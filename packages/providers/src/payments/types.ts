@@ -5,7 +5,8 @@ export interface CheckoutParams {
   priceKey: string;
   priceVersion: number;
   /** Resolved server-side. PAY-01: never taken from the client. */
-  amountJpy: number;
+  amountMinor: number;
+  currency: string;
   stripePriceId: string | null;
   kind: 'one_time' | 'subscription';
   successUrl: string;

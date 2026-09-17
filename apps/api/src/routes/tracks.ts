@@ -9,7 +9,9 @@ import {
 import {
   getLicenseSnapshot,
   getMasterAsset,
+  getPublicTrack,
   getTrackForUser,
+  hasLiked,
   listAssets,
   listTracks,
   softDeleteTrack,
@@ -18,9 +20,14 @@ import {
 } from '@loopscene/db';
 import type { AppContext } from '../context.js';
 import { createExport, issueDownloadUrl } from '../services/exports.js';
-import { LICENSE_DISCLAIMER_JA } from '../services/delivery.js';
+import { LICENSE_DISCLAIMER } from '../services/delivery.js';
+import { toPublicTrackView } from './explore.js';
 
-async function toTrackView(ctx: AppContext, row: TrackRow): Promise<TrackView> {
+async function toTrackView(
+  ctx: AppContext,
+  row: TrackRow,
+  viewerId: string,
+): Promise<TrackView> {
   const master = await getMasterAsset(row.id);
   // A suspended track gets no playable URL at all — the pause has to be real,
   // not a hidden button (SEC-10 / SEC-01).
@@ -34,16 +41,26 @@ async function toTrackView(ctx: AppContext, row: TrackRow): Promise<TrackView> {
           })
         ).url
       : null;
+  const liked = await hasLiked([row.id], viewerId);
 
   return {
     trackId: row.id,
     projectId: row.project_id,
     jobId: row.job_id,
     title: row.title,
+    artistName: null,
+    artistId: row.owner_id,
     state: row.state,
     scene: row.scene as TrackView['scene'],
     mood: (row.mood ?? null) as TrackView['mood'],
+    styles: row.styles ?? [],
+    vocalMode: row.vocal_mode,
+    visibility: row.visibility,
     durationSeconds: row.duration_ms / 1000,
+    playCount: row.play_count,
+    likeCount: row.like_count,
+    likedByMe: liked.has(row.id),
+    coverSeed: row.cover_seed,
     createdAt: row.created_at.toISOString(),
     previewUrl,
     demo: ctx.config.isDemo,
@@ -65,32 +82,60 @@ export default async function trackRoutes(app: FastifyInstance, opts: { ctx: App
       projectId: q.projectId,
     });
     const page = rows.slice(0, q.limit);
-    const items = await Promise.all(page.map((r) => toTrackView(ctx, r)));
+    const items = await Promise.all(page.map((r) => toTrackView(ctx, r, req.user!.id)));
     return {
       items,
       nextCursor: rows.length > q.limit ? page[page.length - 1]!.created_at.toISOString() : null,
     };
   });
 
+  /**
+   * GET /v1/tracks/:id — owner detail with exports, or a published song read
+   * anonymously (same view shape as Explore so one card component renders both).
+   */
   app.get('/v1/tracks/:id', { preHandler: app.requireAuth }, async (req) => {
     const { id } = req.params as { id: string };
     const track = await getTrackForUser(id, req.user!.id);
-    if (!track) throw new AppError('NOT_FOUND', 'track not found');
-    const assets = await listAssets(track.id);
+    if (track) {
+      const assets = await listAssets(track.id);
+      return {
+        ...(await toTrackView(ctx, track, req.user!.id)),
+        lyrics: track.lyrics,
+        exports: assets
+          .filter((a) => a.kind === 'export')
+          .map((a) => ({
+            exportId: a.id,
+            format: a.format,
+            clipStartSeconds: (a.clip_start_ms ?? 0) / 1000,
+            clipDurationSeconds: (a.clip_duration_ms ?? 0) / 1000,
+            fadeOut: a.fade_out_ms > 0,
+            byteSize: a.byte_size,
+            sha256: a.sha256,
+            createdAt: a.created_at.toISOString(),
+          })),
+      };
+    }
+    // Not the owner: visible only if it is published.
+    const publicRow = await getPublicTrack(id);
+    if (!publicRow) throw new AppError('NOT_FOUND', 'track not found');
+    const master = await getMasterAsset(publicRow.id);
+    const liked = await hasLiked([publicRow.id], req.user!.id);
+    const previewUrl = master
+      ? (
+          await ctx.storage.signedUrl({
+            zone: 'delivery',
+            key: master.storage_key,
+            ttlSeconds: ctx.config.DOWNLOAD_URL_TTL_SECONDS,
+          })
+        ).url
+      : null;
     return {
-      ...(await toTrackView(ctx, track)),
-      exports: assets
-        .filter((a) => a.kind === 'export')
-        .map((a) => ({
-          exportId: a.id,
-          format: a.format,
-          clipStartSeconds: (a.clip_start_ms ?? 0) / 1000,
-          clipDurationSeconds: (a.clip_duration_ms ?? 0) / 1000,
-          fadeOut: a.fade_out_ms > 0,
-          byteSize: a.byte_size,
-          sha256: a.sha256,
-          createdAt: a.created_at.toISOString(),
-        })),
+      ...toPublicTrackView(ctx, publicRow, {
+        previewUrl,
+        likedByMe: liked.has(publicRow.id),
+      }),
+      lyrics: publicRow.lyrics,
+      exports: [],
     };
   });
 
@@ -151,7 +196,7 @@ export default async function trackRoutes(app: FastifyInstance, opts: { ctx: App
       })),
       status: snap.status,
       commercialDeliveryEnabled: snap.commercial_delivery,
-      disclaimer: LICENSE_DISCLAIMER_JA,
+      disclaimer: LICENSE_DISCLAIMER,
     };
     return view;
   });

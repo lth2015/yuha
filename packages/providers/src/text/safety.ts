@@ -1,14 +1,17 @@
 import { PROMPT_MAX_CODEPOINTS } from '@loopscene/contracts';
 
 /**
- * Input pre-check (SEC-07 / AI-03 / design doc §28).
+ * Input pre-check (SEC-07 / AI-03 heritage).
  *
- * Deliberately narrow. It blocks the categories our supplier terms and the
- * launch scope actually forbid — named artists/songs, quoted lyrics, voice
- * imitation, reference-media URLs — and rewrites the request into mood /
- * instrument / tempo language.
+ * Deliberately narrow. It blocks the categories our supplier terms actually
+ * forbid — named artists/songs, quoted lyrics of existing works, voice
+ * imitation, reference-media URLs — and lets everything else through.
  *
- * Two things it is NOT:
+ * The 2026-09 product pivot made sung songs a first-class feature, so plain
+ * "add vocals" / "write me lyrics" requests are no longer blocked; what stays
+ * blocked is asking for a SPECIFIC person's voice or an existing work.
+ *
+ * Two things this is NOT:
  *   - a copyright determination. A block means "outside what we accept",
  *     never "you attempted something illegal" (SEC-07 requires the UI to say
  *     so, and every result carries `appealable: true`);
@@ -17,7 +20,7 @@ import { PROMPT_MAX_CODEPOINTS } from '@loopscene/contracts';
 export type BlockReason =
   | 'too_long'
   | 'artist_or_title_reference'
-  | 'lyrics_or_vocal_request'
+  | 'quoted_existing_lyrics'
   | 'voice_imitation'
   | 'reference_media_url'
   | 'personal_information'
@@ -45,10 +48,16 @@ const STYLE_OF_PATTERNS: RegExp[] = [
   /(の|と)(そっくり|同じ曲|カバー|替え歌)/,
 ];
 
-/** Vocal / lyric requests — out of scope for the instrumental launch (§1.2). */
-const VOCAL_PATTERNS: RegExp[] = [
-  /(歌詞|作詞|ボーカル|ヴォーカル|歌って|歌入り|コーラス|ラップ|替え歌|主旋律の歌)/,
-  /\b(lyrics?|vocals?|sing(ing)?|rap|chorus vocal|topline)\b/i,
+/**
+ * Quoted lyrics of an existing work. Requesting original lyrics is fine (and is
+ * now a product feature); reproducing identifiable chunks of known songs is not.
+ * Heuristic: 24+ consecutive characters inside quote marks, or an explicit
+ * "lyrics of <title>" phrasing.
+ */
+const QUOTED_LYRICS_PATTERNS: RegExp[] = [
+  /[「『"][^」』"]{24,}[」』"]/,
+  /\b(lyrics?|words)\s+(of|to|for)\s+[A-Z][\w.'-]+/i,
+  /(の|という)(歌詞| lyrics)/i,
 ];
 
 /** Voice / person imitation and implied endorsement. */
@@ -95,8 +104,8 @@ export function checkPrompt(prompt: string): SafetyResult {
   for (const p of VOICE_PATTERNS) {
     if (p.test(text)) return block('voice_imitation', 'prompt.noVoiceImitation');
   }
-  for (const p of VOCAL_PATTERNS) {
-    if (p.test(text)) return block('lyrics_or_vocal_request', 'prompt.instrumentalOnly');
+  for (const p of QUOTED_LYRICS_PATTERNS) {
+    if (p.test(text)) return block('quoted_existing_lyrics', 'prompt.noExistingLyrics');
   }
   for (const p of STYLE_OF_PATTERNS) {
     if (p.test(text)) return block('artist_or_title_reference', 'prompt.noArtistOrTitle');

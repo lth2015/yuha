@@ -136,7 +136,8 @@ export async function insertOrder(
     priceKey: string;
     priceVersion: number;
     kind: OrderKind;
-    amountJpy: number;
+    amountMinor: number;
+    currency?: string;
     idempotencyKey: string;
     metadata?: Record<string, unknown>;
   },
@@ -144,15 +145,16 @@ export async function insertOrder(
 ): Promise<OrderRow> {
   const id = newId();
   await execute(
-    `INSERT INTO orders (id, user_id, price_key, price_version, kind, amount_jpy, idempotency_key, metadata)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+    `INSERT INTO orders (id, user_id, price_key, price_version, kind, amount_jpy, currency, idempotency_key, metadata)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       id,
       params.userId,
       params.priceKey,
       params.priceVersion,
       params.kind,
-      params.amountJpy,
+      params.amountMinor,
+      params.currency ?? 'usd',
       params.idempotencyKey,
       toJson(params.metadata ?? {}),
     ],
@@ -285,7 +287,7 @@ export async function recordPayment(
     userId: string;
     kind: 'payment' | 'refund' | 'dispute' | 'fee';
     stripeObjectId: string;
-    amountJpy: number;
+    amountMinor: number;
     feeJpy?: number;
     netJpy?: number;
     status: string;
@@ -306,7 +308,7 @@ export async function recordPayment(
       params.userId,
       params.kind,
       params.stripeObjectId,
-      params.amountJpy,
+      params.amountMinor,
       params.feeJpy ?? 0,
       params.netJpy ?? 0,
       params.status,

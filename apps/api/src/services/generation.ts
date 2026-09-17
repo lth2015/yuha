@@ -1,8 +1,8 @@
 import { createHash } from 'node:crypto';
 import {
   AppError,
-  FIXED_DURATION_SECONDS,
   JOB_STATE_TO_PHASE,
+  SONG_DURATIONS,
   type CreateGenerationRequest,
   type JobView,
 } from '@loopscene/contracts';
@@ -40,11 +40,15 @@ import type { AppContext } from '../context.js';
 export function hashRequest(userId: string, req: CreateGenerationRequest): string {
   const canonical = JSON.stringify({
     u: userId,
-    s: req.scene,
+    m: req.mode,
+    t: req.title ?? null,
     p: req.prompt,
+    l: req.lyrics ?? null,
+    s: req.styles,
+    i: req.instrumental,
     e: Math.round(req.energy * 1000),
     d: req.durationSeconds,
-    v: req.vocalMode,
+    v: req.visibility,
   });
   return createHash('sha256').update(canonical).digest('hex');
 }
@@ -52,7 +56,7 @@ export function hashRequest(userId: string, req: CreateGenerationRequest): strin
 function providerRequestKey(jobId: string): string {
   // Stable for the life of the job, so a retry after a timeout reaches the
   // upstream as the same request rather than a second billable one (GEN-06).
-  return `loopscene-${jobId}`;
+  return `sonare-${jobId}`;
 }
 
 export interface CreateGenerationResult {
@@ -82,30 +86,49 @@ export async function createGeneration(
   }
 
   const req = params.request;
-  if (req.durationSeconds !== FIXED_DURATION_SECONDS) {
-    throw new AppError('UNSUPPORTED_CAPABILITY', 'only 30 second tracks are supported at launch');
-  }
   const caps = ctx.music.capabilities();
+
+  // AI-05: reject what the configured provider cannot deliver, before any spend.
   if (!caps.supportedDurationsSeconds.includes(req.durationSeconds)) {
-    // AI-05: never pretend a control was honoured that the upstream cannot do.
-    throw new AppError('UNSUPPORTED_CAPABILITY', 'the configured music provider does not support 30s output');
+    throw new AppError(
+      'UNSUPPORTED_CAPABILITY',
+      `the configured music provider does not support ${req.durationSeconds}s output`,
+    );
   }
-  if (!caps.supportsInstrumentalOnly) {
+  if (req.instrumental && !caps.supportsInstrumentalOnly) {
     throw new AppError(
       'UNSUPPORTED_CAPABILITY',
       'the configured music provider cannot guarantee instrumental-only output',
     );
   }
+  if (!req.instrumental && !caps.supportsVocals) {
+    throw new AppError(
+      'UNSUPPORTED_CAPABILITY',
+      'the configured music provider cannot sing lyrics; choose instrumental',
+    );
+  }
 
   // Input screening happens before any spend and before the text model sees it.
+  // Lyrics are user text exactly like the description, so they pass the same
+  // screening (artist names, existing lyrics, impersonation attempts).
   const safety = checkPrompt(req.prompt);
   if (!safety.allowed) {
-    // A blocked prompt costs nothing: no reservation, no upstream call (UI-15 §15).
+    // A blocked prompt costs nothing: no reservation, no upstream call.
     throw new AppError('PROMPT_BLOCKED', `prompt rejected: ${safety.reason}`, {
       reason: safety.reason,
       hintKey: safety.hintKey,
       appealable: safety.appealable,
     });
+  }
+  if (req.lyrics) {
+    const lyricsSafety = checkPrompt(req.lyrics);
+    if (!lyricsSafety.allowed) {
+      throw new AppError('PROMPT_BLOCKED', `lyrics rejected: ${lyricsSafety.reason}`, {
+        reason: lyricsSafety.reason,
+        hintKey: lyricsSafety.hintKey,
+        appealable: lyricsSafety.appealable,
+      });
+    }
   }
 
   const requestHash = hashRequest(params.userId, req);
@@ -127,13 +150,7 @@ export async function createGeneration(
 
   return withTxRetry(async (tx) => {
     // Take the per-user entitlement lock FIRST, before anything that touches
-    // the users row.
-    //
-    // Inserting a job takes a shared foreign-key lock on users(id); reserving
-    // then wants an exclusive lock on the same row. Two concurrent requests
-    // would each hold the shared lock and each wait for the other's — a textbook
-    // deadlock. Acquiring the exclusive lock up front gives every path the same
-    // lock order, so contenders queue instead of deadlocking (GEN-03).
+    // the users row — see the deadlock note in the ledger design (GEN-03).
     await lockUserEntitlements(params.userId, tx);
 
     // Re-check inside the transaction: two concurrent requests with the same
@@ -159,7 +176,11 @@ export async function createGeneration(
       projectId ??
       (
         await insertProject(
-          { ownerId: params.userId, title: defaultProjectTitle(req.scene), scene: req.scene },
+          {
+            ownerId: params.userId,
+            title: defaultProjectTitle(req),
+            scene: sceneForRequest(req),
+          },
           tx,
         )
       ).id;
@@ -174,11 +195,16 @@ export async function createGeneration(
           requestHash,
           providerRequestKey: 'pending',
           input: {
-            scene: req.scene,
+            mode: req.mode,
+            title: req.title ?? null,
             prompt: req.prompt,
+            lyrics: req.lyrics ?? null,
+            styles: req.styles,
+            instrumental: req.instrumental,
             energy: req.energy,
             durationSeconds: req.durationSeconds,
-            vocalMode: req.vocalMode,
+            vocalMode: req.instrumental ? 'instrumental' : 'with_vocals',
+            visibility: req.visibility,
           },
         },
         tx,
@@ -240,7 +266,12 @@ export async function createGeneration(
       {
         name: 'generation_submitted',
         userRef: params.userId,
-        props: { scene: req.scene, provider: caps.providerId },
+        props: {
+          mode: req.mode,
+          instrumental: req.instrumental,
+          durationSeconds: req.durationSeconds,
+          provider: caps.providerId,
+        },
         runMode: ctx.config.mode,
         isInternal: ctx.config.isDemo,
       },
@@ -251,18 +282,21 @@ export async function createGeneration(
   });
 }
 
-function defaultProjectTitle(scene: string): string {
-  const labels: Record<string, string> = {
-    night_walk: '夜の散歩',
-    daily_log: '日常記録',
-    outfit: 'コーデ',
-    gaming: 'ゲーム',
-  };
-  const now = new Date().toLocaleDateString('ja-JP', { timeZone: 'Asia/Tokyo', month: 'numeric', day: 'numeric' });
-  return `${labels[scene] ?? 'プロジェクト'} ${now}`;
+function sceneForRequest(req: CreateGenerationRequest): string {
+  const hay = `${req.styles.join(' ')} ${req.prompt}`.toLowerCase();
+  if (/(lofi|lo-fi|chill|ambient|night|jazz)/.test(hay)) return 'night_walk';
+  if (/(trap|hip.?hop|edm|house|techno|club|fashion)/.test(hay)) return 'outfit';
+  if (/(synthwave|arcade|game|epic|battle|rock|metal|8.?bit)/.test(hay)) return 'gaming';
+  return 'daily_log';
 }
 
-/** Per-user concurrency cap (§3.2 "运营"), enforced before any reservation. */
+function defaultProjectTitle(req: CreateGenerationRequest): string {
+  const first = req.styles[0];
+  const now = new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  return `${first ? first.replace(/\b\w/g, (c) => c.toUpperCase()) + ' ' : ''}Sessions · ${now}`;
+}
+
+/** Per-user concurrency cap, enforced before any reservation. */
 async function assertConcurrencyLimit(ctx: AppContext, userId: string): Promise<void> {
   const rows = await query<{ n: number }>(
     `SELECT COUNT(*) AS n FROM generation_jobs
@@ -279,13 +313,9 @@ async function assertConcurrencyLimit(ctx: AppContext, userId: string): Promise<
 }
 
 /**
- * Daily upstream spend cap (§12.3).
- *
- * When the cap is reached, new generation stops but order lookup, the library
- * and existing downloads keep working — §12.3 requires exactly that split, so
- * this check lives here rather than at the edge.
- *
- * Checked before any reservation, so hitting the cap costs the user nothing.
+ * Daily upstream spend cap. When the cap is reached, new generation stops but
+ * order lookup, the library and existing downloads keep working. Checked
+ * before any reservation, so hitting the cap costs the user nothing.
  */
 async function assertWithinDailyBudget(ctx: AppContext): Promise<void> {
   const cap = ctx.config.DAILY_BUDGET_MINOR;
@@ -295,36 +325,56 @@ async function assertWithinDailyBudget(ctx: AppContext): Promise<void> {
   if (spent >= cap) {
     throw new AppError(
       'BUDGET_EXCEEDED',
-      `daily upstream budget reached (${spent}/${cap} JPY in the last 24h)`,
+      `daily upstream budget reached (${spent}/${cap} in the last 24h)`,
     );
   }
 }
 
 /**
  * Estimated wait, expressed as a range. UI-04 forbids a fabricated precise
- * percentage, and after the delay threshold the UI says so honestly rather than
- * continuing to promise an imminent result.
+ * percentage; longer songs honestly take longer.
  */
 export function estimateFor(ctx: AppContext, job: JobRow): JobView['estimate'] {
   const startedAt = (job.queued_at ?? job.created_at).getTime();
   const elapsed = (Date.now() - startedAt) / 1000;
   const delayed = elapsed > ctx.config.JOB_DELAY_WARNING_SECONDS;
-  if (job.state === 'DELIVERED' || job.state === 'FAILED' || job.state === 'REJECTED' || job.state === 'CANCELLED') {
+  if (['DELIVERED', 'FAILED', 'REJECTED', 'CANCELLED'].includes(job.state)) {
     return { minSeconds: 0, maxSeconds: 0, delayed: false };
   }
-  return { minSeconds: 30, maxSeconds: 120, delayed };
+  const input = job.input as { durationSeconds?: number };
+  const d = input.durationSeconds ?? 120;
+  const scale = SONG_DURATIONS.includes(d as (typeof SONG_DURATIONS)[number]) ? d / 120 : 1;
+  return {
+    minSeconds: Math.round(30 * Math.min(scale, 2)),
+    maxSeconds: Math.round(120 * Math.min(scale, 2)),
+    delayed,
+  };
 }
 
 export function toJobView(ctx: AppContext, job: JobRow): JobView {
-  const input = job.input as { scene?: string; prompt?: string; energy?: number };
+  const input = job.input as {
+    mode?: 'simple' | 'custom';
+    title?: string | null;
+    prompt?: string;
+    styles?: string[];
+    instrumental?: boolean;
+    energy?: number;
+    durationSeconds?: number;
+    visibility?: 'private' | 'public';
+  };
   return {
     jobId: job.id,
     projectId: job.project_id,
     state: job.state,
     phase: JOB_STATE_TO_PHASE[job.state],
-    scene: (input.scene ?? 'daily_log') as JobView['scene'],
+    mode: input.mode ?? 'simple',
+    title: input.title ?? null,
     prompt: input.prompt ?? '',
+    styles: input.styles ?? [],
+    instrumental: input.instrumental ?? true,
     energy: input.energy ?? 0.5,
+    durationSeconds: input.durationSeconds ?? 30,
+    visibility: input.visibility ?? 'private',
     trackId: job.track_id,
     errorCode: job.error_code,
     estimate: estimateFor(ctx, job),
@@ -345,8 +395,7 @@ export async function getJobView(ctx: AppContext, jobId: string, userId: string)
  *
  * GEN-12: this only records the intent. Whether the job actually cancels is
  * decided by the worker under the version guard, so the response never claims
- * "cancelled" for something already submitted upstream. A job that has already
- * reached the provider reports `cancelled: false` with the reason.
+ * "cancelled" for something already submitted upstream.
  */
 export async function cancelGeneration(
   ctx: AppContext,

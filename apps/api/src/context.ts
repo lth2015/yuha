@@ -2,6 +2,7 @@ import {
   AudioProcessor,
   DemoMusicProvider,
   HttpMusicProvider,
+  createGlmMusicProvider,
   LocalQueueAdapter,
   LocalStorageAdapter,
   LocalTextProvider,
@@ -47,6 +48,27 @@ function buildMusic(cfg: AppConfig): MusicProvider {
       },
     });
   }
+  if (cfg.adapters.music === 'glm') {
+    return createGlmMusicProvider({
+      apiKey: cfg.MUSIC_API_KEY!,
+      ...(cfg.MUSIC_MODEL ? { model: cfg.MUSIC_MODEL } : {}),
+      ...(cfg.MUSIC_BASE_URL ? { baseUrl: cfg.MUSIC_BASE_URL } : {}),
+      ...(cfg.MUSIC_SUBMIT_PATH ? { submitPath: cfg.MUSIC_SUBMIT_PATH } : {}),
+      ...(cfg.MUSIC_POLL_PATH ? { pollPath: cfg.MUSIC_POLL_PATH } : {}),
+      ...(cfg.MUSIC_REQUEST_ID_FIELD ? { requestIdField: cfg.MUSIC_REQUEST_ID_FIELD } : {}),
+      ...(cfg.MUSIC_STATUS_FIELD ? { statusField: cfg.MUSIC_STATUS_FIELD } : {}),
+      ...(cfg.MUSIC_AUDIO_URL_FIELD ? { audioUrlField: cfg.MUSIC_AUDIO_URL_FIELD } : {}),
+      ...(cfg.MUSIC_STATUS_MAP ? { statusMap: cfg.MUSIC_STATUS_MAP } : {}),
+      ...(cfg.MUSIC_IDEMPOTENCY_HEADER ? { idempotencyHeader: cfg.MUSIC_IDEMPOTENCY_HEADER } : {}),
+      ...(cfg.MUSIC_ALLOWED_AUDIO_HOSTS ? { allowedAudioHosts: cfg.MUSIC_ALLOWED_AUDIO_HOSTS } : {}),
+      ...(cfg.MUSIC_CONTRACT_VERSION ? { contractVersion: cfg.MUSIC_CONTRACT_VERSION } : {}),
+      ...(cfg.MUSIC_LICENSE_VERSION ? { licenseVersion: cfg.MUSIC_LICENSE_VERSION } : {}),
+      ...(cfg.MUSIC_TIMEOUT_MS !== 60_000 ? { timeoutMs: cfg.MUSIC_TIMEOUT_MS } : {}),
+      ...(cfg.MUSIC_MAX_AUDIO_BYTES !== 25 * 1024 * 1024 ? { maxAudioBytes: cfg.MUSIC_MAX_AUDIO_BYTES } : {}),
+      ...(cfg.MUSIC_COST_MINOR_PER_REQUEST !== 45 ? { costPerRequestMinor: cfg.MUSIC_COST_MINOR_PER_REQUEST } : {}),
+      ...(cfg.MUSIC_COMMERCIAL_DELIVERY ? { commercialDeliveryPermitted: true } : {}),
+    });
+  }
   const statusMap = JSON.parse(cfg.MUSIC_STATUS_MAP!) as {
     pending: string[];
     completed: string[];
@@ -72,10 +94,11 @@ function buildMusic(cfg: AppConfig): MusicProvider {
     statusMap,
     ...(cfg.MUSIC_IDEMPOTENCY_HEADER ? { idempotencyHeader: cfg.MUSIC_IDEMPOTENCY_HEADER } : {}),
     supportsInstrumentalOnly: cfg.MUSIC_SUPPORTS_INSTRUMENTAL,
+    supportsVocals: true,
     supportsCancel: cfg.MUSIC_SUPPORTS_CANCEL,
     supportsWebhook: cfg.MUSIC_SUPPORTS_WEBHOOK,
     supportsStatusQuery: cfg.MUSIC_SUPPORTS_STATUS_QUERY,
-    supportedDurationsSeconds: [30],
+    supportedDurationsSeconds: [30, 60, 120, 180, 240],
     supportedFormats: cfg.FEATURE_WAV_EXPORT_ENABLED ? ['mp3', 'wav'] : ['mp3'],
     commercialDeliveryPermitted: cfg.MUSIC_COMMERCIAL_DELIVERY,
     maxConcurrency: cfg.MUSIC_MAX_CONCURRENCY,

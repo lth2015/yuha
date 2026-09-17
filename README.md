@@ -1,9 +1,18 @@
-# LOOPSCENE
+# SONARE
 
-30秒のインスト（歌詞・ボーカルなし）BGMを生成する、日本のショート動画クリエイター向けWebサービスの MVP 実装です。
+**Any song you can describe.** An AI song studio in the Suno class: describe an
+idea (or bring your own lyrics), pick styles, energy and length, and get a
+finished song — vocals sung or instrumental, 30 seconds to four minutes — with
+a persistent player, a public Explore feed, likes, publishing and MP3 download.
+Payments run on Stripe (test mode locally); sign-in is Google OAuth plus a
+development login for demo mode.
 
-Implementation of `PROJECT_TASK.md`. Read that first — it is the acceptance
-specification, and this README only explains how to run and verify what was built.
+> Repo note: the workspace packages keep their historical `@loopscene/*` names;
+> the product surface is SONARE. The original brief lives in
+> `PROJECT_TASK.md` (JP-market 30s instrumental BGM). The 2026-09 product
+> pivot supersedes its scope — full songs, lyrics and a public feed — while
+> keeping every engineering guarantee (ledger, idempotency, outbox, Stripe
+> reconciliation, rights handling) that document specifies.
 
 > **This is not ready to charge anyone.** No music-provider agreement is signed,
 > no legal review has happened, and no AWS account has been provisioned. Demo
@@ -15,7 +24,7 @@ specification, and this README only explains how to run and verify what was buil
 
 ## Quick start
 
-Requirements: **Node ≥ 22.13**, **pnpm 11**, **Docker** (for MySQL), **ffmpeg**.
+Requirements: **Node ≥ 22.13**, **pnpm 11** (or `corepack pnpm`), **Docker** (for MySQL), **ffmpeg**.
 
 ```bash
 cp .env.example .env
@@ -32,7 +41,7 @@ accounts:
 
 | Account | Purpose |
 | --- | --- |
-| `creator@example.jp` | ordinary creator with 5 credits |
+| `creator@example.jp` | ordinary creator with 10 credits |
 | `empty@example.jp` | creator with no credits (tests the top-up path) |
 | `support@example.jp` | support role — read-only console plus compensation |
 | `admin@example.jp` | administrator — rights cases and feature switches |
@@ -200,16 +209,38 @@ alerts, rollback and recovery.
 
 ## Scope
 
-Built: scene-based 30s instrumental generation, async job pipeline, credit
-ledger, Stripe payments and subscriptions, private library, trimming and export,
-per-track usage records, rights-complaint handling, operations console.
+Built: full-song generation (lyrics sung or instrumental, 30s–4min), the
+Simple/Custom studio, a persistent queue player, the public Explore feed with
+trending ranking, likes and play counters, publishing/unpublishing, private
+library, MP3 download and trimming, per-song usage records, rights-complaint
+handling, Google OAuth + development login, Stripe checkout / subscriptions /
+refunds (USD catalogue: Starter Pack, Pro, Premier), an async job pipeline with
+the credit ledger, and the operations console.
 
-Deliberately **not** built (`PROJECT_TASK.md` §1.2): lyrics, vocals, voice
-imitation, cover versions, reference-audio upload, music distribution, royalty
-splitting, Content ID registration, a public community, remixing, annual or
-unlimited plans, auto top-up, transferable credit balances, native apps, and
-video upload or composition.
+Deliberately **not** built: voice imitation of real people, cover versions,
+reference-audio upload, music distribution, royalty splitting, Content ID
+registration, remixing, annual or unlimited plans, auto top-up, transferable
+credit balances, native apps, and video upload or composition.
 
 None of these are reachable through a hidden entry point or a provider default —
 `vocalMode` is re-imposed server-side on every request, and the input screen
-rejects lyric, vocal and voice-imitation prompts before any spend occurs.
+rejects voice-imitation, quoted-lyrics and artist-reference prompts before any
+spend occurs.
+
+## Music provider: GLM preset
+
+`MUSIC_ADAPTER=glm` wires the generic HTTP adapter with GLM (Z.ai bigmodel)
+defaults — async submit + poll, 30s–4min songs, vocals supported. Only
+`MUSIC_API_KEY` is required; every endpoint path/field remains overridable via
+the `MUSIC_*` variables in `.env.example`. Until a signed agreement exists the
+preset reports `commercialDeliveryPermitted: false` (SEC-09), so demo-mode
+synthesised audio is what ships by default. Swap to any provider by filling in
+the `http` adapter's mapping from its documentation.
+
+## Google login
+
+Set `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` and `GOOGLE_REDIRECT_URI`
+(redirect: `<api-origin>/v1/auth/google/callback`, registered verbatim in Google
+Cloud Console). The button appears on the sign-in card automatically; the flow
+is authorization-code + PKCE with a signed state, and the SPA exchanges a
+60-second one-time code for its session (no token ever sits in a URL).

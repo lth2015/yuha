@@ -1,16 +1,22 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
+import type { TrackView } from '@loopscene/contracts';
 
 /**
- * A single shared <audio> element.
+ * A single shared <audio> element with a queue.
  *
- * UI-01 and UI-05 require that only one track ever plays at a time. Rather than
- * asking every player component to remember to stop its siblings, there is
- * exactly one audio element for the whole app, so starting a new track
- * inherently stops the previous one. Nothing here ever autoplays (UI-14) —
- * playback only starts from a user gesture.
+ * Only one song ever plays at a time: there is exactly one audio element for
+ * the whole app, so starting a new song inherently stops the previous one
+ * (UI-01/UI-05 heritage). Playback never autoplays (UI-14) — it starts from a
+ * user gesture and continues through the queue as songs end.
  */
 export type PlayerStatus = 'idle' | 'loading' | 'playing' | 'paused' | 'error';
+
+/** What the player bar needs to render: view fields + where it can link to. */
+export type PlayerTrack = Pick<
+  TrackView,
+  'trackId' | 'title' | 'artistName' | 'coverSeed' | 'durationSeconds' | 'vocalMode' | 'likeCount' | 'likedByMe'
+>;
 
 interface PlayerState {
   /** Identifies what is loaded, so each card knows whether it is the active one. */
@@ -21,10 +27,16 @@ interface PlayerState {
 }
 
 interface PlayerApi extends PlayerState {
-  toggle(id: string, url: string): void;
+  current: PlayerTrack | null;
+  queue: PlayerTrack[];
+  /** Plays one song now, optionally setting the surrounding queue context. */
+  play(track: PlayerTrack & { previewUrl: string | null }, queue?: PlayerTrack[]): void;
+  toggle(): void;
   seek(seconds: number): void;
+  next(): void;
+  prev(): void;
   stop(): void;
-  /** Fires once per track when 10s of audio has actually been heard (§11.1). */
+  /** Fires once per song when 10s of audio has actually been heard (§11.1). */
   onTenSeconds(handler: (id: string) => void): () => void;
 }
 
@@ -34,6 +46,9 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const listeners = useRef(new Set<(id: string) => void>());
   const reported = useRef(new Set<string>());
+  const queueRef = useRef<PlayerTrack[]>([]);
+  const [current, setCurrent] = useState<PlayerTrack | null>(null);
+  const [queue, setQueue] = useState<PlayerTrack[]>([]);
   const [state, setState] = useState<PlayerState>({
     activeId: null,
     status: 'idle',
@@ -45,6 +60,60 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     audioRef.current = new Audio();
     audioRef.current.preload = 'metadata';
   }
+
+  const startTrack = useCallback((track: PlayerTrack & { previewUrl: string | null }) => {
+    const audio = audioRef.current;
+    if (!audio || !track.previewUrl) return;
+    audio.pause();
+    audio.src = track.previewUrl;
+    audio.dataset['trackId'] = track.trackId;
+    audio.currentTime = 0;
+    setCurrent(track);
+    setState({ activeId: track.trackId, status: 'loading', currentTime: 0, duration: 0 });
+    void audio.play().catch(() => setState((s) => ({ ...s, status: 'error' })));
+  }, []);
+
+  const play = useCallback(
+    (track: PlayerTrack & { previewUrl: string | null }, nextQueue?: PlayerTrack[]) => {
+      if (nextQueue) {
+        queueRef.current = nextQueue;
+        setQueue(nextQueue);
+      }
+      startTrack(track);
+    },
+    [startTrack],
+  );
+
+  const next = useCallback(() => {
+    const list = queueRef.current;
+    const idx = list.findIndex((t) => t.trackId === state.activeId);
+    for (let i = idx + 1; i < list.length; i++) {
+      const t = list[i]!;
+      // Cards in a queue carry a previewUrl only when rendered from a feed;
+      // the bar refetches nothing — it skips songs without a URL.
+      if ('previewUrl' in t && (t as { previewUrl?: string }).previewUrl) {
+        startTrack(t as PlayerTrack & { previewUrl: string });
+        return;
+      }
+    }
+  }, [state.activeId, startTrack]);
+
+  const prev = useCallback(() => {
+    const audio = audioRef.current;
+    if (audio && audio.currentTime > 3) {
+      audio.currentTime = 0;
+      return;
+    }
+    const list = queueRef.current;
+    const idx = list.findIndex((t) => t.trackId === state.activeId);
+    for (let i = idx - 1; i >= 0; i--) {
+      const t = list[i]!;
+      if ('previewUrl' in t && (t as { previewUrl?: string }).previewUrl) {
+        startTrack(t as PlayerTrack & { previewUrl: string });
+        return;
+      }
+    }
+  }, [state.activeId, startTrack]);
 
   useEffect(() => {
     const audio = audioRef.current;
@@ -62,7 +131,10 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     const onLoaded = () => setState((s) => ({ ...s, duration: audio.duration || 0 }));
     const onPlay = () => setState((s) => ({ ...s, status: 'playing' }));
     const onPause = () => setState((s) => (s.status === 'playing' ? { ...s, status: 'paused' } : s));
-    const onEnded = () => setState((s) => ({ ...s, status: 'paused', currentTime: 0 }));
+    const onEnded = () => {
+      setState((s) => ({ ...s, status: 'paused', currentTime: 0 }));
+      nextRef.current?.();
+    };
     const onWaiting = () => setState((s) => ({ ...s, status: 'loading' }));
     const onError = () => setState((s) => ({ ...s, status: 'error' }));
 
@@ -85,24 +157,16 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     };
   }, []);
 
-  const toggle = useCallback((id: string, url: string) => {
+  // `next` is recreated as activeId changes; keep a stable ref for onEnded.
+  const nextRef = useRef<() => void>(next);
+  nextRef.current = next;
+
+  const toggle = useCallback(() => {
     const audio = audioRef.current;
-    if (!audio) return;
-
-    if (state.activeId === id) {
-      if (audio.paused) void audio.play().catch(() => setState((s) => ({ ...s, status: 'error' })));
-      else audio.pause();
-      return;
-    }
-
-    // Switching tracks: loading a new source stops whatever was playing.
-    audio.pause();
-    audio.src = url;
-    audio.dataset['trackId'] = id;
-    audio.currentTime = 0;
-    setState({ activeId: id, status: 'loading', currentTime: 0, duration: 0 });
-    void audio.play().catch(() => setState((s) => ({ ...s, status: 'error' })));
-  }, [state.activeId]);
+    if (!audio || !current) return;
+    if (audio.paused) void audio.play().catch(() => setState((s) => ({ ...s, status: 'error' })));
+    else audio.pause();
+  }, [current]);
 
   const seek = useCallback((seconds: number) => {
     const audio = audioRef.current;
@@ -112,6 +176,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
 
   const stop = useCallback(() => {
     audioRef.current?.pause();
+    setCurrent(null);
     setState({ activeId: null, status: 'idle', currentTime: 0, duration: 0 });
   }, []);
 
@@ -121,8 +186,8 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const api = useMemo<PlayerApi>(
-    () => ({ ...state, toggle, seek, stop, onTenSeconds }),
-    [state, toggle, seek, stop, onTenSeconds],
+    () => ({ ...state, current, queue, play, toggle, seek, next, prev, stop, onTenSeconds }),
+    [state, current, queue, play, toggle, seek, next, prev, stop, onTenSeconds],
   );
 
   return <PlayerContext.Provider value={api}>{children}</PlayerContext.Provider>;

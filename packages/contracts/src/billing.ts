@@ -6,7 +6,7 @@ import { EntitlementSource, OrderKind, OrderStatus, SubscriptionStatus } from '.
  * the amount, currency and Stripe price id are resolved from the versioned
  * server catalogue. A client-supplied amount is never trusted.
  */
-export const ProductKey = z.enum(['drop_5', 'creator_monthly']);
+export const ProductKey = z.enum(['drop_5', 'pro_monthly', 'premier_monthly']);
 export type ProductKey = z.infer<typeof ProductKey>;
 
 export const productView = z.object({
@@ -14,9 +14,9 @@ export const productView = z.object({
   priceVersion: z.number().int().positive(),
   kind: OrderKind,
   displayName: z.string(),
-  /** Tax-inclusive JPY, stored as an integer (§10). */
-  amountJpy: z.number().int().nonnegative(),
-  currency: z.literal('jpy'),
+  /** Tax-inclusive amount in minor units, stored as an integer (§10 heritage). */
+  amountMinor: z.number().int().nonnegative(),
+  currency: z.enum(['usd', 'jpy']),
   taxIncluded: z.literal(true),
   units: z.number().int().positive(),
   validityDays: z.number().int().positive().nullable(),
@@ -76,7 +76,7 @@ export const orderView = z.object({
   priceKey: z.string(),
   priceVersion: z.number().int(),
   kind: OrderKind,
-  amountJpy: z.number().int(),
+  amountMinor: z.number().int(),
   currency: z.string(),
   status: OrderStatus,
   /**

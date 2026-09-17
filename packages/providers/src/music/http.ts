@@ -51,6 +51,7 @@ export const httpMusicProviderConfig = z.object({
   idempotencyHeader: z.string().optional(),
 
   supportsInstrumentalOnly: z.boolean(),
+  supportsVocals: z.boolean().default(true),
   supportsCancel: z.boolean(),
   supportsWebhook: z.boolean(),
   supportsStatusQuery: z.boolean(),
@@ -95,6 +96,7 @@ export class HttpMusicProvider implements MusicProvider {
       supportedDurationsSeconds: c.supportedDurationsSeconds,
       supportedFormats: c.supportedFormats,
       supportsInstrumentalOnly: c.supportsInstrumentalOnly,
+      supportsVocals: c.supportsVocals,
       supportsIdempotencyKey: !!c.idempotencyHeader,
       supportsCancel: c.supportsCancel && !!c.cancelPath,
       supportsWebhook: c.supportsWebhook,
@@ -167,9 +169,15 @@ export class HttpMusicProvider implements MusicProvider {
       tempo: req.intent.tempoHint,
       energy: req.intent.energy,
       instruments: req.intent.instruments,
+      style_tags: req.intent.styles,
       format: req.format,
     };
-    if (this.cfg.supportsInstrumentalOnly) body['instrumental'] = true;
+    if (req.intent.vocalMode === 'instrumental' && this.cfg.supportsInstrumentalOnly) {
+      body['instrumental'] = true;
+    } else if (this.cfg.supportsVocals) {
+      body['instrumental'] = false;
+      if (req.intent.lyrics) body['lyrics'] = req.intent.lyrics;
+    }
 
     let res;
     try {

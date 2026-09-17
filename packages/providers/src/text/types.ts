@@ -16,11 +16,22 @@ export type IntentResult =
   | { status: 'failed'; requestId: string | null; usage: TextUsage; code: string; message: string };
 
 export interface IntentRequest {
+  /** Derived internally from the style tags; used for demo fixture selection. */
   scene: string;
   /** Untrusted user text. Adapters must treat it as data, never as instructions (AI-03). */
   prompt: string;
   energy: number;
   durationSeconds: number;
+  /** simple = description only; custom = lyrics + style tags supplied by the creator. */
+  mode: 'simple' | 'custom';
+  /** Style tags chosen on the create screen. */
+  styles: string[];
+  /** true when the song must have no vocals. */
+  instrumental: boolean;
+  /** Custom-mode lyrics, already screened by the same safety filter as the prompt. */
+  lyrics: string | null;
+  /** Creator-supplied title, when there is one. */
+  title: string | null;
 }
 
 export interface TextProvider {

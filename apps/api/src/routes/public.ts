@@ -51,6 +51,14 @@ export default async function publicRoutes(app: FastifyInstance, opts: { ctx: Ap
       // Publishable key only. A secret key never reaches the browser (SEC-06).
       stripePublishableKey: ctx.config.STRIPE_PUBLISHABLE_KEY ?? null,
       legalEntityConfigured: ctx.config.legalEntityConfigured,
+      authMethods: {
+        dev: ctx.config.adapters.auth === 'dev',
+        google:
+          ctx.config.adapters.auth === 'google' ||
+          !!(ctx.config.GOOGLE_CLIENT_ID && ctx.config.GOOGLE_CLIENT_SECRET && ctx.config.GOOGLE_REDIRECT_URI),
+        googleConfigured: !!(ctx.config.GOOGLE_CLIENT_ID && ctx.config.GOOGLE_CLIENT_SECRET && ctx.config.GOOGLE_REDIRECT_URI),
+        cognito: ctx.config.adapters.auth === 'cognito',
+      },
     };
     return info;
   });

@@ -1,10 +1,26 @@
+import { createHash, createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
 import { randomUUID } from 'node:crypto';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { AppError, type MeView } from '@loopscene/contracts';
-import { confirmAgeAndTerms, setMarketingOptIn, trackEvent, upsertUser } from '@loopscene/db';
+import {
+  confirmAgeAndTerms,
+  consumeAuthCode,
+  getBalance,
+  getUser,
+  issueAuthCode,
+  setMarketingOptIn,
+  trackEvent,
+  upsertUser,
+  type UserRow,
+} from '@loopscene/db';
 import type { AppContext } from '../context.js';
-import { DevAuthAdapter, type AuthAdapter } from '../auth/index.js';
+import {
+  DevAuthAdapter,
+  GoogleAuthAdapter,
+  GoogleSessionAdapter,
+  type AuthAdapter,
+} from '../auth/index.js';
 import { grantTrialIfEligible } from '../services/billing.js';
 
 const devLoginSchema = z.object({
@@ -16,24 +32,65 @@ const devLoginSchema = z.object({
   marketingOptIn: z.boolean().default(false),
 });
 
-function toMeView(u: {
-  id: string;
-  email: string;
-  display_name: string | null;
-  role: MeView['role'];
-  age_confirmed_at: Date | null;
-  marketing_opt_in: boolean;
-  created_at: Date;
-}): MeView {
+async function toMeView(u: UserRow): Promise<MeView> {
+  const balance = await getBalance(u.id);
   return {
     userId: u.id,
     email: u.email,
     displayName: u.display_name,
+    avatarUrl: u.avatar_url,
     role: u.role,
     ageConfirmed: u.age_confirmed_at !== null,
     marketingOptIn: u.marketing_opt_in,
+    creditsAvailable: balance.available,
     createdAt: u.created_at.toISOString(),
   };
+}
+
+/**
+ * Signed, self-contained OAuth state carrying the PKCE verifier and nonce.
+ *
+ * Google echoes `state` back verbatim, so the CSRF nonce and the PKCE verifier
+ * travel inside it, HMAC-signed with the session secret and expiring in ten
+ * minutes. This keeps the flow stateless (no server-side session or cookie
+ * dependency) while still binding the callback to the start request.
+ */
+const STATE_TTL_SECONDS = 600;
+
+function stateSecret(ctx: AppContext): string {
+  return ctx.config.GOOGLE_SESSION_SECRET ?? ctx.config.DEV_AUTH_SECRET ?? '';
+}
+
+function encodeState(ctx: AppContext, verifier: string): string {
+  const body = Buffer.from(
+    JSON.stringify({ v: verifier, n: randomBytes(8).toString('hex'), exp: Math.floor(Date.now() / 1000) + STATE_TTL_SECONDS }),
+    'utf8',
+  ).toString('base64url');
+  const sig = createHmac('sha256', stateSecret(ctx)).update(body).digest('base64url');
+  return `${body}.${sig}`;
+}
+
+function decodeState(ctx: AppContext, state: string): { verifier: string } | null {
+  const [body, sig] = state.split('.');
+  if (!body || !sig) return null;
+  const expected = createHmac('sha256', stateSecret(ctx)).update(body).digest('base64url');
+  const a = Buffer.from(expected);
+  const b = Buffer.from(sig);
+  if (a.length !== b.length || !timingSafeEqual(a, b)) return null;
+  try {
+    const parsed = JSON.parse(Buffer.from(body, 'base64url').toString('utf8')) as {
+      v?: string;
+      exp?: number;
+    };
+    if (!parsed.v || !parsed.exp || parsed.exp < Date.now() / 1000) return null;
+    return { verifier: parsed.v };
+  } catch {
+    return null;
+  }
+}
+
+function pkceChallenge(verifier: string): string {
+  return createHash('sha256').update(verifier).digest('base64url');
 }
 
 export default async function authRoutes(
@@ -53,7 +110,6 @@ export default async function authRoutes(
         marketingOptIn: z.boolean().default(false),
       })
       .parse(req.body);
-
     const updated = await confirmAgeAndTerms({
       userId: req.user!.id,
       marketingOptIn: body.marketingOptIn,
@@ -103,29 +159,126 @@ export default async function authRoutes(
       return {
         token: token.token,
         expiresAt: token.expiresAt.toISOString(),
-        user: toMeView(confirmed ?? user),
+        user: await toMeView(confirmed ?? user),
         // The web app keeps the demo banner up while this is true.
         demo: ctx.config.isDemo,
       };
     });
   }
 
+  // ------------------------------------------------------------- google oauth
+
   /**
-   * Cognito is the identity provider in integration/production: the email OTP
-   * flow runs against Cognito's own hosted challenge, and this API only ever
-   * validates the resulting id token. There is deliberately no endpoint here
-   * that sends codes or accepts passwords.
+   * Google OAuth (auth/google.ts has the full flow). Registered whenever the
+   * credentials exist, so "Sign in with Google" can coexist with the dev login
+   * in integration mode.
+   */
+  const google =
+    ctx.config.GOOGLE_CLIENT_ID && ctx.config.GOOGLE_CLIENT_SECRET && ctx.config.GOOGLE_REDIRECT_URI
+      ? new GoogleAuthAdapter({
+          clientId: ctx.config.GOOGLE_CLIENT_ID,
+          clientSecret: ctx.config.GOOGLE_CLIENT_SECRET,
+          redirectUri: ctx.config.GOOGLE_REDIRECT_URI,
+          webOrigin: ctx.config.PUBLIC_WEB_URL,
+        })
+      : null;
+
+  if (google) {
+    app.get('/v1/auth/google/start', async (_req, reply) => {
+      const verifier = randomBytes(32).toString('base64url');
+      const state = encodeState(ctx, verifier);
+      return reply
+        .status(302)
+        .redirect(google.authorizationUrl(state, pkceChallenge(verifier)));
+    });
+
+    app.get('/v1/auth/google/callback', async (req, reply) => {
+      const query = z
+        .object({ code: z.string().optional(), state: z.string().optional(), error: z.string().optional() })
+        .parse(req.query);
+      if (query.error) {
+        return reply.redirect(
+          `${ctx.config.PUBLIC_WEB_URL}/auth?google_error=${encodeURIComponent(query.error)}`,
+        );
+      }
+      const state = query.state ? decodeState(ctx, query.state) : null;
+      if (!query.code || !state) {
+        throw new AppError('AUTH_EXCHANGE_FAILED', 'missing or expired google callback state');
+      }
+
+      const identity = await google.exchangeCode({ code: query.code, codeVerifier: state.verifier });
+      const user = await google.toUser(identity);
+      await confirmAgeAndTerms({ userId: user.id, marketingOptIn: false });
+      await grantTrialIfEligible(ctx, user.id);
+      await trackEvent({
+        name: 'signup_completed',
+        userRef: user.id,
+        props: { provider: 'google' },
+        runMode: ctx.config.mode,
+        isInternal: ctx.config.isDemo,
+      });
+
+      // The session token itself never enters a URL; the SPA exchanges this
+      // one-time code for it over POST.
+      const code = await issueAuthCode({ userId: user.id });
+      return reply.redirect(google.callbackRedirect(code.code));
+    });
+
+    app.post(
+      '/v1/auth/google/exchange',
+      {
+        config: {
+          rateLimit: { max: 20, timeWindow: '1 minute' },
+        },
+      },
+      async (req) => {
+        const body = z.object({ code: z.string().min(16).max(256) }).parse(req.body);
+        const consumed = await consumeAuthCode(body.code);
+        if (!consumed) throw new AppError('AUTH_EXCHANGE_FAILED', 'code is invalid, expired or already used');
+
+        const user = await getUser(consumed.userId);
+        if (!user || user.deleted_at) throw new AppError('UNAUTHENTICATED', 'account no longer exists');
+
+        const sessionAdapter = new GoogleSessionAdapter({ secret: stateSecret(ctx) });
+        const token = sessionAdapter.sessionIssuer().issue({
+          provider: 'google',
+          externalId: user.external_id,
+          email: user.email,
+        });
+        return {
+          token: token.token,
+          expiresAt: token.expiresAt.toISOString(),
+          user: await toMeView(user),
+          demo: ctx.config.isDemo,
+        };
+      },
+    );
+  }
+
+  /**
+   * Login methods the web app should render. Google shows whenever its
+   * credentials exist, so integration mode can run dev + google side by side.
    */
   app.get('/v1/auth/config', async () => {
-    if (ctx.config.adapters.auth === 'cognito') {
-      return {
-        adapter: 'cognito' as const,
-        region: ctx.config.COGNITO_REGION,
-        userPoolId: ctx.config.COGNITO_USER_POOL_ID,
-        appClientId: ctx.config.COGNITO_APP_CLIENT_ID,
-      };
-    }
-    return { adapter: 'dev' as const, note: 'development identity — demo mode only' };
+    return {
+      adapter: ctx.config.adapters.auth,
+      devLogin: adapter instanceof DevAuthAdapter,
+      google: {
+        enabled: !!google,
+        // Present but unusable (e.g. missing client id) is surfaced so the UI
+        // can explain instead of hiding a broken button.
+        configured: !!google,
+        clientId: ctx.config.GOOGLE_CLIENT_ID ?? null,
+      },
+      cognito:
+        ctx.config.adapters.auth === 'cognito'
+          ? {
+              region: ctx.config.COGNITO_REGION,
+              userPoolId: ctx.config.COGNITO_USER_POOL_ID,
+              appClientId: ctx.config.COGNITO_APP_CLIENT_ID,
+            }
+          : null,
+    };
   });
 
   /**
@@ -148,11 +301,11 @@ export default async function authRoutes(
       // Retention scope and periods are configured and disclosed separately in
       // the privacy page; they are not decided here.
       retained: [
-        '取引記録（注文・支払・返金）: 法令上の保存義務のため',
-        '権利申立の対象となっている楽曲および証拠: 調査終了まで',
+        'Orders, payments and refunds: statutory retention period',
+        'Songs and evidence under an open rights case: until the investigation closes',
       ],
-      removed: ['アカウント情報', '生成した楽曲と書き出しファイル', 'マーケティング配信先'],
-      note: '停止・削除・配信停止はそれぞれ別の操作です。実際の削除は本人確認後に実行されます。',
+      removed: ['Account profile', 'Your songs and export files', 'Marketing subscription'],
+      note: 'Cancellation, deletion and marketing opt-out are three different operations. Deletion runs after identity verification.',
     };
   });
 }

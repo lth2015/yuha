@@ -39,12 +39,18 @@ const envSchema = z.object({
   DATABASE_SSL: bool(false),
 
   // --- identity -----------------------------------------------------------
-  AUTH_ADAPTER: z.enum(['dev', 'cognito']).optional(),
+  AUTH_ADAPTER: z.enum(['dev', 'google', 'cognito']).optional(),
   /** Signing secret for the local dev session token. Never valid in production. */
   DEV_AUTH_SECRET: z.string().optional(),
   COGNITO_REGION: z.string().optional(),
   COGNITO_USER_POOL_ID: z.string().optional(),
   COGNITO_APP_CLIENT_ID: z.string().optional(),
+  /** "Sign in with Google" (authorization code + PKCE; see auth/google.ts). */
+  GOOGLE_CLIENT_ID: z.string().optional(),
+  GOOGLE_CLIENT_SECRET: z.string().optional(),
+  GOOGLE_REDIRECT_URI: z.string().optional(),
+  /** Signing secret for Google-issued sessions; falls back to DEV_AUTH_SECRET outside production. */
+  GOOGLE_SESSION_SECRET: z.string().optional(),
 
   // --- text model (TokenStars) -------------------------------------------
   TEXT_ADAPTER: z.enum(['local', 'tokenstars']).optional(),
@@ -58,7 +64,8 @@ const envSchema = z.object({
   TOKENSTARS_COST_MINOR_PER_REQUEST: int(1),
 
   // --- music provider -----------------------------------------------------
-  MUSIC_ADAPTER: z.enum(['demo', 'http']).optional(),
+  /** 'glm' = the GLM preset over the generic HTTP adapter (music/glm.ts). */
+  MUSIC_ADAPTER: z.enum(['demo', 'glm', 'http']).optional(),
   MUSIC_PROVIDER_ID: z.string().optional(),
   MUSIC_BASE_URL: z.string().optional(),
   MUSIC_API_KEY: z.string().optional(),
@@ -111,11 +118,12 @@ const envSchema = z.object({
   STRIPE_WEBHOOK_SECRET: z.string().optional(),
   STRIPE_PUBLISHABLE_KEY: z.string().optional(),
   STRIPE_PRICE_ID_DROP_5: z.string().optional(),
-  STRIPE_PRICE_ID_CREATOR_MONTHLY: z.string().optional(),
+  STRIPE_PRICE_ID_PRO_MONTHLY: z.string().optional(),
+  STRIPE_PRICE_ID_PREMIER_MONTHLY: z.string().optional(),
 
   // --- operational switches (§3.2 "运营") ---------------------------------
-  FEATURE_SUBSCRIPTIONS_ENABLED: bool(false),
-  FEATURE_FREE_TRIAL_ENABLED: bool(false),
+  FEATURE_SUBSCRIPTIONS_ENABLED: bool(true),
+  FEATURE_FREE_TRIAL_ENABLED: bool(true),
   FEATURE_WAV_EXPORT_ENABLED: bool(false),
   FREE_TRIAL_UNITS: int(2),
   MAX_CONCURRENT_JOBS_PER_USER: int(2),
@@ -149,9 +157,9 @@ export interface AppConfig extends RawEnv {
   mode: RunMode;
   isDemo: boolean;
   adapters: {
-    auth: 'dev' | 'cognito';
+    auth: 'dev' | 'google' | 'cognito';
     text: 'local' | 'tokenstars';
-    music: 'demo' | 'http';
+    music: 'demo' | 'glm' | 'http';
     storage: 'local' | 's3';
     queue: 'local' | 'sqs';
     payments: 'simulated' | 'stripe';
@@ -173,7 +181,7 @@ const MODE_DEFAULT_ADAPTERS: Record<RunMode, AppConfig['adapters']> = {
   production: {
     auth: 'cognito',
     text: 'tokenstars',
-    music: 'http',
+    music: 'glm',
     storage: 's3',
     queue: 'sqs',
     payments: 'stripe',
@@ -212,7 +220,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
 
   // ---- production must not contain any development affordance (SEC-03) ----
   if (mode === 'production') {
-    if (adapters.auth !== 'cognito') problems.push('production mode cannot use the dev auth adapter');
+    if (adapters.auth === 'dev') problems.push('production mode cannot use the dev auth adapter');
     if (adapters.music === 'demo') problems.push('production mode cannot use the demo (fake) music adapter');
     if (adapters.payments !== 'stripe') problems.push('production mode cannot use simulated payments');
     if (adapters.storage !== 's3') problems.push('production mode requires S3 storage');
@@ -235,6 +243,13 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     if (!e.COGNITO_REGION) problems.push('COGNITO_REGION is required for the cognito auth adapter');
     if (!e.COGNITO_USER_POOL_ID) problems.push('COGNITO_USER_POOL_ID is required for the cognito auth adapter');
     if (!e.COGNITO_APP_CLIENT_ID) problems.push('COGNITO_APP_CLIENT_ID is required for the cognito auth adapter');
+  } else if (adapters.auth === 'google') {
+    if (!e.GOOGLE_CLIENT_ID) problems.push('GOOGLE_CLIENT_ID is required for the google auth adapter');
+    if (!e.GOOGLE_CLIENT_SECRET) problems.push('GOOGLE_CLIENT_SECRET is required for the google auth adapter');
+    if (!e.GOOGLE_REDIRECT_URI) problems.push('GOOGLE_REDIRECT_URI is required for the google auth adapter');
+    if (mode === 'production' && !e.GOOGLE_SESSION_SECRET) {
+      problems.push('GOOGLE_SESSION_SECRET is required for google auth in production');
+    }
   } else if (!e.DEV_AUTH_SECRET) {
     problems.push('DEV_AUTH_SECRET is required for the dev auth adapter');
   }
@@ -248,6 +263,12 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     if (!e.TOKENSTARS_CHAT_PATH) {
       problems.push('TOKENSTARS_CHAT_PATH is required — endpoint paths are never assumed');
     }
+  }
+
+  if (adapters.music === 'glm') {
+    // The GLM preset (providers/music/glm.ts) carries defaults for everything
+    // except the credential; the endpoint mapping remains overridable.
+    if (!e.MUSIC_API_KEY) problems.push('MUSIC_API_KEY is required for the glm music adapter (GLM API key)');
   }
 
   if (adapters.music === 'http') {
@@ -303,8 +324,8 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     if (!e.STRIPE_SECRET_KEY) problems.push('STRIPE_SECRET_KEY is required for the stripe payments adapter');
     if (!e.STRIPE_WEBHOOK_SECRET) problems.push('STRIPE_WEBHOOK_SECRET is required for webhook verification');
     if (!e.STRIPE_PRICE_ID_DROP_5) problems.push('STRIPE_PRICE_ID_DROP_5 is required for the stripe payments adapter');
-    if (e.FEATURE_SUBSCRIPTIONS_ENABLED && !e.STRIPE_PRICE_ID_CREATOR_MONTHLY) {
-      problems.push('STRIPE_PRICE_ID_CREATOR_MONTHLY is required when subscriptions are enabled');
+    if (e.FEATURE_SUBSCRIPTIONS_ENABLED && !e.STRIPE_PRICE_ID_PRO_MONTHLY) {
+      problems.push('STRIPE_PRICE_ID_PRO_MONTHLY is required when subscriptions are enabled');
     }
     if (e.STRIPE_SECRET_KEY?.startsWith('sk_live_') && mode !== 'production') {
       problems.push(`a live Stripe key cannot be used in ${mode} mode`);

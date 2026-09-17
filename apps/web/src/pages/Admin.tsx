@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { apiFetch } from '../lib/api';
-import { formatJpy, formatJst, useSession } from '../lib/session';
+import { formatMoney, formatJst, useSession } from '../lib/session';
 import { Badge, ErrorNotice, Loading } from '../components/common';
 
 interface Measured {
@@ -239,13 +239,13 @@ export default function Admin() {
           <div className="card" style={{ gap: 4 }}>
             <span className="small muted">実請求ベースの上流費用</span>
             <strong className="num" style={{ fontSize: 24 }}>
-              {formatJpy(overview.cost.actualCostJpy)}
+              {formatMoney(overview.cost.actualCostJpy)}
             </strong>
           </div>
           <div className="card" style={{ gap: 4 }}>
             <span className="small muted">試算値（予算前提）</span>
             <strong className="num" style={{ fontSize: 24, color: 'var(--text-muted)' }}>
-              {formatJpy(overview.cost.estimatedCostJpy)}
+              {formatMoney(overview.cost.estimatedCostJpy)}
             </strong>
             {/* §11.2: modelled cost is never added to the invoiced figure. */}
             <span className="small muted">請求実績とは合算していません</span>
@@ -253,7 +253,7 @@ export default function Admin() {
           <div className="card" style={{ gap: 4 }}>
             <span className="small muted">課金対象の失敗分</span>
             <strong className="num" style={{ fontSize: 24 }}>
-              {formatJpy(overview.cost.billableFailureCostJpy)}
+              {formatMoney(overview.cost.billableFailureCostJpy)}
             </strong>
             <span className="small muted">利用者には請求していません</span>
           </div>
@@ -275,11 +275,11 @@ export default function Admin() {
           <div className="card" style={{ gap: 4 }}>
             <span className="small muted">総額 / 返金 / 手数料</span>
             <strong className="num" style={{ fontSize: 20 }}>
-              {formatJpy(overview.revenue.grossJpy)}
+              {formatMoney(overview.revenue.grossJpy)}
             </strong>
             <span className="small muted num">
-              返金 {formatJpy(overview.revenue.refundedJpy)} / 手数料{' '}
-              {formatJpy(overview.revenue.paymentFeeJpy)}
+              返金 {formatMoney(overview.revenue.refundedJpy)} / 手数料{' '}
+              {formatMoney(overview.revenue.paymentFeeJpy)}
             </span>
           </div>
           <div className="card" style={{ gap: 4 }}>

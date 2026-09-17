@@ -5,9 +5,12 @@ export const meView = z.object({
   userId: z.string().uuid(),
   email: z.string(),
   displayName: z.string().nullable(),
+  avatarUrl: z.string().nullable(),
   role: UserRole,
   ageConfirmed: z.boolean(),
   marketingOptIn: z.boolean(),
+  /** Credit balance snapshot so every screen can show it without a second call. */
+  creditsAvailable: z.number().int().nonnegative(),
   createdAt: z.string(),
 });
 export type MeView = z.infer<typeof meView>;
@@ -39,6 +42,13 @@ export const runtimeInfo = z.object({
   stripePublishableKey: z.string().nullable(),
   /** Legal entity disclosure state; "placeholder" is not allowed in production. */
   legalEntityConfigured: z.boolean(),
+  /** Login methods the web app should render. */
+  authMethods: z.object({
+    dev: z.boolean(),
+    google: z.boolean(),
+    googleConfigured: z.boolean(),
+    cognito: z.boolean(),
+  }),
 });
 export type RuntimeInfo = z.infer<typeof runtimeInfo>;
 

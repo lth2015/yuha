@@ -1,320 +1,499 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
-import { Link, useNavigate, useSearchParams } from 'react-router-dom';
-import { PROMPT_MAX_CODEPOINTS, type JobView } from '@loopscene/contracts';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
+import {
+  LYRICS_MAX_CODEPOINTS,
+  PROMPT_MAX_CODEPOINTS,
+  type JobView,
+  type TrackView,
+} from '@loopscene/contracts';
 import { ApiError, apiFetch, newIdempotencyKey } from '../lib/api';
-import { JOB_PHASE_LABELS, SCENE_LABELS } from '../lib/messages';
 import { useSession } from '../lib/session';
-import { ErrorNotice, StageIndicator } from '../components/common';
+import { ErrorNotice } from '../components/common';
 
-const DRAFT_KEY = 'loopscene.draft';
+const DRAFT_KEY = 'sonare.draft';
 
 interface Draft {
-  scene: string;
+  mode: 'simple' | 'custom';
+  title: string;
   prompt: string;
+  lyrics: string;
+  styles: string[];
+  instrumental: boolean;
   energy: number;
+  durationSeconds: 30 | 60 | 120 | 180 | 240;
+  visibility: 'private' | 'public';
 }
 
-function loadDraft(): Draft | null {
-  try {
-    const raw = localStorage.getItem(DRAFT_KEY);
-    return raw ? (JSON.parse(raw) as Draft) : null;
-  } catch {
-    return null;
-  }
+const DEFAULT_DRAFT: Draft = {
+  mode: 'simple',
+  title: '',
+  prompt: '',
+  lyrics: '',
+  styles: [],
+  instrumental: false,
+  energy: 0.5,
+  durationSeconds: 120,
+  visibility: 'private',
+};
+
+const STYLE_PRESETS = [
+  'lofi',
+  'synthwave',
+  'trap',
+  'pop',
+  'acoustic',
+  'ambient',
+  'dnb',
+  'rock',
+  'jazz',
+  'cinematic',
+  'hyperpop',
+  'house',
+];
+
+const DURATIONS: Array<{ value: Draft['durationSeconds']; label: string }> = [
+  { value: 30, label: '0:30' },
+  { value: 60, label: '1:00' },
+  { value: 120, label: '2:00' },
+  { value: 180, label: '3:00' },
+  { value: 240, label: '4:00' },
+];
+
+const PHASE_STEPS: Array<{ key: JobView['phase']; label: string }> = [
+  { key: 'validating', label: 'Validating' },
+  { key: 'queued', label: 'Queued' },
+  { key: 'generating', label: 'Generating' },
+  { key: 'processing', label: 'Processing' },
+  { key: 'verifying', label: 'Verifying' },
+  { key: 'done', label: 'Done' },
+];
+
+function countCodePoints(s: string): number {
+  return [...s].length;
 }
 
 /**
- * UI-03 / UI-04: the create studio.
+ * The Create studio.
  *
- * Scene, mood text, energy; duration is fixed at 30s and output is instrumental
- * only, both stated rather than offered as choices we cannot honour. The cost
- * of the run and the real remaining balance are shown before submitting, and
- * the draft survives a failed submission so nothing is retyped.
+ * Simple mode: describe the song; the platform writes the brief. Custom mode:
+ * your lyrics and style tags. One credit = one song, shown before submission;
+ * the idempotency key is minted when the form is first filled and reused for
+ * every retry of that submission, so a double click cannot double charge.
  */
 export default function Create() {
   const navigate = useNavigate();
-  const [params] = useSearchParams();
-  const { entitlements, refreshEntitlements, runtime } = useSession();
-
-  const draft = useMemo(loadDraft, []);
-  const [scene, setScene] = useState(params.get('scene') ?? draft?.scene ?? 'night_walk');
-  const [prompt, setPrompt] = useState(draft?.prompt ?? '');
-  const [energy, setEnergy] = useState(draft?.energy ?? 0.4);
-  const [error, setError] = useState<unknown>(null);
+  const { me, entitlements, refreshEntitlements, runtime } = useSession();
+  const [draft, setDraft] = useState<Draft>(DEFAULT_DRAFT);
   const [job, setJob] = useState<JobView | null>(null);
+  const [result, setResult] = useState<TrackView | null>(null);
+  const [error, setError] = useState<unknown>(null);
   const [submitting, setSubmitting] = useState(false);
+  const idemKey = useRef<string>(newIdempotencyKey());
+  const pollTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const credits = entitlements?.availableUnits ?? me?.creditsAvailable ?? 0;
 
-  /**
-   * One idempotency key per composed request. It is regenerated only when the
-   * user changes the inputs, so every retry of the *same* request reuses it and
-   * cannot create a second job or a second charge (GEN-01).
-   */
-  const idempotencyKey = useRef(newIdempotencyKey());
-  useEffect(() => {
-    idempotencyKey.current = newIdempotencyKey();
-  }, [scene, prompt, energy]);
-
-  // Keep the draft so an interrupted attempt is not lost (UI-04/UI-12).
   useEffect(() => {
     try {
-      localStorage.setItem(DRAFT_KEY, JSON.stringify({ scene, prompt, energy }));
+      const saved = localStorage.getItem(DRAFT_KEY);
+      if (saved) setDraft({ ...DEFAULT_DRAFT, ...(JSON.parse(saved) as Partial<Draft>) });
+    } catch {
+      /* ignore a corrupt draft */
+    }
+  }, []);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(DRAFT_KEY, JSON.stringify(draft));
     } catch {
       /* private browsing */
     }
-  }, [scene, prompt, energy]);
+  }, [draft]);
 
-  // Restore an in-flight job after a reload or re-login (GEN-10).
+  const patch = useCallback((p: Partial<Draft>) => setDraft((d) => ({ ...d, ...p })), []);
+
+  // ---- job polling with backoff (no request is held open waiting for audio)
   useEffect(() => {
-    void (async () => {
-      try {
-        const res = await apiFetch<{ items: JobView[] }>('/v1/jobs');
-        if (res.items[0]) setJob(res.items[0]);
-      } catch {
-        /* not fatal: the form still works */
+    if (!job || ['done', 'failed'].includes(job.phase)) {
+      if (job?.phase === 'done' && job.trackId) {
+        apiFetch<TrackView>(`/v1/tracks/${job.trackId}`)
+          .then(setResult)
+          .catch(() => undefined);
       }
-    })();
-  }, []);
-
-  // Status polling with a ceiling, never a long-held request (§4.2).
-  useEffect(() => {
-    if (!job || ['DELIVERED', 'FAILED', 'REJECTED', 'CANCELLED'].includes(job.state)) return;
-    let cancelled = false;
-    let delay = 1500;
-
+      return;
+    }
+    let delay = 2000;
     const tick = async () => {
-      if (cancelled) return;
       try {
         const next = await apiFetch<JobView>(`/v1/jobs/${job.jobId}`);
-        if (cancelled) return;
         setJob(next);
-        if (next.state === 'DELIVERED') {
-          await refreshEntitlements();
-          navigate(`/projects/${next.projectId}`);
-          return;
-        }
-        if (['FAILED', 'REJECTED', 'CANCELLED'].includes(next.state)) {
-          await refreshEntitlements();
-          return;
+        if (next.phase === 'done' && next.trackId) {
+          void refreshEntitlements();
         }
       } catch {
-        /* transient: back off and try again */
+        /* transient poll failure: keep trying with backoff */
       }
-      // Back off up to 8s so a long job does not hammer the API.
-      delay = Math.min(delay * 1.4, 8000);
-      timer = setTimeout(() => void tick(), delay);
+      if (delay < 10000) delay = Math.min(delay * 1.6, 10000);
+      pollTimer.current = setTimeout(tick, delay);
     };
-
-    let timer = setTimeout(() => void tick(), delay);
+    pollTimer.current = setTimeout(tick, delay);
     return () => {
-      cancelled = true;
-      clearTimeout(timer);
+      if (pollTimer.current) clearTimeout(pollTimer.current);
     };
-  }, [job, navigate, refreshEntitlements]);
+  }, [job, refreshEntitlements]);
 
-  const promptLength = [...prompt].length;
-  const overLimit = promptLength > PROMPT_MAX_CODEPOINTS;
-  const available = entitlements?.availableUnits ?? 0;
-  const canSubmit = !submitting && !overLimit && available > 0;
-  const busy = job !== null && !['DELIVERED', 'FAILED', 'REJECTED', 'CANCELLED'].includes(job.state);
+  const promptLength = countCodePoints(draft.prompt);
+  const lyricsLength = countCodePoints(draft.lyrics);
+  const canSubmit = useMemo(() => {
+    if (submitting || credits < 1) return false;
+    if (draft.mode === 'simple') return draft.prompt.trim().length > 0;
+    return draft.prompt.trim().length > 0 || draft.styles.length > 0 || draft.lyrics.trim().length > 0;
+  }, [submitting, credits, draft]);
+
+  const toggleStyle = (style: string) => {
+    setDraft((d) => ({
+      ...d,
+      styles: d.styles.includes(style) ? d.styles.filter((s) => s !== style) : [...d.styles, style].slice(0, 6),
+    }));
+  };
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!canSubmit) return;
     setSubmitting(true);
     setError(null);
+    setResult(null);
     try {
-      const res = await apiFetch<JobView>('/v1/generations', {
+      const res = await apiFetch<JobView & { deduplicated: boolean }>('/v1/generations', {
         method: 'POST',
-        idempotencyKey: idempotencyKey.current,
-        body: { scene, prompt, energy, durationSeconds: 30, vocalMode: 'instrumental' },
+        idempotencyKey: idemKey.current,
+        body: {
+          mode: draft.mode,
+          ...(draft.title.trim() ? { title: draft.title.trim() } : {}),
+          prompt: draft.prompt.trim(),
+          ...(draft.mode === 'custom' && draft.lyrics.trim() && !draft.instrumental
+            ? { lyrics: draft.lyrics.trim() }
+            : {}),
+          styles: draft.styles,
+          instrumental: draft.instrumental,
+          energy: draft.energy,
+          durationSeconds: draft.durationSeconds,
+          visibility: draft.visibility,
+        },
       });
       setJob(res);
-      await refreshEntitlements();
+      void refreshEntitlements();
     } catch (err) {
       setError(err);
-      // The draft is intentionally kept so a balance top-up can resume here.
+      // A used key means the browser retried a submission that already landed;
+      // keep the key only for genuine retries of a failed request.
+      if (err instanceof ApiError && err.code === 'IDEMPOTENCY_KEY_REUSED') {
+        idemKey.current = newIdempotencyKey();
+      }
     } finally {
       setSubmitting(false);
     }
   };
 
-  const cancel = async () => {
-    if (!job) return;
-    try {
-      const res = await apiFetch<{ cancelled: boolean; state: string; reason: string | null }>(
-        `/v1/jobs/${job.jobId}/cancel`,
-        { method: 'POST' },
-      );
-      if (res.cancelled) {
-        setJob(null);
-        await refreshEntitlements();
-      } else {
-        // GEN-12: never claim a cancellation that did not happen.
-        setError(new ApiError('JOB_NOT_CANCELLABLE', res.reason ?? 'already submitted', 409));
-      }
-    } catch (err) {
-      setError(err);
-    }
+  const startAnother = () => {
+    setJob(null);
+    setResult(null);
+    idemKey.current = newIdempotencyKey();
+    patch({ title: '', prompt: '', lyrics: '' });
+    navigate('/create');
   };
 
-  if (busy && job) {
-    const phase = JOB_PHASE_LABELS[job.phase] ?? JOB_PHASE_LABELS['queued']!;
+  // ------------------------------------------------------------------ states
+
+  if (job) {
+    const stepIdx = PHASE_STEPS.findIndex((s) => s.key === job.phase);
     return (
-      <div style={{ maxWidth: 640, margin: '0 auto' }} className="stack stack--loose">
-        <h1 style={{ fontSize: 28 }}>{phase.label}</h1>
-        <div className="panel stack">
-          <p className="muted" style={{ margin: 0 }}>
-            {phase.detail}
-          </p>
-          <StageIndicator phase={job.phase} delayed={job.estimate?.delayed ?? false} />
-          <hr className="divider" />
-          <div className="row row--between">
-            <span className="small muted">
-              このページを離れても処理は続きます。作品一覧から戻れます。
-            </span>
-            <button type="button" className="btn btn--ghost" onClick={() => void cancel()}>
-              取り消す
-            </button>
-          </div>
+      <div className="studio stack stack--loose">
+        <h1>{job.title ?? 'Your song'}</h1>
+        <div className={`progress-card panel${job.phase === 'failed' ? ' progress-card--failed' : ''}`}>
+          {job.phase === 'failed' ? (
+            <>
+              <h2>Generation failed</h2>
+              <p className="small">
+                {job.errorCode === 'upstream_rejected'
+                  ? 'The model declined this request. No credit was used — try rephrasing.'
+                  : 'A technical problem interrupted this song. Your credit was returned automatically.'}
+              </p>
+              <div className="progress-card__actions">
+                <button type="button" className="btn btn--primary" onClick={startAnother}>
+                  Start another
+                </button>
+              </div>
+            </>
+          ) : (
+            <>
+              <div className="progress-card__head">
+                <div className="spinner" aria-hidden="true" />
+                <div>
+                  <h2>{PHASE_STEPS[Math.max(stepIdx, 0)]?.label ?? 'Working'}…</h2>
+                  <p className="small muted">
+                    {job.estimate.delayed
+                      ? 'This is taking longer than usual — it is still running. You can leave this page; the song will be in your Library.'
+                      : `Usually ready in ${job.estimate.minSeconds}–${job.estimate.maxSeconds}s. You can leave this page — the song will be in your Library.`}
+                  </p>
+                </div>
+              </div>
+              <ol className="progress-steps" aria-live="polite">
+                {PHASE_STEPS.filter((s) => s.key !== 'failed').map((s, i) => (
+                  <li
+                    key={s.key}
+                    className={i < stepIdx ? 'is-done' : i === stepIdx ? 'is-current' : ''}
+                    aria-current={i === stepIdx ? 'step' : undefined}
+                  >
+                    {s.label}
+                  </li>
+                ))}
+              </ol>
+              {result && result.previewUrl && (
+                <div className="progress-card__done">
+                  <p className="small">
+                    ✅ Done — <Link to={`/song/${result.trackId}`}>open “{result.title}”</Link>, or{' '}
+                    <button type="button" className="linklike" onClick={startAnother}>
+                      start another
+                    </button>
+                    .
+                  </p>
+                </div>
+              )}
+            </>
+          )}
         </div>
-        <ErrorNotice error={error} />
-        <Link className="btn btn--secondary" to="/library">
-          作品一覧を見る
-        </Link>
+        <p className="small muted">
+          Job {job.jobId.slice(0, 8)} · {job.durationSeconds}s ·{' '}
+          {job.instrumental ? 'instrumental' : 'with vocals'}
+          {runtime?.demo ? ' · demo audio (synthesised)' : ''}
+        </p>
       </div>
     );
   }
 
+  // ------------------------------------------------------------------ studio
+
   return (
-    <div className="split">
-      <form className="stack stack--loose" onSubmit={submit}>
-        <div className="stack stack--tight">
-          <h1 style={{ fontSize: 30 }}>サウンドをつくる</h1>
-          <p className="muted">
-            30秒・歌詞なし・ボーカルなしのインストBGMを1曲生成します。
-          </p>
+    <div className="studio">
+      <div className="studio__head">
+        <h1>Create</h1>
+        <div className="studio__balance" aria-live="polite">
+          <span className="credit-pill">
+            <span className="icon icon--note" aria-hidden="true" />
+            {credits} credit{credits === 1 ? '' : 's'}
+          </span>
+          {credits < 1 && (
+            <Link to="/pricing" className="btn btn--primary btn--sm">
+              Get credits
+            </Link>
+          )}
         </div>
+      </div>
 
-        <ErrorNotice error={error} />
+      <ErrorNotice error={error} />
 
-        {job && ['FAILED', 'REJECTED', 'CANCELLED'].includes(job.state) && (
-          <div className="alert alert--warn">
-            <div className="alert__title">前回の生成は完了しませんでした</div>
-            <div className="small">
-              回数は消費されていません。内容を変えてもう一度お試しください。
+      <form className="studio__grid" onSubmit={submit} noValidate>
+        <div className="panel studio__form stack">
+          <div className="seg seg--wide" role="tablist" aria-label="Creation mode">
+            <button
+              type="button"
+              role="tab"
+              aria-selected={draft.mode === 'simple'}
+              className={`seg__btn${draft.mode === 'simple' ? ' is-active' : ''}`}
+              onClick={() => patch({ mode: 'simple' })}
+            >
+              Simple
+            </button>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={draft.mode === 'custom'}
+              className={`seg__btn${draft.mode === 'custom' ? ' is-active' : ''}`}
+              onClick={() => patch({ mode: 'custom' })}
+            >
+              Custom
+            </button>
+          </div>
+          <p className="small muted" style={{ marginTop: 0 }}>
+            {draft.mode === 'simple'
+              ? 'Describe the song; the studio handles the rest.'
+              : 'Your lyrics, your style tags — full control.'}
+          </p>
+
+          {draft.mode === 'custom' && (
+            <div>
+              <label htmlFor="title">Title (optional)</label>
+              <input
+                id="title"
+                value={draft.title}
+                maxLength={120}
+                onChange={(e) => patch({ title: e.target.value })}
+                placeholder="Untitled songs still get named automatically"
+              />
+            </div>
+          )}
+
+          <div>
+            <label htmlFor="prompt">
+              {draft.mode === 'simple' ? 'Describe your song' : 'Description (optional)'}
+            </label>
+            <textarea
+              id="prompt"
+              rows={draft.mode === 'simple' ? 5 : 3}
+              value={draft.prompt}
+              onChange={(e) => patch({ prompt: e.target.value })}
+              placeholder={
+                draft.mode === 'simple'
+                  ? 'A dreamy synthwave night drive, airy female vocals, wistful but hopeful'
+                  : 'Slow build, warm analog feel, saxophone outro'
+              }
+              aria-describedby="prompt-count"
+            />
+            <div id="prompt-count" className="field-count">
+              {promptLength}/{PROMPT_MAX_CODEPOINTS}
             </div>
           </div>
-        )}
 
-        <fieldset className="stack">
-          <legend>シーン</legend>
-          <div className="scene-grid">
-            {Object.entries(SCENE_LABELS).map(([key, label]) => (
-              <button
-                key={key}
-                type="button"
-                className="scene-card"
-                aria-pressed={scene === key}
-                onClick={() => setScene(key)}
-              >
-                <span className="scene-card__title">{label.title}</span>
-                <span className="muted small">{label.description}</span>
-              </button>
-            ))}
-          </div>
-        </fieldset>
+          {draft.mode === 'custom' && (
+            <div>
+              <label htmlFor="lyrics">Lyrics {draft.instrumental && <span className="muted">(unused while instrumental)</span>}</label>
+              <textarea
+                id="lyrics"
+                rows={7}
+                value={draft.lyrics}
+                onChange={(e) => patch({ lyrics: e.target.value })}
+                placeholder={'[Verse]\nCity lights blur into gold\n…'}
+                disabled={draft.instrumental}
+                aria-describedby="lyrics-count"
+              />
+              <div id="lyrics-count" className="field-count">
+                {lyricsLength}/{LYRICS_MAX_CODEPOINTS}
+              </div>
+            </div>
+          )}
 
-        <div>
-          <label htmlFor="prompt">どんな気分にしたいですか？（任意）</label>
-          <textarea
-            id="prompt"
-            value={prompt}
-            onChange={(e) => setPrompt(e.target.value)}
-            placeholder="例：静かな夜の帰り道、少し切ない気持ち。シンセとやわらかいドラム。"
-            aria-describedby="prompt-help prompt-count"
-            aria-invalid={overLimit}
-          />
-          <div className={`char-count ${overLimit ? 'char-count--over' : ''}`} id="prompt-count">
-            <span className="num">{promptLength}</span> / {PROMPT_MAX_CODEPOINTS}
+          <div>
+            <label id="styles-label">Styles (up to 6)</label>
+            <div className="chips" role="group" aria-labelledby="styles-label">
+              {STYLE_PRESETS.map((s) => (
+                <button
+                  key={s}
+                  type="button"
+                  className={`chip chip--btn${draft.styles.includes(s) ? ' is-on' : ''}`}
+                  aria-pressed={draft.styles.includes(s)}
+                  onClick={() => toggleStyle(s)}
+                >
+                  {s}
+                </button>
+              ))}
+            </div>
           </div>
-          <p id="prompt-help" className="small muted" style={{ margin: 0 }}>
-            気分・楽器・テンポの言葉で書いてください。空欄の場合は選んだシーンの雰囲気で作成します。
-            アーティスト名・曲名・歌詞の指定はできません。
-          </p>
+
+          <div className="studio__row">
+            <div>
+              <label id="dur-label">Length</label>
+              <div className="chips" role="group" aria-labelledby="dur-label">
+                {DURATIONS.map((d) => (
+                  <button
+                    key={d.value}
+                    type="button"
+                    className={`chip chip--btn${draft.durationSeconds === d.value ? ' is-on' : ''}`}
+                    aria-pressed={draft.durationSeconds === d.value}
+                    onClick={() => patch({ durationSeconds: d.value })}
+                  >
+                    {d.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div>
+              <label htmlFor="instrumental">Vocals</label>
+              <div className="seg" role="group" aria-label="Vocals">
+                <button
+                  type="button"
+                  className={`seg__btn${draft.instrumental ? ' is-active' : ''}`}
+                  aria-pressed={draft.instrumental}
+                  onClick={() => patch({ instrumental: true })}
+                >
+                  Instrumental
+                </button>
+                <button
+                  type="button"
+                  className={`seg__btn${!draft.instrumental ? ' is-active' : ''}`}
+                  aria-pressed={!draft.instrumental}
+                  onClick={() => patch({ instrumental: false })}
+                >
+                  Sing lyrics
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <div>
+            <label htmlFor="energy">
+              Energy <span className="muted">({Math.round(draft.energy * 100)}%)</span>
+            </label>
+            <input
+              id="energy"
+              type="range"
+              min={0}
+              max={1}
+              step={0.05}
+              value={draft.energy}
+              onChange={(e) => patch({ energy: Number(e.target.value) })}
+            />
+          </div>
+
+          <div className="checkbox-row">
+            <input
+              id="visibility"
+              type="checkbox"
+              checked={draft.visibility === 'public'}
+              onChange={(e) => patch({ visibility: e.target.checked ? 'public' : 'private' })}
+            />
+            <label htmlFor="visibility">Publish to Explore when finished (you can change this anytime)</label>
+          </div>
         </div>
 
-        <div>
-          <label htmlFor="energy">エネルギー</label>
-          <input
-            id="energy"
-            type="range"
-            min={0}
-            max={1}
-            step={0.05}
-            value={energy}
-            onChange={(e) => setEnergy(Number(e.target.value))}
-            aria-valuetext={energy < 0.34 ? '落ち着いた' : energy > 0.66 ? '力強い' : '中間'}
-          />
-          <div className="row row--between small muted">
-            <span>落ち着いた</span>
-            <span>力強い</span>
-          </div>
-        </div>
-
-        <div className="sticky-actions">
-          <button type="submit" className="btn btn--primary btn--block" disabled={!canSubmit}>
-            {submitting ? '送信中…' : available > 0 ? '1回つかって作成する' : '残り回数がありません'}
+        <aside className="panel studio__aside stack">
+          <h2 className="studio__aside-title">This generation</h2>
+          <dl className="studio__facts">
+            <div>
+              <dt>Cost</dt>
+              <dd>1 credit</dd>
+            </div>
+            <div>
+              <dt>Balance after</dt>
+              <dd>{Math.max(credits - 1, 0)} credits</dd>
+            </div>
+            <div>
+              <dt>Length</dt>
+              <dd>{DURATIONS.find((d) => d.value === draft.durationSeconds)?.label}</dd>
+            </div>
+            <div>
+              <dt>Vocals</dt>
+              <dd>{draft.instrumental ? 'Instrumental' : draft.lyrics.trim() ? 'Your lyrics' : 'AI lyrics'}</dd>
+            </div>
+            <div>
+              <dt>Visibility</dt>
+              <dd>{draft.visibility === 'public' ? 'Public on Explore' : 'Private'}</dd>
+            </div>
+          </dl>
+          <button type="submit" className="btn btn--primary btn--lg btn--block" disabled={!canSubmit}>
+            {submitting ? 'Submitting…' : 'Create song · 1 credit'}
           </button>
-          {available === 0 && (
-            <p className="small" style={{ margin: 'var(--s1) 0 0', textAlign: 'center' }}>
-              <Link to="/pricing">料金ページ</Link> から回数を追加してください。入力内容は保存されています。
+          {credits < 1 && (
+            <p className="small">
+              Out of credits —{' '}
+              <Link to="/pricing">pick a plan</Link> (the Starter Pack is one-time, no subscription).
             </p>
           )}
-        </div>
+          <p className="small muted">
+            A failed generation never costs a credit. Nothing is shared publicly unless you choose to publish.
+          </p>
+        </aside>
       </form>
-
-      <aside className="stack sticky-side">
-        {/* UI-03: consumption and the real remaining balance shown before submitting. */}
-        <div className="panel panel--tight stack stack--tight">
-          <h2 style={{ fontSize: 17, margin: 0 }}>今回の消費</h2>
-          <div className="row row--between">
-            <span className="muted">この生成</span>
-            <strong className="num">1 回</strong>
-          </div>
-          <div className="row row--between">
-            <span className="muted">現在の残り</span>
-            <strong className="num">{available} 回</strong>
-          </div>
-          <hr className="divider" />
-          <ul className="small muted" style={{ margin: 0, paddingLeft: '1.2em' }}>
-            <li>1回 = 技術的に正常な30秒音源1つ</li>
-            <li>別バージョンが欲しい場合はもう1回消費します</li>
-            <li>試聴・カット・再ダウンロードは無料です</li>
-            <li>技術的な失敗や審査不通過では消費されません</li>
-          </ul>
-        </div>
-
-        <div className="panel panel--tight stack stack--tight">
-          <h2 style={{ fontSize: 17, margin: 0 }}>この生成の条件</h2>
-          <div className="row row--between small">
-            <span className="muted">長さ</span>
-            <span className="num">30秒（固定）</span>
-          </div>
-          <div className="row row--between small">
-            <span className="muted">形式</span>
-            <span>インスト（歌詞・ボーカルなし）</span>
-          </div>
-          <div className="row row--between small">
-            <span className="muted">ダウンロード</span>
-            <span>MP3{runtime?.features.wavExportEnabled ? ' / WAV' : ''}</span>
-          </div>
-          {runtime && !runtime.features.commercialDeliveryEnabled && (
-            <p className="small" style={{ margin: 0, color: 'var(--warning)' }}>
-              現在は商用利用の許諾が未取得のため、動作確認の範囲でのご利用となります。
-            </p>
-          )}
-        </div>
-      </aside>
     </div>
   );
 }

@@ -85,12 +85,17 @@ export const TempoHint = z.enum(['slow', 'medium', 'fast']);
 export type TempoHint = z.infer<typeof TempoHint>;
 
 /**
- * Launch scope is instrumental only (§1.2). The enum exists so the value is
- * explicit in every stored record and in every upstream request, rather than
- * being an unstated assumption a provider default could silently flip.
+ * Instrumental-only was the 2026-09 MVP scope; the product now also generates
+ * sung songs. The value stays explicit in every stored record and in every
+ * upstream request, rather than being an unstated assumption a provider
+ * default could silently flip.
  */
-export const VocalMode = z.enum(['instrumental']);
+export const VocalMode = z.enum(['instrumental', 'with_vocals']);
 export type VocalMode = z.infer<typeof VocalMode>;
+
+/** Whether a delivered song appears on the public Explore feed. */
+export const Visibility = z.enum(['private', 'public']);
+export type Visibility = z.infer<typeof Visibility>;
 
 export const AudioFormat = z.enum(['mp3', 'wav']);
 export type AudioFormat = z.infer<typeof AudioFormat>;

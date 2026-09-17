@@ -2,14 +2,14 @@ import { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import type { EntitlementsView } from '@loopscene/contracts';
 import { apiFetch, newIdempotencyKey } from '../lib/api';
-import { formatJpy, formatJst, useSession } from '../lib/session';
+import { formatMoney, formatJst, useSession } from '../lib/session';
 import { Badge, ErrorNotice, Loading } from '../components/common';
 
 interface OrderRow {
   orderId: string;
   priceKey: string;
   kind: string;
-  amountJpy: number;
+  amountMinor: number;
   status: string;
   entitlementGranted: boolean;
   createdAt: string;
@@ -281,7 +281,7 @@ export default function Billing() {
                       <td className="small">
                         {o.priceKey === 'drop_5' ? 'DROP（5回パック）' : 'CREATOR（月額20回）'}
                       </td>
-                      <td className="num">{formatJpy(o.amountJpy)}</td>
+                      <td className="num">{formatMoney(o.amountMinor)}</td>
                       <td>
                         <Badge tone={s.tone}>{s.label}</Badge>
                       </td>

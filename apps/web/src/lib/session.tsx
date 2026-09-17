@@ -96,20 +96,27 @@ export function useSession(): SessionState {
   return ctx;
 }
 
-/** Formats an ISO instant in JST, which is the only timezone the UI shows (§10 / UI-11). */
+/** Formats an ISO instant as a local date-time (billing history). */
 export function formatJst(iso: string | null | undefined, withTime = true): string {
   if (!iso) return '—';
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return '—';
-  return new Intl.DateTimeFormat('ja-JP', {
-    timeZone: 'Asia/Tokyo',
+  return new Intl.DateTimeFormat('en-US', {
     year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
+    month: 'short',
+    day: 'numeric',
     ...(withTime ? { hour: '2-digit', minute: '2-digit', hour12: false } : {}),
   }).format(d);
 }
 
+/** Minor units → display string. USD cents by default (the launch catalogue). */
+export function formatMoney(amountMinor: number, currency = 'usd'): string {
+  const cur = currency.toUpperCase();
+  const value = cur === 'JPY' ? amountMinor : amountMinor / 100;
+  return new Intl.NumberFormat('en-US', { style: 'currency', currency: cur }).format(value);
+}
+
+/** Legacy name kept for the admin console; formats JPY-major integers. */
 export function formatJpy(amount: number): string {
   return new Intl.NumberFormat('ja-JP', { style: 'currency', currency: 'JPY' }).format(amount);
 }

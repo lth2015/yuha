@@ -118,12 +118,26 @@ async function submitJob(deps: PipelineDeps, job: JobRow): Promise<void> {
     }
   }
 
-  const input = job.input as { scene: string; prompt: string; energy: number; durationSeconds: number };
+  const input = job.input as {
+    mode?: 'simple' | 'custom';
+    prompt: string;
+    lyrics?: string | null;
+    styles?: string[];
+    instrumental?: boolean;
+    title?: string | null;
+    energy: number;
+    durationSeconds: number;
+  };
 
-  // ---- text model: turn the Japanese description into validated parameters
+  // ---- text model: turn the creator's description into validated parameters
   const intentResult = await ctx.text.extractIntent({
-    scene: input.scene,
+    scene: 'daily_log', // The provider derives the real scene from styles.
+    mode: input.mode ?? 'simple',
     prompt: input.prompt,
+    lyrics: input.mode === 'custom' ? (input.lyrics ?? null) : null,
+    styles: input.styles ?? [],
+    instrumental: input.instrumental ?? true,
+    title: input.title ?? null,
     energy: input.energy,
     durationSeconds: input.durationSeconds,
   });
@@ -159,14 +173,15 @@ async function submitJob(deps: PipelineDeps, job: JobRow): Promise<void> {
   }
 
   // Server-side re-validation. AI-03: the model's output is data, and it never
-  // reaches the music provider without passing our own schema.
+  // reaches the music provider without passing our own schema. The creator's
+  // own choices (duration, vocal mode, title) are re-imposed here rather than
+  // trusted from the model.
   const parsed = musicIntent.safeParse({
     ...intentResult.intent,
-    // Non-negotiable launch constraints are re-imposed here, not trusted from
-    // the model: fixed duration and instrumental only.
     durationSeconds: input.durationSeconds,
-    vocalMode: 'instrumental',
-    scene: input.scene,
+    vocalMode: input.instrumental === false ? 'with_vocals' : 'instrumental',
+    lyrics: input.instrumental === false ? (input.lyrics ?? intentResult.intent.lyrics ?? null) : null,
+    title: input.title ?? intentResult.intent.title ?? null,
   });
   if (!parsed.success) {
     await failJob(ctx, { job, to: 'FAILED', errorCode: 'intent_schema_invalid' });

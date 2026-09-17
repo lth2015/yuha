@@ -123,7 +123,7 @@ export function AudioPlayer({
   if (!url) {
     return (
       <div className="player">
-        <span className="muted small">再生できる音源がまだありません</span>
+        <span className="muted small">No playable audio yet</span>
       </div>
     );
   }
@@ -131,15 +131,31 @@ export function AudioPlayer({
   const duration = isActive && player.duration ? player.duration : 30;
   const current = isActive ? player.currentTime : 0;
 
+  const startOrToggle = () => {
+    if (isActive) player.toggle();
+    else
+      player.play({
+        trackId: id,
+        title: label,
+        artistName: null,
+        coverSeed: 0,
+        durationSeconds: duration,
+        vocalMode: 'instrumental',
+        likeCount: 0,
+        likedByMe: null,
+        previewUrl: url,
+      });
+  };
+
   return (
-    <div className="player">
+    <div className="player row" style={{ alignItems: 'center' }}>
       <button
         type="button"
-        className={`player__btn ${isLoading ? 'player__btn--busy' : ''}`}
-        onClick={() => player.toggle(id, url)}
-        aria-label={isPlaying ? `${label} を一時停止` : `${label} を再生`}
+        className={`btn-icon${isPlaying ? '' : ' btn-icon--main'}`}
+        onClick={startOrToggle}
+        aria-label={isPlaying ? `Pause ${label}` : `Play ${label}`}
       >
-        {isLoading ? '…' : isPlaying ? '❚❚' : '▶'}
+        <span className={isLoading ? 'spinner' : isPlaying ? 'icon icon--pause' : 'icon icon--play'} aria-hidden="true" />
       </button>
 
       {!compact && (
@@ -152,10 +168,10 @@ export function AudioPlayer({
             step={0.1}
             value={current}
             onChange={(e) => {
-              if (!isActive) player.toggle(id, url);
+              if (!isActive) startOrToggle();
               player.seek(Number(e.target.value));
             }}
-            aria-label={`${label} の再生位置`}
+            aria-label={`Play position of ${label}`}
             aria-valuetext={`${formatTime(current)} / ${formatTime(duration)}`}
           />
           <span className="player__time" aria-hidden="true">
@@ -166,7 +182,7 @@ export function AudioPlayer({
 
       {failed && (
         <span className="small" style={{ color: 'var(--danger)' }} role="alert">
-          再生に失敗しました。時間をおいてお試しください。
+          Playback failed — please try again in a moment.
         </span>
       )}
     </div>

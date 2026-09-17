@@ -1,174 +1,112 @@
 import { useEffect, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
-import type { ProductView } from '@loopscene/contracts';
+import { Link } from 'react-router-dom';
+import type { TrackView } from '@loopscene/contracts';
 import { apiFetch } from '../lib/api';
-import { SCENE_LABELS } from '../lib/messages';
-import { formatJpy, useSession } from '../lib/session';
-import { AudioPlayer, ErrorNotice, Loading } from '../components/common';
-
-interface Sample {
-  id: string;
-  scene: string;
-  title: string;
-  durationSeconds: number;
-  url: string;
-  demo: boolean;
-}
+import { useSession } from '../lib/session';
+import { SongCard } from '../components/SongCard';
 
 /**
- * UI-01: scenes, playable samples, the main create entry point and pricing.
- * A visitor can listen before signing in; signing in is required only when a
- * generation is actually started.
+ * Landing page: what the product is, one song-creation CTA, and the live
+ * Explore feed already playing beneath it. Visitors can audition songs before
+ * signing in — the account comes at the moment of creation, not before.
  */
 export default function Home() {
-  const navigate = useNavigate();
-  const { me, runtime } = useSession();
-  const [samples, setSamples] = useState<Sample[]>([]);
-  const [provenance, setProvenance] = useState<string | null>(null);
-  const [products, setProducts] = useState<ProductView[]>([]);
-  const [error, setError] = useState<unknown>(null);
-  const [loading, setLoading] = useState(true);
+  const { me } = useSession();
+  const [songs, setSongs] = useState<TrackView[] | null>(null);
+  const [failed, setFailed] = useState(false);
 
   useEffect(() => {
-    void (async () => {
-      try {
-        const [s, p] = await Promise.all([
-          apiFetch<{ items: Sample[]; provenance: string | null }>('/v1/samples'),
-          apiFetch<{ items: ProductView[] }>('/v1/products'),
-        ]);
-        setSamples(s.items);
-        setProvenance(s.provenance);
-        setProducts(p.items);
-      } catch (err) {
-        setError(err);
-      } finally {
-        setLoading(false);
-      }
-    })();
+    apiFetch<{ items: TrackView[] }>('/v1/explore?limit=8&sort=trending')
+      .then((r) => setSongs(r.items))
+      .catch(() => setFailed(true));
   }, []);
-
-  /** Carries the chosen scene into the create page so it is not asked twice. */
-  const startWithScene = (scene: string) => {
-    const target = `/create?scene=${encodeURIComponent(scene)}`;
-    navigate(me ? target : `/auth?next=${encodeURIComponent(target)}`);
-  };
-
-  const drop = products.find((p) => p.priceKey === 'drop_5');
 
   return (
     <div className="stack stack--loose">
-      <section className="stack">
-        <h1>
-          シーンを選ぶ。気分を書く。
-          <br />
-          30秒のBGMができる。
-        </h1>
-        <p className="muted" style={{ fontSize: 18, maxWidth: '60ch' }}>
-          ショート動画のための、歌詞なし・ボーカルなしのオリジナルBGM。
-          試聴してから15秒／30秒に切り出して、そのままダウンロードできます。
-        </p>
-
-        {/* UI-01: exactly one primary action on the landing page. */}
-        <div className="row">
-          <Link className="btn btn--primary" to={me ? '/create' : '/auth?next=%2Fcreate'}>
-            サウンドをつくる
-          </Link>
-          <Link className="btn btn--ghost" to="/pricing">
-            料金を見る
-          </Link>
-        </div>
-
-        {drop && (
-          <p className="small muted" style={{ margin: 0 }}>
-            {drop.displayName}：{formatJpy(drop.amountJpy)}（税込）で {drop.units} 回。
-            {drop.validityDays && `購入後 ${drop.validityDays} 日間有効。`}
-            自動更新はありません。
+      <section className="hero">
+        <div className="hero__glow" aria-hidden="true" />
+        <div className="hero__inner">
+          <p className="hero__eyebrow">AI song studio</p>
+          <h1 className="hero__title">
+            Any song you can <em>describe</em>.
+          </h1>
+          <p className="hero__sub">
+            Write an idea, pick a vibe, get a finished song — lyrics sung or instrumental, up to four minutes,
+            yours to publish and download.
           </p>
-        )}
-      </section>
-
-      <ErrorNotice error={error} />
-
-      <section className="stack">
-        <h2>シーンから選ぶ</h2>
-        <div className="scene-grid">
-          {Object.entries(SCENE_LABELS).map(([key, label]) => (
-            <button
-              key={key}
-              type="button"
-              className="scene-card"
-              onClick={() => startWithScene(key)}
-            >
-              <span className="scene-card__title">{label.title}</span>
-              <span className="muted small">{label.description}</span>
-              <span className="badge badge--accent" style={{ alignSelf: 'flex-start' }}>
-                このシーンでつくる
-              </span>
-            </button>
-          ))}
+          <div className="hero__cta">
+            <Link className="btn btn--primary btn--lg" to={me ? '/create' : '/auth?next=/create'}>
+              <span className="icon icon--create" aria-hidden="true" />
+              Create a song
+            </Link>
+            <Link className="btn btn--ghost btn--lg" to="/explore">
+              Explore what people made
+            </Link>
+          </div>
+          <div className="hero__stats" aria-label="Product facts">
+            <div>
+              <strong>30s – 4min</strong>
+              <span>song length</span>
+            </div>
+            <div>
+              <strong>Vocals or instrumental</strong>
+              <span>your lyrics or ours</span>
+            </div>
+            <div>
+              <strong>MP3 download</strong>
+              <span>publish to Explore</span>
+            </div>
+          </div>
         </div>
       </section>
 
-      <section className="stack">
-        <h2>サンプルを聴く</h2>
-        {loading ? (
-          <Loading />
-        ) : samples.length === 0 ? (
-          <p className="muted">現在再生できるサンプルはありません。</p>
+      <section aria-labelledby="trending-heading">
+        <div className="section-head">
+          <h2 id="trending-heading">Trending now</h2>
+          <Link to="/explore" className="section-head__more">
+            See all
+          </Link>
+        </div>
+        {failed ? (
+          <div className="empty">
+            <p>The feed could not be loaded right now. Please refresh in a moment.</p>
+          </div>
+        ) : songs === null ? (
+          <div className="grid grid--songs" aria-hidden="true">
+            {Array.from({ length: 4 }, (_, i) => (
+              <div key={i} className="skeleton skeleton--card" />
+            ))}
+          </div>
+        ) : songs.length === 0 ? (
+          <div className="empty">
+            <p>Nothing published yet — be the first to share a song.</p>
+            <Link className="btn btn--primary" to={me ? '/create' : '/auth?next=/create'}>
+              Create the first one
+            </Link>
+          </div>
         ) : (
-          <div className="grid">
-            {samples.map((s) => (
-              <article key={s.id} className="card">
-                <div className="row row--between">
-                  <strong>{s.title}</strong>
-                  <span className="badge">{s.durationSeconds}秒</span>
-                </div>
-                <AudioPlayer id={`sample-${s.id}`} url={s.url} label={s.title} />
-              </article>
+          <div className="grid grid--songs">
+            {songs.map((song) => (
+              <SongCard key={song.trackId} song={song} queue={songs} />
             ))}
           </div>
         )}
-
-        {/* UI-01: the samples carry a lawful-source record. */}
-        {provenance && (
-          <div className="alert alert--info">
-            <div className="alert__title">サンプル音源について</div>
-            <div className="small">{provenance}</div>
-          </div>
-        )}
       </section>
 
-      <section className="stack">
-        <h2>できること・できないこと</h2>
-        <div className="grid">
-          <div className="card">
-            <strong>できること</strong>
-            <ul className="muted small" style={{ margin: 0, paddingLeft: '1.2em' }}>
-              <li>シーンと気分から30秒のインストBGMを生成</li>
-              <li>スマホでの試聴・15秒／30秒の切り出し・1秒フェードアウト</li>
-              <li>MP3のダウンロードと、楽曲ごとの利用条件記録の確認</li>
-              <li>作品は自分だけに表示（公開機能はありません）</li>
-            </ul>
-          </div>
-          <div className="card">
-            <strong>今回は対応していないこと</strong>
-            <ul className="muted small" style={{ margin: 0, paddingLeft: '1.2em' }}>
-              <li>歌詞・ボーカル・歌声の再現</li>
-              <li>アーティスト名や既存曲を指定した生成</li>
-              <li>参考曲・ハミング・音源ファイルのアップロード</li>
-              <li>音楽配信（Spotify等）、Content ID登録、楽曲の再販売</li>
-            </ul>
-          </div>
-        </div>
-        {runtime && !runtime.features.commercialDeliveryEnabled && (
-          <div className="alert alert--warn">
-            <div className="alert__title">商用利用の許諾はまだ有効になっていません</div>
-            <div className="small">
-              現在は動作確認の範囲でご利用ください。利用できる範囲は楽曲ごとの利用条件記録に記載され、
-              購入前にも <Link to="/pricing">料金ページ</Link> で確認できます。
-            </div>
-          </div>
-        )}
+      <section className="how" aria-labelledby="how-heading">
+        <h2 id="how-heading">How it works</h2>
+        <ol className="how__steps">
+          <li>
+            <strong>Describe it.</strong> “A dreamy synthwave night drive with airy vocals” — or paste your own
+            lyrics.
+          </li>
+          <li>
+            <strong>Shape it.</strong> Style tags, energy, length, vocals on or off. One credit generates one song.
+          </li>
+          <li>
+            <strong>Release it.</strong> Listen in the app, download the MP3, publish it to Explore with one tap.
+          </li>
+        </ol>
       </section>
     </div>
   );

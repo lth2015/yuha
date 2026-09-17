@@ -17,6 +17,8 @@ export interface MusicCapabilities {
   supportedFormats: AudioFormat[];
   /** Whether the provider can be asked for instrumental-only output. */
   supportsInstrumentalOnly: boolean;
+  /** Whether the provider can sing supplied lyrics. Gates vocal requests (AI-05). */
+  supportsVocals: boolean;
   /** Whether a stable request key deduplicates upstream (drives GEN-06 handling). */
   supportsIdempotencyKey: boolean;
   supportsCancel: boolean;

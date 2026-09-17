@@ -8,6 +8,7 @@ import errorPlugin from './plugins/errors.js';
 import adminRoutes from './routes/admin.js';
 import authRoutes from './routes/auth.js';
 import billingRoutes from './routes/billing.js';
+import exploreRoutes from './routes/explore.js';
 import fileRoutes from './routes/files.js';
 import generationRoutes from './routes/generations.js';
 import projectRoutes from './routes/projects.js';
@@ -83,6 +84,7 @@ export async function buildServer(ctx: AppContext): Promise<FastifyInstance> {
   await app.register(authRoutes, { ctx, adapter });
   await app.register(projectRoutes);
   await app.register(generationRoutes, { ctx });
+  await app.register(exploreRoutes, { ctx });
   await app.register(trackRoutes, { ctx });
   await app.register(fileRoutes, { ctx });
   await app.register(billingRoutes, { ctx });

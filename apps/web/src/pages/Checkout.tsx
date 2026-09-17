@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import type { OrderView, ProductView } from '@loopscene/contracts';
 import { apiFetch, newIdempotencyKey } from '../lib/api';
-import { formatJpy, formatJst, useSession } from '../lib/session';
+import { formatMoney, formatJst, useSession } from '../lib/session';
 import { Badge, ErrorNotice, Loading } from '../components/common';
 
 interface Disclosure {
@@ -91,7 +91,7 @@ export function CheckoutConfirm() {
               <tr>
                 <th>お支払い金額</th>
                 <td className="num">
-                  <strong>{formatJpy(product.amountJpy)}</strong>（税込）
+                  <strong>{formatMoney(product.amountMinor)}</strong>（税込）
                 </td>
               </tr>
               <tr>
@@ -119,7 +119,7 @@ export function CheckoutConfirm() {
                     <>
                       毎月自動更新（次回請求予定：
                       <span className="num">{formatJst(nextChargeDate, false)}</span> 頃・
-                      {formatJpy(product.amountJpy)}）
+                      {formatMoney(product.amountMinor)}）
                     </>
                   ) : (
                     '自動更新はありません'
@@ -182,7 +182,7 @@ export function CheckoutConfirm() {
         disabled={!agreed || submitting || !product.available}
         onClick={() => void proceed()}
       >
-        {submitting ? '手続き中…' : `${formatJpy(product.amountJpy)} を支払う`}
+        {submitting ? '手続き中…' : `${formatMoney(product.amountMinor)} を支払う`}
       </button>
 
       <p className="small muted" style={{ margin: 0, textAlign: 'center' }}>
@@ -259,7 +259,7 @@ export function CheckoutComplete() {
             <p style={{ margin: 0 }}>
               {order && (
                 <>
-                  {formatJpy(order.amountJpy)}（税込）のお支払いを確認しました。
+                  {formatMoney(order.amountMinor)}（税込）のお支払いを確認しました。
                   <br />
                 </>
               )}
@@ -349,7 +349,7 @@ export function CheckoutSimulate() {
       <section className="panel stack">
         <div className="row row--between">
           <span className="muted">お支払い金額</span>
-          <strong className="num">{formatJpy(amount)}</strong>
+          <strong className="num">{formatMoney(amount)}</strong>
         </div>
         <hr className="divider" />
         <button

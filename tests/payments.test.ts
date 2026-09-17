@@ -75,9 +75,9 @@ describe('checkout', () => {
     expect(res.statusCode).toBe(200);
 
     const order = await getOrder(res.json().orderId);
-    expect(order!.amount_jpy).toBe(980);
-    expect(order!.currency).toBe('jpy');
-    expect(order!.price_version).toBe(1);
+    expect(order!.amount_jpy).toBe(499);
+    expect(order!.currency).toBe('usd');
+    expect(order!.price_version).toBe(2);
     expect(order!.status).toBe('pending');
   });
 
@@ -186,8 +186,8 @@ describe('one-time purchase', () => {
             id: sessionId,
             client_reference_id: orderId,
             payment_status: 'paid',
-            amount_total: 980,
-            currency: 'jpy',
+            amount_total: 499,
+            currency: 'usd',
             metadata: { order_id: orderId, user_id: user.id },
           },
         },
@@ -301,7 +301,7 @@ describe('subscription', () => {
           userId: user.id,
           stripeSubscriptionId: subId,
           stripeCustomerId: 'cus_test_1',
-          priceKey: 'creator_monthly',
+          priceKey: 'pro_monthly',
           priceVersion: 1,
           status: 'active',
           currentPeriodStart: new Date(Date.now() - 86400_000),
@@ -326,7 +326,7 @@ describe('subscription', () => {
             source: 'subscription_period',
             sourceRef: `${subId}:in_0001`,
             units: 20,
-            productKey: 'creator_monthly',
+            productKey: 'pro_monthly',
             priceVersion: 1,
             expiresAt: new Date(Date.now() + 30 * 86400_000),
             reason: 'invoice',
@@ -381,7 +381,7 @@ describe('subscription', () => {
           userId: user.id,
           stripeSubscriptionId: subId,
           stripeCustomerId: 'cus_test_1',
-          priceKey: 'creator_monthly',
+          priceKey: 'pro_monthly',
           priceVersion: 1,
           status: 'canceled',
           currentPeriodStart: null,
@@ -400,7 +400,7 @@ describe('subscription', () => {
           userId: user.id,
           stripeSubscriptionId: subId,
           stripeCustomerId: 'cus_test_1',
-          priceKey: 'creator_monthly',
+          priceKey: 'pro_monthly',
           priceVersion: 1,
           status: 'active',
           currentPeriodStart: null,
@@ -429,7 +429,7 @@ describe('subscription', () => {
           userId: user.id,
           stripeSubscriptionId: subId,
           stripeCustomerId: 'cus_test_1',
-          priceKey: 'creator_monthly',
+          priceKey: 'pro_monthly',
           priceVersion: 1,
           status: 'past_due',
           currentPeriodStart: new Date(Date.now() - 86400_000),
@@ -526,7 +526,7 @@ describe('refunds (PAY-09)', () => {
           id: 're_test_1',
           charge: 'ch_test_1',
           payment_intent: order!.stripe_payment_intent_id,
-          amount_refunded: 980,
+          amount_refunded: 499,
           metadata: { order_id: orderId },
         },
       },
@@ -569,7 +569,7 @@ describe('refunds (PAY-09)', () => {
           id: 're_test_2',
           charge: 'ch_test_2',
           payment_intent: order!.stripe_payment_intent_id,
-          amount_refunded: 980,
+          amount_refunded: 499,
           metadata: { order_id: orderId },
         },
       },

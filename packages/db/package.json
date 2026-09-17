@@ -14,8 +14,8 @@
   "scripts": {
     "build": "tsc -p tsconfig.json && node ../../scripts/copy-migrations.mjs",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "migrate": "tsx src/cli.ts migrate",
-    "reset": "tsx src/cli.ts reset"
+    "migrate": "tsx --env-file-if-exists=../../.env src/cli.ts migrate",
+    "reset": "tsx --env-file-if-exists=../../.env src/cli.ts reset"
   },
   "dependencies": {
     "@loopscene/contracts": "workspace:*",

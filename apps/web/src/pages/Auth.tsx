@@ -1,24 +1,30 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import type { MeView } from '@loopscene/contracts';
 import { apiFetch } from '../lib/api';
 import { useSession } from '../lib/session';
 import { ErrorNotice } from '../components/common';
 
+interface AuthConfig {
+  adapter: string;
+  devLogin: boolean;
+  google: { enabled: boolean; configured: boolean; clientId: string | null };
+}
+
 /**
- * UI-02: sign-in with an explicit 18+ confirmation, separate terms consent, and
- * a marketing checkbox that is separate and unchecked by default.
+ * Sign-in.
  *
- * In demo mode this posts to the development login. In integration/production
- * the identity provider is Cognito, whose email-OTP challenge runs on its own
- * hosted flow — this app never sends codes or handles passwords itself, which
- * is why there is no OTP form here for that path.
+ * "Continue with Google" is the front door: it redirects through the API's
+ * OAuth start endpoint and returns to /auth/google/callback, which exchanges
+ * the one-time code for a session. The email form is the demo/integration
+ * development login and only appears when the server says it exists.
  */
 export default function Auth() {
   const navigate = useNavigate();
   const [params] = useSearchParams();
   const { runtime, signIn } = useSession();
 
+  const [authConfig, setAuthConfig] = useState<AuthConfig | null>(null);
   const [email, setEmail] = useState('');
   const [ageConfirmed, setAgeConfirmed] = useState(false);
   const [termsAccepted, setTermsAccepted] = useState(false);
@@ -27,8 +33,12 @@ export default function Auth() {
   const [submitting, setSubmitting] = useState(false);
 
   const next = params.get('next') ?? '/create';
-  const isDev = runtime?.adapters.auth === 'dev';
+  const googleError = params.get('google_error');
   const canSubmit = email.includes('@') && ageConfirmed && termsAccepted && !submitting;
+
+  useEffect(() => {
+    apiFetch<AuthConfig>('/v1/auth/config').then(setAuthConfig).catch(() => setAuthConfig(null));
+  }, []);
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -50,116 +60,129 @@ export default function Auth() {
   };
 
   return (
-    <div style={{ maxWidth: 520, margin: '0 auto' }} className="stack stack--loose">
-      <div className="stack stack--tight">
-        <h1 style={{ fontSize: 30 }}>ログイン / 新規登録</h1>
-        <p className="muted">
-          メールアドレスだけで始められます。生成と購入は18歳以上の方が対象です。
-        </p>
-      </div>
+    <div className="auth-page">
+      <div className="auth-card panel">
+        <h1 className="auth-card__title">Welcome to SONARE</h1>
+        <p className="auth-card__sub">Turn a sentence into a song. Continue with Google to start creating.</p>
 
-      <ErrorNotice error={error} />
-
-      {!isDev && (
-        <div className="alert alert--info">
-          <div className="alert__title">メール認証コードでログインします</div>
-          <div className="small">
-            入力されたメールアドレス宛に確認コードをお送りします。コード入力欄では貼り付けと自動入力に対応し、
-            60秒後に再送できます。認証は外部の認証基盤（Amazon Cognito）で処理されます。
+        <ErrorNotice error={error} />
+        {googleError && (
+          <div className="alert alert--error">
+            <div className="alert__title">Google sign-in did not complete</div>
+            <div className="small">{googleError.replace(/_/g, ' ')} — please try again.</div>
           </div>
-        </div>
-      )}
-
-      <form className="panel stack" onSubmit={submit} noValidate>
-        <div>
-          <label htmlFor="email">メールアドレス</label>
-          <input
-            id="email"
-            type="email"
-            autoComplete="email"
-            inputMode="email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            placeholder="you@example.jp"
-            required
-            aria-describedby="email-help"
-          />
-          <p id="email-help" className="small muted" style={{ margin: '6px 0 0' }}>
-            ログインと重要なお知らせにのみ使用します。
-          </p>
-        </div>
-
-        {/* Age and terms are separate confirmations, both required. */}
-        <div className="checkbox-row">
-          <input
-            id="age"
-            type="checkbox"
-            checked={ageConfirmed}
-            onChange={(e) => setAgeConfirmed(e.target.checked)}
-            required
-          />
-          <label htmlFor="age">
-            18歳以上です（本サービスの生成・購入は18歳以上の方が対象です）
-          </label>
-        </div>
-
-        <div className="checkbox-row">
-          <input
-            id="terms"
-            type="checkbox"
-            checked={termsAccepted}
-            onChange={(e) => setTermsAccepted(e.target.checked)}
-            required
-          />
-          <label htmlFor="terms">
-            <Link to="/legal/terms" target="_blank">
-              利用規約
-            </Link>
-            と
-            <Link to="/legal/privacy" target="_blank">
-              プライバシーポリシー
-            </Link>
-            に同意します
-          </label>
-        </div>
-
-        {/*
-          UI-02 / SEC-11: marketing consent is a separate, unchecked option and
-          is never a condition of using the account.
-        */}
-        <div className="checkbox-row">
-          <input
-            id="marketing"
-            type="checkbox"
-            checked={marketingOptIn}
-            onChange={(e) => setMarketingOptIn(e.target.checked)}
-          />
-          <label htmlFor="marketing">
-            お知らせメールを受け取る（任意・あとから解除できます）
-          </label>
-        </div>
-
-        <button type="submit" className="btn btn--primary btn--block" disabled={!canSubmit}>
-          {submitting ? '処理中…' : isDev ? 'ログイン' : '確認コードを送る'}
-        </button>
-
-        {!canSubmit && !submitting && (
-          <p className="small muted" style={{ margin: 0 }}>
-            メールアドレスの入力と、年齢・規約の確認が必要です。
-          </p>
         )}
-      </form>
 
-      {isDev && runtime?.demo && (
-        <div className="alert alert--warn">
-          <div className="alert__title">開発用ログインです</div>
-          <div className="small">
-            この画面はデモ環境専用の簡易ログインで、本番環境では存在しません。
-            試用アカウント: <code>creator@example.jp</code>（5回分の残高あり）、
-            <code>empty@example.jp</code>（残高なし）、<code>admin@example.jp</code>（管理者）。
+        {authConfig?.google.enabled ? (
+          <a
+            className="btn btn--google btn--block"
+            href={`${import.meta.env['VITE_API_URL'] ?? 'http://localhost:4000'}/v1/auth/google/start`}
+          >
+            <span className="btn--google__g" aria-hidden="true">
+              G
+            </span>
+            Continue with Google
+          </a>
+        ) : (
+          <div className="alert alert--info">
+            <div className="alert__title">Google sign-in is not configured</div>
+            <div className="small">
+              Set <code>GOOGLE_CLIENT_ID</code>, <code>GOOGLE_CLIENT_SECRET</code> and{' '}
+              <code>GOOGLE_REDIRECT_URI</code> in the API environment to enable it. The button will appear here
+              automatically.
+            </div>
           </div>
-        </div>
-      )}
+        )}
+
+        {authConfig?.devLogin && (
+          <>
+            <div className="auth-divider">
+              <span>or use a development identity</span>
+            </div>
+            <form className="stack" onSubmit={submit} noValidate>
+              <div>
+                <label htmlFor="email">Email</label>
+                <input
+                  id="email"
+                  type="email"
+                  autoComplete="email"
+                  inputMode="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="you@example.com"
+                  required
+                />
+              </div>
+
+              {/* Age and terms are separate confirmations, both required. */}
+              <div className="checkbox-row">
+                <input
+                  id="age"
+                  type="checkbox"
+                  checked={ageConfirmed}
+                  onChange={(e) => setAgeConfirmed(e.target.checked)}
+                  required
+                />
+                <label htmlFor="age">I am 18 or older</label>
+              </div>
+
+              <div className="checkbox-row">
+                <input
+                  id="terms"
+                  type="checkbox"
+                  checked={termsAccepted}
+                  onChange={(e) => setTermsAccepted(e.target.checked)}
+                  required
+                />
+                <label htmlFor="terms">
+                  I agree to the{' '}
+                  <Link to="/legal/terms" target="_blank">
+                    Terms
+                  </Link>{' '}
+                  and{' '}
+                  <Link to="/legal/privacy" target="_blank">
+                    Privacy Policy
+                  </Link>
+                </label>
+              </div>
+
+              {/* Marketing consent is separate, unchecked, and never required. */}
+              <div className="checkbox-row">
+                <input
+                  id="marketing"
+                  type="checkbox"
+                  checked={marketingOptIn}
+                  onChange={(e) => setMarketingOptIn(e.target.checked)}
+                />
+                <label htmlFor="marketing">Send me product news (optional)</label>
+              </div>
+
+              <button type="submit" className="btn btn--block" disabled={!canSubmit}>
+                {submitting ? 'Signing in…' : 'Continue with email'}
+              </button>
+            </form>
+
+            {runtime?.demo && (
+              <div className="alert alert--warn">
+                <div className="alert__title">Development login</div>
+                <div className="small">
+                  Demo accounts: <code>creator@example.jp</code> (10 credits), <code>empty@example.jp</code> (no
+                  credits), <code>admin@example.jp</code> (administrator). This form does not exist in production.
+                </div>
+              </div>
+            )}
+          </>
+        )}
+
+        {authConfig?.adapter === 'cognito' && !authConfig.devLogin && (
+          <div className="alert alert--info">
+            <div className="alert__title">Email code sign-in</div>
+            <div className="small">
+              A verification code will be emailed to you; the challenge is hosted by Amazon Cognito.
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   );
 }

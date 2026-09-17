@@ -21,6 +21,10 @@ export const LICENSE_DISCLAIMER_JA = [
   '著作権登録・権利者証明・独占的所有権・非侵害の保証ではありません。',
 ].join('');
 
+export const LICENSE_DISCLAIMER =
+  'This record states the usage terms and generation provenance in force when the song was made. ' +
+  'It is not a copyright registration, proof of ownership, or a non-infringement guarantee.';
+
 /**
  * Storage keys. Owner id is in the path so a leaked key still belongs to a
  * private bucket, and the random suffix makes keys unguessable (SEC-04).
@@ -89,6 +93,8 @@ export async function deliver(ctx: AppContext, params: DeliverParams): Promise<{
     // not charge a second time.
     if (!delivered) return null;
 
+    const input = job.input as { visibility?: 'private' | 'public'; title?: string | null };
+
     // The track row must exist before the job can reference it, so the id is
     // derived from the job id up front and used for both.
     const track = await insertTrack(
@@ -97,11 +103,16 @@ export async function deliver(ctx: AppContext, params: DeliverParams): Promise<{
         ownerId: job.user_id,
         projectId: job.project_id,
         jobId: job.id,
-        title: titleFor(intent),
+        title: input.title || intent.title || titleFor(intent),
         scene: intent.scene,
         mood: intent.mood,
         durationMs: params.durationMs,
         state: 'deliverable',
+        styles: intent.styles,
+        lyrics: intent.lyrics,
+        vocalMode: intent.vocalMode,
+        visibility: input.visibility === 'public' ? 'public' : 'private',
+        coverSeed: coverSeedFor(trackId),
       },
       tx,
     );
@@ -176,24 +187,15 @@ function deterministicTrackId(jobId: string): string {
   ].join('-');
 }
 
+/** Stable 31-bit seed for the procedural cover art. */
+function coverSeedFor(trackId: string): number {
+  return createHash('sha256').update(`cover:${trackId}`).digest().readUInt32BE(0) % 0x7fffffff;
+}
+
+/** Last-resort title: the local text provider normally names the song. */
 function titleFor(intent: MusicIntent): string {
-  const scene: Record<string, string> = {
-    night_walk: '夜の散歩',
-    daily_log: '日常記録',
-    outfit: 'コーデ',
-    gaming: 'ゲーム',
-  };
-  const mood: Record<string, string> = {
-    calm: '静けさ',
-    dreamy: '夢見心地',
-    warm: 'あたたかさ',
-    melancholic: '切なさ',
-    confident: '自信',
-    playful: '軽やか',
-    tense: '緊張感',
-    uplifting: '前向き',
-  };
-  return `${scene[intent.scene] ?? 'シーン'}・${mood[intent.mood] ?? 'ムード'}`;
+  const style = intent.styles[0] ?? 'Song';
+  return `${style.charAt(0).toUpperCase()}${style.slice(1)} · ${intent.mood}`;
 }
 
 /**

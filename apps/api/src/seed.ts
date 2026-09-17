@@ -1,21 +1,24 @@
 /**
- * Seeds the price catalogue, the landing-page samples and demo accounts.
+ * Seeds the price catalogue, the Explore showcase songs and demo accounts.
  *
- * The product rows here are the *baseline test prices* from PROJECT_TASK.md
- * §1.1. They are versioned, and §11 requires them to be re-derived from signed
- * supplier rates and a legal review before anything is actually sold — seeding
- * them is not approval to charge.
+ * Product rows are the launch pricing baseline for the SONARE product. They are
+ * versioned, and must be re-derived from signed supplier rates and a legal
+ * review before anything is actually sold — seeding them is not approval to
+ * charge.
  */
 import { readFile, readdir } from 'node:fs/promises';
+import { createHash } from 'node:crypto';
 import { join } from 'node:path';
 import {
   closeDb,
   migrate,
+  query,
   setRole,
   upsertProduct,
   upsertUser,
   confirmAgeAndTerms,
   grantUnits,
+  newId,
   withTx,
 } from '@loopscene/db';
 import { loadConfig } from './config.js';
@@ -33,9 +36,9 @@ await upsertProduct({
   price_key: 'drop_5',
   version: 1,
   kind: 'one_time',
-  display_name: 'DROP（5回パック）',
-  amount_jpy: 980,
-  currency: 'jpy',
+  display_name: 'Starter Pack — 5 songs',
+  amount_jpy: 499,
+  currency: 'usd',
   tax_included: true,
   units: 5,
   validity_days: 90,
@@ -45,57 +48,172 @@ await upsertProduct({
 });
 
 await upsertProduct({
-  price_key: 'creator_monthly',
+  price_key: 'pro_monthly',
   version: 1,
   kind: 'subscription',
-  display_name: 'CREATOR（月額20回）',
-  amount_jpy: 1980,
-  currency: 'jpy',
+  display_name: 'Pro — 100 songs / month',
+  amount_jpy: 999,
+  currency: 'usd',
   tax_included: true,
-  units: 20,
+  units: 100,
   validity_days: null,
   auto_renew: true,
-  stripe_price_id: config.STRIPE_PRICE_ID_CREATOR_MONTHLY ?? null,
+  stripe_price_id: config.STRIPE_PRICE_ID_PRO_MONTHLY ?? null,
   active: true,
 });
 
-console.log('✓ product catalogue seeded (drop_5 v1, creator_monthly v1)');
+await upsertProduct({
+  price_key: 'premier_monthly',
+  version: 1,
+  kind: 'subscription',
+  display_name: 'Premier — 400 songs / month',
+  amount_jpy: 2999,
+  currency: 'usd',
+  tax_included: true,
+  units: 400,
+  validity_days: null,
+  auto_renew: true,
+  stripe_price_id: config.STRIPE_PRICE_ID_PREMIER_MONTHLY ?? null,
+  active: true,
+});
 
-// ------------------------------------------------------- landing page samples
+console.log('✓ product catalogue seeded (drop_5, pro_monthly, premier_monthly — USD)');
 
-if (config.adapters.music === 'demo') {
-  const dir = resolveFromRoot(config.DEMO_FIXTURES_DIR ?? './assets/fixtures/audio');
-  try {
-    const files = (await readdir(dir)).filter((f) => f.endsWith('.mp3'));
-    for (const file of files) {
-      const body = await readFile(join(dir, file));
-      await ctx.storage.put({
-        zone: 'delivery',
-        key: `samples/${file}`,
-        body,
-        contentType: 'audio/mpeg',
-      });
-    }
-    console.log(`✓ ${files.length} landing-page samples published to the delivery zone`);
-  } catch (err) {
-    console.warn(`! could not publish samples: ${(err as Error).message}`);
-    console.warn('  run "pnpm fixtures:audio" first');
+// ------------------------------------------------------ explore showcase
+
+/**
+ * Publishes a handful of fully-synthesised songs to the public Explore feed so
+ * the product does not open onto an empty screen. Every row states exactly what
+ * it is: demo-local provenance, preview licence, no commercial claim.
+ */
+const SHOWCASE: Array<{
+  fixture: string;
+  title: string;
+  artist: string;
+  styles: string[];
+  vocalMode: 'instrumental' | 'with_vocals';
+  durationSeconds: number;
+  plays: number;
+  likes: number;
+}> = [
+  { fixture: 'night_walk_calm-120s.mp3', title: 'Neon Rain', artist: 'Aoi', styles: ['lofi', 'chill', 'night'], vocalMode: 'instrumental', durationSeconds: 120, plays: 184, likes: 41 },
+  { fixture: 'outfit_confident-120s.mp3', title: 'Chrome Heart', artist: 'Rin', styles: ['trap', 'fashion', 'confident'], vocalMode: 'with_vocals', durationSeconds: 120, plays: 142, likes: 35 },
+  { fixture: 'gaming_tense-120s.mp3', title: 'Night Signal', artist: 'Kite', styles: ['synthwave', 'arcade', 'epic'], vocalMode: 'instrumental', durationSeconds: 120, plays: 121, likes: 27 },
+  { fixture: 'daily_log_warm-120s.mp3', title: 'Golden Hour', artist: 'Mei', styles: ['vlog', 'acoustic', 'warm'], vocalMode: 'with_vocals', durationSeconds: 120, plays: 98, likes: 22 },
+  { fixture: 'night_walk_dreamy-120s.mp3', title: 'Paper Moon', artist: 'Aoi', styles: ['ambient', 'dreamy'], vocalMode: 'instrumental', durationSeconds: 120, plays: 76, likes: 18 },
+  { fixture: 'gaming_tense-60s.mp3', title: 'Cold Wire', artist: 'Kite', styles: ['dnb', 'tense', 'battle'], vocalMode: 'instrumental', durationSeconds: 60, plays: 54, likes: 12 },
+];
+
+async function seedShowcase() {
+  if (config.adapters.music !== 'demo') return;
+
+  const existing = await query<{ n: number }>(`SELECT COUNT(*) AS n FROM tracks WHERE visibility = 'public'`);
+  if (Number(existing[0]?.n ?? 0) > 0) {
+    console.log('✓ showcase songs already present, skipping');
+    return;
   }
+
+  const dir = resolveFromRoot(config.DEMO_FIXTURES_DIR ?? './assets/fixtures/audio');
+  const artistIds = new Map<string, string>();
+
+  for (const song of SHOWCASE) {
+    let body: Buffer;
+    try {
+      body = await readFile(join(dir, song.fixture));
+    } catch {
+      console.warn(`! fixture ${song.fixture} missing — run "pnpm fixtures:audio" first`);
+      continue;
+    }
+
+    if (!artistIds.has(song.artist)) {
+      const email = `${song.artist.toLowerCase()}@showcase.sonare.demo`;
+      const externalId = `dev-${Buffer.from(email).toString('hex').slice(0, 24)}`;
+      const user = await upsertUser({ authProvider: 'dev', externalId, email, displayName: song.artist });
+      await confirmAgeAndTerms({ userId: user.id, marketingOptIn: false });
+      artistIds.set(song.artist, user.id);
+    }
+    const ownerId = artistIds.get(song.artist)!;
+
+    const projectId = newId();
+    await query(
+      `INSERT INTO projects (id, owner_id, title, scene) VALUES (?, ?, ?, 'daily_log')`,
+      [projectId, ownerId, `${song.artist} · Showcase`],
+    );
+
+    const jobId = newId();
+    const input = {
+      mode: 'simple',
+      title: song.title,
+      prompt: `showcase ${song.styles.join(' ')}`,
+      lyrics: null,
+      styles: song.styles,
+      instrumental: song.vocalMode === 'instrumental',
+      energy: 0.5,
+      durationSeconds: song.durationSeconds,
+      vocalMode: song.vocalMode,
+      visibility: 'public',
+    };
+    await query(
+      `INSERT INTO generation_jobs
+         (id, user_id, project_id, idempotency_key, request_hash, state, input,
+          provider_id, provider_model, provider_contract_version, provider_request_key,
+          delivered_at, finished_at, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, 'DELIVERED', ?, 'demo-local', 'demo-synth-v2', 'demo-no-contract', ?, UTC_TIMESTAMP(3), UTC_TIMESTAMP(3), UTC_TIMESTAMP(3), UTC_TIMESTAMP(3))`,
+      [jobId, ownerId, projectId, `showcase-${jobId}`, createHash('sha256').update(jobId).digest('hex'),
+       JSON.stringify(input), `showcase-${jobId}`],
+    );
+
+    const sha = createHash('sha256').update(body).digest('hex');
+    const trackId = newId();
+    const storageKey = `${ownerId}/${trackId}/master-${sha.slice(0, 12)}.mp3`;
+    await ctx.storage.put({ zone: 'delivery', key: storageKey, body, contentType: 'audio/mpeg' });
+
+    await query(
+      `INSERT INTO tracks (id, owner_id, project_id, job_id, title, scene, mood, duration_ms, state,
+                           styles, lyrics, vocal_mode, visibility, play_count, like_count, cover_seed)
+       VALUES (?, ?, ?, ?, ?, 'daily_log', 'calm', ?, 'deliverable', ?, NULL, ?, 'public', ?, ?, ?)`,
+      [trackId, ownerId, projectId, jobId, song.title, song.durationSeconds * 1000,
+       JSON.stringify(song.styles), song.vocalMode, song.plays, song.likes,
+       createHash('sha256').update(`cover:${trackId}`).digest().readUInt32BE(0) % 0x7fffffff],
+    );
+    await query(
+      `UPDATE generation_jobs SET track_id = ? WHERE id = ?`,
+      [trackId, jobId],
+    );
+    await query(
+      `INSERT INTO asset_versions (id, track_id, owner_id, kind, format, storage_key, byte_size, duration_ms, sha256, params_hash)
+       VALUES (?, ?, ?, 'master', 'mp3', ?, ?, ?, ?, 'master')`,
+      [newId(), trackId, ownerId, storageKey, body.byteLength, song.durationSeconds * 1000, sha],
+    );
+    await query(
+      `INSERT INTO license_snapshots (id, track_id, user_id, provider_id, provider_model, contract_version,
+         license_version, territory, allowed_uses, prohibited_uses, source_sha256, generated_at, commercial_delivery, status)
+       VALUES (?, ?, ?, 'demo-local', 'demo-synth-v2', 'demo-no-contract', 'demo-preview-only', 'JP',
+               ?, ?, ?, UTC_TIMESTAMP(3), 0, 'active')`,
+      [newId(), trackId, ownerId,
+       JSON.stringify(['Internal demo and preview only']),
+       JSON.stringify(['Commercial use', 'Public redistribution', 'Presenting as licensed for commercial delivery']),
+       sha],
+    );
+  }
+  console.log(`✓ showcase: ${SHOWCASE.length} public demo songs published to Explore`);
 }
+
+await seedShowcase();
 
 // ------------------------------------------------------------ demo accounts
 
 if (config.mode !== 'production') {
   const accounts = [
-    { email: 'creator@example.jp', role: 'user' as const, credits: 5, label: 'a creator with a DROP pack' },
-    { email: 'empty@example.jp', role: 'user' as const, credits: 0, label: 'a creator with no credits' },
-    { email: 'support@example.jp', role: 'support' as const, credits: 0, label: 'support staff' },
-    { email: 'admin@example.jp', role: 'admin' as const, credits: 0, label: 'an administrator' },
+    { email: 'creator@example.jp', name: 'Creator', role: 'user' as const, credits: 10, label: 'a creator with 10 credits' },
+    { email: 'empty@example.jp', name: 'Newcomer', role: 'user' as const, credits: 0, label: 'a creator with no credits' },
+    { email: 'support@example.jp', name: 'Support', role: 'support' as const, credits: 0, label: 'support staff' },
+    { email: 'admin@example.jp', name: 'Admin', role: 'admin' as const, credits: 0, label: 'an administrator' },
   ];
 
   for (const acct of accounts) {
     const externalId = `dev-${Buffer.from(acct.email).toString('hex').slice(0, 24)}`;
-    const user = await upsertUser({ authProvider: 'dev', externalId, email: acct.email });
+    const user = await upsertUser({ authProvider: 'dev', externalId, email: acct.email, displayName: acct.name });
     await confirmAgeAndTerms({ userId: user.id, marketingOptIn: false });
     if (acct.role !== 'user') await setRole({ userId: user.id, role: acct.role });
     if (acct.credits > 0) {
@@ -115,7 +233,7 @@ if (config.mode !== 'production') {
         );
       });
     }
-    console.log(`✓ ${acct.email.padEnd(22)} ${acct.label} (${acct.credits} credits)`);
+    console.log(`✓ ${acct.email.padEnd(22)} ${acct.label}`);
   }
   console.log('\n  Sign in from the web app with any of the addresses above.');
   console.log('  These are development identities and exist only outside production.');

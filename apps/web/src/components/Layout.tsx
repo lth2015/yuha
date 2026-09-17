@@ -1,14 +1,15 @@
 import type { ReactNode } from 'react';
-import { Link, NavLink } from 'react-router-dom';
+import { Link, NavLink, useNavigate } from 'react-router-dom';
 import { useSession } from '../lib/session';
+import { PlayerBar } from './PlayerBar';
 
 /**
- * App shell.
+ * App shell: sidebar navigation (desktop), bottom tab bar (mobile), top bar
+ * with the credit pill and account menu, and the persistent player bar.
  *
- * The mode banner is rendered from the server's runtime descriptor and is part
- * of the document flow, not a dismissible toast — §3.1 requires a demo
- * deployment to say so continuously, and a banner you can close is a banner
- * users stop seeing.
+ * The mode banner is part of the document flow, not a dismissible toast — a
+ * demo deployment must say so continuously, and a banner users can close is a
+ * banner users stop seeing.
  */
 function ModeBanner() {
   const { runtime } = useSession();
@@ -17,95 +18,169 @@ function ModeBanner() {
   if (runtime.demo) {
     return (
       <div className="mode-banner" role="status">
-        <strong>デモモード</strong>：音源は動作確認用の合成音、支払いは擬似処理です。
-        実際の課金は発生せず、商用利用の許諾も付与されません。
+        <strong>Demo mode</strong> — audio is synthesised for pipeline testing, payments are simulated. No
+        real charges occur and no commercial licence is granted.
       </div>
     );
   }
   if (!runtime.features.commercialDeliveryEnabled) {
     return (
       <div className="mode-banner" role="status">
-        <strong>プレビュー提供中</strong>：商用利用の許諾は未取得です。
-        生成した音源は動作確認の範囲でご利用ください。
+        <strong>Preview build</strong> — no commercial licence is in force yet. Songs are for evaluation use.
       </div>
     );
   }
   return null;
 }
 
+const NAV = [
+  { to: '/', label: 'Home', icon: 'icon--home', end: true },
+  { to: '/create', label: 'Create', icon: 'icon--create' },
+  { to: '/explore', label: 'Explore', icon: 'icon--explore' },
+  { to: '/library', label: 'Library', icon: 'icon--library' },
+];
+
 export function Layout({ children }: { children: ReactNode }) {
   const { me, entitlements, signOut, runtime } = useSession();
+  const navigate = useNavigate();
+  const credits = entitlements?.availableUnits ?? me?.creditsAvailable ?? 0;
 
   return (
     <div className="app">
       <a className="skip-link" href="#main">
-        本文へスキップ
+        Skip to content
       </a>
-      <ModeBanner />
 
-      <header className="site-header">
-        <div className="container container--wide site-header__inner">
-          <Link to="/" className="brand">
-            LOOPSCENE
-          </Link>
-
-          <nav className="nav" aria-label="メインナビゲーション">
-            {me ? (
-              <>
-                <NavLink to="/create">つくる</NavLink>
-                <NavLink to="/library">作品</NavLink>
-                <NavLink to="/pricing">料金</NavLink>
-                <NavLink to="/settings/billing">請求</NavLink>
-                {(me.role === 'admin' || me.role === 'support') && <NavLink to="/admin">管理</NavLink>}
-                {entitlements && (
-                  <span className="badge badge--accent" title="残りの生成回数">
-                    残り <span className="num">{entitlements.availableUnits}</span> 回
-                  </span>
-                )}
-                <button type="button" className="btn btn--ghost" onClick={signOut}>
-                  ログアウト
-                </button>
-              </>
-            ) : (
-              <>
-                <NavLink to="/pricing">料金</NavLink>
-                <NavLink to="/help/rights">権利について</NavLink>
-                <Link to="/auth" className="btn btn--primary">
-                  ログイン
-                </Link>
-              </>
-            )}
-          </nav>
-        </div>
-      </header>
-
-      <main id="main">
-        <div className="container">{children}</div>
-      </main>
-
-      <footer className="site-footer">
-        <div className="container">
-          {/* UI-01: pricing and the legal pages are always reachable from the footer. */}
-          <nav aria-label="フッターナビゲーション">
-            <Link to="/pricing">料金</Link>
-            <Link to="/legal/terms">利用規約</Link>
-            <Link to="/legal/privacy">プライバシーポリシー</Link>
-            <Link to="/legal/tokushoho">特定商取引法に基づく表記</Link>
-            <Link to="/help/rights">権利申立・お問い合わせ</Link>
-          </nav>
-          <p style={{ margin: 0 }}>
-            LOOPSCENE は30秒のインスト（歌詞・ボーカルなし）BGMを生成するサービスです。
-            生成物の利用条件は楽曲ごとの「利用条件記録」でご確認ください。
-          </p>
-          {runtime && (
-            <p className="small" style={{ marginTop: 'var(--s1)', marginBottom: 0 }}>
-              動作モード: <span className="num">{runtime.mode}</span> / 音楽:{' '}
-              <span className="num">{runtime.adapters.music}</span> / 決済:{' '}
-              <span className="num">{runtime.adapters.payments}</span>
-            </p>
+      <aside className="sidebar" aria-label="Primary">
+        <Link to="/" className="brand">
+          <span className="brand__mark" aria-hidden="true" />
+          SONARE
+        </Link>
+        <nav className="sidebar__nav">
+          {NAV.map((item) => (
+            <NavLink
+              key={item.to}
+              to={item.to}
+              end={'end' in item ? item.end : false}
+              className={({ isActive }) => `sidebar__link${isActive ? ' is-active' : ''}`}
+            >
+              <span className={`icon ${item.icon}`} aria-hidden="true" />
+              <span>{item.label}</span>
+            </NavLink>
+          ))}
+          {me && (
+            <>
+              <NavLink
+                to="/pricing"
+                className={({ isActive }) => `sidebar__link${isActive ? ' is-active' : ''}`}
+              >
+                <span className="icon icon--pricing" aria-hidden="true" />
+                <span>Plans</span>
+              </NavLink>
+              {(me.role === 'admin' || me.role === 'support') && (
+                <NavLink
+                  to="/admin"
+                  className={({ isActive }) => `sidebar__link${isActive ? ' is-active' : ''}`}
+                >
+                  <span className="icon icon--admin" aria-hidden="true" />
+                  <span>Console</span>
+                </NavLink>
+              )}
+            </>
           )}
+        </nav>
+        <div className="sidebar__foot">
+          <Link to="/help/rights" className="sidebar__small">
+            Report a rights issue
+          </Link>
+          <div className="sidebar__small sidebar__small--dim">
+            {runtime ? `${runtime.mode} · ${runtime.adapters.music}` : ''}
+          </div>
         </div>
-      </footer>
+      </aside>
+
+      <div className="app__main">
+        <ModeBanner />
+        <header className="topbar">
+          <Link to="/" className="brand brand--mobile">
+            SONARE
+          </Link>
+          <div className="topbar__spacer" />
+          {me ? (
+            <>
+              <Link to="/pricing" className="credit-pill" title="Songs you can generate now">
+                <span className="icon icon--note" aria-hidden="true" />
+                {credits} credit{credits === 1 ? '' : 's'}
+              </Link>
+              <div className="account">
+                <button type="button" className="account__btn" aria-haspopup="menu">
+                  {me.avatarUrl ? (
+                    <img className="account__avatar" src={me.avatarUrl} alt="" referrerPolicy="no-referrer" />
+                  ) : (
+                    <span className="account__initial" aria-hidden="true">
+                      {(me.displayName ?? me.email)[0]!.toUpperCase()}
+                    </span>
+                  )}
+                </button>
+                <div className="account__menu" role="menu">
+                  <div className="account__who">
+                    <strong>{me.displayName ?? 'Creator'}</strong>
+                    <span className="small">{me.email}</span>
+                  </div>
+                  <Link role="menuitem" to="/library">
+                    My songs
+                  </Link>
+                  <Link role="menuitem" to="/settings/billing">
+                    Billing
+                  </Link>
+                  <Link role="menuitem" to="/settings/account">
+                    Account
+                  </Link>
+                  <button
+                    type="button"
+                    role="menuitem"
+                    onClick={() => {
+                      signOut();
+                      navigate('/');
+                    }}
+                  >
+                    Sign out
+                  </button>
+                </div>
+              </div>
+            </>
+          ) : (
+            <>
+              <Link className="btn btn--ghost btn--sm" to="/auth">
+                Sign in
+              </Link>
+              <Link className="btn btn--primary btn--sm" to="/auth">
+                Start creating
+              </Link>
+            </>
+          )}
+        </header>
+
+        <main id="main" className="content">
+          {children}
+        </main>
+      </div>
+
+      <nav className="tabbar" aria-label="Primary, mobile">
+        {NAV.map((item) => (
+          <NavLink
+            key={item.to}
+            to={item.to}
+            end={'end' in item ? item.end : false}
+            className={({ isActive }) => `tabbar__link${isActive ? ' is-active' : ''}`}
+          >
+            <span className={`icon ${item.icon}`} aria-hidden="true" />
+            <span>{item.label}</span>
+          </NavLink>
+        ))}
+      </nav>
+
+      <PlayerBar />
     </div>
   );
 }

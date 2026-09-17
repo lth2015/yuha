@@ -2,190 +2,136 @@ import { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import type { TrackView } from '@loopscene/contracts';
 import { apiFetch } from '../lib/api';
-import { MOOD_LABELS, SCENE_LABELS, TRACK_STATE_LABELS } from '../lib/messages';
-import { formatJst } from '../lib/session';
-import { AudioPlayer, Badge, EmptyState, ErrorNotice, Loading } from '../components/common';
+import { ErrorNotice } from '../components/common';
+import { SongCard } from '../components/SongCard';
 
 type Filter = 'all' | 'processing' | 'deliverable' | 'suspended';
 
-const FILTERS: Array<{ key: Filter; label: string }> = [
-  { key: 'all', label: 'すべて' },
-  { key: 'processing', label: '処理中' },
-  { key: 'deliverable', label: 'ダウンロード可' },
-  { key: 'suspended', label: '確認中' },
-];
-
 /**
- * UI-08: the private library.
- *
- * Only the signed-in account's tracks are ever returned — this is enforced in
- * the query, not by hiding buttons. Empty, loading and failure states are all
- * handled, and deletion explains its consequences before it happens.
+ * Your songs. Only the signed-in creator's work is ever listed here; the API
+ * enforces that server-side (UI-08 heritage) — this page just renders it.
  */
 export default function Library() {
-  const [tracks, setTracks] = useState<TrackView[]>([]);
+  const [songs, setSongs] = useState<TrackView[] | null>(null);
+  const [cursor, setCursor] = useState<string | null>(null);
   const [filter, setFilter] = useState<Filter>('all');
-  const [search, setSearch] = useState('');
+  const [q, setQ] = useState('');
   const [error, setError] = useState<unknown>(null);
-  const [loading, setLoading] = useState(true);
-  const [deleting, setDeleting] = useState<string | null>(null);
+  const [loadingMore, setLoadingMore] = useState(false);
 
-  const load = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const params = new URLSearchParams();
-      if (filter !== 'all') params.set('state', filter);
-      if (search.trim()) params.set('q', search.trim());
-      const res = await apiFetch<{ items: TrackView[] }>(`/v1/tracks?${params.toString()}`);
-      setTracks(res.items);
-    } catch (err) {
-      setError(err);
-    } finally {
-      setLoading(false);
-    }
-  }, [filter, search]);
+  const load = useCallback(async (params?: { cursor?: string }) => {
+    const search = new URLSearchParams({ limit: '24' });
+    if (filter !== 'all') search.set('state', filter);
+    if (q.trim()) search.set('q', q.trim());
+    if (params?.cursor) search.set('cursor', params.cursor);
+    return apiFetch<{ items: TrackView[]; nextCursor: string | null }>(`/v1/tracks?${search.toString()}`);
+  }, [filter, q]);
 
   useEffect(() => {
-    const t = setTimeout(() => void load(), search ? 300 : 0);
-    return () => clearTimeout(t);
-  }, [load, search]);
+    let cancelled = false;
+    setSongs(null);
+    load()
+      .then((r) => {
+        if (cancelled) return;
+        setSongs(r.items);
+        setCursor(r.nextCursor);
+      })
+      .catch((err) => !cancelled && setError(err));
+    return () => {
+      cancelled = true;
+    };
+  }, [load]);
 
-  const remove = async (track: TrackView) => {
-    const ok = window.confirm(
-      `「${track.title}」を削除します。\n\n` +
-        '・クラウド上の音源と書き出しファイルが削除されます\n' +
-        '・再ダウンロードはできなくなります\n' +
-        '・購入履歴と注文の記録は残ります\n\n' +
-        '削除しますか？',
-    );
-    if (!ok) return;
-    setDeleting(track.trackId);
-    setError(null);
+  const loadMore = async () => {
+    if (!cursor || loadingMore) return;
+    setLoadingMore(true);
     try {
-      await apiFetch(`/v1/tracks/${track.trackId}`, { method: 'DELETE' });
-      await load();
-    } catch (err) {
-      setError(err);
+      const r = await load({ cursor });
+      setSongs((prev) => [...(prev ?? []), ...r.items]);
+      setCursor(r.nextCursor);
     } finally {
-      setDeleting(null);
+      setLoadingMore(false);
     }
   };
 
+  const filters: Array<{ label: string; value: Filter }> = [
+    { label: 'All', value: 'all' },
+    { label: 'Finished', value: 'deliverable' },
+    { label: 'Generating', value: 'processing' },
+    { label: 'Paused', value: 'suspended' },
+  ];
+
   return (
-    <div className="stack stack--loose">
-      <div className="row row--between">
-        <h1 style={{ fontSize: 28, margin: 0 }}>作品</h1>
-        <Link className="btn btn--primary" to="/create">
-          つくる
+    <div className="stack">
+      <div className="section-head">
+        <h1>Library</h1>
+        <Link to="/create" className="btn btn--primary btn--sm">
+          <span className="icon icon--create" aria-hidden="true" />
+          New song
         </Link>
       </div>
 
-      <div className="stack stack--tight">
-        <div className="row" role="group" aria-label="状態で絞り込む">
-          {FILTERS.map((f) => (
+      <div className="explore-controls">
+        <div className="chips" role="group" aria-label="Filter">
+          {filters.map((f) => (
             <button
-              key={f.key}
+              key={f.value}
               type="button"
-              className={`btn ${filter === f.key ? 'btn--primary' : 'btn--ghost'}`}
-              aria-pressed={filter === f.key}
-              onClick={() => setFilter(f.key)}
+              className={`chip chip--btn${filter === f.value ? ' is-on' : ''}`}
+              aria-pressed={filter === f.value}
+              onClick={() => setFilter(f.value)}
             >
               {f.label}
             </button>
           ))}
         </div>
-        <div>
-          <label htmlFor="search" className="visually-hidden">
-            タイトルで検索
-          </label>
+        <div className="explore-search">
           <input
-            id="search"
-            type="text"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="タイトルで検索"
+            type="search"
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+            placeholder="Search your songs…"
+            aria-label="Search your songs"
           />
         </div>
       </div>
 
-      <ErrorNotice error={error} onRetry={() => void load()} />
+      <ErrorNotice error={error} />
 
-      {loading ? (
-        <Loading label="作品を読み込み中" />
-      ) : tracks.length === 0 ? (
-        <EmptyState
-          title={search || filter !== 'all' ? '該当する作品がありません' : 'まだ作品がありません'}
-          description={
-            search || filter !== 'all'
-              ? '条件を変えてもう一度お試しください。'
-              : 'シーンを選んで、最初の30秒BGMをつくってみましょう。'
-          }
-          action={
-            <Link className="btn btn--primary" to="/create">
-              つくる
-            </Link>
-          }
-        />
-      ) : (
-        <div className="grid">
-          {tracks.map((track) => {
-            const state = TRACK_STATE_LABELS[track.state] ?? { label: track.state, tone: '' };
-            return (
-              <article key={track.trackId} className="card">
-                <div className="row row--between">
-                  <strong>{track.title}</strong>
-                  <Badge tone={state.tone}>{state.label}</Badge>
-                </div>
-
-                <div className="row small muted">
-                  <span>{SCENE_LABELS[track.scene]?.title ?? track.scene}</span>
-                  {track.mood && (
-                    <>
-                      <span>・</span>
-                      <span>{MOOD_LABELS[track.mood] ?? track.mood}</span>
-                    </>
-                  )}
-                  <span>・</span>
-                  <span>{formatJst(track.createdAt, false)}</span>
-                </div>
-
-                <AudioPlayer
-                  id={`lib-${track.trackId}`}
-                  url={track.previewUrl}
-                  label={track.title}
-                  compact
-                />
-
-                {track.state === 'suspended' && (
-                  <p className="small" style={{ margin: 0, color: 'var(--warning)' }}>
-                    権利申立の確認中です。確認中は新しいダウンロードリンクを発行できません。
-                    停止は侵害の認定を意味しません。
-                  </p>
-                )}
-
-                <div className="row">
-                  {track.state === 'deliverable' && (
-                    <Link className="btn btn--secondary" to={`/tracks/${track.trackId}/export`}>
-                      カット・DL
-                    </Link>
-                  )}
-                  <Link className="btn btn--ghost" to={`/projects/${track.projectId}`}>
-                    プロジェクト
-                  </Link>
-                  <button
-                    type="button"
-                    className="btn btn--danger"
-                    onClick={() => void remove(track)}
-                    disabled={deleting === track.trackId}
-                  >
-                    {deleting === track.trackId ? '削除中…' : '削除'}
-                  </button>
-                </div>
-              </article>
-            );
-          })}
+      {songs === null ? (
+        <div className="grid grid--songs" aria-hidden="true">
+          {Array.from({ length: 4 }, (_, i) => (
+            <div key={i} className="skeleton skeleton--card" />
+          ))}
         </div>
+      ) : songs.length === 0 ? (
+        <div className="empty">
+          <h2>Nothing here yet</h2>
+          <p>Your generated songs live here — private until you publish them.</p>
+          <Link className="btn btn--primary" to="/create">
+            Create your first song
+          </Link>
+        </div>
+      ) : (
+        <>
+          <div className="grid grid--songs">
+            {songs.map((song) => (
+              <SongCard
+                key={song.trackId}
+                song={song}
+                queue={songs}
+                onRemove={(id) => setSongs((prev) => prev?.filter((s) => s.trackId !== id) ?? null)}
+              />
+            ))}
+          </div>
+          {cursor && (
+            <div className="load-more">
+              <button type="button" className="btn" onClick={loadMore} disabled={loadingMore}>
+                {loadingMore ? 'Loading…' : 'Load more'}
+              </button>
+            </div>
+          )}
+        </>
       )}
     </div>
   );

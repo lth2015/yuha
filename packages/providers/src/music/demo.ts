@@ -60,11 +60,15 @@ export class DemoMusicProvider implements MusicProvider {
   capabilities(): MusicCapabilities {
     return {
       providerId: DemoMusicProvider.PROVIDER_ID,
-      model: 'demo-synth-v1',
+      model: 'demo-synth-v2',
       contractVersion: 'demo-no-contract',
-      supportedDurationsSeconds: [30],
+      supportedDurationsSeconds: [30, 60, 120, 180, 240],
       supportedFormats: ['mp3'],
       supportsInstrumentalOnly: true,
+      // The synthesised fixtures stand in for sung output too: demo mode
+      // exercises the pipeline, not the model. Every licence record still says
+      // demo-local, so the substitution is always visible.
+      supportsVocals: true,
       supportsIdempotencyKey: true,
       supportsCancel: true,
       supportsWebhook: false,
@@ -76,13 +80,8 @@ export class DemoMusicProvider implements MusicProvider {
       dataRegion: 'local',
       licenseVersion: 'demo-preview-only',
       territory: 'JP',
-      allowedUses: ['動作確認・社内デモのみ'],
-      prohibitedUses: [
-        '一般公開・SNS投稿',
-        '収益化',
-        '商用利用',
-        '第三者への再配布',
-      ],
+      allowedUses: ['内部デモ・プレビューのみ'],
+      prohibitedUses: ['商用利用', '一般配信', '第三者への再配布', '権利があるかのように提示すること'],
       // Budget assumption from the unit-economics workbook (45 JPY / request),
       // explicitly flagged as an estimate — not a supplier quote.
       costPerRequestMinor: 45,
@@ -103,13 +102,25 @@ export class DemoMusicProvider implements MusicProvider {
     return this.fixtures;
   }
 
-  /** Same intent always maps to the same fixture, so re-runs are reproducible. */
+  /**
+   * Same intent always maps to the same fixture, so re-runs are reproducible.
+   * Fixture names carry the length (`night_walk_calm-120s.mp3`); the pool is
+   * restricted to the CLOSEST length ≥ the request (falling back to the longest
+   * available), so a 60s request never draws a 4-minute file.
+   */
   private pickFixture(req: MusicSubmitRequest, fixtures: string[]): string {
+    const wanted = req.intent.durationSeconds;
+    const withLen = fixtures.map((f) => {
+      const m = /-(\d+)s\.mp3$/.exec(f);
+      return { f, len: m ? Number(m[1]) : 30 };
+    });
+    const usable = withLen.filter((x) => x.len >= wanted).sort((a, b) => a.len - b.len);
+    const shortest = usable.length ? usable.filter((x) => x.len === usable[0]!.len) : withLen;
+    const pool = shortest.map((x) => x.f);
     const seed = createHash('sha256')
       .update(`${req.intent.scene}:${req.intent.mood}:${req.requestKey}`)
       .digest();
-    const idx = seed.readUInt32BE(0) % fixtures.length;
-    return fixtures[idx]!;
+    return pool[seed.readUInt32BE(0) % pool.length]!;
   }
 
   async submit(req: MusicSubmitRequest): Promise<MusicSubmitResult> {
@@ -160,13 +171,14 @@ export class DemoMusicProvider implements MusicProvider {
     if (pending.hang || Date.now() < pending.readyAt) return { status: 'pending' };
 
     const buffer = await readFile(join(this.opts.fixturesDir, pending.fixture));
+    const m = /-(\d+)s\.mp3$/.exec(pending.fixture);
     return {
       status: 'completed',
       audio: {
         kind: 'buffer',
         buffer,
         format: 'mp3',
-        declaredDurationSeconds: 30,
+        declaredDurationSeconds: m ? Number(m[1]) : 30,
         providerRequestId: pending.providerRequestId,
       },
     };

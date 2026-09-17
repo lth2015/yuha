@@ -20,7 +20,8 @@ import { fileURLToPath } from 'node:url';
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const outDir = join(root, 'assets', 'fixtures', 'audio');
 
-const DURATION = 30;
+/** One fixture per supported song length, so the duration check is exact. */
+const DURATIONS = [30, 60, 120, 180, 240];
 
 /**
  * Each fixture is a small additive-synthesis patch: a chord pad, a bass pulse
@@ -74,19 +75,19 @@ const FIXTURES = [
   },
 ];
 
-function buildFilter(f) {
+function buildFilter(f, duration) {
   const beat = 60 / f.bpm;
   const inputs = [];
   const chain = [];
 
   f.chord.forEach((freq, i) => {
-    inputs.push(`sine=frequency=${freq}:duration=${DURATION}`);
+    inputs.push(`sine=frequency=${freq}:duration=${duration}`);
     // Slow tremolo per voice, slightly detuned in rate so the pad breathes.
     chain.push(`[${i}:a]volume=0.16,tremolo=f=${(0.18 + i * 0.05).toFixed(2)}:d=0.35[p${i}]`);
   });
 
   const bassIdx = f.chord.length;
-  inputs.push(`sine=frequency=${f.bass}:duration=${DURATION}`);
+  inputs.push(`sine=frequency=${f.bass}:duration=${duration}`);
   // Gate the bass into a pulse on the beat.
   chain.push(
     `[${bassIdx}:a]volume=0.35,` +
@@ -95,7 +96,7 @@ function buildFilter(f) {
   );
 
   const noiseIdx = bassIdx + 1;
-  inputs.push(`anoisesrc=color=brown:duration=${DURATION}:amplitude=0.6`);
+  inputs.push(`anoisesrc=color=brown:duration=${duration}:amplitude=0.6`);
   chain.push(
     `[${noiseIdx}:a]volume=${f.noiseGain},` +
       `apulsator=hz=${(2 / beat).toFixed(4)}:amount=1,` +
@@ -106,7 +107,7 @@ function buildFilter(f) {
   chain.push(
     `${padLabels}[bass][perc]amix=inputs=${f.chord.length + 2}:normalize=0,` +
       `lowpass=f=${f.lowpass},` +
-      `afade=t=in:st=0:d=1.5,afade=t=out:st=${DURATION - 2}:d=2,` +
+      `afade=t=in:st=0:d=1.5,afade=t=out:st=${Math.max(duration - 2, 0.5)}:d=2,` +
       `loudnorm=I=-16:TP=-1.5:LRA=11[out]`,
   );
 
@@ -127,25 +128,29 @@ function run(args) {
 
 async function main() {
   await mkdir(outDir, { recursive: true });
+  let count = 0;
   for (const f of FIXTURES) {
-    const { inputs, filter } = buildFilter(f);
-    const args = ['-hide_banner', '-v', 'error', '-y'];
-    for (const i of inputs) args.push('-f', 'lavfi', '-i', i);
-    args.push(
-      '-filter_complex', filter,
-      '-map', '[out]',
-      '-t', String(DURATION),
-      '-codec:a', 'libmp3lame',
-      '-b:a', '192k',
-      '-ar', '44100',
-      '-ac', '2',
-      '-map_metadata', '-1',
-      '-metadata', 'title=LOOPSCENE demo fixture (synthetic, not a real generation)',
-      '-metadata', 'comment=Synthesised by scripts/make-audio-fixtures.mjs. Demo use only.',
-      join(outDir, `${f.name}.mp3`),
-    );
-    await run(args);
-    console.log(`  ✓ ${f.name}.mp3  (${f.label})`);
+    for (const duration of DURATIONS) {
+      const { inputs, filter } = buildFilter(f, duration);
+      const args = ['-hide_banner', '-v', 'error', '-y'];
+      for (const i of inputs) args.push('-f', 'lavfi', '-i', i);
+      args.push(
+        '-filter_complex', filter,
+        '-map', '[out]',
+        '-t', String(duration),
+        '-codec:a', 'libmp3lame',
+        '-b:a', '192k',
+        '-ar', '44100',
+        '-ac', '2',
+        '-map_metadata', '-1',
+        '-metadata', 'title=SONARE demo fixture (synthetic, not a real generation)',
+        '-metadata', 'comment=Synthesised by scripts/make-audio-fixtures.mjs. Demo use only.',
+        join(outDir, `${f.name}-${duration}s.mp3`),
+      );
+      await run(args);
+      count += 1;
+    }
+    console.log(`  ✓ ${f.name}-{${DURATIONS.join(',')}}s.mp3  (${f.label})`);
   }
 
   await writeFile(
@@ -158,22 +163,22 @@ async function main() {
       'sample, or AI model output in any of them, so they carry no external licence',
       'obligation and can be used for demonstration freely.',
       '',
-      'They are synthetic tones, not music produced by a music model. Per',
-      'PROJECT_TASK.md §8 they demonstrate the engineering pipeline only, and are not',
-      'evidence of model quality, originality, or commercial value.',
+      'They are synthetic tones, not music produced by a music model. They demonstrate',
+      'the engineering pipeline only, and are not evidence of model quality,',
+      'originality, or commercial value.',
       '',
       `Generated: ${new Date().toISOString()}`,
-      `Duration: ${DURATION}s each, MP3 192 kbps, 44.1 kHz stereo.`,
+      `Durations: ${DURATIONS.join('s, ')}s each, MP3 192 kbps, 44.1 kHz stereo.`,
       '',
-      '| file | character |',
+      '| character | files |',
       '| --- | --- |',
-      ...FIXTURES.map((f) => `| ${f.name}.mp3 | ${f.label} |`),
+      ...FIXTURES.map((f) => `| ${f.label} | ${f.name}-{30,60,120,180,240}s.mp3 |`),
       '',
     ].join('\n'),
     'utf8',
   );
 
-  console.log(`\nWrote ${FIXTURES.length} fixtures to ${outDir}`);
+  console.log(`\nWrote ${count} fixtures to ${outDir}`);
 }
 
 main().catch((err) => {

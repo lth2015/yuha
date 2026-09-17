@@ -10,7 +10,8 @@ interface SimSession {
   sessionId: string;
   orderId: string;
   userId: string;
-  amountJpy: number;
+  amountMinor: number;
+  currency: string;
   kind: 'one_time' | 'subscription';
   customerId: string;
   subscriptionId: string | null;
@@ -48,7 +49,8 @@ export class SimulatedPaymentsAdapter implements PaymentsAdapter {
       sessionId,
       orderId: params.orderId,
       userId: params.userId,
-      amountJpy: params.amountJpy,
+      amountMinor: params.amountMinor,
+      currency: params.currency,
       kind: params.kind,
       customerId: params.existingCustomerId ?? `cus_sim_${params.userId.slice(0, 8)}`,
       subscriptionId: params.kind === 'subscription' ? `sub_sim_${randomUUID().slice(0, 12)}` : null,
@@ -62,7 +64,7 @@ export class SimulatedPaymentsAdapter implements PaymentsAdapter {
     const url = new URL(this.checkoutBaseUrl);
     url.searchParams.set('session_id', sessionId);
     url.searchParams.set('order_id', params.orderId);
-    url.searchParams.set('amount', String(params.amountJpy));
+    url.searchParams.set('amount', String(params.amountMinor));
     return { sessionId, url: url.toString(), customerId: session.customerId, simulated: true };
   }
 
@@ -140,8 +142,8 @@ export class SimulatedPaymentsAdapter implements PaymentsAdapter {
       paymentIntentId: s.paymentIntentId,
       subscriptionId: s.subscriptionId,
       customerId: s.customerId,
-      amountTotal: s.amountJpy,
-      currency: 'jpy',
+      amountTotal: s.amountMinor,
+      currency: s.currency,
     };
   }
 

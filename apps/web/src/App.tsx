@@ -10,13 +10,16 @@ import Auth from './pages/Auth';
 import Billing from './pages/Billing';
 import { CheckoutComplete, CheckoutConfirm, CheckoutSimulate } from './pages/Checkout';
 import Create from './pages/Create';
+import Explore from './pages/Explore';
 import Export from './pages/Export';
+import GoogleCallback from './pages/GoogleCallback';
 import Home from './pages/Home';
 import { Privacy, Terms, Tokushoho } from './pages/Legal';
 import Library from './pages/Library';
 import Pricing from './pages/Pricing';
 import Project from './pages/Project';
 import Rights from './pages/Rights';
+import SongDetail from './pages/SongDetail';
 
 /** Sends unauthenticated visitors to sign-in, preserving where they were going. */
 function RequireAuth({ children, roles }: { children: ReactNode; roles?: string[] }) {
@@ -31,8 +34,8 @@ function RequireAuth({ children, roles }: { children: ReactNode; roles?: string[
   if (roles && !roles.includes(me.role)) {
     return (
       <div className="alert alert--error">
-        <div className="alert__title">この画面を表示する権限がありません</div>
-        <div className="small">管理者にお問い合わせください。</div>
+        <div className="alert__title">You do not have access to this screen</div>
+        <div className="small">Please contact an administrator.</div>
       </div>
     );
   }
@@ -48,6 +51,9 @@ export default function App() {
             <Routes>
               <Route path="/" element={<Home />} />
               <Route path="/auth" element={<Auth />} />
+              <Route path="/auth/google/callback" element={<GoogleCallback />} />
+              <Route path="/explore" element={<Explore />} />
+              <Route path="/song/:id" element={<SongDetail />} />
               <Route path="/pricing" element={<Pricing />} />
 
               <Route
@@ -68,6 +74,14 @@ export default function App() {
               />
               <Route
                 path="/tracks/:id/export"
+                element={
+                  <RequireAuth>
+                    <Export />
+                  </RequireAuth>
+                }
+              />
+              <Route
+                path="/tracks/:id/license"
                 element={
                   <RequireAuth>
                     <Export />
@@ -135,7 +149,7 @@ export default function App() {
                 }
               />
 
-              {/* Public on purpose: a rights holder must not need an account (SEC-10). */}
+              {/* Public on purpose: a rights holder must not need an account. */}
               <Route path="/help/rights" element={<Rights />} />
               <Route path="/legal/terms" element={<Terms />} />
               <Route path="/legal/privacy" element={<Privacy />} />
@@ -145,8 +159,8 @@ export default function App() {
                 path="*"
                 element={
                   <div className="empty">
-                    <h2>ページが見つかりません</h2>
-                    <p>URLをご確認ください。</p>
+                    <h2>Page not found</h2>
+                    <p>Check the URL, or head back to Explore.</p>
                   </div>
                 }
               />

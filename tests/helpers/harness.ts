@@ -127,11 +127,11 @@ export async function createHarness(overrides: Record<string, string> = {}): Pro
 async function seedCatalogue(): Promise<void> {
   await upsertProduct({
     price_key: 'drop_5',
-    version: 1,
+    version: 2,
     kind: 'one_time',
-    display_name: 'DROP（5回パック）',
-    amount_jpy: 980,
-    currency: 'jpy',
+    display_name: 'Starter Pack — 5 songs',
+    amount_jpy: 499,
+    currency: 'usd',
     tax_included: true,
     units: 5,
     validity_days: 90,
@@ -140,17 +140,31 @@ async function seedCatalogue(): Promise<void> {
     active: true,
   });
   await upsertProduct({
-    price_key: 'creator_monthly',
+    price_key: 'pro_monthly',
     version: 1,
     kind: 'subscription',
-    display_name: 'CREATOR（月額20回）',
-    amount_jpy: 1980,
-    currency: 'jpy',
+    display_name: 'Pro — 100 songs / month',
+    amount_jpy: 999,
+    currency: 'usd',
     tax_included: true,
-    units: 20,
+    units: 100,
     validity_days: null,
     auto_renew: true,
-    stripe_price_id: 'price_test_creator',
+    stripe_price_id: 'price_test_pro',
+    active: true,
+  });
+  await upsertProduct({
+    price_key: 'premier_monthly',
+    version: 1,
+    kind: 'subscription',
+    display_name: 'Premier — 400 songs / month',
+    amount_jpy: 2999,
+    currency: 'usd',
+    tax_included: true,
+    units: 400,
+    validity_days: null,
+    auto_renew: true,
+    stripe_price_id: 'price_test_premier',
     active: true,
   });
 }
@@ -161,6 +175,8 @@ async function seedCatalogue(): Promise<void> {
  * duration and clears every table explicitly.
  */
 const BUSINESS_TABLES = [
+  'song_likes',
+  'auth_codes',
   'ledger_entries',
   'entitlement_batches',
   'asset_versions',

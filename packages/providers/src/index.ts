@@ -1,6 +1,11 @@
 export * from './music/types.js';
 export { DemoMusicProvider, type DemoProviderOptions } from './music/demo.js';
 export { HttpMusicProvider, httpMusicProviderConfig, type HttpMusicProviderConfig } from './music/http.js';
+export {
+  createGlmMusicProvider,
+  glmMusicProviderConfig,
+  type GlmPresetInput,
+} from './music/glm.js';
 
 export * from './text/types.js';
 export { TokenStarsTextProvider, type TokenStarsConfig } from './text/tokenstars.js';

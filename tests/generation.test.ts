@@ -43,7 +43,14 @@ async function post(user: TestUser, body: unknown, idempotencyKey: string) {
   });
 }
 
-const defaultBody = { scene: 'night_walk', prompt: '静かな夜', energy: 0.3 };
+const defaultBody = {
+  mode: 'simple' as const,
+  prompt: 'a quiet late-night walk, gentle rain',
+  styles: ['chill'],
+  instrumental: true,
+  energy: 0.3,
+  durationSeconds: 30,
+};
 
 /** Drains the outbox onto the queue, exactly as the worker's dispatcher does. */
 async function dispatchOutbox(): Promise<number> {
@@ -110,14 +117,14 @@ describe('POST /v1/generations', () => {
   it('GEN-02: the same key with different content is a conflict and changes nothing', async () => {
     const user = await h.createUser({ credits: 3 });
     const first = await post(user, defaultBody, 'key-conflict');
-    const second = await post(user, { ...defaultBody, scene: 'gaming', energy: 0.9 }, 'key-conflict');
+    const second = await post(user, { ...defaultBody, styles: ['trap'], energy: 0.9 }, 'key-conflict');
 
     expect(second.statusCode).toBe(409);
     expect(second.json().error.code).toBe('IDEMPOTENCY_KEY_REUSED');
 
     // The original job is untouched and no second credit was taken.
     const job = await getJob(first.json().jobId);
-    expect((job!.input as { scene: string }).scene).toBe('night_walk');
+    expect((job!.input as { styles: string[] }).styles).toEqual(['chill']);
     expect((await getBalance(user.id)).available).toBe(2);
   });
 
@@ -159,9 +166,9 @@ describe('POST /v1/generations', () => {
     expect(res.statusCode).toBe(400);
   });
 
-  it('AI-03: a prompt over 300 code points is refused before any spend', async () => {
+  it('AI-03: a prompt over 500 code points is refused before any spend', async () => {
     const user = await h.createUser({ credits: 3 });
-    const res = await post(user, { ...defaultBody, prompt: 'あ'.repeat(301) }, 'key-long');
+    const res = await post(user, { ...defaultBody, prompt: 'あ'.repeat(501) }, 'key-long');
 
     expect(res.statusCode).toBe(400);
     expect((await getBalance(user.id)).available).toBe(3);
@@ -169,10 +176,12 @@ describe('POST /v1/generations', () => {
 
   it('SEC-07: blocked input costs no credit and is reported as appealable', async () => {
     const user = await h.createUser({ credits: 3 });
-    const res = await post(user, { ...defaultBody, prompt: '歌詞をつけて歌ってください' }, 'key-blocked');
+    // Requesting vocals is fine now; imitating a real person's voice is not.
+    const res = await post(user, { ...defaultBody, prompt: 'あの歌手の声を真似して歌って' }, 'key-blocked');
 
     expect(res.statusCode).toBe(422);
     expect(res.json().error.code).toBe('PROMPT_BLOCKED');
+    expect(res.json().error.details.reason).toBe('voice_imitation');
     // A block is "outside what we accept", not an accusation — and it is contestable.
     expect(res.json().error.details.appealable).toBe(true);
     expect((await getBalance(user.id)).available).toBe(3);
@@ -395,13 +404,23 @@ describe('capability honesty (AI-05)', () => {
     expect(caps.supportsInstrumentalOnly).toBe(true);
   });
 
-  it('re-imposes the instrumental constraint server side, not trusting the model', async () => {
+  it('re-imposes the creator\'s vocal and duration choices server side, not trusting the model', async () => {
     const user = await h.createUser({ credits: 2 });
-    const { jobId } = (await post(user, defaultBody, 'key-instrumental')).json();
+    const { jobId } = (
+      await post(user, { ...defaultBody, instrumental: false, durationSeconds: 120, mode: 'custom', lyrics: '[Verse]\nlo-fi hearts\n[Chorus]\nslow down' }, 'key-instrumental')
+    ).json();
     await runToCompletion(jobId);
 
     const job = await getJob(jobId);
-    expect((job!.resolved_params as { vocalMode: string }).vocalMode).toBe('instrumental');
-    expect((job!.resolved_params as { durationSeconds: number }).durationSeconds).toBe(30);
+    expect((job!.resolved_params as { vocalMode: string }).vocalMode).toBe('with_vocals');
+    expect((job!.resolved_params as { durationSeconds: number }).durationSeconds).toBe(120);
+    expect((job!.resolved_params as { lyrics: string | null }).lyrics).toContain('slow down');
+    // The delivered song carries the creator's choices.
+    const track = await query<{ vocal_mode: string; duration_ms: number }>(
+      `SELECT vocal_mode, duration_ms FROM tracks WHERE job_id = ?`,
+      [jobId],
+    );
+    expect(track[0]!.vocal_mode).toBe('with_vocals');
+    expect(track[0]!.duration_ms).toBe(120000);
   });
 });

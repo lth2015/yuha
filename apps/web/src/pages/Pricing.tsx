@@ -1,156 +1,172 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import type { ProductView } from '@loopscene/contracts';
-import { apiFetch } from '../lib/api';
-import { formatJpy, useSession } from '../lib/session';
-import { Badge, ErrorNotice, Loading } from '../components/common';
+import { apiFetch, newIdempotencyKey } from '../lib/api';
+import { useSession } from '../lib/session';
+import { ErrorNotice } from '../components/common';
+
+function formatMoney(amountMinor: number, currency: string): string {
+  return new Intl.NumberFormat('en-US', {
+    style: 'currency',
+    currency: currency.toUpperCase(),
+    minimumFractionDigits: amountMinor % 100 === 0 && currency.toLowerCase() !== 'jpy' ? 0 : 2,
+  }).format(currency.toLowerCase() === 'jpy' ? amountMinor : amountMinor / 100);
+}
+
+const PLAN_COPY: Record<string, { tagline: string; bullets: string[]; highlight?: boolean }> = {
+  drop_5: {
+    tagline: 'One-time pack — no subscription',
+    bullets: ['5 song credits', '90-day validity', 'All features, MP3 downloads'],
+  },
+  pro_monthly: {
+    tagline: 'For regular creators',
+    highlight: true,
+    bullets: ['100 songs per month', 'Unused credits stay for the billing period', 'Cancel anytime, keep access to period end'],
+  },
+  premier_monthly: {
+    tagline: 'For studios and heavy users',
+    bullets: ['400 songs per month', 'Priority queue during peak hours', 'Cancel anytime, keep access to period end'],
+  },
+};
 
 /**
- * UI-10: pricing.
- *
- * Every product states its tax-inclusive price, unit count, validity, renewal
- * behaviour and cancellation terms in the same visual weight. There are no
- * countdown discounts, no pre-ticked renewals and no "Pro copyright" tiers —
- * both products carry exactly the same music licence.
+ * Plans. Amounts come from the server catalogue (PAY-01): the checkout request
+ * sends only the product key; the price can never be edited client-side.
  */
 export default function Pricing() {
   const navigate = useNavigate();
   const { me, runtime } = useSession();
-  const [products, setProducts] = useState<ProductView[]>([]);
+  const [products, setProducts] = useState<ProductView[] | null>(null);
   const [error, setError] = useState<unknown>(null);
-  const [loading, setLoading] = useState(true);
+  const [busyKey, setBusyKey] = useState<string | null>(null);
 
   useEffect(() => {
-    void (async () => {
-      try {
-        const res = await apiFetch<{ items: ProductView[] }>('/v1/products');
-        setProducts(res.items);
-      } catch (err) {
-        setError(err);
-      } finally {
-        setLoading(false);
-      }
-    })();
+    apiFetch<ProductView[]>('/v1/products')
+      .then(setProducts)
+      .catch(setError);
   }, []);
 
-  const choose = (priceKey: string) => {
-    const target = `/checkout/confirm?price=${encodeURIComponent(priceKey)}`;
-    navigate(me ? target : `/auth?next=${encodeURIComponent(target)}`);
+  const buy = async (priceKey: string) => {
+    if (!me) {
+      navigate(`/auth?next=/pricing`);
+      return;
+    }
+    setBusyKey(priceKey);
+    setError(null);
+    try {
+      const res = await apiFetch<{ orderId: string; checkoutUrl: string; simulated: boolean }>('/v1/checkout', {
+        method: 'POST',
+        idempotencyKey: newIdempotencyKey('checkout'),
+        body: { priceKey },
+      });
+      if (res.simulated) {
+        navigate(`/checkout/confirm?order_id=${res.orderId}&simulated=1`);
+      } else {
+        window.location.href = res.checkoutUrl;
+      }
+    } catch (err) {
+      setError(err);
+    } finally {
+      setBusyKey(null);
+    }
   };
 
+  const freeTrial = runtime?.features.freeTrialEnabled;
+
   return (
-    <div className="stack stack--loose">
-      <div className="stack stack--tight">
-        <h1 style={{ fontSize: 30 }}>料金</h1>
-        <p className="muted">
-          表示はすべて税込価格です。1回 = 技術的に正常な30秒音源1つ。
+    <div className="stack stack--loose pricing">
+      <div className="pricing__head">
+        <h1>Simple pricing</h1>
+        <p>
+          One credit generates one finished song — vocals or instrumental. Failed generations never cost a
+          credit.
+          {freeTrial ? ' New accounts start with 2 free credits.' : ''}
         </p>
       </div>
 
       <ErrorNotice error={error} />
-      {loading && <Loading />}
 
-      <div className="grid">
-        {products.map((p) => (
-          <article key={p.priceKey} className="card" style={{ gap: 'var(--s2)' }}>
-            <div className="row row--between">
-              <h2 style={{ fontSize: 20, margin: 0 }}>{p.displayName}</h2>
-              {p.autoRenew ? <Badge tone="badge--warn">自動更新あり</Badge> : <Badge>買い切り</Badge>}
-            </div>
-
-            <div>
-              <div style={{ fontSize: 32, fontWeight: 700 }} className="num">
-                {formatJpy(p.amountJpy)}
-              </div>
-              <div className="small muted">税込{p.autoRenew ? ' / 月' : ''}</div>
-            </div>
-
-            <ul className="small" style={{ margin: 0, paddingLeft: '1.2em' }}>
-              <li>
-                <strong className="num">{p.units}</strong> 回の生成（30秒音源）
-              </li>
-              {p.validityDays ? (
-                <li>購入後 {p.validityDays} 日間有効</li>
-              ) : (
-                <li>各請求期間ごとに {p.units} 回。未使用分の繰り越しはありません</li>
-              )}
-              <li>
-                {p.autoRenew
-                  ? '毎月自動更新。いつでもオンラインで停止でき、停止後も当期の終了まで利用できます'
-                  : '自動更新はありません'}
-              </li>
-              <li>試聴・カット・再ダウンロードは無料</li>
-              <li>技術的な失敗・供給元の拒否・審査不通過では消費されません</li>
-            </ul>
-
-            {p.available ? (
-              <button type="button" className="btn btn--primary" onClick={() => choose(p.priceKey)}>
-                この内容で進む
-              </button>
-            ) : (
-              <>
-                <button type="button" className="btn btn--secondary" disabled>
-                  現在受付していません
-                </button>
-                <p className="small muted" style={{ margin: 0 }}>
-                  月額プランは、単発パックでの再購入の実績を確認したうえで公開します。
-                </p>
-              </>
-            )}
-          </article>
-        ))}
-      </div>
-
-      {/* UI-09: what the licence covers is visible BEFORE purchase, not after. */}
-      <section className="panel stack">
-        <h2 style={{ fontSize: 18, margin: 0 }}>生成した音源の利用条件（購入前にご確認ください）</h2>
-        <div className="grid">
-          <div className="stack stack--tight">
-            <strong className="small">対象として想定している用途</strong>
-            <ul className="small muted" style={{ margin: 0, paddingLeft: '1.2em' }}>
-              <li>ご自身のSNS向けショート動画のBGM</li>
-              <li>上記動画の収益化（供給元との契約で認められた範囲）</li>
-            </ul>
-          </div>
-          <div className="stack stack--tight">
-            <strong className="small">今回含まれない用途</strong>
-            <ul className="small muted" style={{ margin: 0, paddingLeft: '1.2em' }}>
-              <li>ブランド広告・クライアント案件への納品</li>
-              <li>楽曲単体の再販売、素材ライブラリへの登録</li>
-              <li>Spotify等の音楽配信、Content IDなどの排他的権利主張</li>
-            </ul>
-          </div>
+      {products === null ? (
+        <div className="grid grid--plans" aria-hidden="true">
+          {Array.from({ length: 3 }, (_, i) => (
+            <div key={i} className="skeleton skeleton--plan" />
+          ))}
         </div>
-        {runtime && !runtime.features.commercialDeliveryEnabled && (
-          <div className="alert alert--warn">
-            <div className="alert__title">商用利用の許諾は現在未取得です</div>
-            <div className="small">
-              供給元との契約が締結されるまで、実際に付与される範囲は動作確認の目的に限られます。
-              各楽曲に付与された条件は、生成時点の内容で「利用条件記録」に保存されます。
-            </div>
-          </div>
-        )}
-        <p className="small muted" style={{ margin: 0 }}>
-          楽曲ごとの利用条件記録は、当社の利用条件と生成元情報を示すものです。
-          著作権登録・権利者証明・独占的所有権・非侵害の保証ではありません。
-        </p>
-      </section>
+      ) : (
+        <div className="grid grid--plans">
+          {freeTrial && (
+            <article className="plan plan--free">
+              <h2>Free</h2>
+              <p className="plan__price">$0</p>
+              <p className="plan__tagline">Start here</p>
+              <ul className="plan__bullets">
+                <li>2 welcome credits</li>
+                <li>Full studio, all lengths</li>
+                <li>Publish to Explore</li>
+              </ul>
+              {me ? (
+                <span className="plan__current">Included with your account</span>
+              ) : (
+                <Link to="/auth?next=/create" className="btn btn--block">
+                  Sign in with Google
+                </Link>
+              )}
+            </article>
+          )}
 
-      <section className="panel stack">
-        <h2 style={{ fontSize: 18, margin: 0 }}>キャンセル・返金について</h2>
-        <ul className="small muted" style={{ margin: 0, paddingLeft: '1.2em' }}>
-          <li>月額プランは、当期の終了時点で自動更新を停止できます（オンラインで完結します）</li>
-          <li>技術的な失敗で消費された回数は返却されます</li>
-          <li>誤課金は原状回復のうえ返金します</li>
-          <li>未使用かつ購入後7日以内のお申し出については、返金の可否を個別にご案内します</li>
+          {products
+            .slice()
+            .sort((a, b) => a.amountMinor - b.amountMinor)
+            .map((p) => {
+              const copy = PLAN_COPY[p.priceKey] ?? {
+                tagline: p.displayName,
+                bullets: [`${p.units} song credits`],
+              };
+              return (
+                <article key={p.priceKey} className={`plan${copy.highlight ? ' plan--highlight' : ''}`}>
+                  {copy.highlight && <span className="plan__badge">Most popular</span>}
+                  <h2>{p.displayName.split('—')[0]!.trim()}</h2>
+                  <p className="plan__price">
+                    {formatMoney(p.amountMinor, p.currency)}
+                    {p.kind === 'subscription' && <span className="plan__per">/month</span>}
+                  </p>
+                  <p className="plan__tagline">{copy.tagline}</p>
+                  <ul className="plan__bullets">
+                    {copy.bullets.map((b) => (
+                      <li key={b}>{b}</li>
+                    ))}
+                  </ul>
+                  {p.available ? (
+                    <button
+                      type="button"
+                      className={`btn btn--block${copy.highlight ? ' btn--primary' : ''}`}
+                      onClick={() => buy(p.priceKey)}
+                      disabled={busyKey === p.priceKey}
+                    >
+                      {busyKey === p.priceKey
+                        ? 'Opening checkout…'
+                        : p.kind === 'subscription'
+                          ? 'Subscribe'
+                          : 'Buy credits'}
+                    </button>
+                  ) : (
+                    <span className="plan__current">Coming soon</span>
+                  )}
+                </article>
+              );
+            })}
+        </div>
+      )}
+
+      <div className="pricing__notes panel">
+        <h2>The fine print, up front</h2>
+        <ul className="small">
+          <li>Prices are tax-inclusive. Payment is handled by Stripe; card details never touch our servers.</li>
+          <li>Subscriptions renew monthly and can be cancelled online at any time — access continues to the end of the paid period.</li>
+          <li>Credits from the Starter Pack are valid for 90 days. Subscription credits reset each billing period and are not carried over.</li>
+          <li>You own the songs you generate, under the usage terms shown on each song's usage record.</li>
         </ul>
-        <p className="small" style={{ margin: 0, color: 'var(--warning)' }}>
-          上記の返金の取扱いは検討中の運用方針です。法令に基づく権利を制限するものではありません。
-          正式な条件は
-          <Link to="/legal/tokushoho">特定商取引法に基づく表記</Link> と
-          <Link to="/legal/terms">利用規約</Link> をご確認ください。
-        </p>
-      </section>
+      </div>
     </div>
   );
 }

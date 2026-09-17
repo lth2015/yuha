@@ -1,10 +1,5 @@
 import { createHash } from 'node:crypto';
-import {
-  AppError,
-  FIXED_DURATION_SECONDS,
-  type CreateExportRequest,
-  type ExportView,
-} from '@loopscene/contracts';
+import { AppError, type CreateExportRequest, type ExportView } from '@loopscene/contracts';
 import {
   findAsset,
   getAssetForUser,
@@ -36,10 +31,9 @@ const FADE_OUT_MS = 1000;
 /**
  * Creates (or reuses) an export.
  *
- * UI-06 in full: 15s or the full 30s, an optional 1s fade-out, range validated
- * against the master, the master itself never overwritten, and neither trimming
- * nor re-downloading costs a generation credit — nothing in this function
- * touches the ledger.
+ * Trimming never costs a generation credit — nothing in this function touches
+ * the ledger. Clip windows are any 5s..full-length range the master covers,
+ * with an optional 1s fade-out; the master itself is never overwritten.
  */
 export async function createExport(
   ctx: AppContext,
@@ -61,14 +55,11 @@ export async function createExport(
   const master = await getMasterAsset(track.id);
   if (!master) throw new AppError('TRACK_NOT_DELIVERABLE', 'master audio is missing');
 
-  // Range check against the real master duration, not the nominal 30s.
+  // Range check against the real master duration, not a nominal length.
   const clipStartMs = Math.round(req.clipStartSeconds * 1000);
   const clipDurationMs = req.clipDurationSeconds * 1000;
   if (clipStartMs < 0 || clipStartMs + clipDurationMs > master.duration_ms + ctx.config.AUDIO_DURATION_TOLERANCE_MS) {
     throw new AppError('VALIDATION_FAILED', 'the requested clip range falls outside the track');
-  }
-  if (req.clipDurationSeconds === FIXED_DURATION_SECONDS && clipStartMs !== 0) {
-    throw new AppError('VALIDATION_FAILED', 'a full-length export must start at 0');
   }
 
   if (req.format === 'wav') {

@@ -1,0 +1,197 @@
+import type { FastifyInstance } from 'fastify';
+import { AppError, exploreQuery, setVisibilityRequest, type TrackView } from '@loopscene/contracts';
+import {
+  getMasterAsset,
+  getPublicTrack,
+  getTrackForUser,
+  hasLiked,
+  incrementPlayCount,
+  likeTrack,
+  listExploreTracks,
+  setTrackVisibility,
+  softDeleteTrack,
+  trackEvent,
+  unlikeTrack,
+  withTx,
+  type TrackWithArtist,
+} from '@loopscene/db';
+import type { AppContext } from '../context.js';
+
+export function toPublicTrackView(
+  ctx: AppContext,
+  row: TrackWithArtist,
+  opts: { previewUrl: string | null; likedByMe: boolean | null },
+): TrackView {
+  return {
+    trackId: row.id,
+    projectId: row.project_id,
+    jobId: row.job_id,
+    title: row.title,
+    artistName: row.artist_name,
+    artistId: row.owner_id,
+    state: row.state,
+    scene: row.scene as TrackView['scene'],
+    mood: (row.mood ?? null) as TrackView['mood'],
+    styles: row.styles ?? [],
+    vocalMode: row.vocal_mode,
+    visibility: row.visibility,
+    durationSeconds: row.duration_ms / 1000,
+    playCount: row.play_count,
+    likeCount: row.like_count,
+    likedByMe: opts.likedByMe,
+    coverSeed: row.cover_seed,
+    createdAt: row.created_at.toISOString(),
+    previewUrl: opts.previewUrl,
+    demo: ctx.config.isDemo,
+  };
+}
+
+async function previewUrlFor(ctx: AppContext, trackId: string): Promise<string | null> {
+  const master = await getMasterAsset(trackId);
+  if (!master) return null;
+  return (
+    await ctx.storage.signedUrl({
+      zone: 'delivery',
+      key: master.storage_key,
+      ttlSeconds: ctx.config.DOWNLOAD_URL_TTL_SECONDS,
+    })
+  ).url;
+}
+
+/**
+ * Explore: the public song feed.
+ *
+ * Every route here is safe for anonymous readers by construction — the
+ * repository layer only returns `visibility = 'public' AND state =
+ * 'deliverable'` rows, so a private song can never leak through a query bug
+ * (SEC-01).
+ */
+export default async function exploreRoutes(app: FastifyInstance, opts: { ctx: AppContext }) {
+  const { ctx } = opts;
+
+  /** GET /v1/explore — trending / newest public songs. Anonymous welcome. */
+  app.get(
+    '/v1/explore',
+    {
+      config: {
+        rateLimit: { max: 240, timeWindow: '1 minute' },
+      },
+    },
+    async (req) => {
+      const q = exploreQuery.parse(req.query);
+      const rows = await listExploreTracks({
+        limit: q.limit + 1,
+        cursor: q.cursor,
+        sort: q.sort,
+        vocal: q.vocal,
+        q: q.q,
+      });
+      const page = rows.slice(0, q.limit);
+      const liked =
+        req.user && page.length ? await hasLiked(page.map((r) => r.id), req.user.id) : new Set<string>();
+      const items = await Promise.all(
+        page.map(async (r) =>
+          toPublicTrackView(ctx, r, {
+            previewUrl: await previewUrlFor(ctx, r.id),
+            likedByMe: req.user ? liked.has(r.id) : null,
+          }),
+        ),
+      );
+      const last = page[page.length - 1];
+      const nextCursor =
+        rows.length > q.limit && last
+          ? q.sort === 'trending'
+            ? `${last.like_count * 4 + last.play_count}|${last.created_at.toISOString()}`
+            : last.created_at.toISOString()
+          : null;
+      return { items, nextCursor };
+    },
+  );
+
+  /**
+   * GET /v1/explore/:id — one public song with lyrics (for the detail view).
+   * Private songs are simply not here; owners read their own via /v1/tracks/:id.
+   */
+  app.get('/v1/explore/:id', async (req) => {
+    const { id } = req.params as { id: string };
+    const row = await getPublicTrack(id);
+    if (!row) throw new AppError('NOT_FOUND', 'song not found');
+    const liked = req.user ? await hasLiked([row.id], req.user.id) : new Set<string>();
+    return {
+      ...toPublicTrackView(ctx, row, {
+        previewUrl: await previewUrlFor(ctx, row.id),
+        likedByMe: req.user ? liked.has(row.id) : null,
+      }),
+      lyrics: row.lyrics,
+    };
+  });
+
+  /** POST /v1/explore/:id/plays — engagement counter; rate-limited per IP. */
+  app.post(
+    '/v1/explore/:id/plays',
+    {
+      config: {
+        rateLimit: { max: 120, timeWindow: '1 minute' },
+      },
+    },
+    async (req, reply) => {
+      const { id } = req.params as { id: string };
+      await incrementPlayCount(id);
+      await trackEvent({
+        name: 'song_played',
+        userRef: req.user?.id ?? null,
+        props: { track_id: id },
+        runMode: ctx.config.mode,
+        isInternal: ctx.config.isDemo,
+      }).catch(() => undefined);
+      return reply.status(202).send({ recorded: true });
+    },
+  );
+
+  /** POST /v1/explore/:id/like — toggle. Idempotent per (user, song) by design. */
+  app.post('/v1/explore/:id/like', { preHandler: app.requireAuth }, async (req) => {
+    const { id } = req.params as { id: string };
+    const { action } = (req.body ?? {}) as { action?: 'like' | 'unlike' };
+
+    // Liking is allowed on any *visible* song: your own private work-in-progress
+    // or a public song you found on the feed — never someone else's private one.
+    const publicRow = await getPublicTrack(id);
+    const ownRow = publicRow ? undefined : await getTrackForUser(id, req.user!.id);
+    if (!publicRow && !ownRow) throw new AppError('NOT_FOUND', 'song not found');
+
+    const result =
+      action === 'unlike'
+        ? await withTx((tx) => unlikeTrack({ trackId: id, userId: req.user!.id }, tx))
+        : await withTx((tx) => likeTrack({ trackId: id, userId: req.user!.id }, tx));
+    return result;
+  });
+
+  /**
+   * POST /v1/tracks/:id/visibility — publish to Explore, or pull back.
+   *
+   * Unpublishing removes the song from the feed immediately; likes already
+   * given are kept (counted on the row), not deleted.
+   */
+  app.post('/v1/tracks/:id/visibility', { preHandler: app.requireAuth }, async (req) => {
+    const { id } = req.params as { id: string };
+    const body = setVisibilityRequest.parse(req.body);
+    const moved = await setTrackVisibility({
+      trackId: id,
+      ownerId: req.user!.id,
+      visibility: body.visibility,
+    });
+    if (!moved) {
+      const track = await getTrackForUser(id, req.user!.id);
+      if (!track) throw new AppError('NOT_FOUND', 'song not found');
+      throw new AppError('TRACK_NOT_DELIVERABLE', 'only finished songs can be published');
+    }
+    await trackEvent({
+      name: body.visibility === 'public' ? 'song_published' : 'song_unpublished',
+      userRef: req.user!.id,
+      props: { track_id: id },
+      runMode: ctx.config.mode,
+      isInternal: ctx.config.isDemo,
+    });
+    return { trackId: id, visibility: body.visibility };
+  });
+}

@@ -1,8 +1,8 @@
-import { createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
 import { createRemoteJWKSet, jwtVerify } from 'jose';
 import { AppError, type UserRole } from '@loopscene/contracts';
 import { findByExternalId, upsertUser, type UserRow } from '@loopscene/db';
 import type { AppConfig } from '../config.js';
+import { SessionTokenIssuer } from './tokens.js';
 
 export interface AuthPrincipal {
   userId: string;
@@ -15,7 +15,7 @@ export interface AuthPrincipal {
 
 export interface AuthAdapter {
   readonly kind: string;
-  /** Verifies a bearer token and returns the local user, creating it on first sight. */
+  /** Verifies a bearer token and returns the local user. */
   verify(token: string): Promise<UserRow>;
 }
 
@@ -74,63 +74,91 @@ export class CognitoAuthAdapter implements AuthAdapter {
 /**
  * Development identity for demo mode.
  *
- * Issues an HMAC-signed opaque token so the local flow exercises real bearer
- * auth rather than a "pretend I am user X" header. `loadConfig` refuses to
- * construct this in production mode (SEC-03), and every user it creates is
- * stored with auth_provider = 'dev', keeping the two identity spaces
- * permanently distinguishable.
+ * Issues an HMAC-signed opaque session via the shared token issuer, so the
+ * local flow exercises real bearer auth rather than a "pretend I am user X"
+ * header. `loadConfig` refuses to construct this in production (SEC-03), and
+ * every user it creates is stored with auth_provider = 'dev', keeping the two
+ * identity spaces permanently distinguishable.
  */
 export class DevAuthAdapter implements AuthAdapter {
   readonly kind = 'dev';
-  private readonly secret: string;
-  private readonly ttlSeconds: number;
+  private readonly issuer: SessionTokenIssuer;
 
   constructor(params: { secret: string; ttlSeconds?: number }) {
-    this.secret = params.secret;
-    this.ttlSeconds = params.ttlSeconds ?? 7 * 24 * 3600;
+    this.issuer = new SessionTokenIssuer(params.secret, params.ttlSeconds);
   }
 
   issue(params: { externalId: string; email: string }): { token: string; expiresAt: Date } {
-    const exp = Math.floor(Date.now() / 1000) + this.ttlSeconds;
-    const body = Buffer.from(
-      JSON.stringify({ sub: params.externalId, email: params.email, exp, nonce: randomBytes(8).toString('hex') }),
-      'utf8',
-    ).toString('base64url');
-    const sig = createHmac('sha256', this.secret).update(body).digest('base64url');
-    return { token: `${body}.${sig}`, expiresAt: new Date(exp * 1000) };
+    return this.issuer.issue({ provider: 'dev', externalId: params.externalId, email: params.email });
   }
 
   async verify(token: string): Promise<UserRow> {
-    const [body, sig] = token.split('.');
-    if (!body || !sig) throw new AppError('UNAUTHENTICATED', 'malformed dev token');
-    const expected = createHmac('sha256', this.secret).update(body).digest('base64url');
-    const a = Buffer.from(expected, 'utf8');
-    const b = Buffer.from(sig, 'utf8');
-    if (a.length !== b.length || !timingSafeEqual(a, b)) {
-      throw new AppError('UNAUTHENTICATED', 'invalid dev token signature');
-    }
-    let payload: { sub?: string; email?: string; exp?: number };
-    try {
-      payload = JSON.parse(Buffer.from(body, 'base64url').toString('utf8'));
-    } catch {
-      throw new AppError('UNAUTHENTICATED', 'malformed dev token payload');
-    }
-    if (!payload.sub || !payload.email) throw new AppError('UNAUTHENTICATED', 'dev token is missing sub or email');
-    if (!payload.exp || payload.exp * 1000 < Date.now()) throw new AppError('UNAUTHENTICATED', 'dev token expired');
+    const claims = this.issuer.verify(token, 'dev');
+    if (!claims) throw new AppError('UNAUTHENTICATED', 'invalid or expired dev session token');
 
-    const existing = await findByExternalId('dev', payload.sub);
+    const existing = await findByExternalId('dev', claims.sub);
     if (existing) return existing;
-    return upsertUser({ authProvider: 'dev', externalId: payload.sub, email: payload.email });
+    return upsertUser({ authProvider: 'dev', externalId: claims.sub, email: claims.email });
+  }
+}
+
+/**
+ * Session side of the Google adapter: the OAuth dance lives in ./google.ts and
+ * the auth routes; this part turns the session token minted at the end of it
+ * back into a user row. No auto-create on verify — a deleted Google account's
+ * session dies with the row.
+ */
+export class GoogleSessionAdapter implements AuthAdapter {
+  readonly kind = 'google';
+  private readonly issuer: SessionTokenIssuer;
+
+  constructor(params: { secret: string }) {
+    this.issuer = new SessionTokenIssuer(params.secret);
+  }
+
+  sessionIssuer(): SessionTokenIssuer {
+    return this.issuer;
+  }
+
+  async verify(token: string): Promise<UserRow> {
+    const claims = this.issuer.verify(token, 'google');
+    if (!claims) throw new AppError('UNAUTHENTICATED', 'invalid or expired session token');
+    const user = await findByExternalId('google', claims.sub);
+    if (!user) throw new AppError('UNAUTHENTICATED', 'session no longer maps to an account');
+    return user;
   }
 }
 
 export function createAuthAdapter(cfg: AppConfig): AuthAdapter {
-  if (cfg.adapters.auth === 'cognito') {
-    return new CognitoAuthAdapter({
-      region: cfg.COGNITO_REGION!,
-      userPoolId: cfg.COGNITO_USER_POOL_ID!,
-      appClientId: cfg.COGNITO_APP_CLIENT_ID!,
-    });
+  switch (cfg.adapters.auth) {
+    case 'cognito':
+      return new CognitoAuthAdapter({
+        region: cfg.COGNITO_REGION!,
+        userPoolId: cfg.COGNITO_USER_POOL_ID!,
+        appClientId: cfg.COGNITO_APP_CLIENT_ID!,
+      });
+    case 'google':
+      return new GoogleSessionAdapter({ secret: googleSessionSecret(cfg) });
+    default:
+      return new DevAuthAdapter({ secret: cfg.DEV_AUTH_SECRET! });
   }
-  return new DevAuthAdapter({ secret: cfg.DEV_AUTH_SECRET! });
 }
+
+/**
+ * Google sessions are signed with the same class of secret as dev sessions.
+ * A deployment that has not set one refuses to boot rather than signing with
+ * a default value.
+ */
+export function googleSessionSecret(cfg: AppConfig): string {
+  const secret = cfg.GOOGLE_SESSION_SECRET ?? cfg.DEV_AUTH_SECRET;
+  if (!secret) {
+    throw new AppError(
+      'SERVICE_DISABLED',
+      'GOOGLE_SESSION_SECRET (or DEV_AUTH_SECRET outside production) is required for google auth',
+    );
+  }
+  return secret;
+}
+
+export { GoogleAuthAdapter, isGoogleConfigured } from './google.js';
+export { SessionTokenIssuer } from './tokens.js';

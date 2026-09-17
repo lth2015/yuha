@@ -47,7 +47,7 @@ export default async function billingRoutes(app: FastifyInstance, opts: { ctx: A
         priceKey: o.price_key,
         priceVersion: o.price_version,
         kind: o.kind,
-        amountJpy: o.amount_jpy,
+        amountMinor: o.amount_jpy,
         currency: o.currency,
         status: o.status,
         entitlementGranted: o.entitlement_granted_at !== null,
@@ -67,7 +67,7 @@ export default async function billingRoutes(app: FastifyInstance, opts: { ctx: A
     return {
       items: rows.map((p) => ({
         kind: p.kind,
-        amountJpy: p.amount_jpy,
+        amountMinor: p.amount_jpy,
         feeJpy: p.fee_jpy,
         netJpy: p.net_jpy,
         status: p.status,
@@ -179,8 +179,8 @@ export default async function billingRoutes(app: FastifyInstance, opts: { ctx: A
             client_reference_id: session.orderId,
             payment_status: session.paymentStatus,
             status: session.status,
-            amount_total: session.amountJpy,
-            currency: 'jpy',
+            amount_total: session.amountMinor,
+            currency: session.currency,
             customer: session.customerId,
             payment_intent: session.paymentIntentId,
             subscription: session.subscriptionId,

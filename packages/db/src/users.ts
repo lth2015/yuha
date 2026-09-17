@@ -8,6 +8,7 @@ export interface UserRow {
   auth_provider: string;
   email: string;
   display_name: string | null;
+  avatar_url: string | null;
   role: UserRole;
   status: 'active' | 'suspended' | 'deleted';
   age_confirmed_at: Date | null;
@@ -19,7 +20,7 @@ export interface UserRow {
 }
 
 const USER_COLUMNS = `
-  id, external_id, auth_provider, email, display_name, role, status,
+  id, external_id, auth_provider, email, display_name, avatar_url, role, status,
   age_confirmed_at, terms_accepted_at, marketing_opt_in, created_at, updated_at, deleted_at
 `;
 
@@ -50,17 +51,26 @@ export async function upsertUser(
     externalId: string;
     email: string;
     displayName?: string | null;
+    avatarUrl?: string | null;
   },
   tx?: PoolConnection,
 ): Promise<UserRow> {
   await execute(
-    `INSERT INTO users (id, auth_provider, external_id, email, display_name)
-     VALUES (?, ?, ?, ?, ?)
+    `INSERT INTO users (id, auth_provider, external_id, email, display_name, avatar_url)
+     VALUES (?, ?, ?, ?, ?, ?)
      ON DUPLICATE KEY UPDATE
        email = VALUES(email),
        display_name = COALESCE(VALUES(display_name), display_name),
+       avatar_url = COALESCE(VALUES(avatar_url), avatar_url),
        updated_at = UTC_TIMESTAMP(3)`,
-    [newId(), params.authProvider, params.externalId, params.email, params.displayName ?? null],
+    [
+      newId(),
+      params.authProvider,
+      params.externalId,
+      params.email,
+      params.displayName ?? null,
+      params.avatarUrl ?? null,
+    ],
     tx,
   );
   return (await findByExternalId(params.authProvider, params.externalId, tx))!;

@@ -12,8 +12,9 @@ coverage/
 # local object storage + generated audio fixtures
 # (the fixtures are synthesised from scripts/make-audio-fixtures.mjs — the script is
 #  the tracked source of truth, the rendered audio is a build artefact)
-var/
-storage/
+# Anchored so the pattern cannot swallow source dirs like packages/*/src/storage/.
+/var/
+/storage/
 assets/fixtures/audio/
 apps/web/dist/
 .vite/

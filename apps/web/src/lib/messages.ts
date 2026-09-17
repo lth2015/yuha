@@ -16,6 +16,11 @@ export interface UserMessage {
 }
 
 export const ERROR_MESSAGES: Record<ErrorCode, UserMessage> = {
+  AUTH_EXCHANGE_FAILED: {
+    title: 'Sign-in could not be completed',
+    next: 'The one-time code may have expired. Start sign-in again from the beginning.',
+    tone: 'error',
+  },
   UNAUTHENTICATED: {
     title: 'ログインが必要です',
     next: 'もう一度ログインしてください。作成中の内容は保存されています。',
@@ -188,12 +193,12 @@ export function messageFor(err: unknown): UserMessage {
 
 /** Extra guidance for a blocked prompt, keyed by the server's hint (SEC-07). */
 export const PROMPT_HINTS: Record<string, string> = {
-  'prompt.tooLong': '300文字以内にしてください。',
+  'prompt.tooLong': 'Keep the description within the length limit.',
+  'prompt.noExistingLyrics': 'Write your own lyrics — quoting lyrics of an existing song is not supported.',
   'prompt.noUrl': 'URLは受け付けていません。参考曲の指定はできません。気分や楽器で表現してください。',
   'prompt.noPersonalInfo': 'メールアドレスやカード番号などの個人情報は入力しないでください。',
   'prompt.rewriteAsMood': '曲の雰囲気を、気分・楽器・テンポの言葉で書いてください。',
   'prompt.noVoiceImitation': '実在する人物の声や歌い方の再現には対応していません。',
-  'prompt.instrumentalOnly': '今回のサービスは歌詞・ボーカルなしのインスト曲のみです。',
   'prompt.noArtistOrTitle': 'アーティスト名や曲名の指定はできません。雰囲気の言葉に置き換えてください。',
 };
 
