@@ -19,7 +19,10 @@ export function PlayerBar() {
   const pct = `${(progress * 100).toFixed(2)}%`;
 
   return (
-    <footer className="player-bar" aria-label="Player">
+    <footer
+      className={`player-bar${player.status === 'playing' ? ' is-playing' : ''}`}
+      aria-label="Player"
+    >
       <div className="player-bar__inner">
         <Link to={`/song/${player.current.trackId}`} className="player-bar__now">
           <CoverArt seed={player.current.coverSeed} title={player.current.title} size={48} />

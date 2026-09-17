@@ -75,7 +75,7 @@ export function CoverArt({
       viewBox="0 0 100 100"
       width={size}
       height={size}
-      className={`cover-art${className ? ` ${className}` : ''}${playing ? ' cover-art--playing' : ''}`}
+      className={`cover-art${className ? ` ${className}` : ''}`}
       role="img"
       aria-label={`Cover art for ${title}`}
       preserveAspectRatio="xMidYMid slice"

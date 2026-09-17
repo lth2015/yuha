@@ -2,9 +2,11 @@ import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import type { TrackView } from '@loopscene/contracts';
 import { apiFetch } from '../lib/api';
+import { usePlayer } from '../lib/player';
 import { useSession } from '../lib/session';
 import { SongCard } from '../components/SongCard';
 import { Eq } from '../components/Eq';
+import { WaveField } from '../components/WaveField';
 
 /**
  * Landing page: what the product is, one song-creation CTA, and the live
@@ -13,8 +15,10 @@ import { Eq } from '../components/Eq';
  */
 export default function Home() {
   const { me } = useSession();
+  const player = usePlayer();
   const [songs, setSongs] = useState<TrackView[] | null>(null);
   const [failed, setFailed] = useState(false);
+  const playing = player.status === 'playing';
 
   useEffect(() => {
     apiFetch<{ items: TrackView[] }>('/v1/explore?limit=8&sort=trending')
@@ -26,21 +30,10 @@ export default function Home() {
     <div className="stack stack--loose">
       <section className="hero">
         <div className="hero__glow" aria-hidden="true" />
-        <div className="notes-field" aria-hidden="true">
-          {Array.from({ length: 14 }, (_, i) => (
-            <span
-              key={i}
-              style={{
-                left: `${(i * 7.3 + 4) % 96}%`,
-                animationDuration: `${9 + (i % 5) * 2.6}s`,
-                animationDelay: `${(i * 1.37) % 9}s`,
-                fontSize: `${14 + ((i * 5) % 16)}px`,
-              }}
-            >
-              {['♪', '♫', '♬', '♩'][i % 4]}
-            </span>
-          ))}
-        </div>
+        <WaveField active={playing} className="hero__waves" />
+        <span className="hero__ghost" aria-hidden="true">
+          SONARE
+        </span>
         <div className="hero__inner">
           <p className="hero__eyebrow">AI song studio</p>
           <h1 className="hero__title">
@@ -79,7 +72,7 @@ export default function Home() {
       <section aria-labelledby="trending-heading">
         <div className="section-head">
           <h2 id="trending-heading">
-            <Eq live={songs !== null && songs.length > 0} /> Trending now
+            <Eq live={playing || (songs !== null && songs.length > 0)} /> Trending now
           </h2>
           <Link to="/explore" className="section-head__more">
             See all
