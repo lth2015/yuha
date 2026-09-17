@@ -196,9 +196,7 @@ export default function SongDetail() {
               </>
             )}
           </div>
-          {song.demo && (
-            <p className="small muted">Demo mode: this audio is synthesised for pipeline demonstration.</p>
-          )}
+
         </div>
       </div>
 

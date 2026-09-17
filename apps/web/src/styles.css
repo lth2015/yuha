@@ -369,16 +369,36 @@ code {
   display: none;
 }
 
-/* mode banner */
+/* mode banner — slim, elegant glass bar; informative without shouting */
 .mode-banner {
-  padding: 8px var(--s3);
-  font-size: 13px;
-  text-align: center;
-  color: #141507;
-  background: repeating-linear-gradient(45deg, #eaffab, #eaffab 12px, #d4ff62 12px, #d4ff62 24px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 7px var(--s3);
+  font-size: 12.5px;
+  color: var(--text-muted);
+  background: rgba(22, 24, 30, 0.85);
+  backdrop-filter: blur(12px);
+  border-bottom: 1px solid var(--border);
+}
+.mode-banner__dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--warning);
+  box-shadow: 0 0 8px rgba(255, 207, 106, 0.8);
+  animation: pulse-dot 2.2s ease-in-out infinite;
+  flex: none;
 }
 .mode-banner strong {
-  letter-spacing: 0.04em;
+  color: var(--text);
+  letter-spacing: 0.06em;
+  font-weight: 700;
+}
+@keyframes pulse-dot {
+  0%, 100% { transform: scale(1); opacity: 1; }
+  50% { transform: scale(1.35); opacity: 0.6; }
 }
 
 /* ---------------------------------------------------------------- buttons */
@@ -1267,6 +1287,12 @@ tr:last-child td {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.player-bar__eq {
+  height: 13px;
 }
 .player-bar__artist {
   font-size: 12.5px;
@@ -1842,5 +1868,295 @@ tr:last-child td {
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
+  }
+}
+
+/* ================================================================ MOTION & FLAIR
+ * The "alive" layer: equalizer bars that dance while a song plays, music
+ * notes drifting through the hero, beat-pulsing play buttons, staggered
+ * entrances. Everything is CSS-driven, honours prefers-reduced-motion (see
+ * the global override at the end of the sheet) and degrades to a perfectly
+ * readable static layout.
+ */
+
+/* ---- equalizer bars ------------------------------------------------------ */
+
+.eq {
+  display: inline-flex;
+  align-items: flex-end;
+  gap: 2.5px;
+  height: 16px;
+  flex: none;
+}
+.eq span {
+  width: 3px;
+  border-radius: 2px;
+  background: currentColor;
+  transform-origin: bottom;
+  animation: eqbar 0.9s ease-in-out infinite alternate;
+  animation-play-state: paused;
+  height: 30%;
+}
+.eq.is-live span {
+  animation-play-state: running;
+}
+.eq span:nth-child(1) { animation-duration: 0.82s; animation-delay: -0.05s; }
+.eq span:nth-child(2) { animation-duration: 0.64s; animation-delay: -0.32s; }
+.eq span:nth-child(3) { animation-duration: 1.05s; animation-delay: -0.12s; }
+.eq span:nth-child(4) { animation-duration: 0.71s; animation-delay: -0.5s; }
+.eq span:nth-child(5) { animation-duration: 0.95s; animation-delay: -0.22s; }
+@keyframes eqbar {
+  0% { height: 22%; }
+  100% { height: 100%; }
+}
+
+/* Larger variant for the player bar. */
+.eq--lg {
+  height: 22px;
+  gap: 3px;
+}
+.eq--lg span {
+  width: 4px;
+}
+
+/* The active song card shows a live EQ over its cover, bottom-left. */
+.song-card__eq {
+  position: absolute;
+  left: 12px;
+  bottom: 12px;
+  color: var(--accent);
+  filter: drop-shadow(0 0 6px rgba(212, 255, 98, 0.55));
+  z-index: 2;
+}
+/* And its play button keeps the beat. */
+.song-card[data-active] .song-card__play {
+  animation: beat 1.6s ease-in-out infinite;
+}
+@keyframes beat {
+  0%, 100% { transform: translateY(0) scale(1); }
+  12% { transform: translateY(0) scale(1.08); }
+  24% { transform: translateY(0) scale(0.98); }
+  36% { transform: translateY(0) scale(1.05); }
+  48% { transform: translateY(0) scale(1); }
+}
+.btn-icon--main.is-playing {
+  animation: beat 1.6s ease-in-out infinite;
+}
+
+/* ---- floating music notes (hero) ---------------------------------------- */
+
+.notes-field {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+  z-index: 0;
+}
+.notes-field span {
+  position: absolute;
+  bottom: -8%;
+  font-size: 18px;
+  color: var(--accent);
+  opacity: 0;
+  animation: note-drift linear infinite;
+}
+.notes-field span:nth-child(odd) {
+  color: var(--accent-soft);
+}
+@keyframes note-drift {
+  0% { transform: translateY(0) rotate(-8deg) scale(0.9); opacity: 0; }
+  8% { opacity: 0.5; }
+  50% { transform: translateY(-45vh) rotate(6deg) scale(1.05); opacity: 0.35; }
+  100% { transform: translateY(-95vh) rotate(-6deg) scale(0.85); opacity: 0; }
+}
+
+/* Hero glow slowly orbits. */
+.hero__glow {
+  animation: glow-orbit 14s ease-in-out infinite alternate;
+}
+@keyframes glow-orbit {
+  0% { transform: translate(0, 0) scale(1); }
+  100% { transform: translate(-12%, -10%) scale(1.15); }
+}
+
+/* ---- entrances ----------------------------------------------------------- */
+
+/* Staggered card entrance on grids. */
+.grid--songs > * {
+  animation: rise-in 0.5s cubic-bezier(0.22, 0.8, 0.32, 1) both;
+  animation-delay: calc(min(var(--i, 0), 8) * 55ms);
+}
+@keyframes rise-in {
+  from { opacity: 0; transform: translateY(14px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* Page content fades up once per navigation. */
+.content > * {
+  animation: fade-up 0.45s cubic-bezier(0.22, 0.8, 0.32, 1) both;
+}
+.content > *:nth-child(2) { animation-delay: 60ms; }
+.content > *:nth-child(3) { animation-delay: 110ms; }
+@keyframes fade-up {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* ---- micro-interactions -------------------------------------------------- */
+
+/* Like heart pops when it lands. */
+.like-btn--on .icon--heart {
+  animation: heart-pop 0.45s cubic-bezier(0.22, 1.6, 0.36, 1);
+}
+@keyframes heart-pop {
+  0% { transform: scale(1); }
+  40% { transform: scale(1.45); }
+  100% { transform: scale(1); }
+}
+
+/* Card tilt + shine sweep on hover (desktop pointers only). */
+@media (hover: hover) {
+  .song-card {
+    transition: transform 0.25s cubic-bezier(0.22, 0.8, 0.32, 1), border-color 0.2s ease, box-shadow 0.25s ease;
+  }
+  .song-card:hover {
+    transform: translateY(-5px) rotate(-0.4deg);
+  }
+  .song-card__art::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(115deg, transparent 30%, rgba(255, 255, 255, 0.09) 48%, transparent 62%);
+    transform: translateX(-120%);
+    transition: transform 0.7s ease;
+    pointer-events: none;
+  }
+  .song-card:hover .song-card__art::after {
+    transform: translateX(120%);
+  }
+}
+
+/* Tab bar icons bounce when active (mobile). */
+.tabbar__link.is-active .icon {
+  animation: tab-bounce 0.4s cubic-bezier(0.22, 1.6, 0.36, 1);
+}
+@keyframes tab-bounce {
+  0% { transform: translateY(0); }
+  40% { transform: translateY(-3px); }
+  100% { transform: translateY(0); }
+}
+
+/* Trending section heading gets a live EQ accent. */
+.section-head h2 {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+}
+.section-head h2 .eq {
+  color: var(--accent);
+}
+
+/* ---- site footer --------------------------------------------------------- */
+
+.site-footer {
+  border-top: 1px solid var(--border);
+  background: rgba(14, 15, 19, 0.6);
+  padding: var(--s4) var(--s3) var(--s3);
+}
+.site-footer__inner {
+  max-width: 1280px;
+  margin: 0 auto;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s3);
+  align-items: flex-start;
+  justify-content: space-between;
+}
+.site-footer__brand {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-width: 320px;
+}
+.site-footer__links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s2) var(--s3);
+  font-size: 14px;
+}
+.site-footer__links a {
+  color: var(--text-muted);
+}
+.site-footer__links a:hover {
+  color: var(--accent);
+}
+.site-footer__fine {
+  max-width: 1280px;
+  margin: var(--s3) auto 0;
+  padding-top: var(--s2);
+  border-top: 1px solid var(--border);
+  font-size: 12.5px;
+  color: var(--text-muted);
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s1) var(--s2);
+  justify-content: space-between;
+}
+
+/* Motion: the notes field and heavy loops stop under reduced motion. */
+@media (prefers-reduced-motion: reduce) {
+  .notes-field span,
+  .song-card[data-active] .song-card__play,
+  .btn-icon--main.is-playing,
+  .hero__glow {
+    animation: none !important;
+  }
+}
+
+/* ---- legal pages ---------------------------------------------------------- */
+
+.legal-page {
+  max-width: 760px;
+  margin: 0 auto;
+}
+.legal-page section {
+  margin: var(--s3) 0;
+}
+.legal-page h2 {
+  font-size: 17px;
+}
+.legal-page ul {
+  padding-left: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  color: var(--text-muted);
+}
+.legal-page strong {
+  color: var(--text);
+}
+.company-facts {
+  display: grid;
+  grid-template-columns: 160px 1fr;
+  gap: 10px var(--s2);
+  margin: 0;
+}
+.company-facts > div {
+  display: contents;
+}
+.company-facts dt {
+  color: var(--text-muted);
+  font-size: 14px;
+}
+.company-facts dd {
+  margin: 0;
+  font-weight: 600;
+}
+@media (max-width: 560px) {
+  .company-facts {
+    grid-template-columns: 1fr;
+  }
+  .company-facts > div {
+    display: block;
   }
 }

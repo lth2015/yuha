@@ -4,6 +4,7 @@ import type { TrackView } from '@loopscene/contracts';
 import { apiFetch } from '../lib/api';
 import { formatTime, usePlayer } from '../lib/player';
 import { CoverArt } from './CoverArt';
+import { Eq } from './Eq';
 
 /**
  * One song card, used by Explore, the Library grid and the Home highlights.
@@ -15,10 +16,13 @@ import { CoverArt } from './CoverArt';
 export function SongCard({
   song,
   queue,
+  index = 0,
   onRemove,
 }: {
   song: TrackView;
   queue: TrackView[];
+  /** Position in the grid, for the staggered entrance animation. */
+  index?: number;
   /** Library-only: called after a successful delete. */
   onRemove?: (trackId: string) => void;
 }) {
@@ -88,9 +92,14 @@ export function SongCard({
   };
 
   return (
-    <article className="song-card" data-active={active || undefined}>
+    <article
+      className="song-card"
+      data-active={active || undefined}
+      style={{ '--i': index } as React.CSSProperties}
+    >
       <div className="song-card__art">
         <CoverArt seed={song.coverSeed} title={song.title} size={300} playing={playing} />
+        {active && <Eq live={playing} className="song-card__eq" />}
         <button
           type="button"
           className="song-card__play"

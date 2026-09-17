@@ -141,8 +141,8 @@ export default function Explore() {
       ) : (
         <>
           <div className="grid grid--songs">
-            {songs.map((song) => (
-              <SongCard key={song.trackId} song={song} queue={songs} />
+            {songs.map((song, i) => (
+              <SongCard key={song.trackId} song={song} queue={songs} index={i} />
             ))}
           </div>
           {cursor && (

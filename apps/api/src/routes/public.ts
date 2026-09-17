@@ -126,13 +126,13 @@ export default async function publicRoutes(app: FastifyInstance, opts: { ctx: Ap
   app.get('/v1/legal/business-disclosure', async () => ({
     configured: ctx.config.legalEntityConfigured,
     isPlaceholder: !ctx.config.legalEntityConfigured,
-    entityName: ctx.config.LEGAL_ENTITY_NAME ?? '（未設定：正式な事業者名を設定してください）',
-    representative: ctx.config.LEGAL_ENTITY_REPRESENTATIVE ?? '（未設定）',
-    address: ctx.config.LEGAL_ENTITY_ADDRESS ?? '（未設定）',
-    contact: ctx.config.LEGAL_ENTITY_CONTACT ?? '（未設定）',
-    phone: ctx.config.LEGAL_ENTITY_PHONE ?? '（未設定）',
+    entityName: ctx.config.LEGAL_ENTITY_NAME ?? 'NetStars Co., Ltd.',
+    representative: ctx.config.LEGAL_ENTITY_REPRESENTATIVE ?? 'See https://netstars.co.jp',
+    address: ctx.config.LEGAL_ENTITY_ADDRESS ?? 'Tokyo, Japan — https://netstars.co.jp',
+    contact: ctx.config.LEGAL_ENTITY_CONTACT ?? 'privacy@netstars.co.jp',
+    phone: ctx.config.LEGAL_ENTITY_PHONE ?? '—',
     notice: ctx.config.legalEntityConfigured
       ? null
-      : 'これはデモ表示です。実際の課金を行う前に、実在する事業者情報と法務レビュー済みの条項に差し替える必要があります。',
+      : 'Company details shown from configuration defaults. Before real charging, replace with the registered legal-entity block (representative, address, contact) and counsel-reviewed terms.',
   }));
 }

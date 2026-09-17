@@ -130,6 +130,9 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     };
     const onLoaded = () => setState((s) => ({ ...s, duration: audio.duration || 0 }));
     const onPlay = () => setState((s) => ({ ...s, status: 'playing' }));
+    // 'playing' (not 'play') is the "buffering ended" signal — without it the
+    // bar would stay on "buffering…" forever after a mid-stream stall.
+    const onPlaying = () => setState((s) => ({ ...s, status: 'playing' }));
     const onPause = () => setState((s) => (s.status === 'playing' ? { ...s, status: 'paused' } : s));
     const onEnded = () => {
       setState((s) => ({ ...s, status: 'paused', currentTime: 0 }));
@@ -141,6 +144,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     audio.addEventListener('timeupdate', onTime);
     audio.addEventListener('loadedmetadata', onLoaded);
     audio.addEventListener('play', onPlay);
+    audio.addEventListener('playing', onPlaying);
     audio.addEventListener('pause', onPause);
     audio.addEventListener('ended', onEnded);
     audio.addEventListener('waiting', onWaiting);
@@ -149,6 +153,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       audio.removeEventListener('timeupdate', onTime);
       audio.removeEventListener('loadedmetadata', onLoaded);
       audio.removeEventListener('play', onPlay);
+      audio.removeEventListener('playing', onPlaying);
       audio.removeEventListener('pause', onPause);
       audio.removeEventListener('ended', onEnded);
       audio.removeEventListener('waiting', onWaiting);

@@ -597,7 +597,10 @@ describe('SEC-06 / §3.1: the runtime descriptor exposes no secrets', () => {
     const res = await h.app.inject({ method: 'GET', url: '/v1/legal/business-disclosure' });
     expect(res.json().configured).toBe(false);
     expect(res.json().isPlaceholder).toBe(true);
-    expect(res.json().notice).toContain('デモ表示');
+    // The unconfigured default is the NetStars display block, and the notice
+    // says plainly that it must be replaced before real charging.
+    expect(res.json().notice).toContain('Before real charging');
+    expect(res.json().entityName).toBe('NetStars Co., Ltd.');
   });
 });
 

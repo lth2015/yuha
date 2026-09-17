@@ -14,7 +14,9 @@ data:
   PORT: {{ .Values.api.port | quote }}
   DATABASE_SSL: "true"
 
-  AUTH_ADAPTER: "cognito"
+  AUTH_ADAPTER: {{ .Values.config.authAdapter | quote }}
+  GOOGLE_CLIENT_ID: {{ .Values.config.google.clientId | quote }}
+  GOOGLE_REDIRECT_URI: {{ .Values.config.google.redirectUri | quote }}
   COGNITO_REGION: {{ .Values.config.cognito.region | quote }}
   COGNITO_USER_POOL_ID: {{ .Values.config.cognito.userPoolId | quote }}
   COGNITO_APP_CLIENT_ID: {{ .Values.config.cognito.appClientId | quote }}
@@ -37,7 +39,7 @@ data:
   TOKENSTARS_REQUEST_ID_HEADER: {{ .Values.config.tokenstars.requestIdHeader | quote }}
   TOKENSTARS_STRUCTURED_OUTPUTS: {{ .Values.config.tokenstars.structuredOutputs | quote }}
 
-  MUSIC_ADAPTER: "http"
+  MUSIC_ADAPTER: {{ .Values.config.music.adapter | quote }}
   MUSIC_PROVIDER_ID: {{ .Values.config.music.providerId | quote }}
   MUSIC_BASE_URL: {{ .Values.config.music.baseUrl | quote }}
   MUSIC_MODEL: {{ .Values.config.music.model | quote }}
@@ -65,7 +67,8 @@ data:
   PAYMENTS_ADAPTER: "stripe"
   STRIPE_PUBLISHABLE_KEY: {{ .Values.config.stripe.publishableKey | quote }}
   STRIPE_PRICE_ID_DROP_5: {{ .Values.config.stripe.priceIdDrop5 | quote }}
-  STRIPE_PRICE_ID_CREATOR_MONTHLY: {{ .Values.config.stripe.priceIdCreatorMonthly | quote }}
+  STRIPE_PRICE_ID_PRO_MONTHLY: {{ .Values.config.stripe.priceIdProMonthly | quote }}
+  STRIPE_PRICE_ID_PREMIER_MONTHLY: {{ .Values.config.stripe.priceIdPremierMonthly | quote }}
 
   FEATURE_SUBSCRIPTIONS_ENABLED: {{ .Values.config.features.subscriptionsEnabled | quote }}
   FEATURE_FREE_TRIAL_ENABLED: {{ .Values.config.features.freeTrialEnabled | quote }}

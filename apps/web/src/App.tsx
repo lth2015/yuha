@@ -14,7 +14,7 @@ import Explore from './pages/Explore';
 import Export from './pages/Export';
 import GoogleCallback from './pages/GoogleCallback';
 import Home from './pages/Home';
-import { Privacy, Terms, Tokushoho } from './pages/Legal';
+import { Company, Privacy, Terms, Tokushoho } from './pages/Legal';
 import Library from './pages/Library';
 import Pricing from './pages/Pricing';
 import Project from './pages/Project';
@@ -153,6 +153,7 @@ export default function App() {
               <Route path="/help/rights" element={<Rights />} />
               <Route path="/legal/terms" element={<Terms />} />
               <Route path="/legal/privacy" element={<Privacy />} />
+              <Route path="/legal/company" element={<Company />} />
               <Route path="/legal/tokushoho" element={<Tokushoho />} />
 
               <Route

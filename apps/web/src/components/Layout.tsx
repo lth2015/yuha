@@ -5,11 +5,11 @@ import { PlayerBar } from './PlayerBar';
 
 /**
  * App shell: sidebar navigation (desktop), bottom tab bar (mobile), top bar
- * with the credit pill and account menu, and the persistent player bar.
+ * with the credit pill and account menu, the persistent player bar, and a
+ * commercial-grade site footer carrying the company and legal links.
  *
- * The mode banner is part of the document flow, not a dismissible toast — a
- * demo deployment must say so continuously, and a banner users can close is a
- * banner users stop seeing.
+ * Non-production deployments still identify themselves — as a slim glass bar,
+ * informative without shouting.
  */
 function ModeBanner() {
   const { runtime } = useSession();
@@ -18,15 +18,21 @@ function ModeBanner() {
   if (runtime.demo) {
     return (
       <div className="mode-banner" role="status">
-        <strong>Demo mode</strong> — audio is synthesised for pipeline testing, payments are simulated. No
-        real charges occur and no commercial licence is granted.
+        <span className="mode-banner__dot" aria-hidden="true" />
+        <span>
+          <strong>Demo build</strong> — audio is synthetic and payments are simulated. No real charges; no
+          commercial licence.
+        </span>
       </div>
     );
   }
   if (!runtime.features.commercialDeliveryEnabled) {
     return (
       <div className="mode-banner" role="status">
-        <strong>Preview build</strong> — no commercial licence is in force yet. Songs are for evaluation use.
+        <span className="mode-banner__dot" aria-hidden="true" />
+        <span>
+          <strong>Preview</strong> — commercial licensing for generated songs is not in force yet.
+        </span>
       </div>
     );
   }
@@ -39,6 +45,39 @@ const NAV = [
   { to: '/explore', label: 'Explore', icon: 'icon--explore' },
   { to: '/library', label: 'Library', icon: 'icon--library' },
 ];
+
+function SiteFooter() {
+  const { runtime } = useSession();
+  return (
+    <footer className="site-footer">
+      <div className="site-footer__inner">
+        <div className="site-footer__brand">
+          <Link to="/" className="brand">
+            <span className="brand__mark" aria-hidden="true" />
+            SONARE
+          </Link>
+          <p className="small muted" style={{ margin: 0 }}>
+            Any song you can describe. An AI song studio by NetStars.
+          </p>
+        </div>
+        <nav className="site-footer__links" aria-label="Footer">
+          <Link to="/explore">Explore</Link>
+          <Link to="/pricing">Plans</Link>
+          <Link to="/legal/terms">Terms of Service</Link>
+          <Link to="/legal/privacy">Privacy Policy</Link>
+          <Link to="/legal/company">Company</Link>
+          <Link to="/help/rights">Report content</Link>
+        </nav>
+      </div>
+      <div className="site-footer__fine">
+        <span>© {new Date().getFullYear()} NetStars Co., Ltd. — https://netstars.co.jp</span>
+        <span>
+          {runtime && !runtime.demo ? runtime.mode + ' deployment' : 'demo environment'} · songs are AI-generated
+        </span>
+      </div>
+    </footer>
+  );
+}
 
 export function Layout({ children }: { children: ReactNode }) {
   const { me, entitlements, signOut, runtime } = useSession();
@@ -90,11 +129,11 @@ export function Layout({ children }: { children: ReactNode }) {
           )}
         </nav>
         <div className="sidebar__foot">
-          <Link to="/help/rights" className="sidebar__small">
-            Report a rights issue
-          </Link>
+          <a className="sidebar__small" href="https://netstars.co.jp" target="_blank" rel="noreferrer">
+            A NetStars product
+          </a>
           <div className="sidebar__small sidebar__small--dim">
-            {runtime ? `${runtime.mode} · ${runtime.adapters.music}` : ''}
+            {runtime?.demo ? 'demo environment' : `v1 · ${runtime?.mode ?? 'production'}`}
           </div>
         </div>
       </aside>
@@ -103,6 +142,7 @@ export function Layout({ children }: { children: ReactNode }) {
         <ModeBanner />
         <header className="topbar">
           <Link to="/" className="brand brand--mobile">
+            <span className="brand__mark" aria-hidden="true" />
             SONARE
           </Link>
           <div className="topbar__spacer" />
@@ -164,6 +204,8 @@ export function Layout({ children }: { children: ReactNode }) {
         <main id="main" className="content">
           {children}
         </main>
+
+        <SiteFooter />
       </div>
 
       <nav className="tabbar" aria-label="Primary, mobile">

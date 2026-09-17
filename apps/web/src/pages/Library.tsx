@@ -115,11 +115,12 @@ export default function Library() {
       ) : (
         <>
           <div className="grid grid--songs">
-            {songs.map((song) => (
+            {songs.map((song, i) => (
               <SongCard
                 key={song.trackId}
                 song={song}
                 queue={songs}
+                index={i}
                 onRemove={(id) => setSongs((prev) => prev?.filter((s) => s.trackId !== id) ?? null)}
               />
             ))}

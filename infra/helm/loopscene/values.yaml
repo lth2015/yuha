@@ -1,4 +1,4 @@
-# LOOPSCENE Helm values.
+# SONARE Helm values.
 #
 # Secrets are never set here. `envFromSecret` names a Kubernetes Secret that the
 # External Secrets Operator (or an equivalent) syncs from AWS Secrets Manager,
@@ -12,25 +12,26 @@ image:
   # Images are pinned by digest, not by tag: an immutable reference is what
   # makes a rollback deterministic (§4.2 "镜像固定摘要").
   api:
-    repository: loopscene-api
+    repository: sonare-api
     digest: ""
   worker:
-    repository: loopscene-worker
+    repository: sonare-worker
     digest: ""
   pullPolicy: IfNotPresent
 
 serviceAccount:
   api:
-    name: loopscene-api
+    name: sonare-api
     # eks.amazonaws.com/role-arn, from the Terraform output.
     roleArn: ""
   worker:
-    name: loopscene-worker
+    name: sonare-worker
     roleArn: ""
 
-# Name of the synced Kubernetes Secret holding DATABASE_URL, STRIPE_SECRET_KEY,
-# STRIPE_WEBHOOK_SECRET, TOKENSTARS_API_KEY and MUSIC_API_KEY.
-envFromSecret: loopscene-runtime
+# Name of the synced Kubernetes Secret holding DATABASE_URL, GOOGLE_CLIENT_SECRET,
+# GOOGLE_SESSION_SECRET, STRIPE_SECRET_KEY, STRIPE_WEBHOOK_SECRET,
+# TOKENSTARS_API_KEY and MUSIC_API_KEY.
+envFromSecret: sonare-runtime
 
 api:
   # §4.2: at least two replicas across two availability zones in production.
@@ -97,6 +98,13 @@ config:
   publicApiUrl: ""
   logLevel: info
 
+  # Primary sign-in: Google OAuth (auth-code + PKCE). The client id is public
+  # by nature; GOOGLE_CLIENT_SECRET / GOOGLE_SESSION_SECRET arrive via the
+  # synced Secret. "cognito" remains available for deployments that prefer it.
+  authAdapter: google
+  google:
+    clientId: ""
+    redirectUri: ""
   cognito:
     region: ap-northeast-1
     userPoolId: ""
@@ -120,6 +128,10 @@ config:
     structuredOutputs: "false"
 
   music:
+    # 'glm' activates the GLM preset over the generic HTTP adapter: defaults
+    # live in the app (packages/providers/src/music/glm.ts) and every field
+    # below overrides them. 'http' keeps the fully-explicit mapping.
+    adapter: glm
     providerId: ""
     baseUrl: ""
     model: ""
@@ -148,11 +160,12 @@ config:
   stripe:
     publishableKey: ""
     priceIdDrop5: ""
-    priceIdCreatorMonthly: ""
+    priceIdProMonthly: ""
+    priceIdPremierMonthly: ""
 
   features:
-    subscriptionsEnabled: "false"
-    freeTrialEnabled: "false"
+    subscriptionsEnabled: "true"
+    freeTrialEnabled: "true"
     wavExportEnabled: "false"
 
   limits:
@@ -163,9 +176,9 @@ config:
 
   # SEC-13: production refuses to start if these are empty.
   legal:
-    entityName: ""
+    entityName: "NetStars Co., Ltd."
     representative: ""
-    address: ""
+    address: "Tokyo, Japan — https://netstars.co.jp"
     contact: ""
     phone: ""
 

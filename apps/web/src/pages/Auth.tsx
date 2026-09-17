@@ -163,13 +163,10 @@ export default function Auth() {
             </form>
 
             {runtime?.demo && (
-              <div className="alert alert--warn">
-                <div className="alert__title">Development login</div>
-                <div className="small">
-                  Demo accounts: <code>creator@example.jp</code> (10 credits), <code>empty@example.jp</code> (no
-                  credits), <code>admin@example.jp</code> (administrator). This form does not exist in production.
-                </div>
-              </div>
+              <p className="small muted" style={{ margin: 0 }}>
+                Demo accounts: <code>creator@example.jp</code> · <code>empty@example.jp</code> ·{' '}
+                <code>admin@example.jp</code>
+              </p>
             )}
           </>
         )}

@@ -1,6 +1,7 @@
 import { Link } from 'react-router-dom';
 import { formatTime, usePlayer } from '../lib/player';
 import { CoverArt } from './CoverArt';
+import { Eq } from './Eq';
 
 /**
  * The persistent player bar — the product's constant.
@@ -23,7 +24,10 @@ export function PlayerBar() {
         <Link to={`/song/${player.current.trackId}`} className="player-bar__now">
           <CoverArt seed={player.current.coverSeed} title={player.current.title} size={48} />
           <span className="player-bar__titles">
-            <span className="player-bar__title">{player.current.title}</span>
+            <span className="player-bar__title">
+              {player.current.title}
+              <Eq live={player.status === 'playing'} className="player-bar__eq" />
+            </span>
             <span className="player-bar__artist">
               {player.current.artistName ?? 'Creator'} ·{' '}
               {player.current.vocalMode === 'instrumental' ? 'Instrumental' : 'Vocals'}
@@ -44,7 +48,7 @@ export function PlayerBar() {
             </button>
             <button
               type="button"
-              className="btn-icon btn-icon--main"
+              className={`btn-icon btn-icon--main${player.status === 'playing' ? ' is-playing' : ''}`}
               onClick={player.toggle}
               aria-label={player.status === 'playing' ? 'Pause' : 'Play'}
             >
