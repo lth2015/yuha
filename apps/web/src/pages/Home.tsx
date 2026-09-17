@@ -4,6 +4,7 @@ import type { TrackView } from '@loopscene/contracts';
 import { apiFetch } from '../lib/api';
 import { usePlayer } from '../lib/player';
 import { useSession } from '../lib/session';
+import { CoverArt } from '../components/CoverArt';
 import { SongCard } from '../components/SongCard';
 import { Eq } from '../components/Eq';
 import { WaveField } from '../components/WaveField';
@@ -19,6 +20,7 @@ export default function Home() {
   const [songs, setSongs] = useState<TrackView[] | null>(null);
   const [failed, setFailed] = useState(false);
   const playing = player.status === 'playing';
+  const collageSongs = (songs ?? []).slice(0, 3);
 
   useEffect(() => {
     apiFetch<{ items: TrackView[] }>('/v1/explore?limit=8&sort=trending')
@@ -31,39 +33,54 @@ export default function Home() {
       <section className="hero">
         <div className="hero__glow" aria-hidden="true" />
         <WaveField active={playing} className="hero__waves" />
-        <span className="hero__ghost" aria-hidden="true">
-          SONARE
-        </span>
-        <div className="hero__inner">
-          <p className="hero__eyebrow">AI song studio</p>
-          <h1 className="hero__title">
-            Any song you can <em>describe</em>.
-          </h1>
-          <p className="hero__sub">
-            Write an idea, pick a vibe, get a finished song — lyrics sung or instrumental, up to four minutes,
-            yours to publish and download.
-          </p>
-          <div className="hero__cta">
-            <Link className="btn btn--primary btn--lg" to={me ? '/create' : '/auth?next=/create'}>
-              <span className="icon icon--create" aria-hidden="true" />
-              Create a song
-            </Link>
-            <Link className="btn btn--ghost btn--lg" to="/explore">
-              Explore what people made
-            </Link>
+        <div className="hero__inner hero__grid">
+          <div className="hero__copy">
+            <p className="hero__eyebrow">AI song studio</p>
+            {/* A deliberate two-line lockup: the gradient word owns its line. */}
+            <h1 className="hero__title">
+              Any song you can
+              <em>describe.</em>
+            </h1>
+            <p className="hero__sub">
+              Write an idea, pick a vibe, get a finished song — lyrics sung or instrumental, up to four
+              minutes, yours to publish and download.
+            </p>
+            <div className="hero__cta">
+              <Link className="btn btn--primary btn--lg" to={me ? '/create' : '/auth?next=/create'}>
+                <span className="icon icon--create" aria-hidden="true" />
+                Create a song
+              </Link>
+              <Link className="btn btn--ghost btn--lg" to="/explore">
+                Explore what people made
+              </Link>
+            </div>
+            <div className="hero__stats" aria-label="Product facts">
+              <div>
+                <strong>30s – 4min</strong>
+                <span>song length</span>
+              </div>
+              <div>
+                <strong>Vocals / instrumental</strong>
+                <span>your lyrics or ours</span>
+              </div>
+              <div>
+                <strong>MP3 download</strong>
+                <span>publish to Explore</span>
+              </div>
+            </div>
           </div>
-          <div className="hero__stats" aria-label="Product facts">
-            <div>
-              <strong>30s – 4min</strong>
-              <span>song length</span>
-            </div>
-            <div>
-              <strong>Vocals or instrumental</strong>
-              <span>your lyrics or ours</span>
-            </div>
-            <div>
-              <strong>MP3 download</strong>
-              <span>publish to Explore</span>
+
+          {/* Real covers from the feed, fanned in 3D — the product showcasing itself. */}
+          <div className="hero__collage" aria-hidden="true">
+            {(collageSongs.length ? collageSongs : [0, 1, 2].map((i) => ({ coverSeed: 1000 + i * 77, title: 'SONARE' }))).map(
+              (song, i) => (
+                <div key={song.coverSeed} className={`hero__card hero__card--${i}`}>
+                  <CoverArt seed={song.coverSeed} title={song.title} size={420} />
+                </div>
+              ),
+            )}
+            <div className="hero__collage-badge">
+              <Eq live={playing} /> {songs?.length ?? 0}+ songs made here
             </div>
           </div>
         </div>

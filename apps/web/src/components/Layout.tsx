@@ -3,42 +3,6 @@ import { Link, NavLink, useNavigate } from 'react-router-dom';
 import { useSession } from '../lib/session';
 import { PlayerBar } from './PlayerBar';
 
-/**
- * App shell: sidebar navigation (desktop), bottom tab bar (mobile), top bar
- * with the credit pill and account menu, the persistent player bar, and a
- * commercial-grade site footer carrying the company and legal links.
- *
- * Non-production deployments still identify themselves — as a slim glass bar,
- * informative without shouting.
- */
-function ModeBanner() {
-  const { runtime } = useSession();
-  if (!runtime) return null;
-
-  if (runtime.demo) {
-    return (
-      <div className="mode-banner" role="status">
-        <span className="mode-banner__dot" aria-hidden="true" />
-        <span>
-          <strong>Demo build</strong> — audio is synthetic and payments are simulated. No real charges; no
-          commercial licence.
-        </span>
-      </div>
-    );
-  }
-  if (!runtime.features.commercialDeliveryEnabled) {
-    return (
-      <div className="mode-banner" role="status">
-        <span className="mode-banner__dot" aria-hidden="true" />
-        <span>
-          <strong>Preview</strong> — commercial licensing for generated songs is not in force yet.
-        </span>
-      </div>
-    );
-  }
-  return null;
-}
-
 const NAV = [
   { to: '/', label: 'Home', icon: 'icon--home', end: true },
   { to: '/create', label: 'Create', icon: 'icon--create' },
@@ -95,6 +59,17 @@ export function Layout({ children }: { children: ReactNode }) {
           <span className="brand__mark" aria-hidden="true" />
           SONARE
         </Link>
+
+        <Link
+          to={me ? '/create' : '/auth?next=/create'}
+          className="sidebar__cta"
+          title="Create a song"
+        >
+          <span className="icon icon--create" aria-hidden="true" />
+          <span>Create</span>
+          <span className="sidebar__cta-glow" aria-hidden="true" />
+        </Link>
+
         <nav className="sidebar__nav">
           {NAV.map((item) => (
             <NavLink
@@ -139,7 +114,6 @@ export function Layout({ children }: { children: ReactNode }) {
       </aside>
 
       <div className="app__main">
-        <ModeBanner />
         <header className="topbar">
           <Link to="/" className="brand brand--mobile">
             <span className="brand__mark" aria-hidden="true" />
