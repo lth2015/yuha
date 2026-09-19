@@ -25,11 +25,18 @@ export default function GoogleCallback() {
       navigate('/auth', { replace: true });
       return;
     }
-    apiFetch<{ token: string; user: MeView }>('/v1/auth/google/exchange', {
-      method: 'POST',
-      body: { code },
-    })
+    apiFetch<{ token: string; user: MeView } | { mfaRequired: true; challengeToken: string }>(
+      '/v1/auth/google/exchange',
+      {
+        method: 'POST',
+        body: { code },
+      },
+    )
       .then((res) => {
+        if ('mfaRequired' in res) {
+          navigate(`/auth/mfa?challenge=${encodeURIComponent(res.challengeToken)}`, { replace: true });
+          return;
+        }
         signIn(res.token, res.user);
         navigate('/create', { replace: true });
       })

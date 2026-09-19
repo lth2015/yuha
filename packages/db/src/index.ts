@@ -10,3 +10,4 @@ export * from './misc.js';
 export * as reporting from './reporting.js';
 export * from './auth_codes.js';
 export * from './market.js';
+export * from './mfa.js';

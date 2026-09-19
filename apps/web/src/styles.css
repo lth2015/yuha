@@ -2924,3 +2924,25 @@ body::before {
   padding: 6px 14px;
   white-space: nowrap;
 }
+
+/* ---- MFA enrollment & challenge --------------------------------------------- */
+
+.mfa-key {
+  display: inline-block;
+  padding: 8px 12px;
+  font-size: 14px;
+  letter-spacing: 0.14em;
+  word-break: break-all;
+}
+.mfa-recovery {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+  gap: 8px;
+}
+.mfa-recovery code {
+  display: block;
+  padding: 8px 10px;
+  text-align: center;
+  font-size: 14px;
+  letter-spacing: 0.08em;
+}

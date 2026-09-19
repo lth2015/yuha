@@ -237,6 +237,18 @@ preset reports `commercialDeliveryPermitted: false` (SEC-09), so demo-mode
 synthesised audio is what ships by default. Swap to any provider by filling in
 the `http` adapter's mapping from its documentation.
 
+## Two-factor authentication (Google Authenticator)
+
+Sign-in is Google OAuth (PKCE + JWKS-verified id tokens); accounts can add a
+TOTP second factor compatible with Google Authenticator: enrollment shows a
+QR `otpauth://` URI, confirmation requires a live code, and every later
+sign-in is intercepted by a 5-minute single-use challenge token until a valid
+code (or a one-time recovery code) is presented. Secrets are AES-256-GCM
+encrypted at rest; recovery codes are SHA-256 hashed and consumed one at a
+time; disable requires a valid code. Google's consumer accounts expose no MFA
+API we can call on a user's behalf, so this is the standard commercial
+integration of Google's authenticator surface with our own verified flow.
+
 ## Market licensing and creator earnings
 
 Published songs can be licensed by other users ($4.99, `market_license`

@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
+import QRCode from 'qrcode';
 import { Link } from 'react-router-dom';
 import { apiFetch } from '../lib/api';
 import { formatJst, useSession } from '../lib/session';
@@ -12,17 +13,87 @@ interface DeletionReceipt {
 }
 
 /**
- * SEC-11: account settings.
+ * Account settings — identity, two-factor authentication (Google
+ * Authenticator), marketing consent, billing pointer and deletion.
  *
- * Stopping renewal, unsubscribing from marketing and deleting the account are
- * three separate controls, and deletion states what is retained (and why)
- * before it is requested.
+ * MFA lifecycle: enroll (QR + manual key) → confirm with a live code (which
+ * reveals the recovery codes exactly once) → enabled. Disable requires a
+ * valid code, so nobody can switch it off from a stolen unlocked tab alone.
  */
 export default function Account() {
   const { me, refreshMe } = useSession();
   const [error, setError] = useState<unknown>(null);
   const [savingMarketing, setSavingMarketing] = useState(false);
   const [receipt, setReceipt] = useState<DeletionReceipt | null>(null);
+
+  const [mfaEnabled, setMfaEnabled] = useState<boolean | null>(null);
+  const [enrollment, setEnrollment] = useState<{ secret: string; otpauthUri: string; qr: string } | null>(null);
+  const [recoveryCodes, setRecoveryCodes] = useState<string[] | null>(null);
+  const [mfaCode, setMfaCode] = useState('');
+  const [mfaBusy, setMfaBusy] = useState(false);
+
+  const refreshMfa = useCallback(() => {
+    apiFetch<{ enabled: boolean }>('/v1/auth/mfa/status')
+      .then((s) => setMfaEnabled(s.enabled))
+      .catch(() => setMfaEnabled(null));
+  }, []);
+  useEffect(refreshMfa, [refreshMfa]);
+
+  const startEnrollment = async () => {
+    setMfaBusy(true);
+    setError(null);
+    try {
+      const res = await apiFetch<{ secret: string; otpauthUri: string }>('/v1/auth/mfa/enroll', { method: 'POST' });
+      const qr = await QRCode.toDataURL(res.otpauthUri, {
+        margin: 1,
+        width: 220,
+        color: { dark: '#101115', light: '#ffffff' },
+      });
+      setEnrollment({ ...res, qr });
+      setRecoveryCodes(null);
+      setMfaCode('');
+    } catch (err) {
+      setError(err);
+    } finally {
+      setMfaBusy(false);
+    }
+  };
+
+  const confirmEnrollment = async () => {
+    if (!/^\d{6}$/.test(mfaCode)) return;
+    setMfaBusy(true);
+    setError(null);
+    try {
+      const res = await apiFetch<{ recoveryCodes: string[] }>('/v1/auth/mfa/confirm', {
+        method: 'POST',
+        body: { code: mfaCode },
+      });
+      setRecoveryCodes(res.recoveryCodes);
+      setEnrollment(null);
+      setMfaCode('');
+      setMfaEnabled(true);
+      refreshMfa();
+    } catch (err) {
+      setError(err);
+    } finally {
+      setMfaBusy(false);
+    }
+  };
+
+  const disableMfa = async () => {
+    if (!mfaCode) return;
+    setMfaBusy(true);
+    setError(null);
+    try {
+      await apiFetch('/v1/auth/mfa/disable', { method: 'POST', body: { code: mfaCode } });
+      setMfaEnabled(false);
+      setMfaCode('');
+    } catch (err) {
+      setError(err);
+    } finally {
+      setMfaBusy(false);
+    }
+  };
 
   const toggleMarketing = async (optIn: boolean) => {
     setSavingMarketing(true);
@@ -39,9 +110,9 @@ export default function Account() {
 
   const requestDeletion = async () => {
     const ok = window.confirm(
-      'アカウントの削除をリクエストします。\n\n' +
-        'これは「自動更新の停止」や「メール配信停止」とは別の操作です。\n' +
-        '本人確認のうえ実行され、取り消せません。\n\n続けますか？',
+      'This will request deletion of your account.\n\n' +
+        'It is separate from cancelling a subscription or unsubscribing from email. ' +
+        'It runs after identity verification and cannot be undone.\n\nContinue?',
     );
     if (!ok) return;
     setError(null);
@@ -55,29 +126,120 @@ export default function Account() {
   if (!me) return null;
 
   return (
-    <div style={{ maxWidth: 620, margin: '0 auto' }} className="stack stack--loose">
-      <h1 style={{ fontSize: 26 }}>アカウント設定</h1>
+    <div style={{ maxWidth: 640, margin: '0 auto' }} className="stack stack--loose">
+      <h1 style={{ fontSize: 26 }}>Account settings</h1>
 
       <ErrorNotice error={error} />
 
       <section className="panel stack">
-        <h2 style={{ fontSize: 18, margin: 0 }}>基本情報</h2>
+        <h2 style={{ fontSize: 18, margin: 0 }}>Profile</h2>
         <div className="row row--between">
-          <span className="muted">メールアドレス</span>
+          <span className="muted">Email</span>
           <span>{me.email}</span>
         </div>
         <div className="row row--between">
-          <span className="muted">年齢確認</span>
-          <span>{me.ageConfirmed ? '確認済み（18歳以上）' : '未確認'}</span>
+          <span className="muted">Age confirmation</span>
+          <span>{me.ageConfirmed ? 'Confirmed (18+)' : 'Not confirmed'}</span>
         </div>
         <div className="row row--between">
-          <span className="muted">登録日</span>
+          <span className="muted">Member since</span>
           <span className="small">{formatJst(me.createdAt, false)}</span>
         </div>
       </section>
 
+      <section className="panel stack" aria-labelledby="mfa-heading">
+        <h2 id="mfa-heading" style={{ fontSize: 18, margin: 0 }}>
+          Two-factor authentication
+        </h2>
+        <p className="small muted" style={{ margin: 0 }}>
+          Add a second factor with Google Authenticator (or any authenticator app). At sign-in you'll enter a
+          6-digit code after your Google account — a stolen password alone is no longer enough.
+        </p>
+
+        {mfaEnabled === null && <p className="small muted">Loading…</p>}
+
+        {mfaEnabled === false && !enrollment && (
+          <button type="button" className="btn btn--primary" onClick={startEnrollment} disabled={mfaBusy}>
+            {mfaBusy ? 'Preparing…' : 'Set up with Google Authenticator'}
+          </button>
+        )}
+
+        {enrollment && (
+          <div className="stack mfa-enroll">
+            <div className="row" style={{ alignItems: 'flex-start', flexWrap: 'wrap', gap: 'var(--s3)' }}>
+              <img
+                src={enrollment.qr}
+                alt="QR code for Google Authenticator"
+                width={190}
+                height={190}
+                style={{ borderRadius: 14, flex: 'none' }}
+              />
+              <div className="stack stack--tight" style={{ minWidth: 220 }}>
+                <strong>1. Scan in Google Authenticator</strong>
+                <span className="small muted">
+                  Open the app → add account → scan QR code. Or enter this key manually:
+                </span>
+                <code className="mfa-key">{enrollment.secret}</code>
+                <strong>2. Enter the current 6-digit code</strong>
+              </div>
+            </div>
+            <div className="row">
+              <input
+                type="text"
+                inputMode="numeric"
+                pattern="[0-9]*"
+                maxLength={6}
+                placeholder="123456"
+                value={mfaCode}
+                onChange={(e) => setMfaCode(e.target.value.replace(/\D/g, ''))}
+                aria-label="Authenticator code"
+                style={{ maxWidth: 140, letterSpacing: '0.2em', fontSize: 18, textAlign: 'center' }}
+              />
+              <button type="button" className="btn btn--primary" onClick={confirmEnrollment} disabled={mfaBusy || mfaCode.length !== 6}>
+                {mfaBusy ? 'Verifying…' : 'Confirm & enable'}
+              </button>
+            </div>
+          </div>
+        )}
+
+        {recoveryCodes && (
+          <div className="alert alert--info stack stack--tight">
+            <div className="alert__title">Two-factor is on — save your recovery codes now</div>
+            <p className="small" style={{ margin: 0 }}>
+              These 8 codes are shown <strong>only once</strong>. Each works one time if you lose your phone.
+            </p>
+            <div className="mfa-recovery">
+              {recoveryCodes.map((c) => (
+                <code key={c}>{c}</code>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {mfaEnabled && (
+          <div className="stack stack--tight">
+            <span className="small" style={{ color: 'var(--ok)' }}>✓ Enabled — sign-ins ask for your authenticator code.</span>
+            <div className="row">
+              <input
+                type="text"
+                inputMode="numeric"
+                maxLength={16}
+                placeholder="code or recovery code"
+                value={mfaCode}
+                onChange={(e) => setMfaCode(e.target.value.trim())}
+                aria-label="Code to disable two-factor"
+                style={{ maxWidth: 220 }}
+              />
+              <button type="button" className="btn btn--danger-ghost" onClick={disableMfa} disabled={mfaBusy || !mfaCode}>
+                Disable two-factor
+              </button>
+            </div>
+          </div>
+        )}
+      </section>
+
       <section className="panel stack">
-        <h2 style={{ fontSize: 18, margin: 0 }}>お知らせメール</h2>
+        <h2 style={{ fontSize: 18, margin: 0 }}>Email notifications</h2>
         <div className="checkbox-row">
           <input
             id="marketing"
@@ -86,35 +248,32 @@ export default function Account() {
             disabled={savingMarketing}
             onChange={(e) => void toggleMarketing(e.target.checked)}
           />
-          <label htmlFor="marketing">新機能やキャンペーンのお知らせを受け取る</label>
+          <label htmlFor="marketing">Send me product news and campaigns</label>
         </div>
         <p className="small muted" style={{ margin: 0 }}>
-          配信の停止はアカウントの利用に影響しません。ログインや取引に関する重要なご連絡は、
-          この設定にかかわらずお送りします。
+          Unsubscribing never affects your account. Service and transaction email still arrives.
         </p>
       </section>
 
       <section className="panel stack">
-        <h2 style={{ fontSize: 18, margin: 0 }}>ご契約</h2>
+        <h2 style={{ fontSize: 18, margin: 0 }}>Billing</h2>
         <p className="small muted" style={{ margin: 0 }}>
-          月額プランの自動更新の停止は「請求」ページから行えます。これはアカウントの削除とは別の操作です。
+          Subscription cancellation lives on the Billing page — separate from deleting the account.
         </p>
-        <Link className="btn btn--secondary" to="/settings/billing">
-          請求ページを開く
+        <Link className="btn" to="/settings/billing">
+          Open billing
         </Link>
       </section>
 
       <section className="panel stack">
-        <h2 style={{ fontSize: 18, margin: 0 }}>アカウントの削除</h2>
+        <h2 style={{ fontSize: 18, margin: 0 }}>Delete account</h2>
 
         {receipt ? (
           <div className="alert alert--info">
-            <div className="alert__title">
-              削除リクエストを受け付けました（受付番号: {receipt.ticket.slice(0, 8)}）
-            </div>
+            <div className="alert__title">Deletion request received (ticket {receipt.ticket.slice(0, 8)})</div>
             <div className="small stack stack--tight" style={{ marginTop: 'var(--s1)' }}>
               <div>
-                <strong>削除されるもの</strong>
+                <strong>Removed</strong>
                 <ul style={{ margin: '4px 0', paddingLeft: '1.2em' }}>
                   {receipt.removed.map((r) => (
                     <li key={r}>{r}</li>
@@ -122,7 +281,7 @@ export default function Account() {
                 </ul>
               </div>
               <div>
-                <strong>保管が続くもの</strong>
+                <strong>Retained where required</strong>
                 <ul style={{ margin: '4px 0', paddingLeft: '1.2em' }}>
                   {receipt.retained.map((r) => (
                     <li key={r}>{r}</li>
@@ -135,13 +294,12 @@ export default function Account() {
         ) : (
           <>
             <p className="small muted" style={{ margin: 0 }}>
-              アカウント、生成した楽曲、書き出しファイルが削除されます。
-              法令上の保存義務がある取引記録と、権利申立で係争中の資料は、必要な範囲で分離して保管されます。
-              保管の範囲と期間は
-              <Link to="/legal/privacy">プライバシーポリシー</Link> に記載しています。
+              Deletes your account, songs and exports. Statutory transaction records and open rights-case
+              evidence are retained separately, as described in the{' '}
+              <Link to="/legal/privacy">Privacy Policy</Link>.
             </p>
             <button type="button" className="btn btn--danger" onClick={() => void requestDeletion()}>
-              アカウントの削除をリクエストする
+              Request account deletion
             </button>
           </>
         )}

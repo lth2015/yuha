@@ -13,6 +13,7 @@ import Create from './pages/Create';
 import Explore from './pages/Explore';
 import Export from './pages/Export';
 import GoogleCallback from './pages/GoogleCallback';
+import MfaChallenge from './pages/MfaChallenge';
 import Home from './pages/Home';
 import { Company, Privacy, Terms, Tokushoho } from './pages/Legal';
 import Library from './pages/Library';
@@ -52,6 +53,7 @@ export default function App() {
               <Route path="/" element={<Home />} />
               <Route path="/auth" element={<Auth />} />
               <Route path="/auth/google/callback" element={<GoogleCallback />} />
+              <Route path="/auth/mfa" element={<MfaChallenge />} />
               <Route path="/explore" element={<Explore />} />
               <Route path="/song/:id" element={<SongDetail />} />
               <Route path="/pricing" element={<Pricing />} />

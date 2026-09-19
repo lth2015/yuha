@@ -51,6 +51,10 @@ const envSchema = z.object({
   GOOGLE_REDIRECT_URI: z.string().optional(),
   /** Signing secret for Google-issued sessions; falls back to DEV_AUTH_SECRET outside production. */
   GOOGLE_SESSION_SECRET: z.string().optional(),
+  /** Key material for encrypting TOTP secrets at rest. Falls back outside production. */
+  MFA_ENCRYPTION_SECRET: z.string().optional(),
+  /** Issuer shown in Google Authenticator. */
+  MFA_ISSUER: z.string().default('SONARE'),
 
   // --- text model (TokenStars) -------------------------------------------
   TEXT_ADAPTER: z.enum(['local', 'tokenstars']).optional(),

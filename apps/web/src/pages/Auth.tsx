@@ -46,10 +46,18 @@ export default function Auth() {
     setSubmitting(true);
     setError(null);
     try {
-      const res = await apiFetch<{ token: string; user: MeView }>('/v1/auth/dev-login', {
+      const res = await apiFetch<
+        { token: string; user: MeView } | { mfaRequired: true; challengeToken: string }
+      >('/v1/auth/dev-login', {
         method: 'POST',
         body: { email, ageConfirmed: true, termsAccepted: true, marketingOptIn },
       });
+      if ('mfaRequired' in res) {
+        navigate(`/auth/mfa?challenge=${encodeURIComponent(res.challengeToken)}&next=${encodeURIComponent(next)}`, {
+          replace: true,
+        });
+        return;
+      }
       signIn(res.token, res.user);
       navigate(next, { replace: true });
     } catch (err) {

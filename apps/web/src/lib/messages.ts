@@ -16,6 +16,16 @@ export interface UserMessage {
 }
 
 export const ERROR_MESSAGES: Record<ErrorCode, UserMessage> = {
+  MFA_INVALID_CODE: {
+    title: 'That code did not match',
+    next: 'Codes rotate every 30 seconds — enter the current one from your authenticator, or use a recovery code.',
+    tone: 'error',
+  },
+  MFA_NOT_ENROLLED: {
+    title: 'Two-factor is not set up on this account',
+    next: 'Enable it from Account settings first.',
+    tone: 'info',
+  },
   AUTH_EXCHANGE_FAILED: {
     title: 'Sign-in could not be completed',
     next: 'The one-time code may have expired. Start sign-in again from the beginning.',

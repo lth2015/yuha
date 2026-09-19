@@ -189,6 +189,7 @@ async function seedCatalogue(): Promise<void> {
  * duration and clears every table explicitly.
  */
 const BUSINESS_TABLES = [
+  'mfa_factors',
   'creator_earnings',
   'track_licenses',
   'song_likes',
