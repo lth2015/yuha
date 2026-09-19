@@ -262,7 +262,7 @@ export function Layout({ children }: { children: ReactNode }) {
           liked={nowPlaying?.likedByMe ?? undefined}
           likeCount={nowPlaying?.likeCount ?? undefined}
           onLike={nowPlaying && nowPlaying.likedByMe !== null ? toggleLike : undefined}
-          onDownload={nowPlaying && me?.userId === nowPlaying.artistId ? download : undefined}
+          onDownload={nowPlaying && (me?.userId === nowPlaying.artistId || nowPlaying.licensedByMe) ? download : undefined}
           onClose={() => setNowPlayingOpen(false)}
         />
       )}

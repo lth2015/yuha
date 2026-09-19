@@ -5,9 +5,12 @@ import {
   getAssetForUser,
   getLicenseSnapshot,
   getMasterAsset,
+  getPublicTrack,
   getTrackForUser,
+  hasLicense,
   insertAsset,
   trackEvent,
+  type TrackRow,
 } from '@loopscene/db';
 import type { AppContext } from '../context.js';
 import { exportKey } from './delivery.js';
@@ -42,7 +45,17 @@ export async function createExport(
   const req = params.request;
   const features = await ctx.features();
 
-  const track = await getTrackForUser(params.trackId, params.userId);
+  // The owner always qualifies; anyone else needs an active market license
+  // for this specific song — knowing the id alone grants nothing (SEC-01).
+  let track: TrackRow | undefined = await getTrackForUser(params.trackId, params.userId);
+  let viaLicense = false;
+  if (!track && (await hasLicense(params.trackId, params.userId))) {
+    const publicTrack = await getPublicTrack(params.trackId);
+    if (publicTrack) {
+      track = publicTrack;
+      viaLicense = true;
+    }
+  }
   if (!track) throw new AppError('NOT_FOUND', 'track not found');
   if (track.state === 'suspended') {
     // SEC-10: while a rights case is open, no new download link is issued.
@@ -54,6 +67,13 @@ export async function createExport(
 
   const master = await getMasterAsset(track.id);
   if (!master) throw new AppError('TRACK_NOT_DELIVERABLE', 'master audio is missing');
+
+  if (viaLicense) {
+    const licence = await getLicenseSnapshot(track.id);
+    if (licence && licence.status !== 'active') {
+      throw new AppError('TRACK_SUSPENDED', `licence record is ${licence.status}`);
+    }
+  }
 
   // Range check against the real master duration, not a nominal length.
   const clipStartMs = Math.round(req.clipStartSeconds * 1000);

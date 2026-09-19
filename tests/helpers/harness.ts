@@ -154,6 +154,20 @@ async function seedCatalogue(): Promise<void> {
     active: true,
   });
   await upsertProduct({
+    price_key: 'market_license',
+    version: 1,
+    kind: 'one_time',
+    display_name: 'Market License — one song',
+    amount_jpy: 499,
+    currency: 'usd',
+    tax_included: true,
+    units: 1,
+    validity_days: null,
+    auto_renew: false,
+    stripe_price_id: 'price_test_market',
+    active: true,
+  });
+  await upsertProduct({
     price_key: 'premier_monthly',
     version: 1,
     kind: 'subscription',
@@ -175,6 +189,8 @@ async function seedCatalogue(): Promise<void> {
  * duration and clears every table explicitly.
  */
 const BUSINESS_TABLES = [
+  'creator_earnings',
+  'track_licenses',
   'song_likes',
   'auth_codes',
   'ledger_entries',

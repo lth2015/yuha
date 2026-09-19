@@ -6,7 +6,7 @@ import { EntitlementSource, OrderKind, OrderStatus, SubscriptionStatus } from '.
  * the amount, currency and Stripe price id are resolved from the versioned
  * server catalogue. A client-supplied amount is never trusted.
  */
-export const ProductKey = z.enum(['drop_5', 'pro_monthly', 'premier_monthly']);
+export const ProductKey = z.enum(['drop_5', 'pro_monthly', 'premier_monthly', 'market_license']);
 export type ProductKey = z.infer<typeof ProductKey>;
 
 export const productView = z.object({

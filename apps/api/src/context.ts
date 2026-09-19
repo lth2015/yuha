@@ -1,6 +1,9 @@
 import {
+  AlignmentProvider,
   AudioProcessor,
   DemoMusicProvider,
+  EstimatedAlignmentProvider,
+  HttpAlignmentProvider,
   HttpMusicProvider,
   createGlmMusicProvider,
   LocalQueueAdapter,
@@ -24,6 +27,7 @@ import { resolveFromRoot } from './paths.js';
 export interface AppContext {
   config: AppConfig;
   music: MusicProvider;
+  alignment: AlignmentProvider;
   text: TextProvider;
   storage: StorageAdapter;
   queue: QueueAdapter;
@@ -112,6 +116,31 @@ function buildMusic(cfg: AppConfig): MusicProvider {
   });
 }
 
+function buildAlignment(cfg: AppConfig): AlignmentProvider {
+  if (cfg.alignment === 'http') {
+    return new HttpAlignmentProvider({
+      providerId: cfg.ALIGNMENT_PROVIDER_ID!,
+      baseUrl: cfg.ALIGNMENT_BASE_URL!,
+      apiKey: cfg.ALIGNMENT_API_KEY!,
+      submitPath: cfg.ALIGNMENT_SUBMIT_PATH!,
+      linesField: cfg.ALIGNMENT_LINES_FIELD!,
+      lineTextField: cfg.ALIGNMENT_LINE_TEXT_FIELD!,
+      lineStartField: cfg.ALIGNMENT_LINE_START_FIELD!,
+      lineEndField: cfg.ALIGNMENT_LINE_END_FIELD!,
+      ...(cfg.ALIGNMENT_WORDS_FIELD ? { wordsField: cfg.ALIGNMENT_WORDS_FIELD } : {}),
+      ...(cfg.ALIGNMENT_WORD_TEXT_FIELD ? { wordTextField: cfg.ALIGNMENT_WORD_TEXT_FIELD } : {}),
+      ...(cfg.ALIGNMENT_WORD_START_FIELD ? { wordStartField: cfg.ALIGNMENT_WORD_START_FIELD } : {}),
+      ...(cfg.ALIGNMENT_WORD_END_FIELD ? { wordEndField: cfg.ALIGNMENT_WORD_END_FIELD } : {}),
+      ...(cfg.ALIGNMENT_SECTION_FIELD ? { sectionField: cfg.ALIGNMENT_SECTION_FIELD } : {}),
+      timeoutMs: cfg.ALIGNMENT_TIMEOUT_MS,
+      // Demo-mode audio has no upstream URL to hand the aligner; a real
+      // deployment resolves the provider's own audio link.
+      audioUrlResolver: () => null,
+    });
+  }
+  return new EstimatedAlignmentProvider();
+}
+
 function buildText(cfg: AppConfig): TextProvider {
   if (cfg.adapters.text === 'local') return new LocalTextProvider();
   return new TokenStarsTextProvider({
@@ -180,6 +209,7 @@ export function createContext(config: AppConfig): AppContext {
   return {
     config,
     music: buildMusic(config),
+    alignment: buildAlignment(config),
     text: buildText(config),
     storage: buildStorage(config),
     queue: buildQueue(config),

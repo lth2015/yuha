@@ -121,6 +121,32 @@ const envSchema = z.object({
   STRIPE_PRICE_ID_PRO_MONTHLY: z.string().optional(),
   STRIPE_PRICE_ID_PREMIER_MONTHLY: z.string().optional(),
 
+  // --- lyric alignment ------------------------------------------------------
+  /** estimated = deterministic line timings (labelled as such); http = real model. */
+  ALIGNMENT_ADAPTER: z.enum(['estimated', 'http']).optional(),
+  ALIGNMENT_PROVIDER_ID: z.string().optional(),
+  ALIGNMENT_BASE_URL: z.string().optional(),
+  ALIGNMENT_API_KEY: z.string().optional(),
+  ALIGNMENT_SUBMIT_PATH: z.string().optional(),
+  ALIGNMENT_LINES_FIELD: z.string().optional(),
+  ALIGNMENT_LINE_TEXT_FIELD: z.string().optional(),
+  ALIGNMENT_LINE_START_FIELD: z.string().optional(),
+  ALIGNMENT_LINE_END_FIELD: z.string().optional(),
+  ALIGNMENT_WORDS_FIELD: z.string().optional(),
+  ALIGNMENT_WORD_TEXT_FIELD: z.string().optional(),
+  ALIGNMENT_WORD_START_FIELD: z.string().optional(),
+  ALIGNMENT_WORD_END_FIELD: z.string().optional(),
+  ALIGNMENT_SECTION_FIELD: z.string().optional(),
+  ALIGNMENT_TIMEOUT_MS: int(60_000),
+
+  // --- Market monetization -------------------------------------------------
+  /** Share of a market license sale credited to the creator, 0..1. */
+  MARKET_CREATOR_SHARE: z
+    .string()
+    .optional()
+    .transform((v) => (v === undefined || v === '' ? 0.7 : Number.parseFloat(v))),
+  STRIPE_PRICE_ID_MARKET_LICENSE: z.string().optional(),
+
   // --- operational switches (§3.2 "运营") ---------------------------------
   FEATURE_SUBSCRIPTIONS_ENABLED: bool(true),
   FEATURE_FREE_TRIAL_ENABLED: bool(true),
@@ -164,6 +190,7 @@ export interface AppConfig extends RawEnv {
     queue: 'local' | 'sqs';
     payments: 'simulated' | 'stripe';
   };
+  alignment: 'estimated' | 'http';
   legalEntityConfigured: boolean;
 }
 
@@ -354,11 +381,29 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
 
   if (problems.length) throw new ConfigError(problems);
 
+  const alignment = e.ALIGNMENT_ADAPTER ?? 'estimated';
+  if (alignment === 'http') {
+    const alignmentDeps = [e.ALIGNMENT_PROVIDER_ID, e.ALIGNMENT_BASE_URL, e.ALIGNMENT_API_KEY, e.ALIGNMENT_SUBMIT_PATH,
+      e.ALIGNMENT_LINES_FIELD, e.ALIGNMENT_LINE_TEXT_FIELD, e.ALIGNMENT_LINE_START_FIELD, e.ALIGNMENT_LINE_END_FIELD];
+    for (const [i, value] of alignmentDeps.entries()) {
+      if (!value) {
+        problems.push(
+          `ALIGNMENT_* field ${i + 1} is required for the http alignment adapter (fill in from the model documentation)`,
+        );
+        break;
+      }
+    }
+  }
+  if (e.MARKET_CREATOR_SHARE < 0 || e.MARKET_CREATOR_SHARE > 1) {
+    problems.push('MARKET_CREATOR_SHARE must be between 0 and 1');
+  }
+
   return {
     ...e,
     mode,
     isDemo: mode === 'demo',
     adapters,
+    alignment,
     legalEntityConfigured: !!(e.LEGAL_ENTITY_NAME && e.LEGAL_ENTITY_ADDRESS && e.LEGAL_ENTITY_CONTACT),
   };
 }

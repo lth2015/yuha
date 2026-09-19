@@ -11,6 +11,7 @@ import {
   recordCostEvent,
   releaseLease,
   releaseReservation,
+  setTrackLyricTimings,
   transitionJob,
   updateAttempt,
   withTx,
@@ -478,5 +479,26 @@ async function processAudio(
   if (delivered) {
     await recordMusicCost(ctx, { job: processing, attemptId, eventType: 'success' });
     log('info', 'delivered', { jobId: job.id, trackId: delivered.trackId });
+
+    // Synced lyrics: line timings for songs with lyrics. With no real
+    // vocal-sync model configured this is the estimator, labelled as such;
+    // failure never affects delivery itself.
+    if (intent.lyrics && intent.vocalMode === 'with_vocals') {
+      const alignment = await ctx.alignment.align({
+        lyrics: intent.lyrics,
+        durationSeconds: intent.durationSeconds,
+        providerRequestId: audioRef.providerRequestId,
+      });
+      if (alignment.status === 'ok') {
+        await setTrackLyricTimings({ trackId: delivered.trackId, timings: alignment.timings }).catch((err) =>
+          log('warn', 'lyric timing storage failed', { jobId: job.id, error: (err as Error).message }),
+        );
+      } else {
+        log('warn', 'lyric alignment failed; lyrics will display unsynced', {
+          jobId: job.id,
+          reason: alignment.reason,
+        });
+      }
+    }
   }
 }

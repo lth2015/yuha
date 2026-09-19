@@ -5,6 +5,17 @@ import { apiFetch } from '../lib/api';
 import { ErrorNotice } from '../components/common';
 import { SongCard } from '../components/SongCard';
 
+interface EarningsSummary {
+  currency: string;
+  creatorShareRate: number;
+  totalMinor: number;
+  pendingMinor: number;
+  clearedMinor: number;
+  paidMinor: number;
+  sales: number;
+  perTrack: Array<{ trackId: string; title: string; sales: number; amountMinor: number }>;
+}
+
 type Filter = 'all' | 'processing' | 'deliverable' | 'suspended';
 
 /**
@@ -12,6 +23,7 @@ type Filter = 'all' | 'processing' | 'deliverable' | 'suspended';
  * enforces that server-side (UI-08 heritage) — this page just renders it.
  */
 export default function Library() {
+  const [earnings, setEarnings] = useState<EarningsSummary | null>(null);
   const [songs, setSongs] = useState<TrackView[] | null>(null);
   const [cursor, setCursor] = useState<string | null>(null);
   const [filter, setFilter] = useState<Filter>('all');
@@ -26,6 +38,10 @@ export default function Library() {
     if (params?.cursor) search.set('cursor', params.cursor);
     return apiFetch<{ items: TrackView[]; nextCursor: string | null }>(`/v1/tracks?${search.toString()}`);
   }, [filter, q]);
+
+  useEffect(() => {
+    apiFetch<EarningsSummary>('/v1/market/earnings').then(setEarnings).catch(() => setEarnings(null));
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -70,6 +86,40 @@ export default function Library() {
           New song
         </Link>
       </div>
+
+      {earnings && earnings.sales > 0 && (
+        <section className="panel earnings" aria-labelledby="earnings-heading">
+          <div className="earnings__head">
+            <h2 id="earnings-heading">Market earnings</h2>
+            <span className="small muted">your share: {Math.round(earnings.creatorShareRate * 100)}% of each sale</span>
+          </div>
+          <div className="earnings__row">
+            <div className="earnings__figure">
+              <strong className="earnings__total">
+                ${(earnings.totalMinor / 100).toFixed(2)}
+              </strong>
+              <span className="small muted">total earned · {earnings.sales} sale{earnings.sales === 1 ? '' : 's'}</span>
+            </div>
+            <div className="earnings__breakdown">
+              <span className="chip">${(earnings.pendingMinor / 100).toFixed(2)} pending</span>
+              <span className="chip">${(earnings.clearedMinor / 100).toFixed(2)} cleared</span>
+              <span className="chip">${(earnings.paidMinor / 100).toFixed(2)} paid out</span>
+            </div>
+          </div>
+          {earnings.perTrack.length > 0 && (
+            <ul className="earnings__tracks">
+              {earnings.perTrack.slice(0, 5).map((t) => (
+                <li key={t.trackId}>
+                  <Link to={`/song/${t.trackId}`}>{t.title}</Link>
+                  <span className="small muted">
+                    {t.sales} license{t.sales === 1 ? '' : 's'} · ${(t.amountMinor / 100).toFixed(2)}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
+      )}
 
       <div className="explore-controls">
         <div className="chips" role="group" aria-label="Filter">

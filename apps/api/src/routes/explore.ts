@@ -1,10 +1,13 @@
 import type { FastifyInstance } from 'fastify';
 import { AppError, exploreQuery, setVisibilityRequest, type TrackView } from '@loopscene/contracts';
+import type { LyricTimings } from '@loopscene/contracts';
 import {
   getMasterAsset,
   getPublicTrack,
   getTrackForUser,
   hasLiked,
+  hasLicense,
+  countLicenses,
   incrementPlayCount,
   likeTrack,
   listExploreTracks,
@@ -15,12 +18,18 @@ import {
   withTx,
   type TrackWithArtist,
 } from '@loopscene/db';
+import { licenseStateFor } from '../services/market.js';
 import type { AppContext } from '../context.js';
 
 export function toPublicTrackView(
   ctx: AppContext,
   row: TrackWithArtist,
-  opts: { previewUrl: string | null; likedByMe: boolean | null },
+  opts: {
+    previewUrl: string | null;
+    likedByMe: boolean | null;
+    licenseCount?: number;
+    licensedByMe?: boolean | null;
+  },
 ): TrackView {
   return {
     trackId: row.id,
@@ -40,6 +49,9 @@ export function toPublicTrackView(
     likeCount: row.like_count,
     likedByMe: opts.likedByMe,
     coverSeed: row.cover_seed,
+    lyricTimings: (row.lyric_timings ?? null) as LyricTimings | null,
+    licenseCount: opts.licenseCount ?? 0,
+    licensedByMe: opts.licensedByMe ?? null,
     createdAt: row.created_at.toISOString(),
     previewUrl: opts.previewUrl,
     demo: ctx.config.isDemo,
@@ -90,12 +102,15 @@ export default async function exploreRoutes(app: FastifyInstance, opts: { ctx: A
       const liked =
         req.user && page.length ? await hasLiked(page.map((r) => r.id), req.user.id) : new Set<string>();
       const items = await Promise.all(
-        page.map(async (r) =>
-          toPublicTrackView(ctx, r, {
+        page.map(async (r) => {
+          const lic = await licenseStateFor(r.id, req.user?.id);
+          return toPublicTrackView(ctx, r, {
             previewUrl: await previewUrlFor(ctx, r.id),
             likedByMe: req.user ? liked.has(r.id) : null,
-          }),
-        ),
+            licenseCount: lic.licenseCount,
+            licensedByMe: lic.licensedByMe,
+          });
+        }),
       );
       const last = page[page.length - 1];
       const nextCursor =
@@ -117,10 +132,13 @@ export default async function exploreRoutes(app: FastifyInstance, opts: { ctx: A
     const row = await getPublicTrack(id);
     if (!row) throw new AppError('NOT_FOUND', 'song not found');
     const liked = req.user ? await hasLiked([row.id], req.user.id) : new Set<string>();
+    const lic = await licenseStateFor(row.id, req.user?.id);
     return {
       ...toPublicTrackView(ctx, row, {
         previewUrl: await previewUrlFor(ctx, row.id),
         likedByMe: req.user ? liked.has(row.id) : null,
+        licenseCount: lic.licenseCount,
+        licensedByMe: lic.licensedByMe,
       }),
       lyrics: row.lyrics,
     };

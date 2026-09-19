@@ -4,6 +4,7 @@ import {
   getActiveProduct,
   getOrder,
   getProductVersion,
+  grantLicenseWithEarnings,
   grantUnits,
   findOrderBySession,
   findSubscriptionByStripeId,
@@ -148,7 +149,28 @@ async function handleCheckoutCompleted(ctx: AppContext, event: StripeEventLike):
 
     // A subscription's first period is granted by invoice.paid, keyed on the
     // invoice, so the checkout event must not also grant one (PAY-06).
-    if (product.kind === 'one_time') {
+    if (product.price_key === 'market_license') {
+      // Market sale: no credits — the buyer receives a per-track license and
+      // the creator accrues their share, both idempotent on the order id.
+      const trackId = (updated.metadata['track_id'] as string | undefined) ?? null;
+      const creatorId = (updated.metadata['creator_id'] as string | undefined) ?? null;
+      if (!trackId || !creatorId) {
+        throw new Error(`market license order ${updated.id} is missing track/creator metadata`);
+      }
+      await grantLicenseWithEarnings(
+        {
+          trackId,
+          buyerId: updated.user_id,
+          creatorId,
+          orderId: updated.id,
+          pricePaid: updated.amount_jpy,
+          currency: updated.currency,
+          creatorShareRate: ctx.config.MARKET_CREATOR_SHARE,
+        },
+        tx,
+      );
+      await markEntitlementGranted(updated.id, tx);
+    } else if (product.kind === 'one_time') {
       await grantUnits(
         {
           userId: updated.user_id,

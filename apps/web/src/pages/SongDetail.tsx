@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import type { TrackView } from '@loopscene/contracts';
-import { apiFetch } from '../lib/api';
+import type { ProductView, TrackView } from '@loopscene/contracts';
+import { apiFetch, newIdempotencyKey } from '../lib/api';
 import { formatTime, usePlayer } from '../lib/player';
 import { useSession } from '../lib/session';
 import { CoverArt } from '../components/CoverArt';
@@ -35,6 +35,8 @@ export default function SongDetail() {
   const [error, setError] = useState<unknown>(null);
   const [busy, setBusy] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [licensePrice, setLicensePrice] = useState<number | null>(null);
+  const [licensing, setLicensing] = useState(false);
 
   const load = useCallback(() => {
     if (!id) return;
@@ -44,6 +46,16 @@ export default function SongDetail() {
   }, [id]);
 
   useEffect(load, [load]);
+
+  // Market price for the License button (public, not-owner view).
+  useEffect(() => {
+    apiFetch<ProductView[]>('/v1/products')
+      .then((ps) => {
+        const p = ps.find((x) => x.priceKey === 'market_license');
+        if (p) setLicensePrice(p.amountMinor / 100);
+      })
+      .catch(() => undefined);
+  }, []);
 
   if (error) {
     return (
@@ -109,6 +121,27 @@ export default function SongDetail() {
       setError(err);
     } finally {
       setBusy(false);
+    }
+  };
+
+  const buyLicense = async () => {
+    if (licensing || !me) return;
+    setLicensing(true);
+    setError(null);
+    try {
+      const res = await apiFetch<{ orderId: string; checkoutUrl: string; simulated: boolean }>(
+        `/v1/market/tracks/${song.trackId}/license`,
+        { method: 'POST', idempotencyKey: newIdempotencyKey('license') },
+      );
+      if (res.simulated) {
+        window.location.href = `/checkout/simulate?session_id=${new URL(res.checkoutUrl).searchParams.get('session_id')}&order_id=${res.orderId}`;
+      } else {
+        window.location.href = res.checkoutUrl;
+      }
+    } catch (err) {
+      setError(err);
+    } finally {
+      setLicensing(false);
     }
   };
 
@@ -199,6 +232,29 @@ export default function SongDetail() {
                 </button>
               </>
             )}
+
+            {/* Market: license someone else's published song, or download one already licensed. */}
+            {!isOwner && song.visibility === 'public' && song.state === 'deliverable' &&
+              (song.licensedByMe ? (
+                <button type="button" className="btn btn--primary" onClick={download} disabled={busy}>
+                  Download licensed MP3
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  className="btn btn--primary"
+                  onClick={buyLicense}
+                  disabled={licensing || !me || licensePrice === null}
+                  title={me ? 'Buy a usage license — the creator earns 70%' : 'Sign in to license this song'}
+                >
+                  {licensing ? 'Opening checkout…' : `License · $${licensePrice?.toFixed(2)}`}
+                </button>
+              ))}
+            {song.licenseCount > 0 && (
+              <span className="song-page__badge small muted">
+                {song.licenseCount} license{song.licenseCount === 1 ? '' : 's'} sold
+              </span>
+            )}
           </div>
 
         </div>
@@ -211,6 +267,7 @@ export default function SongDetail() {
             lyrics={song.lyrics}
             duration={player.duration || song.durationSeconds}
             currentTime={player.currentTime}
+            timings={song.lyricTimings}
             onSeek={player.seek}
           />
         </section>

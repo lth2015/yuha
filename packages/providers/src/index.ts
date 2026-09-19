@@ -7,6 +7,10 @@ export {
   type GlmPresetInput,
 } from './music/glm.js';
 
+export * from './alignment/types.js';
+export { EstimatedAlignmentProvider } from './alignment/estimated.js';
+export { HttpAlignmentProvider, type HttpAlignmentConfig } from './alignment/http.js';
+
 export * from './text/types.js';
 export { TokenStarsTextProvider, type TokenStarsConfig } from './text/tokenstars.js';
 export { LocalTextProvider } from './text/local.js';

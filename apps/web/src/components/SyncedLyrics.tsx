@@ -1,25 +1,36 @@
 import { useEffect, useMemo, useRef } from 'react';
+import type { LyricTimings } from '@loopscene/contracts';
 import { activeLineIndex, buildLyricTimeline, lineProgress } from '../lib/lyrics';
 
 /**
  * Karaoke lyrics: the active line lifts, brightens and fills left-to-right;
  * sung lines settle back, upcoming lines wait dimmed. Clicking a line seeks
- * the player to it. The timeline is deterministic (see lib/lyrics.ts).
+ * the player to it.
+ *
+ * Timing source is chosen honestly: model-aligned timings (`timings`) when
+ * the song carries them, our deterministic estimate otherwise — and the pill
+ * says which, because "estimated" and "word-synced" are different promises.
  */
 export function SyncedLyrics({
   lyrics,
   duration,
   currentTime,
+  timings,
   onSeek,
   compact = false,
 }: {
   lyrics: string;
   duration: number;
   currentTime: number;
+  timings?: LyricTimings | null;
   onSeek?: (seconds: number) => void;
   compact?: boolean;
 }) {
-  const { lines } = useMemo(() => buildLyricTimeline(lyrics, duration), [lyrics, duration]);
+  const lines = useMemo(
+    () => (timings?.lines?.length ? timings.lines : buildLyricTimeline(lyrics, duration).lines),
+    [timings, lyrics, duration],
+  );
+  const source = timings?.lines?.length ? timings.source : ('estimated' as const);
   const active = activeLineIndex(lines, currentTime);
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const lineRefs = useRef<Array<HTMLButtonElement | null>>([]);
@@ -44,8 +55,12 @@ export function SyncedLyrics({
       ref={scrollRef}
       className={`lyrics-sync${compact ? ' lyrics-sync--compact' : ''}`}
       role="list"
-      aria-label="Lyrics"
+      aria-label={`Lyrics (${source === 'aligned' ? 'word-synced' : 'estimated timing'})`}
+      data-source={source}
     >
+      <span className={`lyrics-sync__pill${source === 'aligned' ? ' is-aligned' : ''}`}>
+        {source === 'aligned' ? 'Word-synced' : 'Estimated sync'}
+      </span>
       {lines.map((line, i) => {
         const state = i < active ? 'past' : i === active ? 'active' : 'future';
         const fill = i === active ? lineProgress(lines, i, currentTime) : state === 'past' ? 1 : 0;

@@ -1,5 +1,5 @@
 import type { PoolConnection } from 'mysql2/promise';
-import type { AssetKind, AudioFormat, TrackState, Visibility, VocalMode } from '@loopscene/contracts';
+import type { AssetKind, AudioFormat, LyricTimings, TrackState, Visibility, VocalMode } from '@loopscene/contracts';
 import { execute, newId, query, queryOne } from './pool.js';
 
 export interface TrackRow {
@@ -20,6 +20,7 @@ export interface TrackRow {
   play_count: number;
   like_count: number;
   cover_seed: number;
+  lyric_timings: LyricTimings | null;
   created_at: Date;
   updated_at: Date;
   deleted_at: Date | null;
@@ -31,13 +32,13 @@ export type TrackWithArtist = TrackRow & { artist_name: string | null; artist_av
 const TRACK_COLUMNS = `
   id, owner_id, project_id, job_id, title, scene, mood, duration_ms, state,
   suspended_reason, styles, lyrics, vocal_mode, visibility, play_count, like_count,
-  cover_seed, created_at, updated_at, deleted_at
+  cover_seed, lyric_timings, created_at, updated_at, deleted_at
 `;
 
 const TRACK_SELECT = `
   SELECT t.id, t.owner_id, t.project_id, t.job_id, t.title, t.scene, t.mood, t.duration_ms,
          t.state, t.suspended_reason, t.styles, t.lyrics, t.vocal_mode, t.visibility,
-         t.play_count, t.like_count, t.cover_seed, t.created_at, t.updated_at, t.deleted_at,
+         t.play_count, t.like_count, t.cover_seed, t.lyric_timings, t.created_at, t.updated_at, t.deleted_at,
          u.display_name AS artist_name, u.avatar_url AS artist_avatar
     FROM tracks t
     JOIN users u ON u.id = t.owner_id
@@ -48,7 +49,7 @@ const TRACK_SELECT = `
  * always see a plain array.
  */
 function normaliseRow<T>(row: T): T {
-  const r = row as { styles?: unknown };
+  const r = row as { styles?: unknown; lyric_timings?: unknown };
   if (typeof r.styles === 'string') {
     try {
       r.styles = JSON.parse(r.styles as string);
@@ -56,7 +57,26 @@ function normaliseRow<T>(row: T): T {
       r.styles = null;
     }
   }
+  if (typeof r.lyric_timings === 'string') {
+    try {
+      r.lyric_timings = JSON.parse(r.lyric_timings as string);
+    } catch {
+      r.lyric_timings = null;
+    }
+  }
   return row;
+}
+
+/** Stores the worker's alignment output (source-labelled inside the JSON). */
+export async function setTrackLyricTimings(
+  params: { trackId: string; timings: LyricTimings },
+  tx?: PoolConnection,
+): Promise<void> {
+  await execute(
+    `UPDATE tracks SET lyric_timings = ?, updated_at = UTC_TIMESTAMP(3) WHERE id = ?`,
+    [JSON.stringify(params.timings), params.trackId],
+    tx,
+  );
 }
 
 export async function insertTrack(

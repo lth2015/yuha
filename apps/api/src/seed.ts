@@ -77,7 +77,22 @@ await upsertProduct({
   active: true,
 });
 
-console.log('✓ product catalogue seeded (drop_5, pro_monthly, premier_monthly — USD)');
+await upsertProduct({
+  price_key: 'market_license',
+  version: 1,
+  kind: 'one_time',
+  display_name: 'Market License — one song',
+  amount_jpy: 499,
+  currency: 'usd',
+  tax_included: true,
+  units: 1,
+  validity_days: null,
+  auto_renew: false,
+  stripe_price_id: config.STRIPE_PRICE_ID_MARKET_LICENSE ?? null,
+  active: true,
+});
+
+console.log('✓ product catalogue seeded (drop_5, pro/premier/market_license — USD)');
 
 // ------------------------------------------------------ explore showcase
 

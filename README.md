@@ -237,6 +237,26 @@ preset reports `commercialDeliveryPermitted: false` (SEC-09), so demo-mode
 synthesised audio is what ships by default. Swap to any provider by filling in
 the `http` adapter's mapping from its documentation.
 
+## Market licensing and creator earnings
+
+Published songs can be licensed by other users ($4.99, `market_license`
+catalogue key). The buyer receives per-track download rights; the creator
+accrues 70% of every sale (`MARKET_CREATOR_SHARE`, frozen per sale into the
+license row) in an append-only earnings ledger with pending/cleared/paid
+states, surfaced on the Library page. Payout execution is operator-action
+until a payout provider (Stripe Connect or equivalent) is wired — accrual,
+isolation and reconciliation are real today, transfers are a deliberate
+`BLOCKED_EXTERNAL`.
+
+## Lyric alignment
+
+Synced lyrics carry a provenance label: `aligned` timings come from a real
+vocal-sync model via the configurable HTTP alignment adapter
+(`ALIGNMENT_ADAPTER=http` + the `ALIGNMENT_*` mapping from that model's
+documentation — nothing is invented); until one is configured the worker
+stores deterministic line timings labelled `estimated`, and the UI says
+"Estimated sync" rather than implying word-level accuracy.
+
 ## Google login
 
 Set `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` and `GOOGLE_REDIRECT_URI`

@@ -163,6 +163,34 @@ export const jobView = z.object({
 });
 export type JobView = z.infer<typeof jobView>;
 
+/**
+ * Lyric timing data for synced display.
+ *
+ * `source` is the honesty label: 'aligned' comes from a real vocal-sync model
+ * (forced alignment over the audio), 'estimated' is our deterministic
+ * weighting of lines across the song length. The UI shows which one it has.
+ */
+export const lyricTimings = z.object({
+  source: z.enum(['aligned', 'estimated']),
+  lines: z
+    .array(
+      z.object({
+        text: z.string(),
+        section: z.string(),
+        start: z.number().nonnegative(),
+        end: z.number().nonnegative(),
+        /** Word-level segments, when the alignment model provides them. */
+        words: z
+          .array(z.object({ w: z.string(), start: z.number().nonnegative(), end: z.number().nonnegative() }))
+          .optional(),
+      }),
+    )
+    .max(200),
+  /** Model/procedure that produced the timings, recorded for provenance. */
+  aligner: z.string().max(64),
+});
+export type LyricTimings = z.infer<typeof lyricTimings>;
+
 export const trackView = z.object({
   trackId: z.string().uuid(),
   projectId: z.string().uuid(),
@@ -184,6 +212,12 @@ export const trackView = z.object({
   likedByMe: z.boolean().nullable(),
   /** Deterministic seed for the generated cover art. */
   coverSeed: z.number().int(),
+  /** Timings for synced lyrics; null when the song has no lyrics. */
+  lyricTimings: lyricTimings.nullable(),
+  /** How many people licensed this song on the Market. */
+  licenseCount: z.number().int().nonnegative(),
+  /** True when the viewer has bought a license for this song (download rights). */
+  licensedByMe: z.boolean().nullable(),
   createdAt: z.string(),
   /** Short-lived preview URL; re-issued on each read (SEC-04). */
   previewUrl: z.string().nullable(),
