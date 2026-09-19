@@ -51,7 +51,7 @@ export default function Home() {
                 Create a song
               </Link>
               <Link className="btn btn--ghost btn--lg" to="/explore">
-                Explore what people made
+                Browse the Market
               </Link>
             </div>
             <div className="hero__stats" aria-label="Product facts">

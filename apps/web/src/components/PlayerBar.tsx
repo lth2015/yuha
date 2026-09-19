@@ -10,7 +10,7 @@ import { Eq } from './Eq';
  * survives navigation, and it is the only place transport controls live. The
  * progress rail doubles as a scrubber with a 44px touch target.
  */
-export function PlayerBar() {
+export function PlayerBar({ onExpand }: { onExpand?: () => void }) {
   const player = usePlayer();
   if (!player.current) return null;
 
@@ -99,6 +99,11 @@ export function PlayerBar() {
             <span className="player-bar__queue" title="Songs in queue">
               <span className="icon icon--queue" aria-hidden="true" /> {player.queue.length}
             </span>
+          )}
+          {onExpand && (
+            <button type="button" className="btn-icon" onClick={onExpand} aria-label="Open now playing view">
+              <span className="icon icon--expand" aria-hidden="true" />
+            </button>
           )}
         </div>
       </div>

@@ -34,8 +34,27 @@ export interface IntentRequest {
   title: string | null;
 }
 
+export interface ReviseRequest {
+  /** What the creator wants changed, in their own words (already safety-screened). */
+  instructions: string;
+  original: {
+    title: string | null;
+    styles: string[];
+    lyrics: string | null;
+    instrumental: boolean;
+    durationSeconds: number;
+  };
+}
+
+export type ReviseResult =
+  | { status: 'ok'; title: string | null; styles: string[]; lyrics: string | null; usage: TextUsage }
+  | { status: 'refused'; reason: string; usage: TextUsage }
+  | { status: 'failed'; reason: string; usage: TextUsage };
+
 export interface TextProvider {
   readonly providerId: string;
   readonly model: string;
   extractIntent(req: IntentRequest): Promise<IntentResult>;
+  /** Track editing: rewrite lyrics/styles per instructions. Optional — small local providers may omit it. */
+  reviseSong?(req: ReviseRequest): Promise<ReviseResult>;
 }

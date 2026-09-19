@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import {
   LYRICS_MAX_CODEPOINTS,
   PROMPT_MAX_CODEPOINTS,
@@ -82,24 +82,52 @@ function countCodePoints(s: string): number {
  */
 export default function Create() {
   const navigate = useNavigate();
+  const [params] = useSearchParams();
+  const editTrackId = params.get('edit');
   const { me, entitlements, refreshEntitlements, runtime } = useSession();
   const [draft, setDraft] = useState<Draft>(DEFAULT_DRAFT);
   const [job, setJob] = useState<JobView | null>(null);
   const [result, setResult] = useState<TrackView | null>(null);
   const [error, setError] = useState<unknown>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [editSource, setEditSource] = useState<TrackView & { lyrics: string | null } | null>(null);
+  const [instructions, setInstructions] = useState('');
   const idemKey = useRef<string>(newIdempotencyKey());
   const pollTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const credits = entitlements?.availableUnits ?? me?.creditsAvailable ?? 0;
 
   useEffect(() => {
+    if (!editTrackId) return;
+    // Editing loads the source song and prefills the studio; nothing is
+    // submitted until the creator writes instructions and confirms the credit.
+    apiFetch<TrackView & { lyrics: string | null }>(`/v1/tracks/${editTrackId}`)
+      .then((track) => {
+        setEditSource(track);
+        setDraft((d) => ({
+          ...d,
+          mode: 'custom',
+          title: d.title || track.title,
+          lyrics: track.lyrics ?? d.lyrics,
+          styles: track.styles.length ? track.styles : d.styles,
+          instrumental: track.vocalMode === 'instrumental',
+          durationSeconds: (DURATIONS.find((x) => x.value === Math.round(track.durationSeconds))?.value ??
+            d.durationSeconds) as Draft['durationSeconds'],
+          visibility: track.visibility,
+        }));
+      })
+      .catch(() => undefined);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editTrackId]);
+
+  useEffect(() => {
+    if (editTrackId) return;
     try {
       const saved = localStorage.getItem(DRAFT_KEY);
       if (saved) setDraft({ ...DEFAULT_DRAFT, ...(JSON.parse(saved) as Partial<Draft>) });
     } catch {
       /* ignore a corrupt draft */
     }
-  }, []);
+  }, [editTrackId]);
 
   useEffect(() => {
     try {
@@ -145,9 +173,10 @@ export default function Create() {
   const lyricsLength = countCodePoints(draft.lyrics);
   const canSubmit = useMemo(() => {
     if (submitting || credits < 1) return false;
+    if (editTrackId) return instructions.trim().length > 0;
     if (draft.mode === 'simple') return draft.prompt.trim().length > 0;
     return draft.prompt.trim().length > 0 || draft.styles.length > 0 || draft.lyrics.trim().length > 0;
-  }, [submitting, credits, draft]);
+  }, [submitting, credits, draft, instructions, editTrackId]);
 
   const toggleStyle = (style: string) => {
     setDraft((d) => ({
@@ -163,22 +192,26 @@ export default function Create() {
     setError(null);
     setResult(null);
     try {
-      const res = await apiFetch<JobView & { deduplicated: boolean }>('/v1/generations', {
+      const endpoint = editTrackId ? `/v1/tracks/${editTrackId}/edit` : '/v1/generations';
+      const body = editTrackId
+        ? { instructions: instructions.trim() }
+        : {
+            mode: draft.mode,
+            ...(draft.title.trim() ? { title: draft.title.trim() } : {}),
+            prompt: draft.prompt.trim(),
+            ...(draft.mode === 'custom' && draft.lyrics.trim() && !draft.instrumental
+              ? { lyrics: draft.lyrics.trim() }
+              : {}),
+            styles: draft.styles,
+            instrumental: draft.instrumental,
+            energy: draft.energy,
+            durationSeconds: draft.durationSeconds,
+            visibility: draft.visibility,
+          };
+      const res = await apiFetch<JobView & { deduplicated: boolean }>(endpoint, {
         method: 'POST',
         idempotencyKey: idemKey.current,
-        body: {
-          mode: draft.mode,
-          ...(draft.title.trim() ? { title: draft.title.trim() } : {}),
-          prompt: draft.prompt.trim(),
-          ...(draft.mode === 'custom' && draft.lyrics.trim() && !draft.instrumental
-            ? { lyrics: draft.lyrics.trim() }
-            : {}),
-          styles: draft.styles,
-          instrumental: draft.instrumental,
-          energy: draft.energy,
-          durationSeconds: draft.durationSeconds,
-          visibility: draft.visibility,
-        },
+        body,
       });
       setJob(res);
       void refreshEntitlements();
@@ -275,8 +308,22 @@ export default function Create() {
 
   return (
     <div className="studio">
+      {editSource && (
+        <div className="studio__edit" role="status">
+          <div className="studio__edit-icon" aria-hidden="true">
+            ✎
+          </div>
+          <div>
+            <strong>Editing “{editSource.title}”</strong>
+            <p className="small muted" style={{ margin: 0 }}>
+              Describe what to change — the AI editor rewrites the song and generates a new take. Costs 1
+              credit; the original stays untouched in your Library.
+            </p>
+          </div>
+        </div>
+      )}
       <div className="studio__head">
-        <h1>Create</h1>
+        <h1>{editSource ? 'Edit song' : 'Create'}</h1>
         <div className="studio__balance" aria-live="polite">
           <span className="credit-pill">
             <span className="icon icon--note" aria-hidden="true" />
@@ -294,6 +341,19 @@ export default function Create() {
 
       <form className="studio__grid" onSubmit={submit} noValidate>
         <div className="panel studio__form stack">
+          {editSource && (
+            <div>
+              <label htmlFor="instructions">What should change?</label>
+              <textarea
+                id="instructions"
+                rows={3}
+                value={instructions}
+                onChange={(e) => setInstructions(e.target.value)}
+                placeholder="e.g. rewrite the chorus about a Tokyo summer, make the bridge dreamier, brighter synths"
+                required
+              />
+            </div>
+          )}
           <div className="seg seg--wide" role="tablist" aria-label="Creation mode">
             <button
               type="button"

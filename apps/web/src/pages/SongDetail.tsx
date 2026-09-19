@@ -6,6 +6,7 @@ import { formatTime, usePlayer } from '../lib/player';
 import { useSession } from '../lib/session';
 import { CoverArt } from '../components/CoverArt';
 import { ErrorNotice } from '../components/common';
+import { SyncedLyrics } from '../components/SyncedLyrics';
 
 interface SongDetailResponse extends TrackView {
   lyrics: string | null;
@@ -170,6 +171,9 @@ export default function SongDetail() {
             )}
             {isOwner && (
               <>
+                <Link className="btn" to={`/create?edit=${song.trackId}`}>
+                  Edit with AI
+                </Link>
                 <button type="button" className="btn" onClick={download} disabled={busy}>
                   Download MP3
                 </button>
@@ -203,7 +207,12 @@ export default function SongDetail() {
       {song.lyrics && (
         <section className="panel song-page__lyrics" aria-labelledby="lyrics-heading">
           <h2 id="lyrics-heading">Lyrics</h2>
-          <pre className="lyrics">{song.lyrics}</pre>
+          <SyncedLyrics
+            lyrics={song.lyrics}
+            duration={player.duration || song.durationSeconds}
+            currentTime={player.currentTime}
+            onSeek={player.seek}
+          />
         </section>
       )}
 

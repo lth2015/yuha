@@ -1,12 +1,16 @@
-import type { ReactNode } from 'react';
+import { useCallback, useEffect, useState, type ReactNode } from 'react';
 import { Link, NavLink, useNavigate } from 'react-router-dom';
+import type { TrackView } from '@loopscene/contracts';
+import { apiFetch } from '../lib/api';
+import { usePlayer } from '../lib/player';
 import { useSession } from '../lib/session';
+import { NowPlaying } from './NowPlaying';
 import { PlayerBar } from './PlayerBar';
 
 const NAV = [
   { to: '/', label: 'Home', icon: 'icon--home', end: true },
   { to: '/create', label: 'Create', icon: 'icon--create' },
-  { to: '/explore', label: 'Explore', icon: 'icon--explore' },
+  { to: '/explore', label: 'Market', icon: 'icon--explore' },
   { to: '/library', label: 'Library', icon: 'icon--library' },
 ];
 
@@ -43,10 +47,61 @@ function SiteFooter() {
   );
 }
 
+interface NowPlayingSong extends TrackView {
+  lyrics: string | null;
+}
+
 export function Layout({ children }: { children: ReactNode }) {
   const { me, entitlements, signOut, runtime } = useSession();
   const navigate = useNavigate();
+  const player = usePlayer();
   const credits = entitlements?.availableUnits ?? me?.creditsAvailable ?? 0;
+  const [nowPlaying, setNowPlaying] = useState<NowPlayingSong | null>(null);
+  const [nowPlayingOpen, setNowPlayingOpen] = useState(false);
+
+  // Escape closes the full-screen player, like every music app.
+  useEffect(() => {
+    if (!nowPlayingOpen) return;
+    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && setNowPlayingOpen(false);
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [nowPlayingOpen]);
+
+  const openNowPlaying = useCallback(() => {
+    setNowPlayingOpen(true);
+    const id = player.current?.trackId;
+    if (!id) return;
+    // Best-effort load of lyrics/like state; the overlay renders regardless.
+    apiFetch<NowPlayingSong>(`/v1/tracks/${id}`)
+      .then(setNowPlaying)
+      .catch(() => setNowPlaying(null));
+  }, [player.current?.trackId]);
+
+  const toggleLike = useCallback(async () => {
+    if (!nowPlaying || nowPlaying.likedByMe === null) return;
+    try {
+      const res = await apiFetch<{ liked: boolean; likeCount: number }>(
+        `/v1/explore/${nowPlaying.trackId}/like`,
+        { method: 'POST', body: { action: nowPlaying.likedByMe ? 'unlike' : 'like' } },
+      );
+      setNowPlaying({ ...nowPlaying, likedByMe: res.liked, likeCount: res.likeCount });
+    } catch {
+      /* optimistic UI only */
+    }
+  }, [nowPlaying]);
+
+  const download = useCallback(async () => {
+    if (!nowPlaying) return;
+    try {
+      const res = await apiFetch<{ downloadUrl: string }>(`/v1/tracks/${nowPlaying.trackId}/exports`, {
+        method: 'POST',
+        body: { clipStartSeconds: 0, clipDurationSeconds: Math.round(nowPlaying.durationSeconds), fadeOut: false },
+      });
+      window.location.href = res.downloadUrl;
+    } catch {
+      /* surfaced by the song page */
+    }
+  }, [nowPlaying]);
 
   return (
     <div className="app">
@@ -196,7 +251,21 @@ export function Layout({ children }: { children: ReactNode }) {
         ))}
       </nav>
 
-      <PlayerBar />
+      <PlayerBar onExpand={openNowPlaying} />
+
+      {nowPlayingOpen && (
+        <NowPlaying
+          title={nowPlaying?.title ?? player.current?.title ?? 'Now playing'}
+          artist={nowPlaying?.artistName ?? player.current?.artistName ?? 'Creator'}
+          coverSeed={nowPlaying?.coverSeed ?? player.current?.coverSeed ?? 1}
+          lyrics={nowPlaying?.lyrics ?? null}
+          liked={nowPlaying?.likedByMe ?? undefined}
+          likeCount={nowPlaying?.likeCount ?? undefined}
+          onLike={nowPlaying && nowPlaying.likedByMe !== null ? toggleLike : undefined}
+          onDownload={nowPlaying && me?.userId === nowPlaying.artistId ? download : undefined}
+          onClose={() => setNowPlayingOpen(false)}
+        />
+      )}
     </div>
   );
 }

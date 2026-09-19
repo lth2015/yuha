@@ -1,5 +1,5 @@
 import type { Mood, Scene, TempoHint } from '@loopscene/contracts';
-import type { IntentRequest, IntentResult, TextProvider } from './types.js';
+import type { IntentRequest, IntentResult, ReviseRequest, ReviseResult, TextProvider } from './types.js';
 
 /**
  * Deterministic local intent extractor for demo mode and tests.
@@ -125,6 +125,22 @@ export class LocalTextProvider implements TextProvider {
         lyrics: hasLyrics ? req.lyrics!.slice(0, 3000) : null,
         title: title.slice(0, 120),
       },
+    };
+  }
+
+  /**
+   * Deterministic revision for demo mode: passes the song through unchanged
+   * apart from echoing instructions into the brief the worker will see. A real
+   * rewrite needs the model — with the local provider this exists so the edit
+   * flow, credits and pipeline are exercisable without credentials.
+   */
+  async reviseSong(req: ReviseRequest): Promise<ReviseResult> {
+    return {
+      status: 'ok',
+      title: req.original.title,
+      styles: req.original.styles,
+      lyrics: req.original.lyrics,
+      usage: { costMinor: 0, costIsEstimate: true },
     };
   }
 
