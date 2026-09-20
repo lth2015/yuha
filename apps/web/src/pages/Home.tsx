@@ -139,7 +139,7 @@ export default function Home() {
     const stepIdx = waitSteps.findIndex((s) => s.key === job.phase);
     return (
       <div className="wait-page" aria-live="polite">
-        <PetalMark size={100} className="wait-page__mark is-moving" dim={false} title="YUHA" />
+        <PetalMark size={100} className="wait-page__mark is-moving" shadow={false} title="YUHA" />
         <h1>你的音乐，正在路上。</h1>
         <p className="muted">可以离开这个页面，稍后在「我的作品」查看。</p>
         <ol className="wait-page__steps panel">
@@ -232,7 +232,7 @@ export default function Home() {
             <span>YUHA / 001</span>
             <span>FEEL SOMETHING.</span>
           </div>
-          <PetalMark size={380} className="art-panel__petal is-entering" title="一片花瓣。一点风。" />
+          <PetalMark size={380} className="art-panel__petal is-entering" shadow={false} title="一片花瓣。一点风。" />
           <div className="art-panel__caption">
             <span className="art-panel__line" aria-hidden="true" />
             <h2>

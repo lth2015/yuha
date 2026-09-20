@@ -22,9 +22,9 @@ interface SongDetailResponse extends TrackView {
 }
 
 /**
- * Song detail: big cover, transport, lyrics, license note, and — for the
- * owner — download/publish controls. Public songs are readable anonymously;
- * private ones only by their creator (the server decides, not this page).
+ * The song page as an editorial spread: the cover is the art object, the
+ * title gets display scale, meta reads as small caps, actions are quiet text
+ * controls — gallery, not form.
  */
 export default function SongDetail() {
   const { id } = useParams<{ id: string }>();
@@ -47,7 +47,6 @@ export default function SongDetail() {
 
   useEffect(load, [load]);
 
-  // Market price for the License button (public, not-owner view).
   useEffect(() => {
     apiFetch<ProductView[]>('/v1/products')
       .then((ps) => {
@@ -62,7 +61,7 @@ export default function SongDetail() {
       <div className="stack">
         <ErrorNotice error={error} />
         <Link to="/explore" className="btn">
-          Back to Explore
+          回到市场
         </Link>
       </div>
     );
@@ -108,8 +107,6 @@ export default function SongDetail() {
   };
 
   const download = async () => {
-    // Full-length export at native quality; trimming is available from the
-    // library menu when needed. Re-downloads are free (UI-06 heritage).
     setBusy(true);
     try {
       const res = await apiFetch<{ downloadUrl: string }>(`/v1/tracks/${song.trackId}/exports`, {
@@ -157,112 +154,131 @@ export default function SongDetail() {
 
   return (
     <div className="song-page">
-      <div className="song-page__hero panel">
-        <CoverArt seed={song.coverSeed} title={song.title} size={280} className="song-page__art" playing={playing} />
-        <div className="song-page__info">
-          <p className="song-page__eyebrow">
-            {song.visibility === 'public' ? 'Public' : isOwner ? 'Private' : 'Song'}
+      <div className="song-spread">
+        <div className="song-spread__cover">
+          <CoverArt
+            seed={song.coverSeed}
+            title={song.title}
+            size={560}
+            className="song-spread__art"
+            playing={playing}
+          />
+          <button
+            type="button"
+            className={`song-spread__play${active ? ' is-active' : ''}`}
+            onClick={active ? player.toggle : play}
+            disabled={!song.previewUrl}
+            aria-label={playing ? `暂停「${song.title}」` : `播放「${song.title}」`}
+          >
+            <span className={playing ? 'icon icon--pause' : 'icon icon--play'} aria-hidden="true" />
+            {playing ? '暂停' : '试听'}
+          </button>
+        </div>
+
+        <div className="song-spread__info">
+          <p className="eyebrow song-spread__eyebrow">
+            {song.visibility === 'public' ? '市场在架' : isOwner ? '私人收藏' : '作品'} ·{' '}
+            {song.vocalMode === 'instrumental' ? '纯音乐' : '有人声'} · {formatTime(song.durationSeconds)}
           </p>
-          <h1>{song.title}</h1>
-          <p className="song-page__meta">
-            by <strong>{song.artistName ?? (isOwner ? 'you' : 'a creator')}</strong> ·{' '}
-            {formatTime(song.durationSeconds)} · {song.vocalMode === 'instrumental' ? 'Instrumental' : 'Vocals'} ·{' '}
-            {song.playCount.toLocaleString()} plays
+          <h1 className="song-spread__title">{song.title}</h1>
+          <p className="song-spread__meta">
+            {song.artistName ?? (isOwner ? '你' : '一位创作者')} · {song.playCount.toLocaleString()} 次播放
+            {song.styles.length > 0 && <> · {song.styles.join(' / ')}</>}
           </p>
-          {song.styles.length > 0 && (
-            <div className="chips">
-              {song.styles.map((s) => (
-                <span key={s} className="chip">
-                  {s}
-                </span>
-              ))}
-            </div>
-          )}
-          <div className="song-page__actions">
+
+          <div className="song-spread__actions" aria-label="作品操作">
             <button
               type="button"
-              className="btn btn--primary btn--lg"
-              onClick={play}
-              disabled={!song.previewUrl}
-            >
-              <span className={playing ? 'icon icon--pause' : 'icon icon--play'} aria-hidden="true" />
-              {playing ? 'Pause' : 'Play'}
-            </button>
-            <button
-              type="button"
-              className={`btn like-btn${song.likedByMe ? ' like-btn--on' : ''}`}
+              className={`text-action${song.likedByMe ? ' is-liked' : ''}`}
               onClick={toggleLike}
               disabled={busy || song.likedByMe === null}
               aria-pressed={song.likedByMe ?? undefined}
             >
-              <span className="icon icon--heart" aria-hidden="true" /> {song.likeCount}
+              ♡ {song.likeCount}
             </button>
             {song.visibility === 'public' && (
-              <button type="button" className="btn" onClick={share}>
-                {copied ? 'Link copied' : 'Share'}
+              <button type="button" className="text-action" onClick={share}>
+                {copied ? '已复制链接' : '分享 ↗'}
               </button>
             )}
             {isOwner && (
               <>
-                <Link className="btn" to={`/create?edit=${song.trackId}`}>
-                  Edit with AI
+                <Link className="text-action" to={`/create?edit=${song.trackId}`}>
+                  AI 再创作 ↗
                 </Link>
-                <button type="button" className="btn" onClick={download} disabled={busy}>
-                  Download MP3
+                <button type="button" className="text-action" onClick={download} disabled={busy}>
+                  下载 MP3 ↓
                 </button>
                 <button
                   type="button"
-                  className="btn"
+                  className="text-action"
                   onClick={() => setVisibility(song.visibility === 'public' ? 'private' : 'public')}
                   disabled={busy}
                 >
-                  {song.visibility === 'public' ? 'Unpublish' : 'Publish'}
+                  {song.visibility === 'public' ? '取消发布' : '发布到市场 ↗'}
                 </button>
                 <button
                   type="button"
-                  className="btn btn--danger-ghost"
+                  className="text-action is-danger"
                   disabled={busy}
                   onClick={async () => {
-                    if (!window.confirm(`Delete “${song.title}”? This cannot be undone.`)) return;
+                    if (!window.confirm(`删除「${song.title}」？此操作不可撤销。`)) return;
                     await apiFetch(`/v1/tracks/${song.trackId}`, { method: 'DELETE' });
                     navigate('/library');
                   }}
                 >
-                  Delete
+                  删除
                 </button>
               </>
             )}
-
-            {/* Market: license someone else's published song, or download one already licensed. */}
-            {!isOwner && song.visibility === 'public' && song.state === 'deliverable' &&
-              (song.licensedByMe ? (
-                <button type="button" className="btn btn--primary" onClick={download} disabled={busy}>
-                  Download licensed MP3
+            {!isOwner && song.visibility === 'public' && song.state === 'deliverable' && (
+              song.licensedByMe ? (
+                <button type="button" className="text-action" onClick={download} disabled={busy}>
+                  下载已授权 MP3 ↓
                 </button>
               ) : (
                 <button
                   type="button"
-                  className="btn btn--primary"
+                  className="text-action is-strong"
                   onClick={buyLicense}
                   disabled={licensing || !me || licensePrice === null}
-                  title={me ? 'Buy a usage license — the creator earns 70%' : 'Sign in to license this song'}
+                  title={me ? '购买使用授权，创作者获得 70%' : '登录后可购买授权'}
                 >
-                  {licensing ? 'Opening checkout…' : `License · $${licensePrice?.toFixed(2)}`}
+                  {licensing ? '正在打开支付…' : `购买授权 · $${licensePrice?.toFixed(2)} ↗`}
                 </button>
-              ))}
-            {song.licenseCount > 0 && (
-              <span className="song-page__badge small muted">
-                {song.licenseCount} license{song.licenseCount === 1 ? '' : 's'} sold
-              </span>
+              )
             )}
           </div>
 
+          {song.licenseCount > 0 && (
+            <p className="song-spread__note">已在市场售出 {song.licenseCount} 份授权</p>
+          )}
+          {song.demo && <p className="song-spread__note">演示环境：音频为合成示例。</p>}
+
+          <div className="song-spread__player">
+            <span className="song-spread__time num">
+              {formatTime(active ? player.currentTime : 0)} / {formatTime(song.durationSeconds)}
+            </span>
+            <div
+              className="song-spread__track"
+              role="presentation"
+              onClick={(e) => {
+                const rect = e.currentTarget.getBoundingClientRect();
+                player.seek(((e.clientX - rect.left) / rect.width) * song.durationSeconds);
+              }}
+            >
+              <span
+                className="song-spread__fill"
+                style={{ width: `${active && player.duration ? (player.currentTime / player.duration) * 100 : 0}%` }}
+              />
+            </div>
+          </div>
         </div>
       </div>
 
       {song.lyrics && (
-        <section className="panel song-page__lyrics" aria-labelledby="lyrics-heading">
-          <h2 id="lyrics-heading">Lyrics</h2>
+        <section className="song-page__lyrics panel" aria-labelledby="lyrics-heading">
+          <h2 id="lyrics-heading">歌词</h2>
           <SyncedLyrics
             lyrics={song.lyrics}
             duration={player.duration || song.durationSeconds}
@@ -273,13 +289,13 @@ export default function SongDetail() {
         </section>
       )}
 
-      <section className="panel song-page__license" aria-labelledby="license-heading">
-        <h2 id="license-heading">Usage record</h2>
-        <p className="small muted">
-          Every song carries the usage terms that were in force when it was generated.{' '}
+      <section className="song-page__license panel" aria-labelledby="license-heading">
+        <h2 id="license-heading">使用条件</h2>
+        <p className="small muted" style={{ margin: 0 }}>
+          每首作品都记录着生成当时适用的使用条件。{' '}
           {isOwner && (
             <Link to={`/tracks/${song.trackId}/license`} className="linklike">
-              View the full record
+              查看完整记录
             </Link>
           )}
         </p>

@@ -21,7 +21,7 @@ export function PlayerBar({ onExpand }: { onExpand?: () => void }) {
   return (
     <footer
       className={`player-bar${player.status === 'playing' ? ' is-playing' : ''}`}
-      aria-label="Player"
+      aria-label="播放器"
     >
       <div className="player-bar__inner">
         <Link to={`/song/${player.current.trackId}`} className="player-bar__now">
@@ -32,8 +32,8 @@ export function PlayerBar({ onExpand }: { onExpand?: () => void }) {
               <Eq live={player.status === 'playing'} className="player-bar__eq" />
             </span>
             <span className="player-bar__artist">
-              {player.current.artistName ?? 'Creator'} ·{' '}
-              {player.current.vocalMode === 'instrumental' ? 'Instrumental' : 'Vocals'}
+              {player.current.artistName ?? '创作者'} ·{' '}
+              {player.current.vocalMode === 'instrumental' ? '纯音乐' : '有人声'}
             </span>
           </span>
         </Link>
@@ -53,7 +53,7 @@ export function PlayerBar({ onExpand }: { onExpand?: () => void }) {
               type="button"
               className={`btn-icon btn-icon--main${player.status === 'playing' ? ' is-playing' : ''}`}
               onClick={player.toggle}
-              aria-label={player.status === 'playing' ? 'Pause' : 'Play'}
+              aria-label={player.status === 'playing' ? '暂停' : '播放'}
             >
               <span
                 className={player.status === 'playing' ? 'icon icon--pause' : 'icon icon--play'}
@@ -93,15 +93,15 @@ export function PlayerBar({ onExpand }: { onExpand?: () => void }) {
         </div>
 
         <div className="player-bar__right">
-          {player.status === 'loading' && <span className="player-bar__hint">buffering…</span>}
-          {player.status === 'error' && <span className="player-bar__hint player-bar__hint--err">playback error</span>}
+          {player.status === 'loading' && <span className="player-bar__hint">缓冲中…</span>}
+          {player.status === 'error' && <span className="player-bar__hint player-bar__hint--err">播放失败</span>}
           {player.queue.length > 0 && (
-            <span className="player-bar__queue" title="Songs in queue">
+            <span className="player-bar__queue" title="播放队列">
               <span className="icon icon--queue" aria-hidden="true" /> {player.queue.length}
             </span>
           )}
           {onExpand && (
-            <button type="button" className="btn-icon" onClick={onExpand} aria-label="Open now playing view">
+            <button type="button" className="btn-icon" onClick={onExpand} aria-label="打开正在播放">
               <span className="icon icon--expand" aria-hidden="true" />
             </button>
           )}

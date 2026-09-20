@@ -80,30 +80,30 @@ export default function Library() {
   return (
     <div className="stack">
       <div className="section-head">
-        <h1>Library</h1>
+        <h1>我的作品</h1>
         <Link to="/create" className="btn btn--primary btn--sm">
           <span className="icon icon--create" aria-hidden="true" />
-          New song
+          新的创作
         </Link>
       </div>
 
       {earnings && earnings.sales > 0 && (
         <section className="panel earnings" aria-labelledby="earnings-heading">
           <div className="earnings__head">
-            <h2 id="earnings-heading">Market earnings</h2>
-            <span className="small muted">your share: {Math.round(earnings.creatorShareRate * 100)}% of each sale</span>
+            <h2 id="earnings-heading">市场收益</h2>
+            <span className="small muted">每笔授权你获得 {Math.round(earnings.creatorShareRate * 100)}%</span>
           </div>
           <div className="earnings__row">
             <div className="earnings__figure">
               <strong className="earnings__total">
                 ${(earnings.totalMinor / 100).toFixed(2)}
               </strong>
-              <span className="small muted">total earned · {earnings.sales} sale{earnings.sales === 1 ? '' : 's'}</span>
+              <span className="small muted">累计收益 · {earnings.sales} 笔</span>
             </div>
             <div className="earnings__breakdown">
-              <span className="chip">${(earnings.pendingMinor / 100).toFixed(2)} pending</span>
-              <span className="chip">${(earnings.clearedMinor / 100).toFixed(2)} cleared</span>
-              <span className="chip">${(earnings.paidMinor / 100).toFixed(2)} paid out</span>
+              <span className="chip">${(earnings.pendingMinor / 100).toFixed(2)} 待结算</span>
+              <span className="chip">${(earnings.clearedMinor / 100).toFixed(2)} 已结算</span>
+              <span className="chip">${(earnings.paidMinor / 100).toFixed(2)} 已支付</span>
             </div>
           </div>
           {earnings.perTrack.length > 0 && (
@@ -112,7 +112,7 @@ export default function Library() {
                 <li key={t.trackId}>
                   <Link to={`/song/${t.trackId}`}>{t.title}</Link>
                   <span className="small muted">
-                    {t.sales} license{t.sales === 1 ? '' : 's'} · ${(t.amountMinor / 100).toFixed(2)}
+                    {t.sales} 份授权 · ${(t.amountMinor / 100).toFixed(2)}
                   </span>
                 </li>
               ))}
@@ -140,8 +140,8 @@ export default function Library() {
             type="search"
             value={q}
             onChange={(e) => setQ(e.target.value)}
-            placeholder="Search your songs…"
-            aria-label="Search your songs"
+            placeholder="搜索你的作品…"
+            aria-label="搜索你的作品"
           />
         </div>
       </div>
@@ -156,10 +156,10 @@ export default function Library() {
         </div>
       ) : songs.length === 0 ? (
         <div className="empty">
-          <h2>Nothing here yet</h2>
-          <p>Your generated songs live here — private until you publish them.</p>
+          <h2>还没有作品</h2>
+          <p>生成过的音乐会出现在这里——默认私密，发布前只有你能看到。</p>
           <Link className="btn btn--primary" to="/create">
-            Create your first song
+            开始第一段创作
           </Link>
         </div>
       ) : (
@@ -178,7 +178,7 @@ export default function Library() {
           {cursor && (
             <div className="load-more">
               <button type="button" className="btn" onClick={loadMore} disabled={loadingMore}>
-                {loadingMore ? 'Loading…' : 'Load more'}
+                {loadingMore ? '加载中…' : '加载更多'}
               </button>
             </div>
           )}

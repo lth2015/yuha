@@ -45,15 +45,15 @@ export function NowPlaying({
   };
 
   return (
-    <div className={`now-playing${closing ? ' is-closing' : ''}`} role="dialog" aria-label={`Now playing: ${title}`}>
+    <div className={`now-playing${closing ? ' is-closing' : ''}`} role="dialog" aria-label={`正在播放：${title}`}>
       <div className="now-playing__scrim" onClick={close} aria-hidden="true" />
 
       <header className="now-playing__top">
-        <button type="button" className="btn-icon" onClick={close} aria-label="Close now playing">
+        <button type="button" className="btn-icon" onClick={close} aria-label="关闭">
           <span className="icon icon--next is-flipped" aria-hidden="true" />
         </button>
         <div className="now-playing__now">
-          <Eq live={playing} /> {playing ? 'Now playing' : 'Paused'}
+          <Eq live={playing} /> {playing ? '正在播放' : '已暂停'}
         </div>
         <div className="now-playing__top-spacer" />
       </header>
@@ -72,7 +72,7 @@ export function NowPlaying({
           </div>
 
           <div className="now-playing__transport">
-            <button type="button" className="btn-icon" onClick={player.prev} aria-label="Previous" disabled={!player.queue.length}>
+            <button type="button" className="btn-icon" onClick={player.prev} aria-label="上一首" disabled={!player.queue.length}>
               <span className="icon icon--prev" aria-hidden="true" />
             </button>
             <button
@@ -83,7 +83,7 @@ export function NowPlaying({
             >
               <span className={playing ? 'icon icon--pause' : 'icon icon--play'} aria-hidden="true" />
             </button>
-            <button type="button" className="btn-icon" onClick={player.next} aria-label="Next" disabled={!player.queue.length}>
+            <button type="button" className="btn-icon" onClick={player.next} aria-label="下一首" disabled={!player.queue.length}>
               <span className="icon icon--next" aria-hidden="true" />
             </button>
           </div>
@@ -96,7 +96,7 @@ export function NowPlaying({
             step={0.1}
             value={Math.min(player.currentTime, duration)}
             onChange={(e) => player.seek(Number(e.target.value))}
-            aria-label="Seek"
+            aria-label="进度"
             style={{ '--progress': `${duration ? ((Math.min(player.currentTime, duration) / duration) * 100).toFixed(2) : 0}%` } as React.CSSProperties}
           />
 
@@ -113,7 +113,7 @@ export function NowPlaying({
             )}
             {onDownload && (
               <button type="button" className="btn btn--sm" onClick={onDownload}>
-                Download MP3
+                下载 MP3
               </button>
             )}
           </div>

@@ -43,16 +43,16 @@ export default function MfaChallenge() {
   return (
     <div className="auth-page">
       <div className="auth-card panel">
-        <h1 className="auth-card__title">Two-factor verification</h1>
+        <h1 className="auth-card__title">两步验证</h1>
         <p className="auth-card__sub">
-          Enter the 6-digit code from Google Authenticator (or a recovery code) to finish signing in.
+          输入 Google 身份验证器中的 6 位验证码（或一个恢复码），完成登录。
         </p>
 
         <ErrorNotice error={error} />
 
         <form className="stack" onSubmit={submit} noValidate>
           <div>
-            <label htmlFor="mfa-code">Authenticator code</label>
+            <label htmlFor="mfa-code">验证码</label>
             <input
               id="mfa-code"
               type="text"
@@ -67,16 +67,16 @@ export default function MfaChallenge() {
               aria-describedby="mfa-help"
             />
             <p id="mfa-help" className="small muted" style={{ textAlign: 'center', marginBottom: 0 }}>
-              Lost your phone? Enter one of your recovery codes instead.
+              手机丢了？可以输入任意一个恢复码。
             </p>
           </div>
           <button type="submit" className="btn btn--primary btn--block btn--lg" disabled={busy || code.length < 6}>
-            {busy ? 'Verifying…' : 'Verify & sign in'}
+            {busy ? '正在验证…' : '验证并登录'}
           </button>
         </form>
 
         <p className="small muted" style={{ textAlign: 'center', margin: 0 }}>
-          <a href="/auth">Start over</a>
+          <a href="/auth">重新开始</a>
         </p>
       </div>
     </div>

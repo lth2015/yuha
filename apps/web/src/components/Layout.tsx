@@ -235,7 +235,7 @@ export function Layout({ children }: { children: ReactNode }) {
       {/* Brand moment: the drifting petal only shows while music plays. */}
       {player.status === 'playing' && (
         <span className="app__drift-petal" aria-hidden="true">
-          <PetalMark size={26} dim={false} rotate={-12} title="" />
+          <PetalMark size={26} shadow={false} rotate={-12} title="YUHA" />
         </span>
       )}
     </div>

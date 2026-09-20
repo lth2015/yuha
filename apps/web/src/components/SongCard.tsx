@@ -30,7 +30,7 @@ export function SongCard({
   const [liked, setLiked] = useState<boolean>(song.likedByMe ?? false);
   const [likeCount, setLikeCount] = useState(song.likeCount);
   const [busy, setBusy] = useState(false);
-  const [menuOpen, setMenuOpen] = useState(false);
+  const [menu打开, setMenu打开] = useState(false);
 
   const isMine = song.artistId === '' ? false : !!song.artistId; // set by parent context if known
   const active = player.activeId === song.trackId;
@@ -74,14 +74,14 @@ export function SongCard({
     try {
       await apiFetch(`/v1/tracks/${song.trackId}/visibility`, { method: 'POST', body: { visibility } });
       song.visibility = visibility;
-      setMenuOpen(false);
+      setMenu打开(false);
     } finally {
       setBusy(false);
     }
   };
 
   const remove = async () => {
-    if (!window.confirm(`Delete “${song.title}”? This cannot be undone.`)) return;
+    if (!window.confirm(`删除 “${song.title}”? This cannot be undone.`)) return;
     setBusy(true);
     try {
       await apiFetch(`/v1/tracks/${song.trackId}`, { method: 'DELETE' });
@@ -105,14 +105,14 @@ export function SongCard({
           className="song-card__play"
           onClick={onPlay}
           disabled={!song.previewUrl}
-          aria-label={playing ? `Pause ${song.title}` : `Play ${song.title}`}
+          aria-label={playing ? `暂停「${song.title}」` : `播放「${song.title}」`}
         >
           <span className={playing ? 'icon icon--pause' : 'icon icon--play'} aria-hidden="true" />
         </button>
         {song.state !== 'deliverable' && (
-          <span className="song-card__badge">{song.state === 'processing' ? 'Generating…' : song.state}</span>
+          <span className="song-card__badge">{song.state === 'processing' ? '生成中…' : song.state}</span>
         )}
-        {song.visibility === 'public' && <span className="song-card__public" title="Published to Explore">Public</span>}
+        {song.visibility === 'public' && <span className="song-card__public" title="Published to Explore">市场在架</span>}
       </div>
 
       <div className="song-card__meta">
@@ -121,12 +121,12 @@ export function SongCard({
         </h3>
         <div className="song-card__sub">
           <span className="song-card__artist">
-            {song.artistName ?? (isMine ? 'You' : 'Creator')}
+            {song.artistName ?? (isMine ? '你' : '创作者')}
           </span>
           <span aria-hidden="true">·</span>
           <span>{formatTime(song.durationSeconds)}</span>
           <span aria-hidden="true">·</span>
-          <span className="song-card__mode">{song.vocalMode === 'instrumental' ? 'Instrumental' : 'Vocals'}</span>
+          <span className="song-card__mode">{song.vocalMode === 'instrumental' ? '纯音乐' : '有人声'}</span>
         </div>
         {song.styles.length > 0 && (
           <div className="song-card__styles">
@@ -146,7 +146,7 @@ export function SongCard({
           onClick={toggleLike}
           disabled={busy || liked === null}
           aria-pressed={liked ?? undefined}
-          aria-label={liked ? `Unlike ${song.title}` : `Like ${song.title}`}
+          aria-label={liked ? `取消喜欢「${song.title}」` : `喜欢「${song.title}」`}
         >
           <span className="icon icon--heart" aria-hidden="true" />
           <span className="like-btn__count">{likeCount}</span>
@@ -157,17 +157,17 @@ export function SongCard({
             <button
               type="button"
               className="menu__btn"
-              onClick={() => setMenuOpen((v) => !v)}
+              onClick={() => setMenu打开((v) => !v)}
               aria-haspopup="menu"
-              aria-expanded={menuOpen}
-              aria-label={`More actions for ${song.title}`}
+              aria-expanded={menu打开}
+              aria-label={`「${song.title}」的更多操作`}
             >
               <span className="icon icon--dots" aria-hidden="true" />
             </button>
-            {menuOpen && (
+            {menu打开 && (
               <div className="menu__panel" role="menu">
-                <Link role="menuitem" to={`/song/${song.trackId}`} onClick={() => setMenuOpen(false)}>
-                  Open
+                <Link role="menuitem" to={`/song/${song.trackId}`} onClick={() => setMenu打开(false)}>
+                  打开
                 </Link>
                 <a
                   role="menuitem"
@@ -176,7 +176,7 @@ export function SongCard({
                   aria-disabled={!song.previewUrl}
                   onClick={(e) => !song.previewUrl && e.preventDefault()}
                 >
-                  Download MP3
+                  下载 MP3
                 </a>
                 {onRemove && (
                   <>
@@ -186,10 +186,10 @@ export function SongCard({
                       onClick={() => setVisibility(song.visibility === 'public' ? 'private' : 'public')}
                       disabled={busy}
                     >
-                      {song.visibility === 'public' ? 'Unpublish' : 'Publish to Explore'}
+                      {song.visibility === 'public' ? '取消发布' : '发布到市场'}
                     </button>
                     <button type="button" role="menuitem" className="menu__danger" onClick={remove} disabled={busy}>
-                      Delete
+                      删除
                     </button>
                   </>
                 )}

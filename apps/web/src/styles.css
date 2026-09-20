@@ -154,9 +154,20 @@ code { font-family: var(--mono); font-size: 0.86em; background: var(--surface-so
 }
 .topnav__account { margin-left: auto; display: flex; align-items: center; gap: 14px; }
 
-.brand-lockup { display: inline-flex; align-items: center; gap: 10px; }
-.brand-lockup__word { display: block; }
-.petal-mark { display: block; filter: drop-shadow(6px 10px 8px rgb(138 74 48 / 16%)); }
+.brand-lockup { display: block; height: auto; }
+
+/* The petal floats: shadow on the ground, svg tilts above it. */
+.petal-mark { position: relative; display: inline-block; }
+.petal-mark__svg {
+  display: block; width: 100%; height: 100%;
+  filter: drop-shadow(10px 16px 12px rgb(138 74 48 / 18%));
+  transition: transform var(--t-ui) var(--ease-ui);
+}
+.petal-mark__ground {
+  position: absolute; left: 12%; right: 6%; bottom: -7%; height: 9%;
+  border-radius: 50%;
+  background: radial-gradient(50% 50% at 50% 50%, rgb(90 58 40 / 18%), transparent 70%);
+}
 
 .content {
   flex: 1;
@@ -396,8 +407,16 @@ tr:last-child td { border-bottom: none; }
   position: relative; display: block; border-radius: var(--r-card); overflow: hidden;
   isolation: isolate;
 }
-.cover-art__petal { position: absolute; transform-origin: center; }
-.cover-art__label { position: absolute; right: 14px; bottom: 10px; font-size: 11px; letter-spacing: 0.06em; color: rgba(32, 34, 31, 0.55); font-weight: 500; }
+/* One petal, centre stage with even margins; the tilt gives it life. */
+.cover-art__petal {
+  position: absolute; left: 50%; top: 50%;
+  translate: -50% -50%;
+}
+.cover-art__index {
+  position: absolute; left: 14px; top: 12px;
+  font-size: 11px; font-weight: 600; letter-spacing: 0.08em;
+  color: rgba(32, 34, 31, 0.45);
+}
 .cover-art.is-playing { box-shadow: 0 0 0 2px var(--petal), var(--shadow-card); }
 
 /* 错落瀑布式：columns-based masonry with varied cover ratios. */
@@ -543,16 +562,70 @@ tr:last-child td { border-bottom: none; }
   .chart__play { width: 48px; height: 48px; }
 }
 
-/* ---------------------------------------------------------------- song page */
-.song-page { display: flex; flex-direction: column; gap: var(--s4); }
-.song-page__hero { display: flex; gap: var(--s6); align-items: flex-start; }
-.song-page__art { width: min(280px, 100%); border-radius: var(--r-card); flex: none; }
-.song-page__info { min-width: 0; flex: 1; }
-.song-page__eyebrow { text-transform: uppercase; letter-spacing: 0.18em; font-size: 11px; font-weight: 600; color: var(--muted); margin: 0 0 6px; }
-.song-page__meta { color: var(--muted); }
-.song-page__actions { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin: var(--s4) 0; }
-.song-page__actions .like-btn { border: 1px solid var(--line); }
-.song-page__badge { border: 1px solid var(--line); border-radius: 999px; padding: 6px 14px; white-space: nowrap; }
+/* ---------------------------------------------------------------- song page（editorial spread） */
+.song-page { display: flex; flex-direction: column; gap: var(--s6); }
+.song-spread {
+  display: grid;
+  grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);
+  gap: clamp(32px, 5vw, 80px);
+  align-items: center;
+  padding: clamp(24px, 4vw, 56px) 0;
+}
+.song-spread__cover { position: relative; }
+.song-spread__art { width: 100%; height: auto; border-radius: var(--r-card); box-shadow: var(--shadow-raised); }
+.song-spread__play {
+  position: absolute; left: 50%; bottom: -24px; translate: -50% 0;
+  display: inline-flex; align-items: center; gap: 10px;
+  min-height: 48px; padding: 0 22px;
+  border-radius: 999px; border: none; cursor: pointer;
+  background: var(--ink); color: #fff; font: inherit; font-size: 14px; font-weight: 500;
+  box-shadow: 0 12px 28px rgb(32 34 31 / 22%);
+  transition: transform var(--t-press) var(--ease-ui), background-color var(--t-ui) var(--ease-ui);
+}
+.song-spread__play:hover { background: #3c403a; }
+.song-spread__play:active { transform: scale(0.98); }
+.song-spread__play:disabled { background: var(--surface-soft); color: var(--muted); cursor: default; }
+.song-spread__eyebrow { margin-bottom: var(--s3); }
+.song-spread__title {
+  font-size: clamp(34px, 3.6vw, 52px);
+  letter-spacing: -0.04em; font-weight: 600; line-height: 1.2;
+  margin: 0 0 var(--s3);
+  overflow-wrap: anywhere;
+}
+.song-spread__meta { color: var(--muted); font-size: 15px; margin: 0 0 var(--s6); }
+.song-spread__actions { display: flex; align-items: center; gap: var(--s4) var(--s6); flex-wrap: wrap; margin: 0 0 var(--s4); }
+.song-spread__note { font-size: 12px; color: var(--muted); margin: 0 0 var(--s2); }
+.song-spread__player { display: flex; align-items: center; gap: 14px; margin-top: var(--s4); }
+.song-spread__time { font-size: 12px; color: var(--muted); white-space: nowrap; }
+.song-spread__track { flex: 1; height: 28px; display: flex; align-items: center; cursor: pointer; }
+.song-spread__track::before {
+  content: ''; position: relative; width: 100%; height: 4px; border-radius: 999px; background: var(--line);
+}
+.song-spread__fill {
+  position: absolute; height: 4px; border-radius: 999px; background: var(--ink);
+  transition: width 0.25s linear;
+}
+.song-spread__track { position: relative; }
+.song-spread__fill { position: absolute; left: 0; }
+
+/* quiet text controls */
+.text-action {
+  background: none; border: none; padding: 0; cursor: pointer;
+  font: inherit; font-size: 14px; font-weight: 500; color: var(--ink);
+  border-bottom: 1px solid color-mix(in srgb, var(--ink) 25%, transparent);
+  padding-bottom: 3px; min-height: var(--tap);
+  transition: border-color var(--t-ui) var(--ease-ui), color var(--t-ui) var(--ease-ui);
+}
+.text-action:hover { border-color: var(--ink); }
+.text-action:disabled { opacity: 0.45; cursor: default; }
+.text-action.is-liked { color: var(--petal-deep); border-color: color-mix(in srgb, var(--petal-deep) 35%, transparent); }
+.text-action.is-danger { color: var(--danger); border-color: color-mix(in srgb, var(--danger) 30%, transparent); }
+.text-action.is-strong { color: var(--petal-deep); border-color: color-mix(in srgb, var(--petal-deep) 45%, transparent); }
+
+@media (max-width: 900px) {
+  .song-spread { grid-template-columns: 1fr; }
+  .song-spread__cover { max-width: 420px; margin: 0 auto; width: 100%; }
+}
 
 /* synced lyrics */
 .lyrics-sync { max-height: 420px; overflow-y: auto; padding: var(--s6) 4px; -webkit-mask-image: linear-gradient(to bottom, transparent, #000 12%, #000 86%, transparent); mask-image: linear-gradient(to bottom, transparent, #000 12%, #000 86%, transparent); scrollbar-width: none; }
