@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import type { MeView } from '@loopscene/contracts';
 import { apiFetch } from '../lib/api';
+import { useI18n } from '../lib/i18n';
 import { useSession } from '../lib/session';
 import { ErrorNotice } from '../components/common';
 
@@ -12,6 +13,7 @@ import { ErrorNotice } from '../components/common';
  * only with a valid code.
  */
 export default function MfaChallenge() {
+  const { t } = useI18n();
   const navigate = useNavigate();
   const [params] = useSearchParams();
   const { signIn } = useSession();
@@ -43,16 +45,16 @@ export default function MfaChallenge() {
   return (
     <div className="auth-page">
       <div className="auth-card panel">
-        <h1 className="auth-card__title">两步验证</h1>
+        <h1 className="auth-card__title">{t('mfa.title')}</h1>
         <p className="auth-card__sub">
-          输入 Google 身份验证器中的 6 位验证码（或一个恢复码），完成登录。
+          {t('mfa.sub')}
         </p>
 
         <ErrorNotice error={error} />
 
         <form className="stack" onSubmit={submit} noValidate>
           <div>
-            <label htmlFor="mfa-code">验证码</label>
+            <label htmlFor="mfa-code">{t('mfa.code')}</label>
             <input
               id="mfa-code"
               type="text"
@@ -67,16 +69,16 @@ export default function MfaChallenge() {
               aria-describedby="mfa-help"
             />
             <p id="mfa-help" className="small muted" style={{ textAlign: 'center', marginBottom: 0 }}>
-              手机丢了？可以输入任意一个恢复码。
+              {t('mfa.lost')}
             </p>
           </div>
           <button type="submit" className="btn btn--primary btn--block btn--lg" disabled={busy || code.length < 6}>
-            {busy ? '正在验证…' : '验证并登录'}
+            {busy ? t('mfa.verifying') : t('mfa.verify')}
           </button>
         </form>
 
         <p className="small muted" style={{ textAlign: 'center', margin: 0 }}>
-          <a href="/auth">重新开始</a>
+          <a href="/auth">{t('mfa.restart')}</a>
         </p>
       </div>
     </div>

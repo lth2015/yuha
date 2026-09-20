@@ -1,6 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import type { TrackView } from '@loopscene/contracts';
+import { attachBeat as attachBeatSafe } from './beat';
 
 /**
  * A single shared <audio> element with a queue.
@@ -59,6 +60,8 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
   if (!audioRef.current && typeof Audio !== 'undefined') {
     audioRef.current = new Audio();
     audioRef.current.preload = 'metadata';
+    // Tap the analyser once so ambient visuals can read the real rhythm.
+    attachBeatSafe(audioRef.current);
   }
 
   const startTrack = useCallback((track: PlayerTrack & { previewUrl: string | null }) => {

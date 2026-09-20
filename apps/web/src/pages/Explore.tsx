@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import type { TrackView } from '@loopscene/contracts';
 import { apiFetch } from '../lib/api';
+import { useI18n } from '../lib/i18n';
 import { formatTime, usePlayer } from '../lib/player';
 import { CoverArt } from '../components/CoverArt';
 import { ErrorNotice } from '../components/common';
@@ -19,6 +20,7 @@ type VocalFilter = 'instrumental' | 'vocals' | undefined;
  * liking asks for an account.
  */
 export default function Explore() {
+  const { t } = useI18n();
   const player = usePlayer();
   const [songs, setSongs] = useState<TrackView[]>([]);
   const [cursor, setCursor] = useState<string | null>(null);
@@ -110,10 +112,10 @@ export default function Explore() {
     <div className="stack">
       <div className="market-head">
         <div>
-          <p className="market-head__eyebrow">YUHA 市场</p>
-          <h1>大家做出来的榜单</h1>
+          <p className="market-head__eyebrow">{t('market.eyebrow')}</p>
+          <h1>{t('market.title')}</h1>
           <p className="market-head__sub">
-            这里的每一首作品都由 YUHA 创作者生成并发布到市场。可以试听、喜欢，也可以带着灵感去做你自己的版本。
+            {t('market.sub')}
           </p>
         </div>
         <div className="seg" role="tablist" aria-label="Sort">
@@ -126,7 +128,7 @@ export default function Explore() {
               className={`seg__btn${sort === sv ? ' is-active' : ''}`}
               onClick={() => setSort(sv)}
             >
-              {sv === 'trending' ? '热度' : '最新'}
+              {t(sv === 'trending' ? 'market.trending' : 'market.new')}
             </button>
           ))}
         </div>
@@ -170,8 +172,8 @@ export default function Explore() {
             type="search"
             value={q}
             onChange={(e) => setQ(e.target.value)}
-            placeholder="搜索作品或风格…"
-            aria-label="搜索作品"
+            placeholder={t('market.search')}
+            aria-label={t('market.search')}
             enterKeyHint="search"
           />
           <button type="submit" className="btn btn--sm" disabled={q.trim() === query}>
@@ -190,14 +192,14 @@ export default function Explore() {
         </div>
       ) : shown.length === 0 ? (
         <div className="empty">
-          <p>暂时没有匹配的作品。换个筛选试试——或者去做那首属于这里的歌。</p>
+          <p>{t('market.empty')}</p>
         </div>
       ) : (
         <>
           <section aria-labelledby="chart-heading" className="chart">
             <div className="section-head">
-              <h2 id="chart-heading">前十</h2>
-              <span className="small muted">按播放与喜欢排序</span>
+              <h2 id="chart-heading">{t('market.top10')}</h2>
+              <span className="small muted">{t('market.rankBy')}</span>
             </div>
             <ol className="chart__list">
               {chart.map((song, i) => {
@@ -217,7 +219,7 @@ export default function Explore() {
                       className="chart__play"
                       onClick={() => (active ? player.toggle() : playChartRow(song, shown))}
                       disabled={!song.previewUrl}
-                      aria-label={playing ? `暂停「${song.title}」` : `播放「${song.title}」`}
+                      aria-label={playing ? t('card.pause', { title: song.title }) : t('card.play', { title: song.title })}
                     >
                       <CoverArt seed={song.coverSeed} title={song.title} size={112} />
                       <span className="chart__play-icon" data-playing={playing || undefined} aria-hidden="true">
@@ -229,7 +231,7 @@ export default function Explore() {
                         {song.title}
                       </Link>
                       <span className="chart__artist">
-                        {song.artistName ?? '创作者'} · {song.vocalMode === 'instrumental' ? '纯音乐' : '有人声'} ·{' '}
+                        {song.artistName ?? t('card.creator')} · {t(song.vocalMode === 'instrumental' ? 'song.instrumental' : 'song.vocals')} ·{' '}
                         {formatTime(song.durationSeconds)}
                       </span>
                     </div>
@@ -240,7 +242,7 @@ export default function Explore() {
                         </span>
                       ))}
                     </div>
-                    <span className="chart__stats num" aria-label={`${song.playCount} 次播放，${song.likeCount} 个喜欢`}>
+                    <span className="chart__stats num" aria-label={t('market.stats', { plays: song.playCount.toLocaleString(), likes: song.likeCount.toLocaleString() })}>
                       {song.playCount.toLocaleString()} ▶ · {song.likeCount.toLocaleString()} ♥
                     </span>
                     <ChartLikeButton song={song} />
@@ -253,7 +255,7 @@ export default function Explore() {
           {fresh.length > 0 && (
             <section aria-labelledby="fresh-heading">
               <div className="section-head">
-                <h2 id="fresh-heading">新上架</h2>
+                <h2 id="fresh-heading">{t('market.fresh')}</h2>
               </div>
               <div className="masonry">
                 {fresh.map((song, i) => (
@@ -266,7 +268,7 @@ export default function Explore() {
           {cursor && !genre && (
             <div className="load-more">
               <button type="button" className="btn" onClick={loadMore} disabled={loadingMore}>
-                {loadingMore ? '加载中…' : '加载更多'}
+                {loadingMore ? t('market.loading') : t('market.loadMore')}
               </button>
             </div>
           )}
@@ -278,6 +280,7 @@ export default function Explore() {
 
 /** Like control detached from the card grid, for chart rows. */
 function ChartLikeButton({ song }: { song: TrackView }) {
+  const { t } = useI18n();
   const [liked, setLiked] = useState<boolean>(song.likedByMe ?? false);
   const [count, setCount] = useState(song.likeCount);
   const [busy, setBusy] = useState(false);
@@ -307,7 +310,7 @@ function ChartLikeButton({ song }: { song: TrackView }) {
       onClick={toggle}
       disabled={busy || song.likedByMe === null}
       aria-pressed={liked ?? undefined}
-      aria-label={liked ? `取消喜欢「${song.title}」` : `喜欢「${song.title}」`}
+      aria-label={liked ? t('card.unlike', { title: song.title }) : t('card.like', { title: song.title })}
     >
       <span className="icon icon--heart" aria-hidden="true" /> {count}
     </button>

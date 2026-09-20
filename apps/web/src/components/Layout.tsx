@@ -3,8 +3,10 @@ import { Link, NavLink, useNavigate } from 'react-router-dom';
 import type { TrackView } from '@loopscene/contracts';
 import { apiFetch } from '../lib/api';
 import { usePlayer } from '../lib/player';
+import { useI18n } from '../lib/i18n';
 import { useSession } from '../lib/session';
 import { BrandLogo, PetalMark } from './Brand';
+import { LANGS } from '../lib/i18n';
 import { NowPlaying } from './NowPlaying';
 import { PlayerBar } from './PlayerBar';
 
@@ -19,13 +21,10 @@ interface NowPlayingSong extends TrackView {
   lyrics: string | null;
 }
 
-const NAV = [
-  { to: '/', label: '创作', end: true },
-  { to: '/library', label: '我的作品' },
-  { to: '/explore', label: '市场' },
-];
+
 
 function SiteFooter() {
+  const { t } = useI18n();
   const { runtime } = useSession();
   return (
     <footer className="site-foot">
@@ -33,16 +32,16 @@ function SiteFooter() {
         <BrandLogo width={104} />
       </span>
       <span className="site-foot__links">
-        <Link to="/legal/terms">服务条款</Link>
-        <Link to="/legal/privacy">隐私</Link>
-        <Link to="/legal/company">公司信息</Link>
-        <Link to="/help/rights">内容申诉</Link>
+        <Link to="/legal/terms">{t('footer.terms')}</Link>
+        <Link to="/legal/privacy">{t('footer.privacy')}</Link>
+        <Link to="/legal/company">{t('footer.company')}</Link>
+        <Link to="/help/rights">{t('footer.rights')}</Link>
         <a href="https://netstars.co.jp" target="_blank" rel="noreferrer">
           NetStars
         </a>
       </span>
       <span className="site-foot__fine">
-        © {new Date().getFullYear()} NetStars Co., Ltd. · 让心动，有回声。
+        {t('footer.made', { year: new Date().getFullYear() })} · {t('footer.slogan')}
         {runtime && !runtime.demo ? ` · ${runtime.mode}` : ''}
       </span>
     </footer>
@@ -50,6 +49,7 @@ function SiteFooter() {
 }
 
 export function Layout({ children }: { children: ReactNode }) {
+  const { t, lang, setLang } = useI18n();
   const { me, entitlements, signOut, runtime } = useSession();
   const navigate = useNavigate();
   const player = usePlayer();
@@ -103,7 +103,7 @@ export function Layout({ children }: { children: ReactNode }) {
   return (
     <div className="app">
       <a className="skip-link" href="#main">
-        跳到内容
+        {t('nav.skip')}
       </a>
 
       <header className="topnav">
@@ -112,24 +112,41 @@ export function Layout({ children }: { children: ReactNode }) {
             <BrandLogo width={128} />
           </Link>
 
-          <nav className="topnav__nav" aria-label="主导航">
-            {NAV.map((item) => (
+          <nav className="topnav__nav" aria-label={t('nav.skip').replace('跳到内容', '主导航')}>
+            {[
+              { to: '/', key: 'nav.create', end: true },
+              { to: '/library', key: 'nav.library', end: false },
+              { to: '/explore', key: 'nav.market', end: false },
+            ].map((item) => (
               <NavLink
                 key={item.to}
                 to={item.to}
-                end={'end' in item ? item.end : false}
+                end={item.end}
                 className={({ isActive }) => `topnav__link${isActive ? ' is-active' : ''}`}
               >
-                {item.label}
+                {t(item.key)}
               </NavLink>
             ))}
           </nav>
 
           <div className="topnav__account">
+            <div className="lang-switch" role="group" aria-label="Language">
+              {LANGS.map((l) => (
+                <button
+                  key={l.code}
+                  type="button"
+                  className={`lang-switch__btn${lang === l.code ? ' is-active' : ''}`}
+                  aria-pressed={lang === l.code}
+                  onClick={() => setLang(l.code)}
+                >
+                  {l.label}
+                </button>
+              ))}
+            </div>
             {me ? (
               <>
-                <Link to="/pricing" className="credit-pill" title="当前可用生成次数">
-                  可用 {credits} 次
+                <Link to="/pricing" className="credit-pill">
+                  {t('nav.credits', { n: credits })}
                 </Link>
                 <div className={`account${menuOpen ? ' is-open' : ''}`}>
                   <button
@@ -149,21 +166,21 @@ export function Layout({ children }: { children: ReactNode }) {
                   </button>
                   <div className="account__menu" role="menu">
                     <div className="account__who">
-                      <strong>{me.displayName ?? '创作者'}</strong>
+                      <strong>{me.displayName ?? t('card.creator')}</strong>
                       <span className="small">{me.email}</span>
                     </div>
                     <Link role="menuitem" to="/library" onClick={() => setMenuOpen(false)}>
-                      我的作品
+                      {t('account.mySongs')}
                     </Link>
                     <Link role="menuitem" to="/settings/billing" onClick={() => setMenuOpen(false)}>
-                      账单
+                      {t('account.billing')}
                     </Link>
                     <Link role="menuitem" to="/settings/account" onClick={() => setMenuOpen(false)}>
-                      账户设置
+                      {t('account.settings')}
                     </Link>
                     {(me.role === 'admin' || me.role === 'support') && (
                       <Link role="menuitem" to="/admin" onClick={() => setMenuOpen(false)}>
-                        控制台
+                        {t('account.console')}
                       </Link>
                     )}
                     <button
@@ -175,7 +192,7 @@ export function Layout({ children }: { children: ReactNode }) {
                         navigate('/');
                       }}
                     >
-                      退出登录
+                      {t('account.signOut')}
                     </button>
                   </div>
                 </div>
@@ -183,10 +200,10 @@ export function Layout({ children }: { children: ReactNode }) {
             ) : (
               <>
                 <Link className="btn btn--ghost btn--sm" to="/auth">
-                  登录
+                  {t('nav.signin')}
                 </Link>
                 <Link className="btn btn--primary btn--sm" to="/auth">
-                  开始创作
+                  {t('nav.start')}
                 </Link>
               </>
             )}
@@ -200,15 +217,19 @@ export function Layout({ children }: { children: ReactNode }) {
 
       <SiteFooter />
 
-      <nav className="tabbar" aria-label="主导航（移动）">
-        {NAV.map((item) => (
+      <nav className="tabbar" aria-label={t('nav.skip')}>
+        {[
+          { to: '/', key: 'nav.create', end: true },
+          { to: '/library', key: 'nav.library', end: false },
+          { to: '/explore', key: 'nav.market', end: false },
+        ].map((item) => (
           <NavLink
             key={item.to}
             to={item.to}
-            end={'end' in item ? item.end : false}
+            end={item.end}
             className={({ isActive }) => `tabbar__link${isActive ? ' is-active' : ''}`}
           >
-            {item.label}
+            {t(item.key)}
           </NavLink>
         ))}
       </nav>

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import type { TrackView } from '@loopscene/contracts';
 import { apiFetch } from '../lib/api';
+import { useI18n } from '../lib/i18n';
 import { ErrorNotice } from '../components/common';
 import { SongCard } from '../components/SongCard';
 
@@ -23,6 +24,7 @@ type Filter = 'all' | 'processing' | 'deliverable' | 'suspended';
  * enforces that server-side (UI-08 heritage) — this page just renders it.
  */
 export default function Library() {
+  const { t } = useI18n();
   const [earnings, setEarnings] = useState<EarningsSummary | null>(null);
   const [songs, setSongs] = useState<TrackView[] | null>(null);
   const [cursor, setCursor] = useState<string | null>(null);
@@ -80,39 +82,39 @@ export default function Library() {
   return (
     <div className="stack">
       <div className="section-head">
-        <h1>我的作品</h1>
+        <h1>{t('lib.title')}</h1>
         <Link to="/create" className="btn btn--primary btn--sm">
           <span className="icon icon--create" aria-hidden="true" />
-          新的创作
+          {t('lib.new')}
         </Link>
       </div>
 
       {earnings && earnings.sales > 0 && (
         <section className="panel earnings" aria-labelledby="earnings-heading">
           <div className="earnings__head">
-            <h2 id="earnings-heading">市场收益</h2>
-            <span className="small muted">每笔授权你获得 {Math.round(earnings.creatorShareRate * 100)}%</span>
+            <h2 id="earnings-heading">{t('earn.title')}</h2>
+            <span className="small muted">{t('earn.share', { n: Math.round(earnings.creatorShareRate * 100) })}</span>
           </div>
           <div className="earnings__row">
             <div className="earnings__figure">
               <strong className="earnings__total">
                 ${(earnings.totalMinor / 100).toFixed(2)}
               </strong>
-              <span className="small muted">累计收益 · {earnings.sales} 笔</span>
+              <span className="small muted">{t('earn.total', { n: earnings.sales })}</span>
             </div>
             <div className="earnings__breakdown">
-              <span className="chip">${(earnings.pendingMinor / 100).toFixed(2)} 待结算</span>
-              <span className="chip">${(earnings.clearedMinor / 100).toFixed(2)} 已结算</span>
-              <span className="chip">${(earnings.paidMinor / 100).toFixed(2)} 已支付</span>
+              <span className="chip">${(earnings.pendingMinor / 100).toFixed(2)} {t('earn.pending')}</span>
+              <span className="chip">${(earnings.clearedMinor / 100).toFixed(2)} {t('earn.cleared')}</span>
+              <span className="chip">${(earnings.paidMinor / 100).toFixed(2)} {t('earn.paid')}</span>
             </div>
           </div>
           {earnings.perTrack.length > 0 && (
             <ul className="earnings__tracks">
-              {earnings.perTrack.slice(0, 5).map((t) => (
-                <li key={t.trackId}>
-                  <Link to={`/song/${t.trackId}`}>{t.title}</Link>
+              {earnings.perTrack.slice(0, 5).map((tr) => (
+                <li key={tr.trackId}>
+                  <Link to={`/song/${tr.trackId}`}>{tr.title}</Link>
                   <span className="small muted">
-                    {t.sales} 份授权 · ${(t.amountMinor / 100).toFixed(2)}
+                    {t('earn.perTrack', { n: tr.sales, amount: `$${(tr.amountMinor / 100).toFixed(2)}` })}
                   </span>
                 </li>
               ))}
@@ -140,8 +142,8 @@ export default function Library() {
             type="search"
             value={q}
             onChange={(e) => setQ(e.target.value)}
-            placeholder="搜索你的作品…"
-            aria-label="搜索你的作品"
+            placeholder={t('lib.search')}
+            aria-label={t('lib.search')}
           />
         </div>
       </div>
@@ -156,10 +158,10 @@ export default function Library() {
         </div>
       ) : songs.length === 0 ? (
         <div className="empty">
-          <h2>还没有作品</h2>
-          <p>生成过的音乐会出现在这里——默认私密，发布前只有你能看到。</p>
+          <h2>{t('lib.empty')}</h2>
+          <p>{t('lib.emptySub')}</p>
           <Link className="btn btn--primary" to="/create">
-            开始第一段创作
+            {t('lib.create')}
           </Link>
         </div>
       ) : (
@@ -178,7 +180,7 @@ export default function Library() {
           {cursor && (
             <div className="load-more">
               <button type="button" className="btn" onClick={loadMore} disabled={loadingMore}>
-                {loadingMore ? '加载中…' : '加载更多'}
+                {loadingMore ? t('lib.loading') : t('lib.loadMore')}
               </button>
             </div>
           )}

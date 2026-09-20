@@ -1,4 +1,5 @@
 import { useMemo } from 'react';
+import { useI18n } from '../lib/i18n';
 
 /**
  * YUHA cover system (acceptance §3): a quiet three-tone canvas — soft petal,
@@ -38,6 +39,7 @@ export function CoverArt({
   className?: string;
   playing?: boolean;
 }) {
+  const { t } = useI18n();
   const art = useMemo(() => {
     const rand = seedOf(seed);
     const tone = TONES[Math.floor(rand() * TONES.length)]!;
@@ -55,7 +57,7 @@ export function CoverArt({
       className={`cover-art${className ? ` ${className}` : ''}${playing ? ' is-playing' : ''}`}
       style={{ background: art.tone.bg, width: size, height: size }}
       role="img"
-      aria-label={`「${title}」的封面`}
+      aria-label={t('cover.aria', { title })}
     >
       <svg
         viewBox="0 0 96 96"

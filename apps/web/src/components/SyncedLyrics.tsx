@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef } from 'react';
 import type { LyricTimings } from '@loopscene/contracts';
+import { useI18n } from '../lib/i18n';
 import { activeLineIndex, buildLyricTimeline, lineProgress } from '../lib/lyrics';
 
 /**
@@ -26,6 +27,7 @@ export function SyncedLyrics({
   onSeek?: (seconds: number) => void;
   compact?: boolean;
 }) {
+  const { t } = useI18n();
   const lines = useMemo(
     () => (timings?.lines?.length ? timings.lines : buildLyricTimeline(lyrics, duration).lines),
     [timings, lyrics, duration],
@@ -55,11 +57,11 @@ export function SyncedLyrics({
       ref={scrollRef}
       className={`lyrics-sync${compact ? ' lyrics-sync--compact' : ''}`}
       role="list"
-      aria-label={`Lyrics (${source === 'aligned' ? 'word-synced' : 'estimated timing'})`}
+      aria-label={t('song.lyrics')}
       data-source={source}
     >
       <span className={`lyrics-sync__pill${source === 'aligned' ? ' is-aligned' : ''}`}>
-        {source === 'aligned' ? 'Word-synced' : 'Estimated sync'}
+        {t(source === 'aligned' ? 'lyrics.aligned' : 'lyrics.estimated')}
       </span>
       {lines.map((line, i) => {
         const state = i < active ? 'past' : i === active ? 'active' : 'future';
@@ -77,7 +79,7 @@ export function SyncedLyrics({
               className={`lyrics-sync__line is-${state}`}
               style={{ '--fill': `${(fill * 100).toFixed(1)}%` } as React.CSSProperties}
               onClick={() => onSeek?.(Math.max(0, line.start - 0.4))}
-              title={onSeek ? 'Play from here' : undefined}
+              title={onSeek ? t('lyrics.playFrom') : undefined}
             >
               <span className="lyrics-sync__text">{line.text}</span>
               <span className="lyrics-sync__fill" aria-hidden="true">

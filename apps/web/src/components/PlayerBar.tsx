@@ -1,4 +1,5 @@
 import { Link } from 'react-router-dom';
+import { useI18n } from '../lib/i18n';
 import { formatTime, usePlayer } from '../lib/player';
 import { CoverArt } from './CoverArt';
 import { Eq } from './Eq';
@@ -11,6 +12,7 @@ import { Eq } from './Eq';
  * progress rail doubles as a scrubber with a 44px touch target.
  */
 export function PlayerBar({ onExpand }: { onExpand?: () => void }) {
+  const { t } = useI18n();
   const player = usePlayer();
   if (!player.current) return null;
 
@@ -21,7 +23,7 @@ export function PlayerBar({ onExpand }: { onExpand?: () => void }) {
   return (
     <footer
       className={`player-bar${player.status === 'playing' ? ' is-playing' : ''}`}
-      aria-label="播放器"
+      aria-label={t('player.nowPlaying')}
     >
       <div className="player-bar__inner">
         <Link to={`/song/${player.current.trackId}`} className="player-bar__now">
@@ -32,8 +34,8 @@ export function PlayerBar({ onExpand }: { onExpand?: () => void }) {
               <Eq live={player.status === 'playing'} className="player-bar__eq" />
             </span>
             <span className="player-bar__artist">
-              {player.current.artistName ?? '创作者'} ·{' '}
-              {player.current.vocalMode === 'instrumental' ? '纯音乐' : '有人声'}
+              {player.current.artistName ?? t('card.creator')} ·{' '}
+              {t(player.current.vocalMode === 'instrumental' ? 'song.instrumental' : 'song.vocals')}
             </span>
           </span>
         </Link>
@@ -53,7 +55,7 @@ export function PlayerBar({ onExpand }: { onExpand?: () => void }) {
               type="button"
               className={`btn-icon btn-icon--main${player.status === 'playing' ? ' is-playing' : ''}`}
               onClick={player.toggle}
-              aria-label={player.status === 'playing' ? '暂停' : '播放'}
+              aria-label={player.status === 'playing' ? t('player.pause') : t('player.play')}
             >
               <span
                 className={player.status === 'playing' ? 'icon icon--pause' : 'icon icon--play'}
@@ -93,15 +95,15 @@ export function PlayerBar({ onExpand }: { onExpand?: () => void }) {
         </div>
 
         <div className="player-bar__right">
-          {player.status === 'loading' && <span className="player-bar__hint">缓冲中…</span>}
-          {player.status === 'error' && <span className="player-bar__hint player-bar__hint--err">播放失败</span>}
+          {player.status === 'loading' && <span className="player-bar__hint">{t('player.buffering')}</span>}
+          {player.status === 'error' && <span className="player-bar__hint player-bar__hint--err">{t('player.error')}</span>}
           {player.queue.length > 0 && (
-            <span className="player-bar__queue" title="播放队列">
+            <span className="player-bar__queue" title={t("player.queue")}>
               <span className="icon icon--queue" aria-hidden="true" /> {player.queue.length}
             </span>
           )}
           {onExpand && (
-            <button type="button" className="btn-icon" onClick={onExpand} aria-label="打开正在播放">
+            <button type="button" className="btn-icon" onClick={onExpand} aria-label={t("player.expand")}>
               <span className="icon icon--expand" aria-hidden="true" />
             </button>
           )}

@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import type { MeView } from '@loopscene/contracts';
 import { apiFetch } from '../lib/api';
+import { useI18n } from '../lib/i18n';
 import { useSession } from '../lib/session';
 import { ErrorNotice } from '../components/common';
 
@@ -14,12 +15,13 @@ interface AuthConfig {
 /**
  * Sign-in.
  *
- * "使用 Google 继续" is the front door: it redirects through the API's
+ * "{t('auth.google')}" is the front door: it redirects through the API's
  * OAuth start endpoint and returns to /auth/google/callback, which exchanges
  * the one-time code for a session. The email form is the demo/integration
  * development login and only appears when the server says it exists.
  */
 export default function Auth() {
+  const { t } = useI18n();
   const navigate = useNavigate();
   const [params] = useSearchParams();
   const { runtime, signIn } = useSession();
@@ -70,8 +72,8 @@ export default function Auth() {
   return (
     <div className="auth-page">
       <div className="auth-card panel">
-        <h1 className="auth-card__title">来到 YUHA</h1>
-        <p className="auth-card__sub">写下心情，做成音乐。用 Google 账号继续。</p>
+        <h1 className="auth-card__title">{t('auth.welcome')}</h1>
+        <p className="auth-card__sub">{t('auth.sub')}</p>
 
         <ErrorNotice error={error} />
         {googleError && (
@@ -89,7 +91,7 @@ export default function Auth() {
             <span className="btn--google__g" aria-hidden="true">
               G
             </span>
-            使用 Google 继续
+            {t('auth.google')}
           </a>
         ) : (
           <div className="alert alert--info">
@@ -105,7 +107,7 @@ export default function Auth() {
         {authConfig?.devLogin && (
           <>
             <div className="auth-divider">
-              <span>或使用开发身份登录</span>
+              <span>{t('auth.or')}</span>
             </div>
             <form className="stack" onSubmit={submit} noValidate>
               <div>

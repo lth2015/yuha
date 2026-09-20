@@ -3,6 +3,7 @@ import { BrowserRouter, Navigate, Route, Routes, useLocation } from 'react-route
 import { Layout } from './components/Layout';
 import { Loading } from './components/common';
 import { PlayerProvider } from './lib/player';
+import { I18nProvider } from './lib/i18n';
 import { SessionProvider, useSession } from './lib/session';
 import Account from './pages/Account';
 import Admin from './pages/Admin';
@@ -46,6 +47,7 @@ function RequireAuth({ children, roles }: { children: ReactNode; roles?: string[
 export default function App() {
   return (
     <BrowserRouter>
+      <I18nProvider>
       <SessionProvider>
         <PlayerProvider>
           <Layout>
@@ -171,6 +173,7 @@ export default function App() {
           </Layout>
         </PlayerProvider>
       </SessionProvider>
+      </I18nProvider>
     </BrowserRouter>
   );
 }
