@@ -1,18 +1,19 @@
 import { useState } from 'react';
+import type { LyricTimings } from '@loopscene/contracts';
 import { usePlayer } from '../lib/player';
 import { CoverArt } from './CoverArt';
 import { Eq } from './Eq';
 import { SyncedLyrics } from './SyncedLyrics';
-import { WaveField } from './WaveField';
 
 /**
  * Now Playing — the full-screen listening view.
  *
- * The WaveField becomes the room, the cover breathes centre stage, and the
- * lyrics sing along in sync. Reached from the player bar's expand button.
+ * A light glass sheet over the app: cover centre stage, transport, and the
+ * lyrics singing along in sync. Reached from the player bar's expand button.
  */
 export function NowPlaying({
   lyrics,
+  timings,
   onClose,
   onLike,
   liked,
@@ -23,6 +24,7 @@ export function NowPlaying({
   coverSeed,
 }: {
   lyrics: string | null;
+  timings?: LyricTimings | null;
   onClose: () => void;
   onLike?: () => void;
   liked?: boolean;
@@ -45,7 +47,6 @@ export function NowPlaying({
   return (
     <div className={`now-playing${closing ? ' is-closing' : ''}`} role="dialog" aria-label={`Now playing: ${title}`}>
       <div className="now-playing__scrim" onClick={close} aria-hidden="true" />
-      <WaveField active={playing} className="now-playing__waves" />
 
       <header className="now-playing__top">
         <button type="button" className="btn-icon" onClick={close} aria-label="Close now playing">
@@ -124,6 +125,7 @@ export function NowPlaying({
               lyrics={lyrics}
               duration={duration || 120}
               currentTime={player.currentTime}
+              timings={timings}
               onSeek={player.seek}
             />
           </div>

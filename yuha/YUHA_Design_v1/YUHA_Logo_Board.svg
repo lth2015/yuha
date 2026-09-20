@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="1000" viewBox="0 0 1600 1000" role="img" aria-labelledby="title"><title id="title">YUHA logo design and variants</title><rect width="1600" height="1000" fill="#F6F5F0"/>
+<text x="90" y="84" fill="#20221F" font-family="sans-serif" font-size="18" letter-spacing="3">YUHA / IDENTITY 01</text>
+<g transform="translate(342 255) scale(2.8)"><g fill="#F46B45"><path d="M81 12C83 41 62 71 27 85C31 70 43 55 54 47C66 37 75 24 81 12Z"/>
+<path d="M14 24C37 23 53 34 54 49C40 47 22 38 14 24Z"/></g><g transform="translate(115 12)"><g color="#20221F"><g fill="none" stroke="currentColor" stroke-width="10" stroke-linecap="round" stroke-linejoin="round">
+<path d="M7 18L21 49C23 54 27 54 29 49L43 18M29 49L19 72"/>
+<path d="M64 18V39C64 58 93 58 93 39V18"/>
+<path d="M116 1V52M116 34C116 13 146 13 146 34V52"/>
+<path d="M202 35C202 12 171 12 171 35C171 59 202 59 202 35ZM202 19V52"/>
+</g></g></g></g>
+<text x="805" y="605" text-anchor="middle" fill="#20221F" font-family="Noto Sans CJK SC,sans-serif" font-size="40" letter-spacing="4">让心动，有回声。</text>
+<path d="M90 717H1510" stroke="#D8DAD3"/>
+<g transform="translate(94 782) scale(1.25)"><g fill="#20221F"><path d="M81 12C83 41 62 71 27 85C31 70 43 55 54 47C66 37 75 24 81 12Z"/>
+<path d="M14 24C37 23 53 34 54 49C40 47 22 38 14 24Z"/></g></g>
+<rect x="278" y="768" width="134" height="134" rx="28" fill="#F46B45"/>
+<g transform="translate(297 784)"><g fill="#20221F"><path d="M81 12C83 41 62 71 27 85C31 70 43 55 54 47C66 37 75 24 81 12Z"/>
+<path d="M14 24C37 23 53 34 54 49C40 47 22 38 14 24Z"/></g></g>
+<rect x="500" y="768" width="240" height="134" rx="24" fill="#20221F"/>
+<g transform="translate(518 803) scale(.63)"><g fill="#FFFFFF"><path d="M81 12C83 41 62 71 27 85C31 70 43 55 54 47C66 37 75 24 81 12Z"/>
+<path d="M14 24C37 23 53 34 54 49C40 47 22 38 14 24Z"/></g><g transform="translate(115 12)"><g color="#FFFFFF"><g fill="none" stroke="currentColor" stroke-width="10" stroke-linecap="round" stroke-linejoin="round">
+<path d="M7 18L21 49C23 54 27 54 29 49L43 18M29 49L19 72"/>
+<path d="M64 18V39C64 58 93 58 93 39V18"/>
+<path d="M116 1V52M116 34C116 13 146 13 146 34V52"/>
+<path d="M202 35C202 12 171 12 171 35C171 59 202 59 202 35ZM202 19V52"/>
+</g></g></g></g>
+<text x="900" y="807" fill="#61665D" font-family="sans-serif" font-size="17" letter-spacing="2">A PETAL. A LITTLE WIND.</text>
+<text x="900" y="845" fill="#20221F" font-family="Noto Sans CJK SC,sans-serif" font-size="22">羽花 · ユハ · yu-ha</text>
+<circle cx="1438" cy="846" r="26" fill="#F46B45"/>
+<circle cx="1500" cy="846" r="26" fill="#20221F"/>
+</svg>

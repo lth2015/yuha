@@ -164,7 +164,7 @@ export default function Library() {
         </div>
       ) : (
         <>
-          <div className="grid grid--songs">
+          <div className="masonry">
             {songs.map((song, i) => (
               <SongCard
                 key={song.trackId}

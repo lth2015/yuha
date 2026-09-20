@@ -256,7 +256,7 @@ export default function Explore() {
               <div className="section-head">
                 <h2 id="fresh-heading">Fresh drops</h2>
               </div>
-              <div className="grid grid--songs">
+              <div className="masonry">
                 {fresh.map((song, i) => (
                   <SongCard key={song.trackId} song={song} queue={fresh} index={i} />
                 ))}

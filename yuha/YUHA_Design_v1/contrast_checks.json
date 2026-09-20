@@ -1,0 +1,74 @@
+[
+  {
+    "foreground": "#20221F",
+    "background": "#F6F5F0",
+    "purpose": "正文",
+    "ratio": 14.685,
+    "minimum": 4.5,
+    "pass": true
+  },
+  {
+    "foreground": "#61665D",
+    "background": "#F6F5F0",
+    "purpose": "次级正文",
+    "ratio": 5.393,
+    "minimum": 4.5,
+    "pass": true
+  },
+  {
+    "foreground": "#61665D",
+    "background": "#FFFFFF",
+    "purpose": "输入占位",
+    "ratio": 5.887,
+    "minimum": 4.5,
+    "pass": true
+  },
+  {
+    "foreground": "#20221F",
+    "background": "#F46B45",
+    "purpose": "橙底文字",
+    "ratio": 5.371,
+    "minimum": 4.5,
+    "pass": true
+  },
+  {
+    "foreground": "#FFFFFF",
+    "background": "#20221F",
+    "purpose": "主按钮",
+    "ratio": 16.03,
+    "minimum": 4.5,
+    "pass": true
+  },
+  {
+    "foreground": "#A33F22",
+    "background": "#F6F5F0",
+    "purpose": "链接",
+    "ratio": 5.845,
+    "minimum": 4.5,
+    "pass": true
+  },
+  {
+    "foreground": "#7B8177",
+    "background": "#F6F5F0",
+    "purpose": "控件边界",
+    "ratio": 3.665,
+    "minimum": 3,
+    "pass": true
+  },
+  {
+    "foreground": "#5748B9",
+    "background": "#F6F5F0",
+    "purpose": "焦点",
+    "ratio": 6.343,
+    "minimum": 3,
+    "pass": true
+  },
+  {
+    "foreground": "#B33131",
+    "background": "#FFFFFF",
+    "purpose": "错误",
+    "ratio": 6.176,
+    "minimum": 4.5,
+    "pass": true
+  }
+]

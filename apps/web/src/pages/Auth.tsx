@@ -14,7 +14,7 @@ interface AuthConfig {
 /**
  * Sign-in.
  *
- * "Continue with Google" is the front door: it redirects through the API's
+ * "使用 Google 继续" is the front door: it redirects through the API's
  * OAuth start endpoint and returns to /auth/google/callback, which exchanges
  * the one-time code for a session. The email form is the demo/integration
  * development login and only appears when the server says it exists.
@@ -70,8 +70,8 @@ export default function Auth() {
   return (
     <div className="auth-page">
       <div className="auth-card panel">
-        <h1 className="auth-card__title">Welcome to SONARE</h1>
-        <p className="auth-card__sub">Turn a sentence into a song. Continue with Google to start creating.</p>
+        <h1 className="auth-card__title">来到 YUHA</h1>
+        <p className="auth-card__sub">写下心情，做成音乐。用 Google 账号继续。</p>
 
         <ErrorNotice error={error} />
         {googleError && (
@@ -89,7 +89,7 @@ export default function Auth() {
             <span className="btn--google__g" aria-hidden="true">
               G
             </span>
-            Continue with Google
+            使用 Google 继续
           </a>
         ) : (
           <div className="alert alert--info">
@@ -105,7 +105,7 @@ export default function Auth() {
         {authConfig?.devLogin && (
           <>
             <div className="auth-divider">
-              <span>or use a development identity</span>
+              <span>或使用开发身份登录</span>
             </div>
             <form className="stack" onSubmit={submit} noValidate>
               <div>

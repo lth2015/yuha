@@ -1,141 +1,271 @@
-import { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
-import type { TrackView } from '@loopscene/contracts';
-import { apiFetch } from '../lib/api';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
+import type { JobView, TrackView } from '@loopscene/contracts';
+import { apiFetch, newIdempotencyKey } from '../lib/api';
 import { usePlayer } from '../lib/player';
 import { useSession } from '../lib/session';
-import { CoverArt } from '../components/CoverArt';
-import { SongCard } from '../components/SongCard';
+import { PetalMark } from '../components/Brand';
 import { Eq } from '../components/Eq';
-import { WaveField } from '../components/WaveField';
+import { SongCard } from '../components/SongCard';
+
+const DRAFT_KEY = 'yuha.home-draft';
+
+const MOODS: Record<string, string> = {
+  城市散步: '城市散步，节奏轻快。干净的鼓点和柔软的合成器，像周末没安排的下午。',
+  日落公路: '日落公路，朋友骑车回家。轻快一点，像风穿过衬衫。',
+  房间里的雨: '房间里的雨，温暖的钢琴和轻柔的环境声。安静，但有一点期待。',
+  深夜自习: '深夜自习，安静的白噪音和微弱的心跳感，专注而平静。',
+};
 
 /**
- * Landing page: what the product is, one song-creation CTA, and the live
- * Explore feed already playing beneath it. Visitors can audition songs before
- * signing in — the account comes at the moment of creation, not before.
+ * YUHA home — the create screen itself (acceptance UI-01): the slogan, a
+ * one-line explainer, a composer with mood starters, and the fixed 30s /
+ * instrumental note. Visitors can write first and sign in at submit; the
+ * draft survives the round trip. Finished work surfaces beneath.
  */
 export default function Home() {
-  const { me } = useSession();
+  const { me, entitlements, refreshEntitlements } = useSession();
   const player = usePlayer();
+  const navigate = useNavigate();
+  const [prompt, setPrompt] = useState('');
+  const [activeMood, setActiveMood] = useState<string | null>(null);
+  const [feedback, setFeedback] = useState('从一句话开始，也可以选一种心情。');
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [songs, setSongs] = useState<TrackView[] | null>(null);
-  const [failed, setFailed] = useState(false);
+  const [job, setJob] = useState<JobView | null>(null);
+  const idemKey = useRef(newIdempotencyKey());
+  const promptRef = useRef<HTMLTextAreaElement | null>(null);
+
+  const credits = entitlements?.availableUnits ?? me?.creditsAvailable ?? 0;
   const playing = player.status === 'playing';
-  const collageSongs = (songs ?? []).slice(0, 3);
 
   useEffect(() => {
-    apiFetch<{ items: TrackView[] }>('/v1/explore?limit=8&sort=trending')
+    try {
+      setPrompt(localStorage.getItem(DRAFT_KEY) ?? '');
+    } catch {
+      /* ignore */
+    }
+    apiFetch<{ items: TrackView[] }>('/v1/explore?limit=6&sort=trending')
       .then((r) => setSongs(r.items))
-      .catch(() => setFailed(true));
+      .catch(() => setSongs([]));
   }, []);
 
-  return (
-    <div className="stack stack--loose">
-      <section className="hero">
-        <div className="hero__glow" aria-hidden="true" />
-        <WaveField active={playing} className="hero__waves" />
-        <div className="hero__inner hero__grid">
-          <div className="hero__copy">
-            <p className="hero__eyebrow">AI song studio</p>
-            {/* A deliberate two-line lockup: the gradient word owns its line. */}
-            <h1 className="hero__title">
-              Any song you can
-              <em>describe.</em>
-            </h1>
-            <p className="hero__sub">
-              Write an idea, pick a vibe, get a finished song — lyrics sung or instrumental, up to four
-              minutes, yours to publish and download.
-            </p>
-            <div className="hero__cta">
-              <Link className="btn btn--primary btn--lg" to={me ? '/create' : '/auth?next=/create'}>
-                <span className="icon icon--create" aria-hidden="true" />
-                Create a song
-              </Link>
-              <Link className="btn btn--ghost btn--lg" to="/explore">
-                Browse the Market
-              </Link>
-            </div>
-            <div className="hero__stats" aria-label="Product facts">
-              <div>
-                <strong>30s – 4min</strong>
-                <span>song length</span>
-              </div>
-              <div>
-                <strong>Vocals / instrumental</strong>
-                <span>your lyrics or ours</span>
-              </div>
-              <div>
-                <strong>MP3 download</strong>
-                <span>publish to Explore</span>
-              </div>
-            </div>
-          </div>
+  useEffect(() => {
+    try {
+      localStorage.setItem(DRAFT_KEY, prompt);
+    } catch {
+      /* private browsing */
+    }
+  }, [prompt]);
 
-          {/* Real covers from the feed, fanned in 3D — the product showcasing itself. */}
-          <div className="hero__collage" aria-hidden="true">
-            {(collageSongs.length ? collageSongs : [0, 1, 2].map((i) => ({ coverSeed: 1000 + i * 77, title: 'SONARE' }))).map(
-              (song, i) => (
-                <div key={song.coverSeed} className={`hero__card hero__card--${i}`}>
-                  <CoverArt seed={song.coverSeed} title={song.title} size={420} />
-                </div>
-              ),
-            )}
-            <div className="hero__collage-badge">
-              <Eq live={playing} /> {songs?.length ?? 0}+ songs made here
+  const canSubmit = prompt.trim().length > 0 && !submitting;
+
+  const pickMood = (name: string) => {
+    if (prompt.trim() && !Object.values(MOODS).includes(prompt)) {
+      setFeedback(`已保留你的文字；可以手动补充「${name}」的感觉。`);
+      return;
+    }
+    setPrompt(MOODS[name]!);
+    setActiveMood(name);
+    setFeedback('已经放入一个起点，你可以随意修改。');
+  };
+
+  const submit = async () => {
+    if (!canSubmit) return;
+    setSubmitting(true);
+    setError(null);
+    try {
+      if (!me) {
+        const next = encodeURIComponent('/');
+        navigate(`/auth?next=${next}`);
+        return;
+      }
+      const res = await apiFetch<JobView & { deduplicated: boolean }>('/v1/generations', {
+        method: 'POST',
+        idempotencyKey: idemKey.current,
+        body: {
+          mode: 'simple',
+          prompt: prompt.trim(),
+          styles: activeMood ? [activeMood] : [],
+          instrumental: true,
+          energy: 0.5,
+          durationSeconds: 30,
+          visibility: 'private',
+        },
+      });
+      setJob(res);
+      void refreshEntitlements();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : '提交失败，请重试');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  // Poll the job to terminal state, then hand over to the song page.
+  useEffect(() => {
+    if (!job || ['done', 'failed'].includes(job.phase)) {
+      if (job?.phase === 'done' && job.trackId) navigate(`/song/${job.trackId}`, { replace: true });
+      return;
+    }
+    let delay = 2000;
+    const tick = async () => {
+      try {
+        const next = await apiFetch<JobView>(`/v1/jobs/${job.jobId}`);
+        setJob(next);
+      } catch {
+        /* transient poll failure */
+      }
+      if (delay < 10000) delay = Math.min(delay * 1.6, 10000);
+      setTimeout(tick, delay);
+    };
+    const t = setTimeout(tick, delay);
+    return () => clearTimeout(t);
+  }, [job, navigate]);
+
+  const waitSteps = useMemo(
+    () => [
+      { key: 'validating', label: '正在确认这次创作' },
+      { key: 'queued', label: '已加入队列' },
+      { key: 'generating', label: '正在生成你的音乐' },
+      { key: 'done', label: '已完成，可以试听' },
+    ],
+    [],
+  );
+
+  // ---- generation state (real stages only, no fake progress) ----
+  if (job) {
+    const stepIdx = waitSteps.findIndex((s) => s.key === job.phase);
+    return (
+      <div className="wait-page" aria-live="polite">
+        <PetalMark size={100} className="wait-page__mark is-moving" dim={false} title="YUHA" />
+        <h1>你的音乐，正在路上。</h1>
+        <p className="muted">可以离开这个页面，稍后在「我的作品」查看。</p>
+        <ol className="wait-page__steps panel">
+          {waitSteps.map((s, i) => (
+            <li key={s.key} className={i < stepIdx ? 'is-done' : i === stepIdx ? 'is-current' : 'is-future'}>
+              <span className="status-dot" aria-hidden="true" />
+              {s.label}
+              <b>{i < stepIdx ? '已完成' : i === stepIdx ? '进行中' : '待完成'}</b>
+            </li>
+          ))}
+        </ol>
+        {job.phase === 'failed' && (
+          <p className="state-note" role="alert">
+            这次没有完成，额度已按服务端确认退回。你可以修改描述后重试。
+          </p>
+        )}
+        <Link to="/library" className="btn">
+          去我的作品
+        </Link>
+      </div>
+    );
+  }
+
+  return (
+    <div className="stack">
+      <section className="hero">
+        <div className="hero__copy">
+          <p className="eyebrow">A LITTLE FEELING. YOUR OWN SOUND.</p>
+          <h1 className="hero__title">
+            让心动，
+            <br />
+            有回声。
+          </h1>
+          <p className="hero__intro">写下一段心情，做成属于这一刻的音乐。</p>
+
+          <div className="composer panel">
+            <label htmlFor="home-prompt">今天，想听见什么？</label>
+            <textarea
+              id="home-prompt"
+              ref={promptRef}
+              value={prompt}
+              maxLength={400}
+              onChange={(e) => {
+                setPrompt(e.target.value);
+                if (e.target.value !== (activeMood && MOODS[activeMood])) setActiveMood(null);
+              }}
+              placeholder="傍晚的海边，朋友骑车回家。轻快一点，像风穿过衬衫。"
+              aria-describedby="home-prompt-format home-prompt-count"
+            />
+            <div className="composer__meta">
+              <span id="home-prompt-format">30 秒 · 纯音乐 · 仅自己可见</span>
+              <span id="home-prompt-count" className="num">
+                {prompt.length} / 400
+              </span>
             </div>
+
+            <div className="chips" role="group" aria-label="从一种心情开始">
+              {Object.keys(MOODS).map((name) => (
+                <button
+                  key={name}
+                  type="button"
+                  className="chip chip--mood"
+                  aria-pressed={activeMood === name}
+                  onClick={() => pickMood(name)}
+                >
+                  {name}
+                </button>
+              ))}
+            </div>
+
+            <div className="composer__row">
+              <span className="composer__cost">
+                每次生成消耗 1 次额度
+                <br />
+                {me ? `当前可用 ${credits} 次` : '登录后可查看可用次数'}
+              </span>
+              <button type="button" className="btn btn--primary" onClick={submit} disabled={!canSubmit}>
+                {submitting ? '正在提交…' : '生成音乐 · 1 次'}
+                <span aria-hidden="true">↗</span>
+              </button>
+            </div>
+            <p className="composer__feedback" aria-live="polite">
+              {error ?? feedback}
+            </p>
           </div>
         </div>
+
+        <aside className="art-panel" aria-label="品牌意象：一片被风托起的羽花">
+          <div className="art-panel__index" aria-hidden="true">
+            <span>YUHA / 001</span>
+            <span>FEEL SOMETHING.</span>
+          </div>
+          <PetalMark size={380} className="art-panel__petal is-entering" title="一片花瓣。一点风。" />
+          <div className="art-panel__caption">
+            <span className="art-panel__line" aria-hidden="true" />
+            <h2>
+              一片花瓣。
+              <br />
+              一点风。
+            </h2>
+            <p>
+              把没有说出口的，
+              <br />
+              交给下一段旋律。
+            </p>
+          </div>
+        </aside>
       </section>
 
-      <section aria-labelledby="trending-heading">
-        <div className="section-head">
-          <h2 id="trending-heading">
-            <Eq live={playing || (songs !== null && songs.length > 0)} /> Trending now
-          </h2>
-          <Link to="/explore" className="section-head__more">
-            See all
-          </Link>
-        </div>
-        {failed ? (
-          <div className="empty">
-            <p>The feed could not be loaded right now. Please refresh in a moment.</p>
-          </div>
-        ) : songs === null ? (
-          <div className="grid grid--songs" aria-hidden="true">
-            {Array.from({ length: 4 }, (_, i) => (
-              <div key={i} className="skeleton skeleton--card" />
-            ))}
-          </div>
-        ) : songs.length === 0 ? (
-          <div className="empty">
-            <p>Nothing published yet — be the first to share a song.</p>
-            <Link className="btn btn--primary" to={me ? '/create' : '/auth?next=/create'}>
-              Create the first one
+      {songs && songs.length > 0 && (
+        <section aria-labelledby="home-works">
+          <div className="section-head">
+            <h2 id="home-works">
+              <Eq live={playing} /> 此刻的回声
+            </h2>
+            <Link to="/explore" className="section-head__more">
+              逛逛市场 →
             </Link>
           </div>
-        ) : (
-          <div className="grid grid--songs">
+          <div className="masonry">
             {songs.map((song, i) => (
               <SongCard key={song.trackId} song={song} queue={songs} index={i} />
             ))}
           </div>
-        )}
-      </section>
-
-      <section className="how" aria-labelledby="how-heading">
-        <h2 id="how-heading">How it works</h2>
-        <ol className="how__steps">
-          <li>
-            <strong>Describe it.</strong> “A dreamy synthwave night drive with airy vocals” — or paste your own
-            lyrics.
-          </li>
-          <li>
-            <strong>Shape it.</strong> Style tags, energy, length, vocals on or off. One credit generates one song.
-          </li>
-          <li>
-            <strong>Release it.</strong> Listen in the app, download the MP3, publish it to Explore with one tap.
-          </li>
-        </ol>
-      </section>
+        </section>
+      )}
     </div>
   );
 }

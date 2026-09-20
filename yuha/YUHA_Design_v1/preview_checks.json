@@ -1,0 +1,327 @@
+{
+  "browser": "151.0.7922.34",
+  "checks": [
+    {
+      "check": "responsive-layout",
+      "viewport": [
+        1440,
+        900
+      ],
+      "state": "create",
+      "pass": true,
+      "layout": {
+        "width": 1440,
+        "docWidth": 1440,
+        "bad": []
+      }
+    },
+    {
+      "check": "responsive-layout",
+      "viewport": [
+        1440,
+        900
+      ],
+      "state": "processing",
+      "pass": true,
+      "layout": {
+        "width": 1440,
+        "docWidth": 1440,
+        "bad": []
+      }
+    },
+    {
+      "check": "responsive-layout",
+      "viewport": [
+        1440,
+        900
+      ],
+      "state": "result",
+      "pass": true,
+      "layout": {
+        "width": 1440,
+        "docWidth": 1440,
+        "bad": []
+      }
+    },
+    {
+      "check": "responsive-layout",
+      "viewport": [
+        1440,
+        900
+      ],
+      "state": "library",
+      "pass": true,
+      "layout": {
+        "width": 1440,
+        "docWidth": 1440,
+        "bad": []
+      }
+    },
+    {
+      "check": "responsive-layout",
+      "viewport": [
+        1024,
+        768
+      ],
+      "state": "create",
+      "pass": true,
+      "layout": {
+        "width": 1024,
+        "docWidth": 1024,
+        "bad": []
+      }
+    },
+    {
+      "check": "responsive-layout",
+      "viewport": [
+        1024,
+        768
+      ],
+      "state": "processing",
+      "pass": true,
+      "layout": {
+        "width": 1024,
+        "docWidth": 1024,
+        "bad": []
+      }
+    },
+    {
+      "check": "responsive-layout",
+      "viewport": [
+        1024,
+        768
+      ],
+      "state": "result",
+      "pass": true,
+      "layout": {
+        "width": 1024,
+        "docWidth": 1024,
+        "bad": []
+      }
+    },
+    {
+      "check": "responsive-layout",
+      "viewport": [
+        1024,
+        768
+      ],
+      "state": "library",
+      "pass": true,
+      "layout": {
+        "width": 1024,
+        "docWidth": 1024,
+        "bad": []
+      }
+    },
+    {
+      "check": "responsive-layout",
+      "viewport": [
+        768,
+        1024
+      ],
+      "state": "create",
+      "pass": true,
+      "layout": {
+        "width": 768,
+        "docWidth": 768,
+        "bad": []
+      }
+    },
+    {
+      "check": "responsive-layout",
+      "viewport": [
+        768,
+        1024
+      ],
+      "state": "processing",
+      "pass": true,
+      "layout": {
+        "width": 768,
+        "docWidth": 768,
+        "bad": []
+      }
+    },
+    {
+      "check": "responsive-layout",
+      "viewport": [
+        768,
+        1024
+      ],
+      "state": "result",
+      "pass": true,
+      "layout": {
+        "width": 768,
+        "docWidth": 768,
+        "bad": []
+      }
+    },
+    {
+      "check": "responsive-layout",
+      "viewport": [
+        768,
+        1024
+      ],
+      "state": "library",
+      "pass": true,
+      "layout": {
+        "width": 768,
+        "docWidth": 768,
+        "bad": []
+      }
+    },
+    {
+      "check": "responsive-layout",
+      "viewport": [
+        390,
+        844
+      ],
+      "state": "create",
+      "pass": true,
+      "layout": {
+        "width": 390,
+        "docWidth": 390,
+        "bad": []
+      }
+    },
+    {
+      "check": "responsive-layout",
+      "viewport": [
+        390,
+        844
+      ],
+      "state": "processing",
+      "pass": true,
+      "layout": {
+        "width": 390,
+        "docWidth": 390,
+        "bad": []
+      }
+    },
+    {
+      "check": "responsive-layout",
+      "viewport": [
+        390,
+        844
+      ],
+      "state": "result",
+      "pass": true,
+      "layout": {
+        "width": 390,
+        "docWidth": 390,
+        "bad": []
+      }
+    },
+    {
+      "check": "responsive-layout",
+      "viewport": [
+        390,
+        844
+      ],
+      "state": "library",
+      "pass": true,
+      "layout": {
+        "width": 390,
+        "docWidth": 390,
+        "bad": []
+      }
+    },
+    {
+      "check": "responsive-layout",
+      "viewport": [
+        320,
+        740
+      ],
+      "state": "create",
+      "pass": true,
+      "layout": {
+        "width": 320,
+        "docWidth": 320,
+        "bad": []
+      }
+    },
+    {
+      "check": "responsive-layout",
+      "viewport": [
+        320,
+        740
+      ],
+      "state": "processing",
+      "pass": true,
+      "layout": {
+        "width": 320,
+        "docWidth": 320,
+        "bad": []
+      }
+    },
+    {
+      "check": "responsive-layout",
+      "viewport": [
+        320,
+        740
+      ],
+      "state": "result",
+      "pass": true,
+      "layout": {
+        "width": 320,
+        "docWidth": 320,
+        "bad": []
+      }
+    },
+    {
+      "check": "responsive-layout",
+      "viewport": [
+        320,
+        740
+      ],
+      "state": "library",
+      "pass": true,
+      "layout": {
+        "width": 320,
+        "docWidth": 320,
+        "bad": []
+      }
+    },
+    {
+      "check": "empty-submit-disabled",
+      "pass": true
+    },
+    {
+      "check": "mood-fills-prompt",
+      "pass": true
+    },
+    {
+      "check": "typed-prompt-preserved",
+      "pass": true
+    },
+    {
+      "check": "generate-transitions-to-explicit-preview",
+      "pass": true
+    },
+    {
+      "check": "wait-animation-4.8-seconds-maximum",
+      "pass": true,
+      "animation": {
+        "duration": "2.4s",
+        "count": "2",
+        "name": "breathe"
+      }
+    },
+    {
+      "check": "system-reduced-motion-runtime",
+      "pass": true
+    },
+    {
+      "check": "local-reduced-motion",
+      "pass": true
+    },
+    {
+      "check": "no-audio-or-video-elements",
+      "pass": true
+    },
+    {
+      "check": "no-javascript-runtime-errors",
+      "pass": true,
+      "errors": []
+    }
+  ]
+}

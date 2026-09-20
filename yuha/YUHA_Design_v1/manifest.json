@@ -1,0 +1,152 @@
+{
+  "brand": "YUHA",
+  "version": "1.0",
+  "delivered": "2026-09-20",
+  "files": [
+    {
+      "path": "ARTWORK_PROMPT.md",
+      "bytes": 2201,
+      "sha256": "a5e4b51db590ca233952992648f2debd56822792d760edf581d90be4e3c15728"
+    },
+    {
+      "path": "DELIVERY_QA.md",
+      "bytes": 2624,
+      "sha256": "4285be7c3298ab944a5b1808f632177a1c95ccb5860f08326a4933931e7430f6"
+    },
+    {
+      "path": "README.md",
+      "bytes": 2612,
+      "sha256": "abdbb2086fc1491ea684359b56c8e10b0e71c5a39dfa69bfed3a081a7bd2095f"
+    },
+    {
+      "path": "YUHA_Brand_UI_Acceptance.md",
+      "bytes": 26373,
+      "sha256": "f40973d329e71f63a4458750d55ca518e86b70eebbad3c7060a9d238d9e168b4"
+    },
+    {
+      "path": "YUHA_Logo_Board.png",
+      "bytes": 74736,
+      "sha256": "728f82fc785c012ae27f5918e9f7666b1e9bbfb27a220383acaf5f8441f685a4"
+    },
+    {
+      "path": "YUHA_Logo_Board.svg",
+      "bytes": 2650,
+      "sha256": "3e0c9478214514bd79e51708cf6b7d2f4cbb32461c1421ef86b5f4c80608e8f5"
+    },
+    {
+      "path": "YUHA_Preview.html",
+      "bytes": 29313,
+      "sha256": "383980e4c8024e525454795be91d8010ab410df183de03d8efee0b6d9c0aaf4f"
+    },
+    {
+      "path": "assets/yuha-app-icon-192.png",
+      "bytes": 4322,
+      "sha256": "77fda6a4ab3eb4b494babd65ef7213799279ca1a20c0bffe2bf2d4012f68c254"
+    },
+    {
+      "path": "assets/yuha-app-icon-512.png",
+      "bytes": 16021,
+      "sha256": "57fe1342af4e314a15a9919d34a4376a248627bac8d0703fa03f339df9959b5a"
+    },
+    {
+      "path": "assets/yuha-app-icon.svg",
+      "bytes": 421,
+      "sha256": "0bfc6ebceb20870e094b7ca04c3d3ad8d6a3ff06586307e5af4b539e92c6b5f4"
+    },
+    {
+      "path": "assets/yuha-favicon-32.png",
+      "bytes": 677,
+      "sha256": "a378b5fc1ae04df71896258d94241fb87236816538eea8e8416d1208d52294f2"
+    },
+    {
+      "path": "assets/yuha-favicon.svg",
+      "bytes": 376,
+      "sha256": "0913c5e14a5dd7e461f18ea5feed9a2f3746dc1faa0311e82ba2a57084b2a1ca"
+    },
+    {
+      "path": "assets/yuha-logo-mono.svg",
+      "bytes": 716,
+      "sha256": "5ef95059075a5f358f64342bb503f2f820b5b60888ff2216eea945f8212e6dd7"
+    },
+    {
+      "path": "assets/yuha-logo-reverse.svg",
+      "bytes": 713,
+      "sha256": "6f891c9904afcefa67dbd2ad26004cb6380acaff8c20a8eeef55c0607475579c"
+    },
+    {
+      "path": "assets/yuha-logo.png",
+      "bytes": 25945,
+      "sha256": "a743608ef6d7c6a9bc39b9a72339dd8121d089a917b2eb2ee85913e09539c655"
+    },
+    {
+      "path": "assets/yuha-logo.svg",
+      "bytes": 705,
+      "sha256": "f0216dc686a0a29c9239a446fd99dadf37f5962bd8e04fe60aa91b4cfdfbf6c2"
+    },
+    {
+      "path": "assets/yuha-mark-ink.svg",
+      "bytes": 331,
+      "sha256": "dd4bacf393277b598f8298e1815b2bcf7be817e8bcc7c87139e8f2210752cf15"
+    },
+    {
+      "path": "assets/yuha-mark-orange.svg",
+      "bytes": 320,
+      "sha256": "1ce88183a96c0f21413476fe6451ad63be0c870f4e94c8ef7f5c48c00eec6b2b"
+    },
+    {
+      "path": "assets/yuha-mark-white.svg",
+      "bytes": 328,
+      "sha256": "3476c8e7ef0f157bd20884e6da72b8f0abaa401479bbc36e7411d6c9b055aba3"
+    },
+    {
+      "path": "assets/yuha-wordmark.svg",
+      "bytes": 558,
+      "sha256": "c62a1061f738f44b69e03663d6d117ae60cf2f7be4abe4187b01bcb31d82b641"
+    },
+    {
+      "path": "contrast_checks.json",
+      "bytes": 1367,
+      "sha256": "bc4edb40366877b56138010349ae0e8ee2224d585f3719cf4b12a896b227c707"
+    },
+    {
+      "path": "design_tokens.json",
+      "bytes": 1747,
+      "sha256": "f6acbc5c099736affdf98c82d4c8071b1f1f1dc805567643056fe7a73584af39"
+    },
+    {
+      "path": "preview_checks.json",
+      "bytes": 5705,
+      "sha256": "2ee18122c2a656b89135ad7dc798d8471b7917580970bc370e8d19600b57ddc4"
+    },
+    {
+      "path": "previews/YUHA_UI_Desktop.png",
+      "bytes": 116004,
+      "sha256": "4a29ee6bae2d6e3269007e5c23634d32516849e1cd2dfe931b01884bc4ed1332"
+    },
+    {
+      "path": "previews/YUHA_UI_Mobile.png",
+      "bytes": 74502,
+      "sha256": "b3d8f468a5ed6c1235bc165e2da702bbaa147456fb6e339dd12163b9fb02ed67"
+    },
+    {
+      "path": "previews/ui-1440-library.png",
+      "bytes": 73144,
+      "sha256": "4ca18a588bdcbdfbbf691ad6b067af90ef1ea4ed54ff1e7e1cc92dbdab565990"
+    },
+    {
+      "path": "previews/ui-1440-result.png",
+      "bytes": 77840,
+      "sha256": "bfacaab51ff117ede0ecb7480c1bdc6bb95ebb7e1c50e44ba507170ecfc18107"
+    },
+    {
+      "path": "previews/ui-390-result.png",
+      "bytes": 64932,
+      "sha256": "294f3c9d15f7156553dc0fbf555ea4b3e94e3686f4060478f155386fe0bbaeb8"
+    },
+    {
+      "path": "tokens.css",
+      "bytes": 1099,
+      "sha256": "89658c2bcece0eb21a0b0a77ae78fe09bf5fb71bfc8edba84180380e3da346b6"
+    }
+  ]
+}
