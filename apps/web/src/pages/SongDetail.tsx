@@ -63,7 +63,7 @@ export default function SongDetail() {
     return (
       <div className="stack">
         <ErrorNotice error={error} />
-        <Link to="/explore" className="btn">
+        <Link to="/library" className="btn">
           {t('song.backMarket')}
         </Link>
       </div>

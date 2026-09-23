@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import QRCode from 'qrcode';
 import { Link } from 'react-router-dom';
 import { apiFetch } from '../lib/api';
+import { useI18n } from '../lib/i18n';
 import { formatJst, useSession } from '../lib/session';
 import { ErrorNotice } from '../components/common';
 
@@ -21,6 +22,7 @@ interface DeletionReceipt {
  * valid code, so nobody can switch it off from a stolen unlocked tab alone.
  */
 export default function Account() {
+  const { t } = useI18n();
   const { me, refreshMe } = useSession();
   const [error, setError] = useState<unknown>(null);
   const [savingMarketing, setSavingMarketing] = useState(false);
@@ -192,7 +194,7 @@ export default function Account() {
                 placeholder="123456"
                 value={mfaCode}
                 onChange={(e) => setMfaCode(e.target.value.replace(/\D/g, ''))}
-                aria-label="Authenticator code"
+                aria-label={t('a11y.totpCode')}
                 style={{ maxWidth: 140, letterSpacing: '0.2em', fontSize: 18, textAlign: 'center' }}
               />
               <button type="button" className="btn btn--primary" onClick={confirmEnrollment} disabled={mfaBusy || mfaCode.length !== 6}>

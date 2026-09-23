@@ -102,7 +102,6 @@ export default function Pricing() {
               <ul className="plan__bullets">
                 <li>2 welcome credits</li>
                 <li>Full studio, all lengths</li>
-                <li>Publish to Explore</li>
               </ul>
               {me ? (
                 <span className="plan__current">Included with your account</span>

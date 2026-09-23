@@ -3,7 +3,8 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-    <meta name="color-scheme" content="light" />
+    <meta name="color-scheme" content="dark" />
+    <meta name="theme-color" content="#08090d" />
     <title>YUHA — 让心动，有回声。</title>
     <meta
       name="description"
@@ -18,9 +19,17 @@
     <link rel="icon" type="image/svg+xml" href="/brand/yuha-favicon.svg" />
     <link rel="icon" type="image/png" sizes="32x32" href="/brand/yuha-favicon-32.png" />
     <!--
-      Type system per YUHA_Brand_UI_Acceptance §3.1: system sans stacks with
-      CJK fallbacks; the brand wordmark is SVG, never text.
+      Type: M PLUS 2 carries Latin and Japanese; Chinese falls through to the
+      platform faces in --font. Google Fonts subsets by unicode-range, so the
+      CJK payload only ships for the glyphs a page actually uses.
+      The brand wordmark stays SVG, never text.
     -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=M+PLUS+2:wght@300;400;500;700&display=swap"
+    />
   </head>
   <body>
     <div id="root"></div>

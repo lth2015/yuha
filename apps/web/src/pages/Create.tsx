@@ -2,11 +2,13 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import {
   LYRICS_MAX_CODEPOINTS,
+  MAX_STYLE_TAGS,
   PROMPT_MAX_CODEPOINTS,
   type JobView,
   type TrackView,
 } from '@loopscene/contracts';
 import { ApiError, apiFetch, newIdempotencyKey } from '../lib/api';
+import { useI18n } from '../lib/i18n';
 import { useSession } from '../lib/session';
 import { ErrorNotice } from '../components/common';
 
@@ -59,13 +61,14 @@ const DURATIONS: Array<{ value: Draft['durationSeconds']; label: string }> = [
   { value: 240, label: '4:00' },
 ];
 
-const PHASE_STEPS: Array<{ key: JobView['phase']; label: string }> = [
-  { key: 'validating', label: 'Validating' },
-  { key: 'queued', label: 'Queued' },
-  { key: 'generating', label: 'Generating' },
-  { key: 'processing', label: 'Processing' },
-  { key: 'verifying', label: 'Verifying' },
-  { key: 'done', label: 'Done' },
+/** Phase order for the progress rail; the label comes from the dictionary. */
+const PHASE_STEPS: Array<JobView['phase']> = [
+  'validating',
+  'queued',
+  'generating',
+  'processing',
+  'verifying',
+  'done',
 ];
 
 function countCodePoints(s: string): number {
@@ -82,6 +85,7 @@ function countCodePoints(s: string): number {
  */
 export default function Create() {
   const navigate = useNavigate();
+  const { t } = useI18n();
   const [params] = useSearchParams();
   const editTrackId = params.get('edit');
   const { me, entitlements, refreshEntitlements, runtime } = useSession();
@@ -238,22 +242,22 @@ export default function Create() {
   // ------------------------------------------------------------------ states
 
   if (job) {
-    const stepIdx = PHASE_STEPS.findIndex((s) => s.key === job.phase);
+    const stepIdx = PHASE_STEPS.indexOf(job.phase);
     return (
       <div className="studio stack stack--loose">
-        <h1>{job.title ?? 'Your song'}</h1>
+        <h1>{job.title ?? t('create.defaultTitle')}</h1>
         <div className={`progress-card panel${job.phase === 'failed' ? ' progress-card--failed' : ''}`}>
           {job.phase === 'failed' ? (
             <>
-              <h2>Generation failed</h2>
+              <h2>{t('create.job.failed')}</h2>
               <p className="small">
                 {job.errorCode === 'upstream_rejected'
-                  ? 'The model declined this request. No credit was used — try rephrasing.'
-                  : 'A technical problem interrupted this song. Your credit was returned automatically.'}
+                  ? t('create.job.failedUpstream')
+                  : t('create.job.failedTech')}
               </p>
               <div className="progress-card__actions">
                 <button type="button" className="btn btn--primary" onClick={startAnother}>
-                  Start another
+                  {t('create.job.startAnother')}
                 </button>
               </div>
             </>
@@ -262,31 +266,38 @@ export default function Create() {
               <div className="progress-card__head">
                 <div className="spinner" aria-hidden="true" />
                 <div>
-                  <h2>{PHASE_STEPS[Math.max(stepIdx, 0)]?.label ?? 'Working'}…</h2>
+                  <h2>{t(`create.phase.${PHASE_STEPS[Math.max(stepIdx, 0)] ?? 'working'}`)}…</h2>
                   <p className="small muted">
                     {job.estimate.delayed
-                      ? 'This is taking longer than usual — it is still running. You can leave this page; the song will be in your Library.'
-                      : `Usually ready in ${job.estimate.minSeconds}–${job.estimate.maxSeconds}s. You can leave this page — the song will be in your Library.`}
+                      ? t('create.job.delayed')
+                      : t('create.job.eta', {
+                          min: job.estimate.minSeconds,
+                          max: job.estimate.maxSeconds,
+                        })}
                   </p>
                 </div>
               </div>
               <ol className="progress-steps" aria-live="polite">
-                {PHASE_STEPS.filter((s) => s.key !== 'failed').map((s, i) => (
+                {PHASE_STEPS.map((phase, i) => (
                   <li
-                    key={s.key}
+                    key={phase}
                     className={i < stepIdx ? 'is-done' : i === stepIdx ? 'is-current' : ''}
                     aria-current={i === stepIdx ? 'step' : undefined}
                   >
-                    {s.label}
+                    {t(`create.phase.${phase}`)}
                   </li>
                 ))}
               </ol>
               {result && result.previewUrl && (
                 <div className="progress-card__done">
                   <p className="small">
-                    ✅ Done — <Link to={`/song/${result.trackId}`}>open “{result.title}”</Link>, or{' '}
+                    <span className="icon icon--check" aria-hidden="true" /> {t('create.job.doneOpen')}{' '}
+                    <Link to={`/song/${result.trackId}`}>
+                      {t('create.job.open', { title: result.title })}
+                    </Link>
+                    {t('create.job.or')}{' '}
                     <button type="button" className="linklike" onClick={startAnother}>
-                      start another
+                      {t('create.job.startAnother')}
                     </button>
                     .
                   </p>
@@ -296,9 +307,9 @@ export default function Create() {
           )}
         </div>
         <p className="small muted">
-          Job {job.jobId.slice(0, 8)} · {job.durationSeconds}s ·{' '}
-          {job.instrumental ? 'instrumental' : 'with vocals'}
-          {runtime?.demo ? ' · demo audio (synthesised)' : ''}
+          {job.jobId.slice(0, 8)} · {job.durationSeconds}s ·{' '}
+          {job.instrumental ? t('create.vocals.instrumental') : t('composer.vocals')}
+          {runtime?.demo ? ` · ${t('create.job.demoAudio')}` : ''}
         </p>
       </div>
     );
@@ -311,27 +322,26 @@ export default function Create() {
       {editSource && (
         <div className="studio__edit" role="status">
           <div className="studio__edit-icon" aria-hidden="true">
-            ✎
+            <span className="icon icon--edit" />
           </div>
           <div>
-            <strong>Editing “{editSource.title}”</strong>
+            <strong>{t('create.edit.banner', { title: editSource.title })}</strong>
             <p className="small muted" style={{ margin: 0 }}>
-              Describe what to change — the AI editor rewrites the song and generates a new take. Costs 1
-              credit; the original stays untouched in your Library.
+              {t('create.edit.hint')}
             </p>
           </div>
         </div>
       )}
       <div className="studio__head">
-        <h1>{editSource ? 'Edit song' : 'Create'}</h1>
+        <h1>{editSource ? t('create.h1.edit') : t('create.h1')}</h1>
         <div className="studio__balance" aria-live="polite">
           <span className="credit-pill">
             <span className="icon icon--note" aria-hidden="true" />
-            {credits} credit{credits === 1 ? '' : 's'}
+            {t('create.credits', { n: credits })}
           </span>
           {credits < 1 && (
             <Link to="/pricing" className="btn btn--primary btn--sm">
-              Get credits
+              {t('create.getCredits')}
             </Link>
           )}
         </div>
@@ -343,18 +353,18 @@ export default function Create() {
         <div className="panel studio__form stack">
           {editSource && (
             <div>
-              <label htmlFor="instructions">What should change?</label>
+              <label htmlFor="instructions">{t('create.edit.label')}</label>
               <textarea
                 id="instructions"
                 rows={3}
                 value={instructions}
                 onChange={(e) => setInstructions(e.target.value)}
-                placeholder="e.g. rewrite the chorus about a Tokyo summer, make the bridge dreamier, brighter synths"
+                placeholder={t('create.edit.placeholder')}
                 required
               />
             </div>
           )}
-          <div className="seg seg--wide" role="tablist" aria-label="Creation mode">
+          <div className="seg seg--wide" role="tablist" aria-label={t('create.mode')}>
             <button
               type="button"
               role="tab"
@@ -362,7 +372,7 @@ export default function Create() {
               className={`seg__btn${draft.mode === 'simple' ? ' is-active' : ''}`}
               onClick={() => patch({ mode: 'simple' })}
             >
-              Simple
+              {t('create.mode.simple')}
             </button>
             <button
               type="button"
@@ -371,31 +381,29 @@ export default function Create() {
               className={`seg__btn${draft.mode === 'custom' ? ' is-active' : ''}`}
               onClick={() => patch({ mode: 'custom' })}
             >
-              Custom
+              {t('create.mode.custom')}
             </button>
           </div>
           <p className="small muted" style={{ marginTop: 0 }}>
-            {draft.mode === 'simple'
-              ? 'Describe the song; the studio handles the rest.'
-              : 'Your lyrics, your style tags — full control.'}
+            {draft.mode === 'simple' ? t('create.mode.simpleHint') : t('create.mode.customHint')}
           </p>
 
           {draft.mode === 'custom' && (
             <div>
-              <label htmlFor="title">Title (optional)</label>
+              <label htmlFor="title">{t('create.title')}</label>
               <input
                 id="title"
                 value={draft.title}
                 maxLength={120}
                 onChange={(e) => patch({ title: e.target.value })}
-                placeholder="Untitled songs still get named automatically"
+                placeholder={t('create.title.placeholder')}
               />
             </div>
           )}
 
           <div>
             <label htmlFor="prompt">
-              {draft.mode === 'simple' ? 'Describe your song' : 'Description (optional)'}
+              {draft.mode === 'simple' ? t('create.prompt.simple') : t('create.prompt.custom')}
             </label>
             <textarea
               id="prompt"
@@ -404,8 +412,8 @@ export default function Create() {
               onChange={(e) => patch({ prompt: e.target.value })}
               placeholder={
                 draft.mode === 'simple'
-                  ? 'A dreamy synthwave night drive, airy female vocals, wistful but hopeful'
-                  : 'Slow build, warm analog feel, saxophone outro'
+                  ? t('create.prompt.placeholderSimple')
+                  : t('create.prompt.placeholderCustom')
               }
               aria-describedby="prompt-count"
             />
@@ -416,7 +424,10 @@ export default function Create() {
 
           {draft.mode === 'custom' && (
             <div>
-              <label htmlFor="lyrics">Lyrics {draft.instrumental && <span className="muted">(unused while instrumental)</span>}</label>
+              <label htmlFor="lyrics">
+                {t('create.lyrics')}{' '}
+                {draft.instrumental && <span className="muted">{t('create.lyrics.unused')}</span>}
+              </label>
               <textarea
                 id="lyrics"
                 rows={7}
@@ -433,7 +444,7 @@ export default function Create() {
           )}
 
           <div>
-            <label id="styles-label">Styles (up to 6)</label>
+            <label id="styles-label">{t('create.styles', { n: MAX_STYLE_TAGS })}</label>
             <div className="chips" role="group" aria-labelledby="styles-label">
               {STYLE_PRESETS.map((s) => (
                 <button
@@ -451,7 +462,7 @@ export default function Create() {
 
           <div className="studio__row">
             <div>
-              <label id="dur-label">Length</label>
+              <label id="dur-label">{t('create.length')}</label>
               <div className="chips" role="group" aria-labelledby="dur-label">
                 {DURATIONS.map((d) => (
                   <button
@@ -468,15 +479,15 @@ export default function Create() {
             </div>
 
             <div>
-              <label htmlFor="instrumental">Vocals</label>
-              <div className="seg" role="group" aria-label="Vocals">
+              <label htmlFor="instrumental">{t('create.vocals')}</label>
+              <div className="seg" role="group" aria-label={t('create.vocals')}>
                 <button
                   type="button"
                   className={`seg__btn${draft.instrumental ? ' is-active' : ''}`}
                   aria-pressed={draft.instrumental}
                   onClick={() => patch({ instrumental: true })}
                 >
-                  Instrumental
+                  {t('create.vocals.instrumental')}
                 </button>
                 <button
                   type="button"
@@ -484,7 +495,7 @@ export default function Create() {
                   aria-pressed={!draft.instrumental}
                   onClick={() => patch({ instrumental: false })}
                 >
-                  Sing lyrics
+                  {t('create.vocals.sing')}
                 </button>
               </div>
             </div>
@@ -492,7 +503,7 @@ export default function Create() {
 
           <div>
             <label htmlFor="energy">
-              Energy <span className="muted">({Math.round(draft.energy * 100)}%)</span>
+              {t('create.energy')} <span className="muted">({Math.round(draft.energy * 100)}%)</span>
             </label>
             <input
               id="energy"
@@ -512,45 +523,56 @@ export default function Create() {
               checked={draft.visibility === 'public'}
               onChange={(e) => patch({ visibility: e.target.checked ? 'public' : 'private' })}
             />
-            <label htmlFor="visibility">Publish to Explore when finished (you can change this anytime)</label>
+            <label htmlFor="visibility">{t('create.visibility')}</label>
           </div>
         </div>
 
         <aside className="panel studio__aside stack">
-          <h2 className="studio__aside-title">This generation</h2>
+          <h2 className="studio__aside-title">{t('create.aside.h2')}</h2>
           <dl className="studio__facts">
             <div>
-              <dt>Cost</dt>
-              <dd>1 credit</dd>
+              <dt>{t('create.aside.cost')}</dt>
+              <dd>{t('create.aside.costValue')}</dd>
             </div>
             <div>
-              <dt>Balance after</dt>
-              <dd>{Math.max(credits - 1, 0)} credits</dd>
+              <dt>{t('create.aside.balance')}</dt>
+              <dd>{t('create.aside.balanceValue', { n: Math.max(credits - 1, 0) })}</dd>
             </div>
             <div>
-              <dt>Length</dt>
+              <dt>{t('create.length')}</dt>
               <dd>{DURATIONS.find((d) => d.value === draft.durationSeconds)?.label}</dd>
             </div>
             <div>
-              <dt>Vocals</dt>
-              <dd>{draft.instrumental ? 'Instrumental' : draft.lyrics.trim() ? 'Your lyrics' : 'AI lyrics'}</dd>
+              <dt>{t('create.vocals')}</dt>
+              <dd>
+                {draft.instrumental
+                  ? t('create.vocals.instrumental')
+                  : draft.lyrics.trim()
+                    ? t('create.aside.vocalsYours')
+                    : t('create.aside.vocalsAi')}
+              </dd>
             </div>
             <div>
-              <dt>Visibility</dt>
-              <dd>{draft.visibility === 'public' ? 'Public on Explore' : 'Private'}</dd>
+              <dt>{t('create.aside.visibility')}</dt>
+              <dd>
+                {draft.visibility === 'public'
+                  ? t('create.aside.linkOpen')
+                  : t('create.aside.private')}
+              </dd>
             </div>
           </dl>
           <button type="submit" className="btn btn--primary btn--lg btn--block" disabled={!canSubmit}>
-            {submitting ? 'Submitting…' : 'Create song · 1 credit'}
+            {submitting ? t('create.submitting') : t('create.submit')}
           </button>
           {credits < 1 && (
             <p className="small">
-              Out of credits —{' '}
-              <Link to="/pricing">pick a plan</Link> (the Starter Pack is one-time, no subscription).
+              {t('create.outOfCredits')}{' '}
+              <Link to="/pricing">{t('create.pickPlan')}</Link>
+              {t('create.pickPlanTail')}
             </p>
           )}
           <p className="small muted">
-            A failed generation never costs a credit. Nothing is shared publicly unless you choose to publish.
+            {t('create.guarantee')}
           </p>
         </aside>
       </form>

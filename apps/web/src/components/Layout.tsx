@@ -6,6 +6,7 @@ import { usePlayer } from '../lib/player';
 import { useI18n } from '../lib/i18n';
 import { useSession } from '../lib/session';
 import { BrandLogo, PetalMark } from './Brand';
+import { LightField } from './LightField';
 import { LANGS } from '../lib/i18n';
 import { NowPlaying } from './NowPlaying';
 import { PlayerBar } from './PlayerBar';
@@ -101,7 +102,9 @@ export function Layout({ children }: { children: ReactNode }) {
   }, [nowPlaying]);
 
   return (
-    <div className="app">
+    <>
+      <LightField />
+      <div className="app">
       <a className="skip-link" href="#main">
         {t('nav.skip')}
       </a>
@@ -116,7 +119,6 @@ export function Layout({ children }: { children: ReactNode }) {
             {[
               { to: '/', key: 'nav.create', end: true },
               { to: '/library', key: 'nav.library', end: false },
-              { to: '/explore', key: 'nav.market', end: false },
             ].map((item) => (
               <NavLink
                 key={item.to}
@@ -130,7 +132,7 @@ export function Layout({ children }: { children: ReactNode }) {
           </nav>
 
           <div className="topnav__account">
-            <div className="lang-switch" role="group" aria-label="Language">
+            <div className="lang-switch" role="group" aria-label={t('a11y.lang')}>
               {LANGS.map((l) => (
                 <button
                   key={l.code}
@@ -221,7 +223,6 @@ export function Layout({ children }: { children: ReactNode }) {
         {[
           { to: '/', key: 'nav.create', end: true },
           { to: '/library', key: 'nav.library', end: false },
-          { to: '/explore', key: 'nav.market', end: false },
         ].map((item) => (
           <NavLink
             key={item.to}
@@ -259,6 +260,7 @@ export function Layout({ children }: { children: ReactNode }) {
           <PetalMark size={26} shadow={false} rotate={-12} title="YUHA" />
         </span>
       )}
-    </div>
+      </div>
+    </>
   );
 }

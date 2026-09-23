@@ -46,7 +46,7 @@ export function PlayerBar({ onExpand }: { onExpand?: () => void }) {
               type="button"
               className="btn-icon"
               onClick={player.prev}
-              aria-label="Previous song"
+              aria-label={t('a11y.prev')}
               disabled={player.queue.length === 0}
             >
               <span className="icon icon--prev" aria-hidden="true" />
@@ -66,7 +66,7 @@ export function PlayerBar({ onExpand }: { onExpand?: () => void }) {
               type="button"
               className="btn-icon"
               onClick={player.next}
-              aria-label="Next song"
+              aria-label={t('a11y.next')}
               disabled={player.queue.length === 0}
             >
               <span className="icon icon--next" aria-hidden="true" />

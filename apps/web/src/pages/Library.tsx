@@ -72,11 +72,11 @@ export default function Library() {
     }
   };
 
-  const filters: Array<{ label: string; value: Filter }> = [
-    { label: 'All', value: 'all' },
-    { label: 'Finished', value: 'deliverable' },
-    { label: 'Generating', value: 'processing' },
-    { label: 'Paused', value: 'suspended' },
+  const filters: Array<{ key: string; value: Filter }> = [
+    { key: 'lib.all', value: 'all' },
+    { key: 'lib.finished', value: 'deliverable' },
+    { key: 'lib.generating', value: 'processing' },
+    { key: 'lib.paused', value: 'suspended' },
   ];
 
   return (
@@ -124,7 +124,7 @@ export default function Library() {
       )}
 
       <div className="explore-controls">
-        <div className="chips" role="group" aria-label="Filter">
+        <div className="chips" role="group" aria-label={t('lib.filter')}>
           {filters.map((f) => (
             <button
               key={f.value}
@@ -133,7 +133,7 @@ export default function Library() {
               aria-pressed={filter === f.value}
               onClick={() => setFilter(f.value)}
             >
-              {f.label}
+              {t(f.key)}
             </button>
           ))}
         </div>

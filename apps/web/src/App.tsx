@@ -11,7 +11,6 @@ import Auth from './pages/Auth';
 import Billing from './pages/Billing';
 import { CheckoutComplete, CheckoutConfirm, CheckoutSimulate } from './pages/Checkout';
 import Create from './pages/Create';
-import Explore from './pages/Explore';
 import Export from './pages/Export';
 import GoogleCallback from './pages/GoogleCallback';
 import MfaChallenge from './pages/MfaChallenge';
@@ -56,7 +55,6 @@ export default function App() {
               <Route path="/auth" element={<Auth />} />
               <Route path="/auth/google/callback" element={<GoogleCallback />} />
               <Route path="/auth/mfa" element={<MfaChallenge />} />
-              <Route path="/explore" element={<Explore />} />
               <Route path="/song/:id" element={<SongDetail />} />
               <Route path="/pricing" element={<Pricing />} />
 
@@ -165,7 +163,7 @@ export default function App() {
                 element={
                   <div className="empty">
                     <h2>Page not found</h2>
-                    <p>Check the URL, or head back to Explore.</p>
+                    <p>Check the URL, or head back to Create.</p>
                   </div>
                 }
               />

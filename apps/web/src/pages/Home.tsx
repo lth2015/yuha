@@ -1,41 +1,44 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import type { JobView, TrackView } from '@loopscene/contracts';
+import type { JobView } from '@loopscene/contracts';
 import { apiFetch, newIdempotencyKey } from '../lib/api';
-import { usePlayer } from '../lib/player';
 import { useI18n } from '../lib/i18n';
 import { useSession } from '../lib/session';
 import { PetalMark } from '../components/Brand';
-import { Eq } from '../components/Eq';
-import { SongCard } from '../components/SongCard';
 
 const DRAFT_KEY = 'yuha.home-draft';
 
 const MOOD_KEYS = ['city', 'sunset', 'rain', 'night'] as const;
 
+/** The simple path commits to one shape: a full song, two minutes, private.
+    Everything else lives in the studio at /create. */
+const SIMPLE_DURATION_SECONDS = 120;
+
 /**
- * YUHA home — the create screen itself (acceptance UI-01): the slogan, a
- * one-line explainer, a composer with mood starters, and the fixed 30s /
- * instrumental note. Visitors can write first and sign in at submit; the
- * draft survives the round trip. Finished work surfaces beneath.
+ * YUHA home — the create screen itself: the slogan, a one-line explainer and
+ * a composer with mood starters. It makes exactly one decision available
+ * beyond the description — vocals or instrumental — because that is the only
+ * choice that changes what the listener gets. Length, style tags, lyrics and
+ * visibility live in the studio at /create.
+ *
+ * Visitors can write first and sign in at submit; the draft survives the
+ * round trip.
  */
 export default function Home() {
   const { t } = useI18n();
   const { me, entitlements, refreshEntitlements } = useSession();
-  const player = usePlayer();
   const navigate = useNavigate();
   const [prompt, setPrompt] = useState('');
   const [activeMood, setActiveMood] = useState<string | null>(null);
+  const [instrumental, setInstrumental] = useState(false);
   const [feedbackKey, setFeedbackKey] = useState<{ key: string; params?: Record<string, string | number> } | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [songs, setSongs] = useState<TrackView[] | null>(null);
   const [job, setJob] = useState<JobView | null>(null);
   const idemKey = useRef(newIdempotencyKey());
   const promptRef = useRef<HTMLTextAreaElement | null>(null);
 
   const credits = entitlements?.availableUnits ?? me?.creditsAvailable ?? 0;
-  const playing = player.status === 'playing';
 
   useEffect(() => {
     try {
@@ -43,9 +46,6 @@ export default function Home() {
     } catch {
       /* ignore */
     }
-    apiFetch<{ items: TrackView[] }>('/v1/explore?limit=6&sort=trending')
-      .then((r) => setSongs(r.items))
-      .catch(() => setSongs([]));
   }, []);
 
   useEffect(() => {
@@ -86,9 +86,9 @@ export default function Home() {
           mode: 'simple',
           prompt: prompt.trim(),
           styles: activeMood ? [t(`mood.${activeMood}`)] : [],
-          instrumental: true,
+          instrumental,
           energy: 0.5,
-          durationSeconds: 30,
+          durationSeconds: SIMPLE_DURATION_SECONDS,
           visibility: 'private',
         },
       });
@@ -188,7 +188,11 @@ export default function Home() {
               aria-describedby="home-prompt-format home-prompt-count"
             />
             <div className="composer__meta">
-              <span id="home-prompt-format">{t('composer.format')}</span>
+              <span id="home-prompt-format">
+                {t('composer.format', {
+                  mode: instrumental ? t('composer.instrumental') : t('composer.vocals'),
+                })}
+              </span>
               <span id="home-prompt-count" className="num">
                 {prompt.length} / 400
               </span>
@@ -208,6 +212,30 @@ export default function Home() {
               ))}
             </div>
 
+            <div className="composer__vocal">
+              <div className="seg" role="group" aria-label={t('composer.vocalMode')}>
+                <button
+                  type="button"
+                  className={`seg__btn${!instrumental ? ' is-active' : ''}`}
+                  aria-pressed={!instrumental}
+                  onClick={() => setInstrumental(false)}
+                >
+                  {t('composer.vocals')}
+                </button>
+                <button
+                  type="button"
+                  className={`seg__btn${instrumental ? ' is-active' : ''}`}
+                  aria-pressed={instrumental}
+                  onClick={() => setInstrumental(true)}
+                >
+                  {t('composer.instrumental')}
+                </button>
+              </div>
+              <Link to="/create" className="composer__advanced">
+                {t('composer.advanced')}
+              </Link>
+            </div>
+
             <div className="composer__row">
               <span className="composer__cost">
                 {t('composer.cost')}
@@ -220,7 +248,12 @@ export default function Home() {
               </button>
             </div>
             <p className="composer__feedback" aria-live="polite">
-              {error ?? (feedbackKey ? t(feedbackKey.key, feedbackKey.params) : t('composer.feedback'))}
+              {error ??
+                (feedbackKey
+                  ? t(feedbackKey.key, feedbackKey.params)
+                  : instrumental
+                    ? t('composer.instrumentalHint')
+                    : t('composer.vocalsHint'))}
             </p>
           </div>
         </div>
@@ -246,24 +279,6 @@ export default function Home() {
           </div>
         </aside>
       </section>
-
-      {songs && songs.length > 0 && (
-        <section aria-labelledby="home-works">
-          <div className="section-head">
-            <h2 id="home-works">
-              <Eq live={playing} /> {t('home.echoes')}
-            </h2>
-            <Link to="/explore" className="section-head__more">
-              {t('home.toMarket')}
-            </Link>
-          </div>
-          <div className="masonry">
-            {songs.map((song, i) => (
-              <SongCard key={song.trackId} song={song} queue={songs} index={i} />
-            ))}
-          </div>
-        </section>
-      )}
     </div>
   );
 }
