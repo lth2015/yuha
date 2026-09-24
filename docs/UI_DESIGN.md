@@ -1,13 +1,28 @@
-# UI design direction
+# UI design direction (superseded)
+
+> **This document no longer describes the product.** It is kept as the record
+> of the LOOPSCENE-era design — a light petal palette and a 30-second
+> instrumental product — both of which have been replaced. Do not implement
+> from it.
+>
+> What is current, in `apps/web`:
+>
+> - A dark studio palette with a coloured light field behind glass surfaces
+>   (`styles.css`, `components/LightField.tsx`).
+> - The score: a description read as music, which is also every song's sleeve,
+>   the recording screen and the song page's transport (`lib/score.ts`,
+>   `components/Score.tsx`).
+> - Full songs, 30 seconds to four minutes, sung or instrumental — not a fixed
+>   30-second instrumental.
+>
+> The scope decisions that drove those changes are recorded in `CLAUDE.md`.
 
 Design system for LOOPSCENE, revised after a competitive review of **Suno**
 (<https://suno.com/home>, reviewed 2026-09-10 at 1440px and 390px).
 
-This document is the implementation reference for `apps/web`. It sits **under**
-`PROJECT_TASK.md` §5 and §13 of the design doc, which fix the palette, the
-spacing baseline and the accessibility bar. Where this document proposes a
-change, it says explicitly whether that change is inside or outside the
-spec-locked constraints.
+This document was the implementation reference for `apps/web`. It sat **under**
+`PROJECT_TASK.md` §5 and §13 of the design doc, which fixed the palette, the
+spacing baseline and the accessibility bar.
 
 ---
 

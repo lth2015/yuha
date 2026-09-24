@@ -74,6 +74,10 @@ export const createCheckoutResponse = z.object({
 export const orderView = z.object({
   orderId: z.string().uuid(),
   priceKey: z.string(),
+  /** The catalogue's name at purchase time — a receipt must not be rewritten
+   * by a later rename or reprice. Null for orders whose catalogue row is gone. */
+  displayName: z.string().nullable(),
+ 
   priceVersion: z.number().int(),
   kind: OrderKind,
   amountMinor: z.number().int(),

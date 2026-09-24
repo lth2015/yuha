@@ -32,10 +32,10 @@ export interface CostSummary {
   windowEnd: string;
   deliveredCount: number;
   /** Cost recorded against real, invoiceable provider calls. */
-  actualCostJpy: number;
+  actualCostMinor: number;
   /** Cost from modelled/demo events. Never added to the actual figure. */
-  estimatedCostJpy: number;
-  billableFailureCostJpy: number;
+  estimatedCostMinor: number;
+  billableFailureCostMinor: number;
   costPerDelivery: Measured<number>;
   /**
    * "Adopted result" means the creator exported and reported using the track.
@@ -88,9 +88,9 @@ export async function costSummary(windowDays = 30): Promise<CostSummary> {
     windowStart: new Date(Date.now() - windowDays * 86400_000).toISOString(),
     windowEnd: new Date().toISOString(),
     deliveredCount: delivered,
-    actualCostJpy: actual,
-    estimatedCostJpy: estimated,
-    billableFailureCostJpy: num(row?.['billable_failures']),
+    actualCostMinor: actual,
+    estimatedCostMinor: estimated,
+    billableFailureCostMinor: num(row?.['billable_failures']),
     costPerDelivery: measured(delivered > 0 ? total / delivered : null, delivered, 'no deliveries in window'),
     costPerAdoptedResult: measured(
       adoptedCount > 0 ? total / adoptedCount : null,
@@ -103,10 +103,10 @@ export async function costSummary(windowDays = 30): Promise<CostSummary> {
 }
 
 export interface RevenueSummary {
-  grossJpy: number;
-  refundedJpy: number;
-  paymentFeeJpy: number;
-  netJpy: number;
+  grossMinor: number;
+  refundedMinor: number;
+  paymentFeeMinor: number;
+  netMinor: number;
   paidOrderCount: number;
   refundCount: number;
   disputeCount: number;
@@ -118,15 +118,15 @@ export async function revenueSummary(windowDays = 30): Promise<RevenueSummary> {
   const d = windowDays;
   const row = await queryOne<Record<string, unknown>>(
     `SELECT
-       COALESCE((SELECT SUM(amount_jpy) FROM payments
+       COALESCE((SELECT SUM(amount_minor) FROM payments
                   WHERE kind = 'payment'
                     AND occurred_at >= DATE_SUB(UTC_TIMESTAMP(3), INTERVAL ? DAY)), 0) AS gross,
-       COALESCE((SELECT SUM(amount_jpy) FROM payments
+       COALESCE((SELECT SUM(amount_minor) FROM payments
                   WHERE kind = 'refund'
                     AND occurred_at >= DATE_SUB(UTC_TIMESTAMP(3), INTERVAL ? DAY)), 0) AS refunded,
-       COALESCE((SELECT SUM(fee_jpy) FROM payments
+       COALESCE((SELECT SUM(fee_minor) FROM payments
                   WHERE occurred_at >= DATE_SUB(UTC_TIMESTAMP(3), INTERVAL ? DAY)), 0) AS fees,
-       COALESCE((SELECT SUM(net_jpy) FROM payments
+       COALESCE((SELECT SUM(net_minor) FROM payments
                   WHERE occurred_at >= DATE_SUB(UTC_TIMESTAMP(3), INTERVAL ? DAY)), 0) AS net,
        (SELECT COUNT(*) FROM orders
          WHERE status = 'paid'
@@ -142,10 +142,10 @@ export async function revenueSummary(windowDays = 30): Promise<RevenueSummary> {
     [d, d, d, d, d, d, d],
   );
   return {
-    grossJpy: num(row?.['gross']),
-    refundedJpy: num(row?.['refunded']),
-    paymentFeeJpy: num(row?.['fees']),
-    netJpy: num(row?.['net']),
+    grossMinor: num(row?.['gross']),
+    refundedMinor: num(row?.['refunded']),
+    paymentFeeMinor: num(row?.['fees']),
+    netMinor: num(row?.['net']),
     paidOrderCount: num(row?.['paid_orders']),
     refundCount: num(row?.['refunds']),
     disputeCount: num(row?.['disputes']),
@@ -283,7 +283,7 @@ export interface OperationsSnapshot {
   ledgerDiscrepancies: number;
   /** Technical success rate over the window; target ≥95% (§12.3). */
   technicalSuccessRate: Measured<number>;
-  budgetSpentTodayJpy: number;
+  budgetSpentTodayMinor: number;
 }
 
 export async function operationsSnapshot(budgetWindowHours = 24): Promise<OperationsSnapshot> {
@@ -330,6 +330,6 @@ export async function operationsSnapshot(budgetWindowHours = 24): Promise<Operat
       finished,
       'no finished jobs in the last 7 days',
     ),
-    budgetSpentTodayJpy: num(row?.['spend']),
+    budgetSpentTodayMinor: num(row?.['spend']),
   };
 }

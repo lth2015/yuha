@@ -4,6 +4,7 @@ import type { ProductView, TrackView } from '@yuha/contracts';
 import { apiFetch, newIdempotencyKey } from '../lib/api';
 import { formatTime, usePlayer } from '../lib/player';
 import { useI18n } from '../lib/i18n';
+import { LOCALES, formatMoney } from '../lib/money';
 import { useSession } from '../lib/session';
 import { CoverArt } from '../components/CoverArt';
 import { ErrorNotice } from '../components/common';
@@ -30,7 +31,7 @@ interface SongDetailResponse extends TrackView {
  * controls — gallery, not form.
  */
 export default function SongDetail() {
-  const { t } = useI18n();
+  const { t, lang } = useI18n();
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { me } = useSession();
@@ -39,7 +40,7 @@ export default function SongDetail() {
   const [error, setError] = useState<unknown>(null);
   const [busy, setBusy] = useState(false);
   const [copied, setCopied] = useState(false);
-  const [licensePrice, setLicensePrice] = useState<number | null>(null);
+  const [licenseProduct, setLicenseProduct] = useState<ProductView | null>(null);
   const [licensing, setLicensing] = useState(false);
   // `player.currentTime` re-renders this several times a second while the song
   // plays; the score itself only depends on the seed.
@@ -58,7 +59,7 @@ export default function SongDetail() {
     apiFetch<ProductView[]>('/v1/products')
       .then((ps) => {
         const p = ps.find((x) => x.priceKey === 'market_license');
-        if (p) setLicensePrice(p.amountMinor / 100);
+        if (p) setLicenseProduct(p);
       })
       .catch(() => undefined);
   }, []);
@@ -228,10 +229,16 @@ export default function SongDetail() {
                   type="button"
                   className="text-action is-strong"
                   onClick={buyLicense}
-                  disabled={licensing || !me || licensePrice === null}
+                  disabled={licensing || !me || licenseProduct === null}
                   title={me ? '购买使用授权，创作者获得 70%' : '登录后可购买授权'}
                 >
-                  {licensing ? t('song.licensing') : t('song.license', { price: licensePrice?.toFixed(2) ?? '' })}
+                  {licensing
+                    ? t('song.licensing')
+                    : t('song.license', {
+                        price: licenseProduct
+                          ? formatMoney(licenseProduct.amountMinor, licenseProduct.currency, LOCALES[lang])
+                          : '',
+                      })}
                 </button>
               )
             )}

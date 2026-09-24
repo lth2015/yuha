@@ -101,7 +101,18 @@ export function formatJst(iso: string | null | undefined, withTime = true): stri
   if (!iso) return '—';
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return '—';
-  return new Intl.DateTimeFormat('en-US', {
+  // The zone is fixed (the operating entity is Japanese) but the *reading* of
+  // the date should follow the interface. This util is called from modules
+  // without i18n in scope, so it reads the same stored preference the
+  // dictionary does rather than taking a locale through every call site.
+  let locale = 'en-US';
+  try {
+    const l = localStorage.getItem('yuha.lang');
+    locale = l === 'ja' ? 'ja-JP' : l === 'zh' ? 'zh-CN' : 'en-US';
+  } catch {
+    /* private browsing */
+  }
+  return new Intl.DateTimeFormat(locale, {
     year: 'numeric',
     month: 'short',
     day: 'numeric',
@@ -109,12 +120,8 @@ export function formatJst(iso: string | null | undefined, withTime = true): stri
   }).format(d);
 }
 
-/** Minor units → display string. USD cents by default (the launch catalogue). */
-export function formatMoney(amountMinor: number, currency = 'usd'): string {
-  const cur = currency.toUpperCase();
-  const value = cur === 'JPY' ? amountMinor : amountMinor / 100;
-  return new Intl.NumberFormat('en-US', { style: 'currency', currency: cur }).format(value);
-}
+/** Re-exported so existing callers keep working; the implementation is in lib/money. */
+export { formatMoney } from './money';
 
 /** Legacy name kept for the admin console; formats JPY-major integers. */
 export function formatJpy(amount: number): string {

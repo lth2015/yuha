@@ -3,32 +3,10 @@ import { Link, useNavigate } from 'react-router-dom';
 import type { ProductView } from '@yuha/contracts';
 import { apiFetch, newIdempotencyKey } from '../lib/api';
 import { useI18n } from '../lib/i18n';
+import { LOCALES, formatMoney, formatPerUnit } from '../lib/money';
 import { useSession } from '../lib/session';
 import { ErrorNotice } from '../components/common';
 import { CHECKOUT_RETURN_KEY } from './Checkout';
-
-const LOCALES: Record<string, string> = { zh: 'zh-CN', ja: 'ja-JP', en: 'en-US' };
-
-/** Zero-decimal currencies (JPY) store the whole amount in `amountMinor`. */
-function isZeroDecimal(currency: string): boolean {
-  return currency.toLowerCase() === 'jpy';
-}
-
-function formatMoney(amountMinor: number, currency: string, locale: string, minFrac?: number): string {
-  const zero = isZeroDecimal(currency);
-  return new Intl.NumberFormat(locale, {
-    style: 'currency',
-    currency: currency.toUpperCase(),
-    minimumFractionDigits: minFrac ?? (amountMinor % 100 === 0 && !zero ? 0 : 2),
-    maximumFractionDigits: minFrac ?? (zero ? 0 : 2),
-  }).format(zero ? amountMinor : amountMinor / 100);
-}
-
-/** The unit price — the figure a buyer actually compares plans on. */
-function perSong(p: { amountMinor: number; currency: string; units: number }, locale: string): string {
-  const each = p.amountMinor / Math.max(1, p.units);
-  return formatMoney(each, p.currency, locale, isZeroDecimal(p.currency) ? 0 : 2);
-}
 
 /** Copy keys per catalogue entry; the amounts always come from the server. */
 const PLAN_COPY: Record<string, { tag: string; bullets: string[]; highlight?: boolean }> = {
@@ -154,7 +132,7 @@ export default function Pricing() {
                     {formatMoney(p.amountMinor, p.currency, locale)}
                     {p.kind === 'subscription' && <span className="plan__per">{t('price.month')}</span>}
                   </p>
-                  <p className="plan__unit">{t('price.perSong', { amount: perSong(p, locale) })}</p>
+                  <p className="plan__unit">{t('price.perSong', { amount: formatPerUnit(p.amountMinor, p.units, p.currency, locale) })}</p>
                   <p className="plan__tagline">{copy ? t(copy.tag) : p.displayName}</p>
                   <ul className="plan__bullets">
                     {(copy?.bullets ?? []).map((b) => (

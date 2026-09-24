@@ -75,7 +75,7 @@ describe('checkout', () => {
     expect(res.statusCode).toBe(200);
 
     const order = await getOrder(res.json().orderId);
-    expect(order!.amount_jpy).toBe(499);
+    expect(order!.amount_minor).toBe(499);
     expect(order!.currency).toBe('usd');
     expect(order!.price_version).toBe(2);
     expect(order!.status).toBe('pending');
@@ -546,8 +546,8 @@ describe('refunds (PAY-09)', () => {
     expect(balance.consumed).toBe(1);
     expect(balance.reserved).toBe(1);
 
-    const refunded = await query<{ status: string; refunded_amount_jpy: number }>(
-      `SELECT status, refunded_amount_jpy FROM orders WHERE id = ?`,
+    const refunded = await query<{ status: string; refunded_amount_minor: number }>(
+      `SELECT status, refunded_amount_minor FROM orders WHERE id = ?`,
       [orderId],
     );
     expect(refunded[0]!.status).toBe('refunded');

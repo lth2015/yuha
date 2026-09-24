@@ -478,11 +478,11 @@ code { font-family: var(--mono); font-size: 0.86em; background: var(--surface-so
 .empty { border: 1px dashed var(--control-line); border-radius: var(--r-card); padding: var(--s12) var(--s4); text-align: center; color: var(--muted); display: flex; flex-direction: column; align-items: center; gap: var(--s4); }
 .load-more { display: flex; justify-content: center; margin-top: var(--s6); }
 
-.alert { border-radius: var(--r-control); border: 1px solid var(--line); padding: 14px 16px; margin: 0 0 var(--s4); background: var(--surface); }
+.alert { border-radius: var(--r-control); border: 1px solid var(--line); padding: 14px 16px; margin: 0 0 var(--s4); background-color: var(--glass); }
 .alert__title { font-weight: 600; margin-bottom: 4px; }
-.alert--error { border-color: color-mix(in srgb, var(--danger) 45%, transparent); background: #fdf1f1; }
-.alert--warn { border-color: color-mix(in srgb, var(--warning) 45%, transparent); background: #faf3e8; }
-.alert--info { border-color: var(--line); background: var(--surface-soft); }
+.alert--error { border-color: color-mix(in srgb, var(--danger) 45%, transparent); background-color: color-mix(in srgb, var(--danger) 12%, var(--glass)); }
+.alert--warn { border-color: color-mix(in srgb, var(--warning) 45%, transparent); background-color: color-mix(in srgb, var(--warning) 12%, var(--glass)); }
+.alert--info { border-color: var(--line-strong); background-color: var(--surface-soft); }
 .alert__next { font-size: 14px; color: var(--muted); margin: 0; }
 
 .skeleton {
@@ -1248,3 +1248,14 @@ tr:last-child td { border-bottom: none; }
  */
 .checkout-return { max-width: 560px; margin: 0 auto; }
 .checkout-return h1 { font-size: clamp(24px, 3.4vw, 32px); letter-spacing: -0.03em; margin: 0; }
+
+/* ---------------------------------------------------------------- account surfaces */
+/*
+ * Billing, account and the other settings pages had their type sizes written
+ * inline, so they drifted from the scale the rest of the product uses. These
+ * are the two sizes those pages actually need.
+ */
+.page-title { font-size: clamp(26px, 3.2vw, 34px); letter-spacing: -0.03em; margin: 0 0 var(--s2); }
+.section-title { font-size: 18px; font-weight: 600; margin: 0; }
+.credit-figure { font-size: 30px; font-weight: 700; line-height: 1.1; }
+.is-warning { color: var(--warning); }

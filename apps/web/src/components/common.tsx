@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react';
 import { Link } from 'react-router-dom';
+import { useI18n } from '../lib/i18n';
 import { messageFor, PROMPT_HINTS, type UserMessage } from '../lib/messages';
 import { ApiError } from '../lib/api';
 import { formatTime, usePlayer } from '../lib/player';
@@ -9,6 +10,7 @@ import { formatTime, usePlayer } from '../lib/player';
  * blocked prompt additionally shows the rewrite hint the server returned.
  */
 export function ErrorNotice({ error, onRetry }: { error: unknown; onRetry?: () => void }) {
+  const { t } = useI18n();
   if (!error) return null;
   const msg: UserMessage = messageFor(error);
   const hintKey =
@@ -27,14 +29,15 @@ export function ErrorNotice({ error, onRetry }: { error: unknown; onRetry?: () =
       {hintKey && PROMPT_HINTS[hintKey] && <div className="alert__next">{PROMPT_HINTS[hintKey]}</div>}
       {appealable && (
         <div className="alert__next small">
-          判定が誤っていると思われる場合は{' '}
-          <Link to="/help/rights">こちらから報告</Link> できます。判定は違法性の認定ではありません。
+          {t('common.rightsNotice')}
+          <Link to="/help/rights">{t('common.rightsReport')}</Link>
+          {t('common.rightsNotice2')}
         </div>
       )}
       {onRetry && (
         <div style={{ marginTop: 'var(--s2)' }}>
           <button type="button" className="btn btn--secondary" onClick={onRetry}>
-            もう一度試す
+            {t('common.retry')}
           </button>
         </div>
       )}
@@ -86,10 +89,11 @@ export function EmptyState({
   );
 }
 
-export function Loading({ label = '読み込み中' }: { label?: string }) {
+export function Loading({ label }: { label?: string }) {
+  const { t } = useI18n();
   return (
     <div className="stack" aria-busy="true" aria-live="polite">
-      <span className="visually-hidden">{label}</span>
+      <span className="visually-hidden">{label ?? t('common.loading')}</span>
       <div className="skeleton" />
       <div className="skeleton" style={{ width: '70%' }} />
     </div>
@@ -195,10 +199,11 @@ export function AudioPlayer({
 const STAGE_ORDER = ['validating', 'queued', 'generating', 'processing', 'verifying'] as const;
 
 export function StageIndicator({ phase, delayed }: { phase: string; delayed: boolean }) {
+  const { t } = useI18n();
   const index = STAGE_ORDER.indexOf(phase as (typeof STAGE_ORDER)[number]);
   return (
     <div className="stack stack--tight">
-      <div className="stages" role="img" aria-label={`進行状況: ${phase}`}>
+      <div className="stages" role="img" aria-label={t('common.progressAria', { phase })}>
         {STAGE_ORDER.map((s, i) => (
           <div
             key={s}
@@ -208,8 +213,8 @@ export function StageIndicator({ phase, delayed }: { phase: string; delayed: boo
       </div>
       <p className="small muted" style={{ margin: 0 }}>
         {delayed
-          ? '通常より時間がかかっています。回数は二重に消費されません。このまま閉じても処理は続きます。'
-          : '通常30秒〜2分ほどで完了します。この画面を閉じても処理は続きます。'}
+          ? t('common.slowJob')
+          : t('common.normalJob')}
       </p>
     </div>
   );

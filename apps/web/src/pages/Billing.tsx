@@ -1,40 +1,37 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import type { EntitlementsView } from '@yuha/contracts';
+import type { EntitlementsView, OrderView } from '@yuha/contracts';
 import { apiFetch, newIdempotencyKey } from '../lib/api';
-import { formatMoney, formatJst, useSession } from '../lib/session';
+import { formatJst, useSession } from '../lib/session';
+import { useI18n } from '../lib/i18n';
+import { LOCALES, formatMoney } from '../lib/money';
 import { Badge, ErrorNotice, Loading } from '../components/common';
 
-interface OrderRow {
-  orderId: string;
-  priceKey: string;
-  kind: string;
-  amountMinor: number;
-  status: string;
-  entitlementGranted: boolean;
-  createdAt: string;
-  createdAtJst: string;
-  paidAt: string | null;
-  receiptUrl: string | null;
-}
+/**
+ * The contract type, not a hand-written copy. The local duplicate had drifted:
+ * it lacked `currency`, so amounts were formatted as USD whatever the order
+ * actually was, and lacked `displayName`, which is why the item column was
+ * guessing at the product from its price key.
+ */
+type OrderRow = OrderView & { createdAtJst: string };
 
-const ORDER_STATUS: Record<string, { label: string; tone: string }> = {
-  pending: { label: '確認中', tone: 'badge--warn' },
-  paid: { label: '支払い済み', tone: 'badge--ok' },
-  failed: { label: '失敗', tone: 'badge--danger' },
-  refunded: { label: '返金済み', tone: '' },
-  partially_refunded: { label: '一部返金', tone: '' },
-  canceled: { label: 'キャンセル', tone: '' },
+const ORDER_STATUS: Record<string, { key: string; tone: string }> = {
+  pending: { key: 'bill.st.pending', tone: 'badge--warn' },
+  paid: { key: 'bill.st.paid', tone: 'badge--ok' },
+  failed: { key: 'bill.st.failed', tone: 'badge--danger' },
+  refunded: { key: 'bill.st.refunded', tone: '' },
+  partially_refunded: { key: 'bill.st.partially_refunded', tone: '' },
+  canceled: { key: 'bill.st.canceled', tone: '' },
 };
 
-const SUBSCRIPTION_STATUS: Record<string, { label: string; tone: string }> = {
-  active: { label: '有効', tone: 'badge--ok' },
-  trialing: { label: 'お試し中', tone: 'badge--ok' },
-  past_due: { label: 'お支払い確認できず', tone: 'badge--warn' },
-  canceled: { label: '停止済み', tone: '' },
-  unpaid: { label: '未払い', tone: 'badge--danger' },
-  incomplete: { label: '手続き中', tone: 'badge--warn' },
-  paused: { label: '一時停止', tone: '' },
+const SUBSCRIPTION_STATUS: Record<string, { key: string; tone: string }> = {
+  active: { key: 'bill.sub.active', tone: 'badge--ok' },
+  trialing: { key: 'bill.sub.trialing', tone: 'badge--ok' },
+  past_due: { key: 'bill.sub.past_due', tone: 'badge--warn' },
+  canceled: { key: 'bill.sub.canceled', tone: '' },
+  unpaid: { key: 'bill.sub.unpaid', tone: 'badge--danger' },
+  incomplete: { key: 'bill.sub.incomplete', tone: 'badge--warn' },
+  paused: { key: 'bill.sub.paused', tone: '' },
 };
 
 /**
@@ -50,6 +47,7 @@ export default function Billing() {
   const [ent, setEnt] = useState<EntitlementsView | null>(null);
   const [error, setError] = useState<unknown>(null);
   const [loading, setLoading] = useState(true);
+  const { t, lang } = useI18n();
   const [cancelling, setCancelling] = useState(false);
   const [cancelResult, setCancelResult] = useState<{ effectiveAt: string | null } | null>(null);
 
@@ -79,9 +77,7 @@ export default function Billing() {
   const cancelSubscription = async () => {
     if (!subscription) return;
     const ok = window.confirm(
-      '自動更新を停止します。\n\n' +
-        `現在の期間（${subscription.endsAtJst ?? '—'}）の終了までは引き続きご利用いただけます。\n` +
-        '次回以降の請求は発生しません。\n\n停止しますか？',
+      t('bill.cancelConfirm', { date: subscription.endsAtJst ?? '—' }),
     );
     if (!ok) return;
 
@@ -110,28 +106,24 @@ export default function Billing() {
     }
   };
 
-  if (loading) return <Loading label="請求情報を読み込み中" />;
+  if (loading) return <Loading label={t('bill.loading')} />;
 
   return (
     <div className="stack stack--loose">
-      <h1 style={{ fontSize: 28 }}>請求・契約</h1>
+      <h1 className="page-title">{t('bill.h1')}</h1>
 
       <ErrorNotice error={error} onRetry={() => void load()} />
 
       <section className="panel stack">
-        <h2 style={{ fontSize: 18, margin: 0 }}>残り回数</h2>
+        <h2 className="section-title">{t('bill.credits')}</h2>
         <div className="row" style={{ gap: 'var(--s3)' }}>
           <div>
-            <div style={{ fontSize: 30, fontWeight: 700 }} className="num">
-              {ent?.availableUnits ?? 0}
-            </div>
-            <div className="small muted">利用できる回数</div>
+            <div className="num credit-figure">{ent?.availableUnits ?? 0}</div>
+            <div className="small muted">{t('bill.available')}</div>
           </div>
           <div>
-            <div style={{ fontSize: 30, fontWeight: 700 }} className="num">
-              {ent?.reservedUnits ?? 0}
-            </div>
-            <div className="small muted">処理中に確保</div>
+            <div className="num credit-figure">{ent?.reservedUnits ?? 0}</div>
+            <div className="small muted">{t('bill.reserved')}</div>
           </div>
         </div>
 
@@ -140,10 +132,10 @@ export default function Billing() {
             <table>
               <thead>
                 <tr>
-                  <th>種別</th>
-                  <th>付与</th>
-                  <th>残り</th>
-                  <th>有効期限</th>
+                  <th>{t('bill.tbl.kind')}</th>
+                  <th>{t('bill.tbl.granted')}</th>
+                  <th>{t('bill.tbl.left')}</th>
+                  <th>{t('bill.tbl.expires')}</th>
                 </tr>
               </thead>
               <tbody>
@@ -151,19 +143,19 @@ export default function Billing() {
                   <tr key={b.batchId}>
                     <td>
                       {b.source === 'one_time_order'
-                        ? '単発パック'
+                        ? t('bill.src.one_time')
                         : b.source === 'subscription_period'
-                          ? '月額プラン'
+                          ? t('bill.src.subscription')
                           : b.source === 'compensation'
-                            ? '補償'
+                            ? t('bill.src.compensation')
                             : b.source === 'promo_trial'
-                              ? '試用'
-                              : '調整'}
+                              ? t('bill.src.trial')
+                              : t('bill.src.adjust')}
                     </td>
                     <td className="num">{b.grantedUnits}</td>
                     <td className="num">{b.availableUnits}</td>
                     <td className="small muted">
-                      {b.expiresAt ? formatJst(b.expiresAt, false) : '期限なし'}
+                      {b.expiresAt ? formatJst(b.expiresAt, false) : t('bill.noExpiry')}
                     </td>
                   </tr>
                 ))}
@@ -172,67 +164,65 @@ export default function Billing() {
           </div>
         )}
         <p className="small muted" style={{ margin: 0 }}>
-          有効期限が近い回数から先に消費されます。
+          {t('bill.spendOrder')}
         </p>
       </section>
 
       <section className="panel stack">
-        <h2 style={{ fontSize: 18, margin: 0 }}>月額プラン</h2>
+        <h2 className="section-title">{t('bill.plan')}</h2>
 
         {!subscription ? (
           <>
             <p className="muted" style={{ margin: 0 }}>
-              現在ご契約中の月額プランはありません。
+              {t('bill.noPlan')}
             </p>
             <Link className="btn btn--secondary" to="/pricing">
-              料金を見る
+              {t('bill.seePricing')}
             </Link>
           </>
         ) : (
           <>
             <div className="row row--between">
-              <span className="muted">状態</span>
+              <span className="muted">{t('bill.status')}</span>
               <Badge tone={SUBSCRIPTION_STATUS[subscription.status]?.tone ?? ''}>
-                {SUBSCRIPTION_STATUS[subscription.status]?.label ?? subscription.status}
+                {SUBSCRIPTION_STATUS[subscription.status]
+                  ? t(SUBSCRIPTION_STATUS[subscription.status]!.key)
+                  : subscription.status}
               </Badge>
             </div>
             <div className="row row--between">
-              <span className="muted">現在の期間</span>
+              <span className="muted">{t('bill.period')}</span>
               <span className="small">
                 {formatJst(subscription.currentPeriodStart, false)} 〜{' '}
                 {formatJst(subscription.currentPeriodEnd, false)}
               </span>
             </div>
             <div className="row row--between">
-              <span className="muted">次回更新</span>
+              <span className="muted">{t('bill.renews')}</span>
               <span className="small">
                 {subscription.cancelAtPeriodEnd
-                  ? '自動更新は停止済み'
+                  ? t('bill.autoRenewOff')
                   : `${subscription.endsAtJst ?? '—'}（JST）`}
               </span>
             </div>
 
             {subscription.status === 'past_due' && (
               <div className="alert alert--warn">
-                <div className="alert__title">お支払いを確認できませんでした</div>
-                <div className="small">
-                  新しい期間の回数はまだ付与されていません。現在お持ちの回数は引き続きご利用いただけます。
-                  お支払い方法を更新すると、確認後に付与されます。
-                </div>
+                <div className="alert__title">{t('bill.pastDueTitle')}</div>
+                <div className="small">{t('bill.pastDue')}</div>
               </div>
             )}
 
             {cancelResult ? (
               <div className="alert alert--info">
-                <div className="alert__title">自動更新を停止しました</div>
+                <div className="alert__title">{t('bill.cancelledTitle')}</div>
                 <div className="small">
-                  {formatJst(cancelResult.effectiveAt)}（JST）まではこれまでどおりご利用いただけます。
-                  次回以降の請求は発生しません。
+                  {t('bill.cancelledBody', { date: `${formatJst(cancelResult.effectiveAt)} (JST)` })}
                 </div>
               </div>
             ) : subscription.cancelAtPeriodEnd ? (
               <div className="alert alert--info small">
-                自動更新は停止済みです。{subscription.endsAtJst ?? '—'}（JST）まで利用できます。
+                {t('bill.alreadyCancelled', { date: `${subscription.endsAtJst ?? '—'} (JST)` })}
               </div>
             ) : (
               <button
@@ -241,55 +231,58 @@ export default function Billing() {
                 onClick={() => void cancelSubscription()}
                 disabled={cancelling}
               >
-                {cancelling ? '手続き中…' : '自動更新を停止する'}
+                {cancelling ? t('bill.cancelling') : t('bill.cancel')}
               </button>
             )}
 
             <p className="small muted" style={{ margin: 0 }}>
-              停止はオンラインで完結します。お電話での手続きは不要です。
-              停止後も、すでに生成した楽曲は生成時点の条件に従ってご利用いただけます。
+              {t('bill.cancelNote')}
             </p>
           </>
         )}
       </section>
 
       <section className="panel stack">
-        <h2 style={{ fontSize: 18, margin: 0 }}>購入履歴</h2>
+        <h2 className="section-title">{t('bill.history')}</h2>
         {orders.length === 0 ? (
           <p className="muted" style={{ margin: 0 }}>
-            購入履歴はまだありません。
+            {t('bill.noHistory')}
           </p>
         ) : (
           <div className="table-wrap">
             <table>
               <thead>
                 <tr>
-                  <th>日時（JST）</th>
-                  <th>内容</th>
-                  <th>金額</th>
-                  <th>状態</th>
-                  <th>回数の付与</th>
-                  <th>領収</th>
+                  <th>{t('bill.tbl.when')} (JST)</th>
+                  <th>{t('bill.tbl.item')}</th>
+                  <th>{t('bill.tbl.amount')}</th>
+                  <th>{t('bill.status')}</th>
+                  <th>{t('bill.tbl.grantCol')}</th>
+                  <th>{t('bill.tbl.receipt')}</th>
                 </tr>
               </thead>
               <tbody>
                 {orders.map((o) => {
-                  const s = ORDER_STATUS[o.status] ?? { label: o.status, tone: '' };
+                  const st = ORDER_STATUS[o.status];
                   return (
                     <tr key={o.orderId}>
                       <td className="small">{o.createdAtJst}</td>
                       <td className="small">
-                        {o.priceKey === 'drop_5' ? 'DROP（5回パック）' : 'CREATOR（月額20回）'}
+                        {/* The catalogue's name at purchase time. This used to be a
+                            two-way guess that labelled every non-drop_5 order
+                            "CREATOR（月額20回）" — a Premier buyer's receipt named a
+                            plan they had not bought. */}
+                        {o.displayName ?? o.priceKey}
                       </td>
-                      <td className="num">{formatMoney(o.amountMinor)}</td>
+                      <td className="num">{formatMoney(o.amountMinor, o.currency, LOCALES[lang])}</td>
                       <td>
-                        <Badge tone={s.tone}>{s.label}</Badge>
+                        <Badge tone={st?.tone ?? ''}>{st ? t(st.key) : o.status}</Badge>
                       </td>
                       <td className="small">
                         {o.entitlementGranted ? (
-                          '付与済み'
+                          t('bill.granted')
                         ) : o.status === 'paid' ? (
-                          <span style={{ color: 'var(--warning)' }}>処理中</span>
+                          <span className="is-warning">{t('bill.processing')}</span>
                         ) : (
                           '—'
                         )}
@@ -297,7 +290,7 @@ export default function Billing() {
                       <td className="small">
                         {o.receiptUrl ? (
                           <a href={o.receiptUrl} target="_blank" rel="noreferrer">
-                            表示
+                            {t('bill.view')}
                           </a>
                         ) : (
                           '—'
@@ -313,13 +306,10 @@ export default function Billing() {
       </section>
 
       <section className="panel stack">
-        <h2 style={{ fontSize: 18, margin: 0 }}>アカウント</h2>
-        <p className="small muted" style={{ margin: 0 }}>
-          「自動更新の停止」「お知らせメールの配信停止」「アカウントの削除」はそれぞれ別の操作です。
-        </p>
+        <h2 className="section-title">{t('bill.account')}</h2>
         <div className="row">
           <Link className="btn btn--ghost" to="/settings/account">
-            アカウント設定
+            {t('bill.accountSettings')}
           </Link>
         </div>
       </section>

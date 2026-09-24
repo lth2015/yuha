@@ -51,7 +51,7 @@ export async function createLicenseCheckout(
       priceKey: product.price_key,
       priceVersion: product.version,
       kind: product.kind,
-      amountMinor: product.amount_jpy,
+      amountMinor: product.amount_minor,
       currency: product.currency,
       idempotencyKey: params.idempotencyKey,
       metadata: {
@@ -69,7 +69,7 @@ export async function createLicenseCheckout(
     userEmail: user.email,
     priceKey: product.price_key,
     priceVersion: product.version,
-    amountMinor: product.amount_jpy,
+    amountMinor: product.amount_minor,
     currency: product.currency,
     stripePriceId: product.stripe_price_id,
     kind: product.kind,

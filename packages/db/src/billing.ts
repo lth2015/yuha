@@ -7,7 +7,7 @@ export interface ProductRow {
   version: number;
   kind: OrderKind;
   display_name: string;
-  amount_jpy: number;
+  amount_minor: number;
   currency: string;
   tax_included: boolean;
   units: number;
@@ -18,7 +18,7 @@ export interface ProductRow {
 }
 
 const PRODUCT_COLUMNS = `
-  price_key, version, kind, display_name, amount_jpy, currency, tax_included,
+  price_key, version, kind, display_name, amount_minor, currency, tax_included,
   units, validity_days, auto_renew, stripe_price_id, active
 `;
 
@@ -63,7 +63,7 @@ export async function listActiveProducts(): Promise<ProductRow[]> {
 export async function upsertProduct(p: ProductRow, tx?: PoolConnection): Promise<void> {
   await execute(
     `INSERT INTO product_catalog
-       (price_key, version, kind, display_name, amount_jpy, currency, tax_included,
+       (price_key, version, kind, display_name, amount_minor, currency, tax_included,
         units, validity_days, auto_renew, stripe_price_id, active)
      VALUES (?,?,?,?,?,?,?,?,?,?,?,?)
      ON DUPLICATE KEY UPDATE
@@ -75,7 +75,7 @@ export async function upsertProduct(p: ProductRow, tx?: PoolConnection): Promise
       p.version,
       p.kind,
       p.display_name,
-      p.amount_jpy,
+      p.amount_minor,
       p.currency,
       p.tax_included ? 1 : 0,
       p.units,
@@ -96,7 +96,7 @@ export interface OrderRow {
   price_key: string;
   price_version: number;
   kind: OrderKind;
-  amount_jpy: number;
+  amount_minor: number;
   currency: string;
   status: OrderStatus;
   idempotency_key: string;
@@ -106,16 +106,16 @@ export interface OrderRow {
   entitlement_granted_at: Date | null;
   paid_at: Date | null;
   receipt_url: string | null;
-  refunded_amount_jpy: number;
+  refunded_amount_minor: number;
   metadata: Record<string, unknown>;
   created_at: Date;
   updated_at: Date;
 }
 
 const ORDER_COLUMNS = `
-  id, user_id, price_key, price_version, kind, amount_jpy, currency, status,
+  id, user_id, price_key, price_version, kind, amount_minor, currency, status,
   idempotency_key, stripe_checkout_session_id, stripe_payment_intent_id, stripe_customer_id,
-  entitlement_granted_at, paid_at, receipt_url, refunded_amount_jpy, metadata, created_at, updated_at
+  entitlement_granted_at, paid_at, receipt_url, refunded_amount_minor, metadata, created_at, updated_at
 `;
 
 export async function findOrderByIdempotencyKey(
@@ -145,7 +145,7 @@ export async function insertOrder(
 ): Promise<OrderRow> {
   const id = newId();
   await execute(
-    `INSERT INTO orders (id, user_id, price_key, price_version, kind, amount_jpy, currency, idempotency_key, metadata)
+    `INSERT INTO orders (id, user_id, price_key, price_version, kind, amount_minor, currency, idempotency_key, metadata)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       id,
@@ -190,9 +190,25 @@ export async function findOrderBySession(
   );
 }
 
-export async function listOrders(userId: string, limit = 50): Promise<OrderRow[]> {
-  return query<OrderRow>(
-    `SELECT ${ORDER_COLUMNS} FROM orders WHERE user_id = ? ORDER BY created_at DESC LIMIT ?`,
+export async function listOrders(
+  userId: string,
+  limit = 50,
+): Promise<Array<OrderRow & { display_name: string | null }>> {
+  // Joined on (price_key, version): the catalogue row as it was when bought,
+  // so renaming or repricing a plan never rewrites an existing receipt.
+  return query<OrderRow & { display_name: string | null }>(
+    `SELECT ${ORDER_COLUMNS.split(',')
+      .map((c) => c.trim())
+      .filter(Boolean)
+      .map((c) => `o.${c}`)
+      .join(', ')},
+            pc.display_name
+       FROM orders o
+       LEFT JOIN product_catalog pc
+              ON pc.price_key = o.price_key AND pc.version = o.price_version
+      WHERE o.user_id = ?
+      ORDER BY o.created_at DESC
+      LIMIT ?`,
     [userId, limit],
   );
 }
@@ -255,15 +271,15 @@ export async function markEntitlementGranted(orderId: string, tx: PoolConnection
 }
 
 export async function setOrderStatus(
-  params: { orderId: string; status: OrderStatus; refundedAmountJpy?: number },
+  params: { orderId: string; status: OrderStatus; refundedAmountMinor?: number },
   tx?: PoolConnection,
 ): Promise<void> {
   await execute(
     `UPDATE orders SET status = ?,
-                       refunded_amount_jpy = COALESCE(?, refunded_amount_jpy),
+                       refunded_amount_minor = COALESCE(?, refunded_amount_minor),
                        updated_at = UTC_TIMESTAMP(3)
       WHERE id = ?`,
-    [params.status, params.refundedAmountJpy ?? null, params.orderId],
+    [params.status, params.refundedAmountMinor ?? null, params.orderId],
     tx,
   );
 }
@@ -288,8 +304,8 @@ export async function recordPayment(
     kind: 'payment' | 'refund' | 'dispute' | 'fee';
     stripeObjectId: string;
     amountMinor: number;
-    feeJpy?: number;
-    netJpy?: number;
+    feeMinor?: number;
+    netMinor?: number;
     status: string;
     payoutId?: string | null;
     occurredAt: Date;
@@ -299,8 +315,8 @@ export async function recordPayment(
 ): Promise<{ inserted: boolean }> {
   const res = await execute(
     `INSERT IGNORE INTO payments
-       (id, order_id, user_id, kind, stripe_object_id, amount_jpy, fee_jpy,
-        net_jpy, status, payout_id, occurred_at, raw)
+       (id, order_id, user_id, kind, stripe_object_id, amount_minor, fee_minor,
+        net_minor, status, payout_id, occurred_at, raw)
      VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`,
     [
       newId(),
@@ -309,8 +325,8 @@ export async function recordPayment(
       params.kind,
       params.stripeObjectId,
       params.amountMinor,
-      params.feeJpy ?? 0,
-      params.netJpy ?? 0,
+      params.feeMinor ?? 0,
+      params.netMinor ?? 0,
       params.status,
       params.payoutId ?? null,
       params.occurredAt,
@@ -325,15 +341,15 @@ export async function listPayments(orderId: string): Promise<
   Array<{
     kind: string;
     stripe_object_id: string;
-    amount_jpy: number;
-    fee_jpy: number;
-    net_jpy: number;
+    amount_minor: number;
+    fee_minor: number;
+    net_minor: number;
     status: string;
     occurred_at: Date;
   }>
 > {
   return query(
-    `SELECT kind, stripe_object_id, amount_jpy, fee_jpy, net_jpy, status, occurred_at
+    `SELECT kind, stripe_object_id, amount_minor, fee_minor, net_minor, status, occurred_at
        FROM payments WHERE order_id = ? ORDER BY occurred_at`,
     [orderId],
   );

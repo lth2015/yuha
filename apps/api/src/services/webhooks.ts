@@ -123,9 +123,9 @@ async function handleCheckoutCompleted(ctx: AppContext, event: StripeEventLike):
 
   const amountTotal = live?.amountTotal ?? (session['amount_total'] as number | null);
   const currency = (live?.currency ?? session['currency']) as string | undefined;
-  if (amountTotal !== null && amountTotal !== undefined && amountTotal !== order.amount_jpy) {
+  if (amountTotal !== null && amountTotal !== undefined && amountTotal !== order.amount_minor) {
     throw new Error(
-      `amount mismatch for order ${order.id}: charged ${amountTotal}, catalogue says ${order.amount_jpy}`,
+      `amount mismatch for order ${order.id}: charged ${amountTotal}, catalogue says ${order.amount_minor}`,
     );
   }
   if (currency && currency.toLowerCase() !== order.currency.toLowerCase()) {
@@ -163,7 +163,7 @@ async function handleCheckoutCompleted(ctx: AppContext, event: StripeEventLike):
           buyerId: updated.user_id,
           creatorId,
           orderId: updated.id,
-          pricePaid: updated.amount_jpy,
+          pricePaid: updated.amount_minor,
           currency: updated.currency,
         },
         tx,
@@ -196,7 +196,7 @@ async function handleCheckoutCompleted(ctx: AppContext, event: StripeEventLike):
           userId: updated.user_id,
           kind: 'payment',
           stripeObjectId: pi,
-          amountMinor: order.amount_jpy,
+          amountMinor: order.amount_minor,
           status: 'succeeded',
           occurredAt: new Date(event.created * 1000),
         },
@@ -416,8 +416,8 @@ async function handleRefund(ctx: AppContext, event: StripeEventLike): Promise<vo
   const amount = Number(obj['amount_refunded'] ?? obj['amount'] ?? 0);
   if (!chargeId) return;
 
-  const orders = await query<{ id: string; user_id: string; amount_jpy: number }>(
-    `SELECT id, user_id, amount_jpy FROM orders
+  const orders = await query<{ id: string; user_id: string; amount_minor: number }>(
+    `SELECT id, user_id, amount_minor FROM orders
       WHERE stripe_payment_intent_id = ? OR id = ?
       LIMIT 1`,
     [typeof paymentIntent === 'string' ? paymentIntent : '', metaString(obj, 'order_id') ?? null],
@@ -475,8 +475,8 @@ async function handleRefund(ctx: AppContext, event: StripeEventLike): Promise<vo
     await setOrderStatus(
       {
         orderId: order.id,
-        status: Math.abs(amount) >= order.amount_jpy ? 'refunded' : 'partially_refunded',
-        refundedAmountJpy: Math.abs(amount),
+        status: Math.abs(amount) >= order.amount_minor ? 'refunded' : 'partially_refunded',
+        refundedAmountMinor: Math.abs(amount),
       },
       tx,
     );

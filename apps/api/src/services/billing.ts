@@ -1,5 +1,6 @@
 import { AppError, type EntitlementsView, type OrderView, type ProductView } from '@yuha/contracts';
 import {
+  getProductVersion,
   attachCheckoutSession,
   findOrderByIdempotencyKey,
   getActiveProduct,
@@ -25,7 +26,7 @@ export function toProductView(row: ProductRow, available: boolean): ProductView 
     priceVersion: row.version,
     kind: row.kind,
     displayName: row.display_name,
-    amountMinor: row.amount_jpy,
+    amountMinor: row.amount_minor,
     currency: row.currency as ProductView['currency'],
     taxIncluded: true,
     units: row.units,
@@ -100,7 +101,7 @@ export async function createCheckout(
       priceKey: product.price_key,
       priceVersion: product.version,
       kind: product.kind,
-      amountMinor: product.amount_jpy,
+      amountMinor: product.amount_minor,
       currency: product.currency,
       idempotencyKey: params.idempotencyKey,
       metadata: { units: product.units, validity_days: product.validity_days },
@@ -113,7 +114,7 @@ export async function createCheckout(
     userEmail: user.email,
     priceKey: product.price_key,
     priceVersion: product.version,
-    amountMinor: product.amount_jpy,
+    amountMinor: product.amount_minor,
     currency: product.currency,
     stripePriceId: product.stripe_price_id,
     kind: product.kind,
@@ -151,12 +152,15 @@ export async function createCheckout(
 export async function getOrderView(userId: string, orderId: string): Promise<OrderView> {
   const order = await getOrderForUser(orderId, userId);
   if (!order) throw new AppError('NOT_FOUND', 'order not found');
+  // The catalogue row as it was at purchase time, keyed on (key, version).
+  const product = await getProductVersion(order.price_key, order.price_version);
   return {
     orderId: order.id,
     priceKey: order.price_key,
+    displayName: product?.display_name ?? null,
     priceVersion: order.price_version,
     kind: order.kind,
-    amountMinor: order.amount_jpy,
+    amountMinor: order.amount_minor,
     currency: order.currency,
     status: order.status,
     entitlementGranted: order.entitlement_granted_at !== null,

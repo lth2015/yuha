@@ -20,23 +20,23 @@ interface Overview {
     deadLetteredMessages: number;
     ledgerDiscrepancies: number;
     technicalSuccessRate: Measured;
-    budgetSpentTodayJpy: number;
+    budgetSpentTodayMinor: number;
   };
   cost: {
     deliveredCount: number;
-    actualCostJpy: number;
-    estimatedCostJpy: number;
-    billableFailureCostJpy: number;
+    actualCostMinor: number;
+    estimatedCostMinor: number;
+    billableFailureCostMinor: number;
     costPerDelivery: Measured;
     costPerAdoptedResult: Measured;
     exportCount: number;
     adoptedCount: number;
   };
   revenue: {
-    grossJpy: number;
-    refundedJpy: number;
-    paymentFeeJpy: number;
-    netJpy: number;
+    grossMinor: number;
+    refundedMinor: number;
+    paymentFeeMinor: number;
+    netMinor: number;
     paidOrderCount: number;
     refundCount: number;
     disputeCount: number;
@@ -239,13 +239,13 @@ export default function Admin() {
           <div className="card" style={{ gap: 4 }}>
             <span className="small muted">実請求ベースの上流費用</span>
             <strong className="num" style={{ fontSize: 24 }}>
-              {formatMoney(overview.cost.actualCostJpy)}
+              {formatMoney(overview.cost.actualCostMinor)}
             </strong>
           </div>
           <div className="card" style={{ gap: 4 }}>
             <span className="small muted">試算値（予算前提）</span>
             <strong className="num" style={{ fontSize: 24, color: 'var(--text-muted)' }}>
-              {formatMoney(overview.cost.estimatedCostJpy)}
+              {formatMoney(overview.cost.estimatedCostMinor)}
             </strong>
             {/* §11.2: modelled cost is never added to the invoiced figure. */}
             <span className="small muted">請求実績とは合算していません</span>
@@ -253,7 +253,7 @@ export default function Admin() {
           <div className="card" style={{ gap: 4 }}>
             <span className="small muted">課金対象の失敗分</span>
             <strong className="num" style={{ fontSize: 24 }}>
-              {formatMoney(overview.cost.billableFailureCostJpy)}
+              {formatMoney(overview.cost.billableFailureCostMinor)}
             </strong>
             <span className="small muted">利用者には請求していません</span>
           </div>
@@ -275,11 +275,11 @@ export default function Admin() {
           <div className="card" style={{ gap: 4 }}>
             <span className="small muted">総額 / 返金 / 手数料</span>
             <strong className="num" style={{ fontSize: 20 }}>
-              {formatMoney(overview.revenue.grossJpy)}
+              {formatMoney(overview.revenue.grossMinor)}
             </strong>
             <span className="small muted num">
-              返金 {formatMoney(overview.revenue.refundedJpy)} / 手数料{' '}
-              {formatMoney(overview.revenue.paymentFeeJpy)}
+              返金 {formatMoney(overview.revenue.refundedMinor)} / 手数料{' '}
+              {formatMoney(overview.revenue.paymentFeeMinor)}
             </span>
           </div>
           <div className="card" style={{ gap: 4 }}>

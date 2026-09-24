@@ -45,9 +45,10 @@ export default async function billingRoutes(app: FastifyInstance, opts: { ctx: A
       items: rows.map((o) => ({
         orderId: o.id,
         priceKey: o.price_key,
+        displayName: o.display_name,
         priceVersion: o.price_version,
         kind: o.kind,
-        amountMinor: o.amount_jpy,
+        amountMinor: o.amount_minor,
         currency: o.currency,
         status: o.status,
         entitlementGranted: o.entitlement_granted_at !== null,
@@ -67,9 +68,9 @@ export default async function billingRoutes(app: FastifyInstance, opts: { ctx: A
     return {
       items: rows.map((p) => ({
         kind: p.kind,
-        amountMinor: p.amount_jpy,
-        feeJpy: p.fee_jpy,
-        netJpy: p.net_jpy,
+        amountMinor: p.amount_minor,
+        feeMinor: p.fee_minor,
+        netMinor: p.net_minor,
         status: p.status,
         occurredAt: p.occurred_at.toISOString(),
       })),
