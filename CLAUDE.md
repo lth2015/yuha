@@ -86,6 +86,14 @@ check was about the rendering.
   balance after CSS edits, SQL placeholder counts, contrast maths, dictionary
   key parity, orphaned exports — have each caught real defects. Eyeballing
   caught none of them.
+- **Before declaring yourself blocked, look.** "The tests cannot run here" was
+  repeated for fourteen commits on the strength of `node -v` printing v20 and
+  Docker not being up. nvm had Node 24 installed the whole time and Docker
+  Desktop was sitting in /Applications; the suite runs in twenty seconds.
+  That block cost this branch its only real validation — including whether
+  two irreversible migrations applied — and it was never real. Reading one
+  symptom and declaring the environment insufficient is the same move as
+  reading a screenshot and declaring the feature working.
 
 ## Commands
 
