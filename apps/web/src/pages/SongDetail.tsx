@@ -5,7 +5,6 @@ import { apiFetch, newIdempotencyKey } from '../lib/api';
 import { formatTime, usePlayer } from '../lib/player';
 import { useI18n } from '../lib/i18n';
 import { useSession } from '../lib/session';
-import { AmbientStage } from '../components/AmbientStage';
 import { CoverArt } from '../components/CoverArt';
 import { ErrorNotice } from '../components/common';
 import { Score } from '../components/Score';
@@ -151,7 +150,6 @@ export default function SongDetail() {
     <div className="song-page">
       <div className="song-spread">
         <div className="song-spread__stagewrap">
-          <AmbientStage seed={song.coverSeed} className="song-spread__ambient" />
           <div className="song-spread__cover">
           <CoverArt
             seed={song.coverSeed}

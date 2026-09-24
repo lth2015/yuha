@@ -78,7 +78,7 @@ export default function Library() {
       </div>
 
 
-      <div className="explore-controls">
+      <div className="library-controls">
         <div className="chips" role="group" aria-label={t('lib.filter')}>
           {filters.map((f) => (
             <button
@@ -92,7 +92,7 @@ export default function Library() {
             </button>
           ))}
         </div>
-        <div className="explore-search">
+        <div className="library-search">
           <input
             type="search"
             value={q}

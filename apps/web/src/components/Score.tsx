@@ -46,7 +46,8 @@ export function Score({
    */
   ghost?: string;
   className?: string;
-  height?: number;
+  /** px number, or any CSS length — sleeves size theirs as a percentage. */
+  height?: number | string;
   label?: string;
   compact?: boolean;
   /**

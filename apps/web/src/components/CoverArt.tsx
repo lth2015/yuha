@@ -41,12 +41,13 @@ const FIELDS = [
 export function CoverArt({
   seed,
   title,
-  size = 220,
+  size,
   className,
   playing = false,
 }: {
   seed: number;
   title: string;
+  /** Upper bound, not a fixed width: the sleeve always fills its container. */
   size?: number;
   className?: string;
   playing?: boolean;
@@ -58,21 +59,21 @@ export function CoverArt({
     const index = String(1 + Math.floor(rand() * 999)).padStart(3, '0');
     // Denser on a big sleeve, sparser on a small one, so the marks keep the
     // same visual weight at every size the grid uses.
-    const notes = size >= 220 ? 52 : 34;
+    const notes = (size ?? 320) >= 220 ? 52 : 34;
     return { field, index, score: scoreFromSeed(seed, notes) };
   }, [seed, size]);
 
   return (
     <span
       className={`cover-art${className ? ` ${className}` : ''}${playing ? ' is-playing' : ''}`}
-      style={{ background: art.field, width: size, aspectRatio: '1 / 1' }}
+      style={{ background: art.field, width: '100%', maxWidth: size, aspectRatio: '1 / 1' }}
       role="img"
       aria-label={t('cover.aria', { title })}
     >
       <Score
         score={art.score}
         compact
-        height={Math.round(size * 0.52)}
+        height="52%"
         className="cover-art__score"
         label=""
       />
