@@ -169,9 +169,13 @@ export async function revenueSummary(windowDays = 30): Promise<RevenueSummary> {
            AND occurred_at >= DATE_SUB(UTC_TIMESTAMP(3), INTERVAL ? DAY))              AS disputes,
        (SELECT COUNT(*) FROM orders
          WHERE status = 'paid' AND entitlement_granted_at IS NULL)                     AS ungranted,
+       -- No kind filter, to match the widest sum above: fees and net
+       -- select every payments row in the window, disputes included. Scoping
+       -- this narrower than the figures it labels would let a chargeback in
+       -- another currency land in those totals while the panel calls them
+       -- single-currency — the same silent mixing this column exists to stop.
        (SELECT GROUP_CONCAT(DISTINCT currency) FROM payments
-         WHERE occurred_at >= DATE_SUB(UTC_TIMESTAMP(3), INTERVAL ? DAY)
-           AND kind IN ('payment','refund','fee'))                                     AS currencies`,
+         WHERE occurred_at >= DATE_SUB(UTC_TIMESTAMP(3), INTERVAL ? DAY))               AS currencies`,
     [d, d, d, d, d, d, d, d],
   );
   const seen = String(row?.['currencies'] ?? '')

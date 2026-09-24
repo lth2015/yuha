@@ -13,11 +13,6 @@ export interface CheckoutParams {
   cancelUrl: string;
   /** Reused so a repeated click cannot create a second Stripe session. */
   idempotencyKey: string;
-  /**
-   * Offer Alipay and WeChat Pay alongside cards. Honoured only for one-time
-   * payments: both are single-use methods and cannot back a subscription.
-   */
-  walletsEnabled?: boolean;
   existingCustomerId?: string | null;
 }
 

@@ -55,6 +55,8 @@ export default function Home() {
   const [error, setError] = useState<string | null>(null);
   const [job, setJob] = useState<JobView | null>(null);
   const idemKey = useRef(newIdempotencyKey());
+  /** The self-rescheduling poll timer, so the effect cleanup can actually stop it. */
+  const pollTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const promptRef = useRef<HTMLTextAreaElement | null>(null);
 
   const credits = entitlements?.availableUnits ?? me?.creditsAvailable ?? 0;
@@ -133,23 +135,43 @@ export default function Home() {
   // Poll the job to terminal state, then hand over to the song page.
   useEffect(() => {
     if (!job || ['done', 'failed'].includes(job.phase)) {
-      if (job?.phase === 'done' && job.trackId) navigate(`/song/${job.trackId}`, { replace: true });
+      if (job?.phase === 'done' && job.trackId) {
+        navigate(`/song/${job.trackId}`, { replace: true });
+      } else if (job?.phase === 'failed') {
+        // A failed generation is refunded server-side. Without this the
+        // composer still shows the pre-failure balance, and a user who was
+        // down to their last credit is told to buy the one just returned.
+        void refreshEntitlements();
+      }
       return;
     }
+
+    let cancelled = false;
     let delay = 2000;
     const tick = async () => {
+      if (cancelled) return;
       try {
         const next = await apiFetch<JobView>(`/v1/jobs/${job.jobId}`);
+        if (cancelled) return;
         setJob(next);
       } catch {
         /* transient poll failure */
       }
+      if (cancelled) return;
       if (delay < 10000) delay = Math.min(delay * 1.6, 10000);
-      setTimeout(tick, delay);
+      // Held in a ref, not a local: the previous shape lost this handle, so
+      // cleanup could only ever clear the *first* timer. Every `setJob` then
+      // re-ran the effect and started another chain beside the one still
+      // running, and a surviving chain could revive a job the user had
+      // already dismissed.
+      pollTimer.current = setTimeout(tick, delay);
     };
-    const t = setTimeout(tick, delay);
-    return () => clearTimeout(t);
-  }, [job, navigate]);
+    pollTimer.current = setTimeout(tick, delay);
+    return () => {
+      cancelled = true;
+      if (pollTimer.current) clearTimeout(pollTimer.current);
+    };
+  }, [job, navigate, refreshEntitlements]);
 
 
   // ---- generation state (real stages only, no fake progress) ----

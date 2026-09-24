@@ -76,6 +76,16 @@ function countCodePoints(s: string): number {
  * the idempotency key is minted when the form is first filled and reused for
  * every retry of that submission, so a double click cannot double charge.
  */
+/** The creator's own stored draft, or the defaults. */
+function readStoredDraft(): Draft {
+  try {
+    const saved = localStorage.getItem(DRAFT_KEY);
+    return saved ? { ...DEFAULT_DRAFT, ...(JSON.parse(saved) as Partial<Draft>) } : DEFAULT_DRAFT;
+  } catch {
+    return DEFAULT_DRAFT;
+  }
+}
+
 export default function Create() {
   const navigate = useNavigate();
   const { t } = useI18n();
@@ -89,20 +99,22 @@ export default function Create() {
    * worse than losing the draft: the overwrite is valid JSON, so the next
    * mount restores it and the creator's work silently becomes the defaults.
    */
-  const [draft, setDraft] = useState<Draft>(() => {
-    if (editTrackId) return DEFAULT_DRAFT;
-    try {
-      const saved = localStorage.getItem(DRAFT_KEY);
-      return saved ? { ...DEFAULT_DRAFT, ...(JSON.parse(saved) as Partial<Draft>) } : DEFAULT_DRAFT;
-    } catch {
-      return DEFAULT_DRAFT;
-    }
-  });
+  const [draft, setDraft] = useState<Draft>(() => (editTrackId ? DEFAULT_DRAFT : readStoredDraft()));
   const [job, setJob] = useState<JobView | null>(null);
   const [result, setResult] = useState<TrackView | null>(null);
   const [error, setError] = useState<unknown>(null);
   const [submitting, setSubmitting] = useState(false);
   const [editSource, setEditSource] = useState<TrackView & { lyrics: string | null } | null>(null);
+  /**
+   * True once the draft has been filled from a track being edited.
+   *
+   * `editTrackId` can change without a remount — 'Start another' navigates
+   * from /create?edit=X to /create on the same component instance — and the
+   * lazy initializer does not re-run. Without this the save effect would
+   * then see `editTrackId === null` holding the edited track's settings and
+   * write them over the creator's own stored draft.
+   */
+  const draftIsFromTrack = useRef(false);
   const [instructions, setInstructions] = useState('');
   const idemKey = useRef<string>(newIdempotencyKey());
   const pollTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -115,6 +127,7 @@ export default function Create() {
     apiFetch<TrackView & { lyrics: string | null }>(`/v1/tracks/${editTrackId}`)
       .then((track) => {
         setEditSource(track);
+        draftIsFromTrack.current = true;
         setDraft((d) => ({
           ...d,
           mode: 'custom',
@@ -133,8 +146,9 @@ export default function Create() {
 
   useEffect(() => {
     // Editing a track fills the studio from that track; persisting it would
-    // overwrite whatever the creator had in progress of their own.
-    if (editTrackId) return;
+    // overwrite whatever the creator had in progress of their own. The ref
+    // keeps that true after the edit id is gone but the content is not.
+    if (editTrackId || draftIsFromTrack.current) return;
     try {
       localStorage.setItem(DRAFT_KEY, JSON.stringify(draft));
     } catch {
@@ -236,7 +250,17 @@ export default function Create() {
     setJob(null);
     setResult(null);
     idemKey.current = newIdempotencyKey();
-    patch({ title: '', prompt: '', lyrics: '' });
+    // Leaving an edit session restores the creator's own draft. Clearing only
+    // title/prompt/lyrics would leave the edited track's styles, length and
+    // energy behind, and the save effect would then write those over the
+    // draft this is supposed to be protecting.
+    if (draftIsFromTrack.current) {
+      draftIsFromTrack.current = false;
+      setEditSource(null);
+      setDraft(readStoredDraft());
+    } else {
+      patch({ title: '', prompt: '', lyrics: '' });
+    }
     navigate('/create');
   };
 

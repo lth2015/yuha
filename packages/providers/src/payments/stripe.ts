@@ -54,19 +54,21 @@ export class StripePaymentsAdapter implements PaymentsAdapter {
     // automatic methods by mode and currency, and will not offer Alipay or
     // WeChat Pay on a subscription because both are single-use.
     //
-    // `walletsEnabled` therefore drives only what the pricing page claims we
-    // accept; the session says nothing about methods.
+    // STRIPE_WALLETS_ENABLED therefore never reaches this adapter at all: it
+    // drives only what the pricing page claims we accept. A parameter that
+    // changed nothing would just be another surface that looks like it does.
+    //
+    // Not even payment_method_options: it was left behind carrying a
+    // wechat_pay `client` for a session that no longer names wechat_pay, and
+    // whether Stripe accepts options for an unlisted method could not be
+    // checked from here. If it rejects them, every one-time checkout would
+    // fail the moment the flag was switched on — the opposite of adding a way
+    // to pay. Checkout's hosted page is a web surface, so there is nothing
+    // here it needs telling.
 
     const session = await this.stripe.checkout.sessions.create(
       {
         mode: oneTime ? 'payment' : 'subscription',
-        ...(oneTime && params.walletsEnabled === true
-          ? {
-              // Only meaningful if the account offers WeChat Pay; it tells
-              // Stripe where the QR is rendered. Ignored otherwise.
-              payment_method_options: { wechat_pay: { client: 'web' as const } },
-            }
-          : {}),
         line_items: [{ price: params.stripePriceId, quantity: 1 }],
         success_url: params.successUrl,
         cancel_url: params.cancelUrl,
