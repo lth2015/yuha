@@ -1,18 +1,24 @@
-# SONARE
+# YUHA
 
-**Any song you can describe.** An AI song studio in the Suno class: describe an
-idea (or bring your own lyrics), pick styles, energy and length, and get a
-finished song — vocals sung or instrumental, 30 seconds to four minutes — with
-a persistent player, a public Explore feed, likes, publishing and MP3 download.
-Payments run on Stripe (test mode locally); sign-in is Google OAuth plus a
-development login for demo mode.
+**Any song you can describe.** An AI song studio: describe an idea (or bring
+your own lyrics), pick styles, energy and length, and get a finished song —
+vocals sung or instrumental, 30 seconds to four minutes — with a persistent
+player, a private library and MP3 download. Payments run on Stripe (test mode
+locally); sign-in is Google OAuth plus a development login for demo mode.
 
-> Repo note: the workspace packages keep their historical `@loopscene/*` names;
-> the product surface is SONARE. The original brief lives in
-> `PROJECT_TASK.md` (JP-market 30s instrumental BGM). The 2026-09 product
-> pivot supersedes its scope — full songs, lyrics and a public feed — while
-> keeping every engineering guarantee (ledger, idempotency, outbox, Stripe
-> reconciliation, rights handling) that document specifies.
+> Repo note: the product is **YUHA**. Two earlier names survive in places that
+> cannot be renamed safely — `PROJECT_TASK.md` and `spec/` are the original
+> brief and stay as written records, and the applied migration
+> `0002_sonare_songs.sql` is checksum-tracked, so its name and contents are
+> frozen. Local and deployed infrastructure identifiers (the Helm chart, the
+> Terraform resources, the dev database) still read `loopscene`; renaming them
+> would force resource recreation, so that is a deliberate, separate decision.
+
+> Scope note: there is **no public feed and no likes**. Songs are private, and
+> publishing means anyone holding the link can open it. The platform sells its
+> own service and does not split licence revenue with creators — what a licence
+> records is authorship and usage rights, which is the part intended to carry
+> over to on-chain proof later.
 
 > **This is not ready to charge anyone.** No music-provider agreement is signed,
 > no legal review has happened, and no AWS account has been provisioned. Demo
@@ -210,14 +216,15 @@ alerts, rollback and recovery.
 ## Scope
 
 Built: full-song generation (lyrics sung or instrumental, 30s–4min), the
-Simple/Custom studio, a persistent queue player, the public Explore feed with
-trending ranking, likes and play counters, publishing/unpublishing, private
-library, MP3 download and trimming, per-song usage records, rights-complaint
-handling, Google OAuth + development login, Stripe checkout / subscriptions /
-refunds (USD catalogue: Starter Pack, Pro, Premier), an async job pipeline with
-the credit ledger, and the operations console.
+Simple/Custom studio, a persistent queue player, play counters, link sharing
+on and off, a private library, MP3 download and trimming, per-song usage and
+authorship records, rights-complaint handling, Google OAuth + development
+login, Stripe checkout / subscriptions / refunds (USD catalogue: Starter Pack,
+Pro, Premier), an async job pipeline with the credit ledger, and the
+operations console.
 
-Deliberately **not** built: voice imitation of real people, cover versions,
+Deliberately **not** built: a public feed or social graph, likes, creator
+revenue sharing, voice imitation of real people, cover versions,
 reference-audio upload, music distribution, royalty splitting, Content ID
 registration, remixing, annual or unlimited plans, auto top-up, transferable
 credit balances, native apps, and video upload or composition.
@@ -249,16 +256,18 @@ time; disable requires a valid code. Google's consumer accounts expose no MFA
 API we can call on a user's behalf, so this is the standard commercial
 integration of Google's authenticator surface with our own verified flow.
 
-## Market licensing and creator earnings
+## Licensing and the authorship record
 
-Published songs can be licensed by other users ($4.99, `market_license`
-catalogue key). The buyer receives per-track download rights; the creator
-accrues 70% of every sale (`MARKET_CREATOR_SHARE`, frozen per sale into the
-license row) in an append-only earnings ledger with pending/cleared/paid
-states, surfaced on the Library page. Payout execution is operator-action
-until a payout provider (Stripe Connect or equivalent) is wired — accrual,
-isolation and reconciliation are real today, transfers are a deliberate
-`BLOCKED_EXTERNAL`.
+A song whose link is open can be licensed by another user ($4.99,
+`market_license` catalogue key). The buyer receives per-track download rights.
+The platform sells its own service and does **not** split that revenue with
+creators, so there is no earnings ledger and no payout machinery.
+
+What each sale writes is a `track_licenses` row: who authored the song, who
+holds usage rights to it, and what was paid, idempotent on the order id. That
+record is deliberately kept as a system of record — it is the authorship proof
+intended to carry over to on-chain attestation later, and it must outlive any
+monetisation model layered on top of it.
 
 ## Lyric alignment
 

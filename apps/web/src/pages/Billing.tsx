@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import type { EntitlementsView } from '@loopscene/contracts';
+import type { EntitlementsView } from '@yuha/contracts';
 import { apiFetch, newIdempotencyKey } from '../lib/api';
 import { formatMoney, formatJst, useSession } from '../lib/session';
 import { Badge, ErrorNotice, Loading } from '../components/common';

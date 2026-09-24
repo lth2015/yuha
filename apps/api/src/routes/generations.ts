@@ -5,8 +5,8 @@ import {
   IDEMPOTENCY_HEADER,
   createGenerationRequest,
   idempotencyKeySchema,
-} from '@loopscene/contracts';
-import { getBalance, getTrackForUser, listOpenJobs, trackEvent } from '@loopscene/db';
+} from '@yuha/contracts';
+import { getBalance, getTrackForUser, listOpenJobs, trackEvent } from '@yuha/db';
 import type { AppContext } from '../context.js';
 import { cancelGeneration, createGeneration, getJobView, toJobView } from '../services/generation.js';
 
@@ -106,7 +106,7 @@ export default async function generationRoutes(app: FastifyInstance, opts: { ctx
         throw new AppError('UNSUPPORTED_CAPABILITY', 'the configured text provider cannot edit songs');
       }
 
-      const { checkPrompt } = await import('@loopscene/providers');
+      const { checkPrompt } = await import('@yuha/providers');
       const safety = checkPrompt(body.instructions);
       if (!safety.allowed) {
         throw new AppError('PROMPT_BLOCKED', `instructions rejected: ${safety.reason}`, {

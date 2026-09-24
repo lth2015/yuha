@@ -1,4 +1,4 @@
-import { AppError } from '@loopscene/contracts';
+import { AppError } from '@yuha/contracts';
 import {
   consumeRecoveryCode,
   disableMfaFactor,
@@ -8,7 +8,7 @@ import {
   getUser,
   redeemChallenge,
   upsertMfaFactor,
-} from '@loopscene/db';
+} from '@yuha/db';
 import { createHash } from 'node:crypto';
 import type { AppContext } from '../context.js';
 import { SessionTokenIssuer } from '../auth/tokens.js';
@@ -83,7 +83,7 @@ export async function confirmMfa(
 
   // Recovery codes are stored hashed; the plaintext is returned exactly once.
   const fresh = generateRecoveryCodes();
-  const { execute } = await import('@loopscene/db');
+  const { execute } = await import('@yuha/db');
   await execute(`UPDATE mfa_factors SET recovery_codes = ? WHERE user_id = ?`, [
     JSON.stringify(fresh.map(hashRecoveryCode)),
     params.userId,

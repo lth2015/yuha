@@ -3,9 +3,9 @@ import {
   AppError,
   cancelSubscriptionRequest,
   createCheckoutRequest,
-} from '@loopscene/contracts';
-import { listOrders, recordWebhookEvent, listPayments } from '@loopscene/db';
-import { SimulatedPaymentsAdapter } from '@loopscene/providers';
+} from '@yuha/contracts';
+import { listOrders, recordWebhookEvent, listPayments } from '@yuha/db';
+import { SimulatedPaymentsAdapter } from '@yuha/providers';
 import type { AppContext } from '../context.js';
 import {
   cancelSubscription,

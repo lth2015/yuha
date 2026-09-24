@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import type { ExportView, LicenseSnapshotView } from '@loopscene/contracts';
+import type { ExportView, LicenseSnapshotView } from '@yuha/contracts';
 import { apiFetch } from '../lib/api';
 import { formatJst, useSession } from '../lib/session';
 import { AudioPlayer, Badge, ErrorNotice, Loading } from '../components/common';

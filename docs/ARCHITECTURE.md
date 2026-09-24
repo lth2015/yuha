@@ -19,7 +19,7 @@ was built and, where a decision was contested, why it went the way it did.
 | `infra/helm` | API and worker deployment |
 
 The API and the worker are **one image**, and both import their domain logic
-from `@loopscene/api`. That is deliberate: they share the ledger and the state
+from `@yuha/api`. That is deliberate: they share the ledger and the state
 machine, and two copies of those rules would eventually disagree about money.
 
 ---

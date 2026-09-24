@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState, type ReactNode } from 'react';
 import { Link, NavLink, useNavigate } from 'react-router-dom';
-import type { TrackView } from '@loopscene/contracts';
+import type { TrackView } from '@yuha/contracts';
 import { apiFetch } from '../lib/api';
 import { usePlayer } from '../lib/player';
 import { useI18n } from '../lib/i18n';
@@ -75,18 +75,6 @@ export function Layout({ children }: { children: ReactNode }) {
       .catch(() => setNowPlaying(null));
   }, [player.current?.trackId]);
 
-  const toggleLike = useCallback(async () => {
-    if (!nowPlaying || nowPlaying.likedByMe === null) return;
-    try {
-      const res = await apiFetch<{ liked: boolean; likeCount: number }>(
-        `/v1/explore/${nowPlaying.trackId}/like`,
-        { method: 'POST', body: { action: nowPlaying.likedByMe ? 'unlike' : 'like' } },
-      );
-      setNowPlaying({ ...nowPlaying, likedByMe: res.liked, likeCount: res.likeCount });
-    } catch {
-      /* optimistic UI only */
-    }
-  }, [nowPlaying]);
 
   const download = useCallback(async () => {
     if (!nowPlaying) return;
@@ -244,9 +232,6 @@ export function Layout({ children }: { children: ReactNode }) {
           coverSeed={nowPlaying?.coverSeed ?? player.current?.coverSeed ?? 1}
           lyrics={nowPlaying?.lyrics ?? null}
           timings={nowPlaying?.lyricTimings ?? null}
-          liked={nowPlaying?.likedByMe ?? undefined}
-          likeCount={nowPlaying?.likeCount ?? undefined}
-          onLike={nowPlaying && nowPlaying.likedByMe !== null ? toggleLike : undefined}
           onDownload={
             nowPlaying && (me?.userId === nowPlaying.artistId || nowPlaying.licensedByMe) ? download : undefined
           }

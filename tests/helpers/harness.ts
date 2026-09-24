@@ -9,7 +9,7 @@ import {
   loadConfig,
   DevAuthAdapter,
   type AppContext,
-} from '@loopscene/api';
+} from '@yuha/api';
 import {
   closeDb,
   confirmAgeAndTerms,
@@ -21,7 +21,7 @@ import {
   upsertProduct,
   upsertUser,
   withTx,
-} from '@loopscene/db';
+} from '@yuha/db';
 
 /**
  * Test harness.
@@ -190,9 +190,7 @@ async function seedCatalogue(): Promise<void> {
  */
 const BUSINESS_TABLES = [
   'mfa_factors',
-  'creator_earnings',
   'track_licenses',
-  'song_likes',
   'auth_codes',
   'ledger_entries',
   'entitlement_batches',

@@ -20,7 +20,7 @@ import {
   revokeUnusedUnits,
   reconcileBalances,
   withTx,
-} from '@loopscene/db';
+} from '@yuha/db';
 import { createHarness, ledgerFor, resetData, teardown, type Harness } from './helpers/harness.js';
 
 let h: Harness;

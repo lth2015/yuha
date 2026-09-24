@@ -1,4 +1,4 @@
-import { AppError, type EntitlementsView, type OrderView, type ProductView } from '@loopscene/contracts';
+import { AppError, type EntitlementsView, type OrderView, type ProductView } from '@yuha/contracts';
 import {
   attachCheckoutSession,
   findOrderByIdempotencyKey,
@@ -16,7 +16,7 @@ import {
   trackEvent,
   withTx,
   type ProductRow,
-} from '@loopscene/db';
+} from '@yuha/db';
 import type { AppContext } from '../context.js';
 
 export function toProductView(row: ProductRow, available: boolean): ProductView {

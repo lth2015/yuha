@@ -1,4 +1,4 @@
-import type { AudioFormat, MusicIntent } from '@loopscene/contracts';
+import type { AudioFormat, MusicIntent } from '@yuha/contracts';
 
 /**
  * Music provider adapter contract (AI-04).

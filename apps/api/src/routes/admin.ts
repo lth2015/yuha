@@ -1,6 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
-import { AppError } from '@loopscene/contracts';
+import { AppError } from '@yuha/contracts';
 import {
   compensateUnits,
   getRightsCase,
@@ -16,7 +16,7 @@ import {
   updateRightsCase,
   withTx,
   writeAuditLog,
-} from '@loopscene/db';
+} from '@yuha/db';
 import type { AppContext } from '../context.js';
 
 /**

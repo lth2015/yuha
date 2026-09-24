@@ -1,4 +1,4 @@
-# LOOPSCENE API + worker image.
+# YUHA API + worker image.
 #
 # One image serves both workloads; the Helm chart selects the entry point. That
 # keeps the deployed API and worker byte-identical, which matters because they
@@ -25,9 +25,9 @@ COPY apps/worker/package.json apps/worker/
 
 # --frozen-lockfile: the build fails rather than silently resolving a different
 # dependency tree than the one that was tested.
-RUN pnpm install --frozen-lockfile --filter "@loopscene/contracts..." \
-      --filter "@loopscene/db..." --filter "@loopscene/providers..." \
-      --filter "@loopscene/api..." --filter "@loopscene/worker..."
+RUN pnpm install --frozen-lockfile --filter "@yuha/contracts..." \
+      --filter "@yuha/db..." --filter "@yuha/providers..." \
+      --filter "@yuha/api..." --filter "@yuha/worker..."
 
 COPY tsconfig.base.json ./
 COPY scripts/ scripts/
@@ -35,19 +35,19 @@ COPY packages/ packages/
 COPY apps/api/ apps/api/
 COPY apps/worker/ apps/worker/
 
-RUN pnpm --filter @loopscene/contracts build \
- && pnpm --filter @loopscene/db build \
- && pnpm --filter @loopscene/providers build \
- && pnpm --filter @loopscene/api build \
- && pnpm --filter @loopscene/worker build
+RUN pnpm --filter @yuha/contracts build \
+ && pnpm --filter @yuha/db build \
+ && pnpm --filter @yuha/providers build \
+ && pnpm --filter @yuha/api build \
+ && pnpm --filter @yuha/worker build
 
 # `pnpm deploy` produces a self-contained directory with workspace
 # dependencies copied in rather than symlinked into a shared store, which is
 # what makes the tree survive being copied into a fresh image. `pnpm prune` is
 # the wrong tool here: at a workspace root it removes the workspace links
-# entirely and the app then cannot resolve @loopscene/*.
-RUN CI=true pnpm deploy --filter=@loopscene/api  --prod --legacy /deploy/api \
- && CI=true pnpm deploy --filter=@loopscene/worker --prod --legacy /deploy/worker
+# entirely and the app then cannot resolve @yuha/*.
+RUN CI=true pnpm deploy --filter=@yuha/api  --prod --legacy /deploy/api \
+ && CI=true pnpm deploy --filter=@yuha/worker --prod --legacy /deploy/worker
 
 # --------------------------------------------------------------- runtime stage
 FROM node:22.13.1-bookworm-slim AS runtime

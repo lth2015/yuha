@@ -1,5 +1,5 @@
 import type { PoolConnection } from 'mysql2/promise';
-import { canTransition, type JobState } from '@loopscene/contracts';
+import { canTransition, type JobState } from '@yuha/contracts';
 import { execute, newId, query, queryOne, toJson } from './pool.js';
 
 export interface JobRow {

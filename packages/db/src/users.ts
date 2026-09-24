@@ -1,5 +1,5 @@
 import type { PoolConnection } from 'mysql2/promise';
-import type { UserRole } from '@loopscene/contracts';
+import type { UserRole } from '@yuha/contracts';
 import { execute, newId, query, queryOne } from './pool.js';
 
 export interface UserRow {

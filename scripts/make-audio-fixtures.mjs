@@ -143,7 +143,7 @@ async function main() {
         '-ar', '44100',
         '-ac', '2',
         '-map_metadata', '-1',
-        '-metadata', 'title=SONARE demo fixture (synthetic, not a real generation)',
+        '-metadata', 'title=YUHA demo fixture (synthetic, not a real generation)',
         '-metadata', 'comment=Synthesised by scripts/make-audio-fixtures.mjs. Demo use only.',
         join(outDir, `${f.name}-${duration}s.mp3`),
       );

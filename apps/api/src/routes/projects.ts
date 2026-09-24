@@ -1,6 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
-import { AppError, Scene } from '@loopscene/contracts';
+import { AppError, Scene } from '@yuha/contracts';
 import {
   deleteProject,
   getProjectForUser,
@@ -8,7 +8,7 @@ import {
   listProjects,
   listTracks,
   renameProject,
-} from '@loopscene/db';
+} from '@yuha/db';
 
 export default async function projectRoutes(app: FastifyInstance) {
   app.get('/v1/projects', { preHandler: app.requireAuth }, async (req) => {

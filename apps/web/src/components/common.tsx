@@ -141,8 +141,6 @@ export function AudioPlayer({
         coverSeed: 0,
         durationSeconds: duration,
         vocalMode: 'instrumental',
-        likeCount: 0,
-        likedByMe: null,
         previewUrl: url,
       });
   };

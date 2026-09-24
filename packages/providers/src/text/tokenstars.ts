@@ -1,4 +1,4 @@
-import { musicIntent, type MusicIntent } from '@loopscene/contracts';
+import { musicIntent, type MusicIntent } from '@yuha/contracts';
 import type { IntentRequest, IntentResult, ReviseRequest, ReviseResult, TextProvider, TextUsage } from './types.js';
 
 /**

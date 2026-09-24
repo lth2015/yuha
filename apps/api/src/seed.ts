@@ -1,7 +1,7 @@
 /**
  * Seeds the price catalogue, the Explore showcase songs and demo accounts.
  *
- * Product rows are the launch pricing baseline for the SONARE product. They are
+ * Product rows are the launch pricing baseline for the YUHA product. They are
  * versioned, and must be re-derived from signed supplier rates and a legal
  * review before anything is actually sold — seeding them is not approval to
  * charge.
@@ -20,7 +20,7 @@ import {
   grantUnits,
   newId,
   withTx,
-} from '@loopscene/db';
+} from '@yuha/db';
 import { loadConfig } from './config.js';
 import { resolveFromRoot } from './paths.js';
 import { createContext } from './context.js';
@@ -109,14 +109,13 @@ const SHOWCASE: Array<{
   vocalMode: 'instrumental' | 'with_vocals';
   durationSeconds: number;
   plays: number;
-  likes: number;
 }> = [
-  { fixture: 'night_walk_calm-120s.mp3', title: 'Neon Rain', artist: 'Aoi', styles: ['lofi', 'chill', 'night'], vocalMode: 'instrumental', durationSeconds: 120, plays: 184, likes: 41 },
-  { fixture: 'outfit_confident-120s.mp3', title: 'Chrome Heart', artist: 'Rin', styles: ['trap', 'fashion', 'confident'], vocalMode: 'with_vocals', durationSeconds: 120, plays: 142, likes: 35 },
-  { fixture: 'gaming_tense-120s.mp3', title: 'Night Signal', artist: 'Kite', styles: ['synthwave', 'arcade', 'epic'], vocalMode: 'instrumental', durationSeconds: 120, plays: 121, likes: 27 },
-  { fixture: 'daily_log_warm-120s.mp3', title: 'Golden Hour', artist: 'Mei', styles: ['vlog', 'acoustic', 'warm'], vocalMode: 'with_vocals', durationSeconds: 120, plays: 98, likes: 22 },
-  { fixture: 'night_walk_dreamy-120s.mp3', title: 'Paper Moon', artist: 'Aoi', styles: ['ambient', 'dreamy'], vocalMode: 'instrumental', durationSeconds: 120, plays: 76, likes: 18 },
-  { fixture: 'gaming_tense-60s.mp3', title: 'Cold Wire', artist: 'Kite', styles: ['dnb', 'tense', 'battle'], vocalMode: 'instrumental', durationSeconds: 60, plays: 54, likes: 12 },
+  { fixture: 'night_walk_calm-120s.mp3', title: 'Neon Rain', artist: 'Aoi', styles: ['lofi', 'chill', 'night'], vocalMode: 'instrumental', durationSeconds: 120, plays: 184 },
+  { fixture: 'outfit_confident-120s.mp3', title: 'Chrome Heart', artist: 'Rin', styles: ['trap', 'fashion', 'confident'], vocalMode: 'with_vocals', durationSeconds: 120, plays: 142 },
+  { fixture: 'gaming_tense-120s.mp3', title: 'Night Signal', artist: 'Kite', styles: ['synthwave', 'arcade', 'epic'], vocalMode: 'instrumental', durationSeconds: 120, plays: 121 },
+  { fixture: 'daily_log_warm-120s.mp3', title: 'Golden Hour', artist: 'Mei', styles: ['vlog', 'acoustic', 'warm'], vocalMode: 'with_vocals', durationSeconds: 120, plays: 98 },
+  { fixture: 'night_walk_dreamy-120s.mp3', title: 'Paper Moon', artist: 'Aoi', styles: ['ambient', 'dreamy'], vocalMode: 'instrumental', durationSeconds: 120, plays: 76 },
+  { fixture: 'gaming_tense-60s.mp3', title: 'Cold Wire', artist: 'Kite', styles: ['dnb', 'tense', 'battle'], vocalMode: 'instrumental', durationSeconds: 60, plays: 54 },
 ];
 
 async function seedShowcase() {
@@ -185,10 +184,10 @@ async function seedShowcase() {
 
     await query(
       `INSERT INTO tracks (id, owner_id, project_id, job_id, title, scene, mood, duration_ms, state,
-                           styles, lyrics, vocal_mode, visibility, play_count, like_count, cover_seed)
-       VALUES (?, ?, ?, ?, ?, 'daily_log', 'calm', ?, 'deliverable', ?, NULL, ?, 'public', ?, ?, ?)`,
+                           styles, lyrics, vocal_mode, visibility, play_count, cover_seed)
+       VALUES (?, ?, ?, ?, ?, 'daily_log', 'calm', ?, 'deliverable', ?, NULL, ?, 'public', ?, ?)`,
       [trackId, ownerId, projectId, jobId, song.title, song.durationSeconds * 1000,
-       JSON.stringify(song.styles), song.vocalMode, song.plays, song.likes,
+       JSON.stringify(song.styles), song.vocalMode, song.plays,
        createHash('sha256').update(`cover:${trackId}`).digest().readUInt32BE(0) % 0x7fffffff],
     );
     await query(

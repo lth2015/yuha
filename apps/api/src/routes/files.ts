@@ -1,6 +1,6 @@
 import type { FastifyInstance } from 'fastify';
-import { AppError } from '@loopscene/contracts';
-import { LocalStorageAdapter } from '@loopscene/providers';
+import { AppError } from '@yuha/contracts';
+import { LocalStorageAdapter } from '@yuha/providers';
 import type { AppContext } from '../context.js';
 
 /**

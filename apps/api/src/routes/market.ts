@@ -1,10 +1,11 @@
 import type { FastifyInstance } from 'fastify';
-import { AppError, IDEMPOTENCY_HEADER, idempotencyKeySchema } from '@loopscene/contracts';
+import { AppError, IDEMPOTENCY_HEADER, idempotencyKeySchema } from '@yuha/contracts';
 import type { AppContext } from '../context.js';
-import { createLicenseCheckout, creatorEarnings } from '../services/market.js';
+import { createLicenseCheckout } from '../services/market.js';
 
 /**
- * Market routes: licensing songs between users and the creator earnings view.
+ * Market routes: licensing a song for use by another user. The platform
+ * sells its own service, so there is no creator revenue split.
  */
 export default async function marketRoutes(app: FastifyInstance, opts: { ctx: AppContext }) {
   const { ctx } = opts;
@@ -28,13 +29,4 @@ export default async function marketRoutes(app: FastifyInstance, opts: { ctx: Ap
     },
   );
 
-  /** The signed-in creator's own earnings — nobody else's (SEC-01). */
-  app.get('/v1/market/earnings', { preHandler: app.requireAuth }, async (req) => {
-    const summary = await creatorEarnings(req.user!.id);
-    return {
-      currency: 'usd',
-      creatorShareRate: ctx.config.MARKET_CREATOR_SHARE,
-      ...summary,
-    };
-  });
 }

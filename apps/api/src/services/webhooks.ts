@@ -1,10 +1,10 @@
-import type { SubscriptionStatus } from '@loopscene/contracts';
+import type { SubscriptionStatus } from '@yuha/contracts';
 import {
   finishWebhookEvent,
   getActiveProduct,
   getOrder,
   getProductVersion,
-  grantLicenseWithEarnings,
+  grantLicense,
   grantUnits,
   findOrderBySession,
   findSubscriptionByStripeId,
@@ -19,7 +19,7 @@ import {
   withTx,
   query,
   type WebhookEventRow,
-} from '@loopscene/db';
+} from '@yuha/db';
 import type { AppContext } from '../context.js';
 
 /**
@@ -157,7 +157,7 @@ async function handleCheckoutCompleted(ctx: AppContext, event: StripeEventLike):
       if (!trackId || !creatorId) {
         throw new Error(`market license order ${updated.id} is missing track/creator metadata`);
       }
-      await grantLicenseWithEarnings(
+      await grantLicense(
         {
           trackId,
           buyerId: updated.user_id,
@@ -165,7 +165,6 @@ async function handleCheckoutCompleted(ctx: AppContext, event: StripeEventLike):
           orderId: updated.id,
           pricePaid: updated.amount_jpy,
           currency: updated.currency,
-          creatorShareRate: ctx.config.MARKET_CREATOR_SHARE,
         },
         tx,
       );

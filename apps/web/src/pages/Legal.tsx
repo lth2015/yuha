@@ -70,7 +70,7 @@ export function Terms() {
       <DraftBanner isPlaceholder={d.isPlaceholder} />
       <Section h="1. The service">
         <p>
-          SONARE (the “Service”) is an AI song studio operated by{' '}
+          YUHA (the “Service”) is an AI song studio operated by{' '}
           <strong>{d.entityName}</strong> that generates songs from descriptions and lyrics you provide. By
           creating an account or using the Service you agree to these Terms.
         </p>
@@ -147,7 +147,7 @@ export function Privacy() {
       <DraftBanner isPlaceholder={d.isPlaceholder} />
       <Section h="1. Who we are">
         <p>
-          {d.entityName} ({d.address}) operates SONARE and is the controller of the personal data described
+          {d.entityName} ({d.address}) operates YUHA and is the controller of the personal data described
           below. Privacy contact: {d.contact}.
         </p>
       </Section>

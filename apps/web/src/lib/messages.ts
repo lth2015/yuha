@@ -1,4 +1,4 @@
-import { ERROR_CODES, type ErrorCode } from '@loopscene/contracts';
+import { ERROR_CODES, type ErrorCode } from '@yuha/contracts';
 import { ApiError, NetworkError } from './api';
 
 /**

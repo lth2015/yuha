@@ -1,6 +1,6 @@
 import { createRemoteJWKSet, jwtVerify } from 'jose';
-import { AppError } from '@loopscene/contracts';
-import { findByExternalId, upsertUser, type UserRow } from '@loopscene/db';
+import { AppError } from '@yuha/contracts';
+import { findByExternalId, upsertUser, type UserRow } from '@yuha/db';
 import type { AuthAdapter } from './index.js';
 
 /**

@@ -1,5 +1,5 @@
 {
-  "name": "@loopscene/db",
+  "name": "@yuha/db",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -18,7 +18,7 @@
     "reset": "tsx --env-file-if-exists=../../.env src/cli.ts reset"
   },
   "dependencies": {
-    "@loopscene/contracts": "workspace:*",
+    "@yuha/contracts": "workspace:*",
     "mysql2": "^3.11.5"
   },
   "devDependencies": {

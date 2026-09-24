@@ -1,4 +1,4 @@
-import type { LyricTimings } from '@loopscene/contracts';
+import type { LyricTimings } from '@yuha/contracts';
 import type { AlignmentProvider, AlignmentRequest, AlignmentResult } from './types.js';
 
 const SECTION_RE = /^\s*[[(](?:verse|chorus|bridge|intro|outro|pre-?chorus|hook|refrain|interlude|instrumental)[^)\]]*[)\]]\s*$/i;

@@ -1,4 +1,4 @@
-import type { LyricTimings } from '@loopscene/contracts';
+import type { LyricTimings } from '@yuha/contracts';
 import type { AlignmentProvider, AlignmentRequest, AlignmentResult } from './types.js';
 
 /**

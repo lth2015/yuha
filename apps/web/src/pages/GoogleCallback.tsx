@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import type { MeView } from '@loopscene/contracts';
+import type { MeView } from '@yuha/contracts';
 import { apiFetch } from '../lib/api';
 import { useSession } from '../lib/session';
 

@@ -207,9 +207,6 @@ export const trackView = z.object({
   visibility: Visibility,
   durationSeconds: z.number(),
   playCount: z.number().int().nonnegative(),
-  likeCount: z.number().int().nonnegative(),
-  /** Present on every authenticated read; null for anonymous Explore visits. */
-  likedByMe: z.boolean().nullable(),
   /** Deterministic seed for the generated cover art. */
   coverSeed: z.number().int(),
   /** Timings for synced lyrics; null when the song has no lyrics. */
@@ -237,15 +234,6 @@ export const listTracksResponse = z.object({
   items: z.array(trackView),
   nextCursor: z.string().nullable(),
 });
-
-export const exploreQuery = z.object({
-  cursor: z.string().optional(),
-  limit: z.coerce.number().int().min(1).max(50).default(24),
-  sort: z.enum(['trending', 'new']).default('trending'),
-  vocal: z.enum(['instrumental', 'vocals']).optional(),
-  q: z.string().max(100).optional(),
-});
-export type ExploreQuery = z.infer<typeof exploreQuery>;
 
 export const exploreResponse = z.object({
   items: z.array(trackView),

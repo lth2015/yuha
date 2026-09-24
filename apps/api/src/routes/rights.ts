@@ -1,5 +1,5 @@
 import type { FastifyInstance } from 'fastify';
-import { createRightsCaseRequest } from '@loopscene/contracts';
+import { createRightsCaseRequest } from '@yuha/contracts';
 import {
   getTrack,
   insertRightsCase,
@@ -7,7 +7,7 @@ import {
   setLicenseStatus,
   setTrackState,
   writeAuditLog,
-} from '@loopscene/db';
+} from '@yuha/db';
 import type { AppContext } from '../context.js';
 
 function caseNumber(): string {

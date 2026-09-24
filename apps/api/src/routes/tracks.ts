@@ -5,14 +5,13 @@ import {
   listTracksQuery,
   type LicenseSnapshotView,
   type TrackView,
-} from '@loopscene/contracts';
-import type { LyricTimings } from '@loopscene/contracts';
+} from '@yuha/contracts';
+import type { LyricTimings } from '@yuha/contracts';
 import {
   getLicenseSnapshot,
   getMasterAsset,
   getPublicTrack,
   getTrackForUser,
-  hasLiked,
   hasLicense,
   countLicenses,
   listAssets,
@@ -20,7 +19,7 @@ import {
   softDeleteTrack,
   trackEvent,
   type TrackRow,
-} from '@loopscene/db';
+} from '@yuha/db';
 import { licenseStateFor } from '../services/market.js';
 import type { AppContext } from '../context.js';
 import { createExport, issueDownloadUrl } from '../services/exports.js';
@@ -45,7 +44,6 @@ async function toTrackView(
           })
         ).url
       : null;
-  const liked = await hasLiked([row.id], viewerId);
 
   return {
     trackId: row.id,
@@ -62,8 +60,6 @@ async function toTrackView(
     visibility: row.visibility,
     durationSeconds: row.duration_ms / 1000,
     playCount: row.play_count,
-    likeCount: row.like_count,
-    likedByMe: liked.has(row.id),
     coverSeed: row.cover_seed,
     lyricTimings: (row.lyric_timings ?? null) as LyricTimings | null,
     licenseCount: await countLicenses(row.id),
@@ -126,7 +122,6 @@ export default async function trackRoutes(app: FastifyInstance, opts: { ctx: App
     const publicRow = await getPublicTrack(id);
     if (!publicRow) throw new AppError('NOT_FOUND', 'track not found');
     const master = await getMasterAsset(publicRow.id);
-    const liked = await hasLiked([publicRow.id], req.user!.id);
     const lic = await licenseStateFor(publicRow.id, req.user!.id);
     const previewUrl = master
       ? (
@@ -140,7 +135,6 @@ export default async function trackRoutes(app: FastifyInstance, opts: { ctx: App
     return {
       ...toPublicTrackView(ctx, publicRow, {
         previewUrl,
-        likedByMe: liked.has(publicRow.id),
         licenseCount: lic.licenseCount,
         licensedByMe: lic.licensedByMe,
       }),

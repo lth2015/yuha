@@ -1,6 +1,6 @@
-import type { AppContext } from '@loopscene/api';
-import { failJob } from '@loopscene/api';
-import { recordCostEvent, type JobRow } from '@loopscene/db';
+import type { AppContext } from '@yuha/api';
+import { failJob } from '@yuha/api';
+import { recordCostEvent, type JobRow } from '@yuha/db';
 
 type Log = (level: 'info' | 'warn' | 'error', msg: string, fields?: Record<string, unknown>) => void;
 

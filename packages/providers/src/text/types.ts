@@ -1,4 +1,4 @@
-import type { MusicIntent } from '@loopscene/contracts';
+import type { MusicIntent } from '@yuha/contracts';
 
 export interface TextUsage {
   promptTokens?: number;

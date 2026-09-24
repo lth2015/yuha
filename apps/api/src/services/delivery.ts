@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import type { MusicIntent } from '@loopscene/contracts';
+import type { MusicIntent } from '@yuha/contracts';
 import {
   consumeReservation,
   compensateUnits,
@@ -13,7 +13,7 @@ import {
   transitionJob,
   withTx,
   type JobRow,
-} from '@loopscene/db';
+} from '@yuha/db';
 import type { AppContext } from '../context.js';
 
 export const LICENSE_DISCLAIMER_JA = [

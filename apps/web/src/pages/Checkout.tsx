@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
-import type { OrderView, ProductView } from '@loopscene/contracts';
+import type { OrderView, ProductView } from '@yuha/contracts';
 import { apiFetch, newIdempotencyKey } from '../lib/api';
 import { formatMoney, formatJst, useSession } from '../lib/session';
 import { Badge, ErrorNotice, Loading } from '../components/common';

@@ -1,7 +1,7 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import fp from 'fastify-plugin';
-import { AppError, type UserRole } from '@loopscene/contracts';
-import type { UserRow } from '@loopscene/db';
+import { AppError, type UserRole } from '@yuha/contracts';
+import type { UserRow } from '@yuha/db';
 import type { AuthAdapter } from '../auth/index.js';
 
 declare module 'fastify' {

@@ -7,7 +7,7 @@
  * webhook and entitlement logic, not a shortcut around it.
  */
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
-import { processWebhookEvent } from '@loopscene/api';
+import { processWebhookEvent } from '@yuha/api';
 import {
   claimWebhookEvents,
   findSubscriptionByStripeId,
@@ -18,8 +18,8 @@ import {
   recordWebhookEvent,
   upsertSubscription,
   withTx,
-} from '@loopscene/db';
-import { SimulatedPaymentsAdapter } from '@loopscene/providers';
+} from '@yuha/db';
+import { SimulatedPaymentsAdapter } from '@yuha/providers';
 import { createHarness, resetData, teardown, type Harness, type TestUser } from './helpers/harness.js';
 
 let h: Harness;
@@ -282,7 +282,7 @@ describe('one-time purchase', () => {
     await query(`DELETE FROM entitlement_batches WHERE user_id = ?`, [user.id]);
     await query(`UPDATE orders SET entitlement_granted_at = NULL WHERE id = ?`, [orderId]);
 
-    const { recoverUngrantedOrders } = await import('@loopscene/api');
+    const { recoverUngrantedOrders } = await import('@yuha/api');
     const repaired = await recoverUngrantedOrders(h.ctx);
 
     expect(repaired).toBe(1);
@@ -510,7 +510,7 @@ describe('refunds (PAY-09)', () => {
       ).json();
 
     const delivered = await gen('refund-gen-001');
-    const { runJobStep } = await import('@loopscene/worker/pipeline');
+    const { runJobStep } = await import('@yuha/worker/pipeline');
     for (let i = 0; i < 4; i += 1) {
       await runJobStep({ ctx: h.ctx, owner: 'refund-test', log: () => undefined }, delivered.jobId);
     }
@@ -609,7 +609,7 @@ describe('PAY-10: entitlement history survives cancellation', () => {
       })
     ).json();
 
-    const { runJobStep } = await import('@loopscene/worker/pipeline');
+    const { runJobStep } = await import('@yuha/worker/pipeline');
     for (let i = 0; i < 4; i += 1) {
       await runJobStep({ ctx: h.ctx, owner: 'history', log: () => undefined }, gen.jobId);
     }

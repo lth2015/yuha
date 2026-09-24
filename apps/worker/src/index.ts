@@ -1,7 +1,7 @@
 import { hostname } from 'node:os';
 import { randomUUID } from 'node:crypto';
-import { ConfigError, createContext, loadConfig } from '@loopscene/api';
-import { closeDb } from '@loopscene/db';
+import { ConfigError, createContext, loadConfig } from '@yuha/api';
+import { closeDb } from '@yuha/db';
 import {
   generationLoop,
   maintenanceLoop,

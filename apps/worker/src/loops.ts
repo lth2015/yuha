@@ -1,5 +1,5 @@
-import type { AppContext } from '@loopscene/api';
-import { processWebhookEvent, recoverUngrantedOrders } from '@loopscene/api';
+import type { AppContext } from '@yuha/api';
+import { processWebhookEvent, recoverUngrantedOrders } from '@yuha/api';
 import {
   claimJob,
   claimOutboxBatch,
@@ -10,7 +10,7 @@ import {
   markDispatched,
   reconcileBalances,
   withTx,
-} from '@loopscene/db';
+} from '@yuha/db';
 import { runJobStep, type PipelineDeps } from './pipeline.js';
 import { failStaleUnknownJob } from './reconcile.js';
 

@@ -1,5 +1,5 @@
 {
-  "name": "@loopscene/providers",
+  "name": "@yuha/providers",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -19,8 +19,8 @@
     "@aws-sdk/client-s3": "^3.717.0",
     "@aws-sdk/client-sqs": "^3.717.0",
     "@aws-sdk/s3-request-presigner": "^3.717.0",
-    "@loopscene/contracts": "workspace:*",
-    "@loopscene/db": "workspace:*",
+    "@yuha/contracts": "workspace:*",
+    "@yuha/db": "workspace:*",
     "stripe": "^17.5.0",
     "zod": "^3.24.1"
   },

@@ -5,7 +5,7 @@ import {
   SONG_DURATIONS,
   type CreateGenerationRequest,
   type JobView,
-} from '@loopscene/contracts';
+} from '@yuha/contracts';
 import {
   enqueueOutbox,
   getBalance,
@@ -27,8 +27,8 @@ import {
   withTx,
   withTxRetry,
   type JobRow,
-} from '@loopscene/db';
-import { checkPrompt } from '@loopscene/providers';
+} from '@yuha/db';
+import { checkPrompt } from '@yuha/providers';
 import type { AppContext } from '../context.js';
 
 /**

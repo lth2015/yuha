@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import type { ProductView, TrackView } from '@loopscene/contracts';
+import type { ProductView, TrackView } from '@yuha/contracts';
 import { apiFetch, newIdempotencyKey } from '../lib/api';
 import { formatTime, usePlayer } from '../lib/player';
 import { useI18n } from '../lib/i18n';
@@ -85,19 +85,6 @@ export default function SongDetail() {
     player.play({ ...song, previewUrl: song.previewUrl });
   };
 
-  const toggleLike = async () => {
-    if (song.likedByMe === null) return;
-    setBusy(true);
-    try {
-      const res = await apiFetch<{ liked: boolean; likeCount: number }>(`/v1/explore/${song.trackId}/like`, {
-        method: 'POST',
-        body: { action: song.likedByMe ? 'unlike' : 'like' },
-      });
-      setSong({ ...song, likedByMe: res.liked, likeCount: res.likeCount });
-    } finally {
-      setBusy(false);
-    }
-  };
 
   const setVisibility = async (visibility: 'public' | 'private') => {
     setBusy(true);
@@ -193,15 +180,6 @@ export default function SongDetail() {
           </p>
 
           <div className="song-spread__actions" aria-label="作品操作">
-            <button
-              type="button"
-              className={`text-action${song.likedByMe ? ' is-liked' : ''}`}
-              onClick={toggleLike}
-              disabled={busy || song.likedByMe === null}
-              aria-pressed={song.likedByMe ?? undefined}
-            >
-              {t('song.like', { n: song.likeCount })}
-            </button>
             {song.visibility === 'public' && (
               <button type="button" className="text-action" onClick={share}>
                 {copied ? t('song.copied') : t('song.share')}

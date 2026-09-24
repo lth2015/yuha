@@ -3,10 +3,10 @@
  * from §3.1 and the SSRF guard from SEC-05.
  */
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
-import { ConfigError, loadConfig } from '@loopscene/api';
-import { getLicenseSnapshot, getTrack, query, setLicenseStatus } from '@loopscene/db';
-import { LocalStorageAdapter, assertSafeUrl, checkPrompt, isPublicAddress } from '@loopscene/providers';
-import { runJobStep } from '@loopscene/worker/pipeline';
+import { ConfigError, loadConfig } from '@yuha/api';
+import { getLicenseSnapshot, getTrack, query, setLicenseStatus } from '@yuha/db';
+import { LocalStorageAdapter, assertSafeUrl, checkPrompt, isPublicAddress } from '@yuha/providers';
+import { runJobStep } from '@yuha/worker/pipeline';
 import { createHarness, resetData, teardown, type Harness, type TestUser } from './helpers/harness.js';
 
 let h: Harness;

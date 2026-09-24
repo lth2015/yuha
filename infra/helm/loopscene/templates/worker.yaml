@@ -142,7 +142,7 @@ spec:
       containers:
         - name: migrate
           image: {{ include "loopscene.apiImage" . }}
-          command: ["node", "api/node_modules/@loopscene/db/dist/cli.js", "migrate"]
+          command: ["node", "api/node_modules/@yuha/db/dist/cli.js", "migrate"]
           env:
             {{- include "loopscene.envVars" . | nindent 12 }}
           envFrom:

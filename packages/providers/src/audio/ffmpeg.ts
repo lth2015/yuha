@@ -2,7 +2,7 @@ import { spawn } from 'node:child_process';
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import type { AudioFormat } from '@loopscene/contracts';
+import type { AudioFormat } from '@yuha/contracts';
 
 export interface AudioProbe {
   durationMs: number;

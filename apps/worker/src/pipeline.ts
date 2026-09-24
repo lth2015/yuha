@@ -1,6 +1,6 @@
-import type { AppContext } from '@loopscene/api';
-import { deliver, failJob, handleLateResult, quarantineKey } from '@loopscene/api';
-import { musicIntent, type MusicIntent } from '@loopscene/contracts';
+import type { AppContext } from '@yuha/api';
+import { deliver, failJob, handleLateResult, quarantineKey } from '@yuha/api';
+import { musicIntent, type MusicIntent } from '@yuha/contracts';
 import {
   extendLease,
   getJob,
@@ -16,8 +16,8 @@ import {
   updateAttempt,
   withTx,
   type JobRow,
-} from '@loopscene/db';
-import { fetchAudio, HttpMusicProvider, redactPrompt, type MusicAudioRef } from '@loopscene/providers';
+} from '@yuha/db';
+import { fetchAudio, HttpMusicProvider, redactPrompt, type MusicAudioRef } from '@yuha/providers';
 
 export interface PipelineDeps {
   ctx: AppContext;

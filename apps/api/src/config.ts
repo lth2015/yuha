@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { RunMode } from '@loopscene/contracts';
+import { RunMode } from '@yuha/contracts';
 
 /**
  * Configuration and mode validation (PROJECT_TASK.md §3).
@@ -54,7 +54,7 @@ const envSchema = z.object({
   /** Key material for encrypting TOTP secrets at rest. Falls back outside production. */
   MFA_ENCRYPTION_SECRET: z.string().optional(),
   /** Issuer shown in Google Authenticator. */
-  MFA_ISSUER: z.string().default('SONARE'),
+  MFA_ISSUER: z.string().default('YUHA'),
 
   // --- text model (TokenStars) -------------------------------------------
   TEXT_ADAPTER: z.enum(['local', 'tokenstars']).optional(),
@@ -144,11 +144,6 @@ const envSchema = z.object({
   ALIGNMENT_TIMEOUT_MS: int(60_000),
 
   // --- Market monetization -------------------------------------------------
-  /** Share of a market license sale credited to the creator, 0..1. */
-  MARKET_CREATOR_SHARE: z
-    .string()
-    .optional()
-    .transform((v) => (v === undefined || v === '' ? 0.7 : Number.parseFloat(v))),
   STRIPE_PRICE_ID_MARKET_LICENSE: z.string().optional(),
 
   // --- operational switches (§3.2 "运营") ---------------------------------
@@ -397,9 +392,6 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
         break;
       }
     }
-  }
-  if (e.MARKET_CREATOR_SHARE < 0 || e.MARKET_CREATOR_SHARE > 1) {
-    problems.push('MARKET_CREATOR_SHARE must be between 0 and 1');
   }
 
   return {

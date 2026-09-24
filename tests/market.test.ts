@@ -1,5 +1,5 @@
 /**
- * Market monetization: license purchases, creator earnings, buyer download
+ * Market licensing: license purchases, the authorship record, buyer download
  * rights — plus the lyric-alignment provenance the synced display relies on.
  *
  * The purchase path drives the real webhook pipeline (simulated payments in
@@ -7,9 +7,9 @@
  */
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { processWebhookEvent } from '../apps/api/src/services/webhooks.js';
-import { claimWebhookEvents, query, withTx } from '@loopscene/db';
+import { claimWebhookEvents, query, withTx } from '@yuha/db';
 import { createHarness, resetData, teardown, type Harness, type TestUser } from './helpers/harness.js';
-import { runJobStep } from '@loopscene/worker/pipeline';
+import { runJobStep } from '@yuha/worker/pipeline';
 
 let h: Harness;
 
@@ -119,7 +119,7 @@ describe('lyric alignment provenance', () => {
 });
 
 describe('market licensing', () => {
-  it('a paid license grants the buyer download rights and pays the creator 70%', async () => {
+  it('a paid license grants the buyer download rights and records the author', async () => {
     const creator = await h.createUser({ credits: 2 });
     const buyer = await h.createUser({ credits: 0 });
     const { trackId } = await deliverSong(creator, 'market-song-1', true);
@@ -144,24 +144,16 @@ describe('market licensing', () => {
     await payOrder(checkoutUrl, buyer);
 
     // The license row exists exactly once, with the frozen share rate.
-    const license = await query<{ buyer_id: string; creator_id: string; creator_share_rate: string }>(
-      `SELECT buyer_id, creator_id, creator_share_rate FROM track_licenses WHERE track_id = ?`,
+    const license = await query<{ buyer_id: string; creator_id: string; price_paid: number }>(
+      `SELECT buyer_id, creator_id, price_paid FROM track_licenses WHERE track_id = ?`,
       [trackId],
     );
     expect(license).toHaveLength(1);
     expect(license[0]!.buyer_id).toBe(buyer.id);
+    // The authorship record is the part that must survive: who made it, who
+    // bought it, and what was paid. This is what a later on-chain proof reads.
     expect(license[0]!.creator_id).toBe(creator.id);
-    expect(Number(license[0]!.creator_share_rate)).toBeCloseTo(0.7, 4);
-
-    // Earnings: 70% of the $4.99 sale accrues to the creator.
-    const earnings = await query<{ amount_minor: number; status: string; gross_minor: number }>(
-      `SELECT amount_minor, gross_minor, status FROM creator_earnings WHERE creator_id = ?`,
-      [creator.id],
-    );
-    expect(earnings).toHaveLength(1);
-    expect(earnings[0]!.gross_minor).toBe(499);
-    expect(earnings[0]!.amount_minor).toBe(349);
-    expect(earnings[0]!.status).toBe('pending');
+    expect(license[0]!.price_paid).toBe(499);
 
     // The buyer can now export the song.
     const exportRes = await h.app.inject({
@@ -171,12 +163,6 @@ describe('market licensing', () => {
       payload: { clipStartSeconds: 0, clipDurationSeconds: 60, fadeOut: false } as never,
     });
     expect(exportRes.statusCode).toBe(200);
-
-    // And the creator sees the earnings summary.
-    const earningsView = await h.app.inject({ method: 'GET', url: '/v1/market/earnings', headers: creator.authHeader });
-    expect(earningsView.statusCode).toBe(200);
-    expect(earningsView.json().totalMinor).toBe(349);
-    expect(earningsView.json().perTrack).toHaveLength(1);
 
     void orderId;
   });
@@ -223,20 +209,4 @@ describe('market licensing', () => {
     expect(privRes.statusCode).toBe(404);
   });
 
-  it('earnings are visible only to their owner (SEC-01)', async () => {
-    const creator = await h.createUser({ credits: 2 });
-    const buyer = await h.createUser();
-    const { trackId } = await deliverSong(creator, 'market-song-5', true);
-    const checkout = await h.app.inject({
-      method: 'POST',
-      url: `/v1/market/tracks/${trackId}/license`,
-      headers: { ...buyer.authHeader, 'idempotency-key': 'market-key-0005' },
-    });
-    await payOrder(checkout.json().checkoutUrl, buyer);
-
-    const asBuyer = await h.app.inject({ method: 'GET', url: '/v1/market/earnings', headers: buyer.authHeader });
-    expect(asBuyer.json().totalMinor).toBe(0);
-    const asCreator = await h.app.inject({ method: 'GET', url: '/v1/market/earnings', headers: creator.authHeader });
-    expect(asCreator.json().totalMinor).toBe(349);
-  });
 });

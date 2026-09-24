@@ -1,4 +1,4 @@
-# Deploying SONARE on AWS
+# Deploying YUHA on AWS
 
 End-to-end runbook for the production topology: **ALB → EKS (api + worker) →
 RDS MySQL 8**, audio on **S3** (two access boundaries), queue on **SQS**, static

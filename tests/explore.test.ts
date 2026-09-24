@@ -1,13 +1,12 @@
 /**
- * Explore feed and social features: visibility, likes, play counters and the
- * Google one-time-code exchange.
+ * Song visibility, play counters and the Google one-time-code exchange.
  *
- * The privacy rule under test throughout: a song is readable by the world only
- * when its owner published it; everything else stays invisible no matter how
- * precisely its id is known (SEC-01 heritage applied to the new feed).
+ * The privacy rule under test throughout: a song is readable by anyone else
+ * only while its owner has its link turned on; everything else stays
+ * invisible no matter how precisely its id is known (SEC-01).
  */
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
-import { query } from '@loopscene/db';
+import { query } from '@yuha/db';
 import {
   createHarness,
   resetData,
@@ -50,7 +49,7 @@ async function deliverSong(user: TestUser, key: string, visibility: 'private' | 
   expect(res.statusCode).toBe(202);
   const { jobId } = res.json();
 
-  const { runJobStep } = await import('@loopscene/worker/pipeline');
+  const { runJobStep } = await import('@yuha/worker/pipeline');
   for (let i = 0; i < 6; i += 1) {
     const job = await query<{ state: string; track_id: string | null }>(
       `SELECT state, track_id FROM generation_jobs WHERE id = ?`,
@@ -65,47 +64,6 @@ async function deliverSong(user: TestUser, key: string, visibility: 'private' | 
   throw new Error('song did not reach DELIVERED');
 }
 
-describe('GET /v1/explore', () => {
-  it('lists published songs to anonymous visitors, never private ones', async () => {
-    const owner = await h.createUser({ credits: 5 });
-    const publicId = await deliverSong(owner, 'exp-pub-1', 'public');
-    await deliverSong(owner, 'exp-priv-1', 'private');
-
-    const res = await h.app.inject({ method: 'GET', url: '/v1/explore' });
-    expect(res.statusCode).toBe(200);
-    const ids = res.json().items.map((t: { trackId: string }) => t.trackId);
-    expect(ids).toContain(publicId);
-    expect(ids).toHaveLength(1);
-  });
-
-  it('filters by vocal mode and orders trending by engagement', async () => {
-    const owner = await h.createUser({ credits: 5 });
-    const a = await deliverSong(owner, 'trend-song-a', 'public'); // instrumental
-    const b = await deliverSong(owner, 'trend-song-b', 'public');
-
-    // b gets the engagement: 2 plays + 1 like (score 1*4+2 = 6)
-    await h.app.inject({ method: 'POST', url: `/v1/explore/${b}/plays` });
-    await h.app.inject({ method: 'POST', url: `/v1/explore/${b}/plays` });
-    await h.app.inject({
-      method: 'POST',
-      url: `/v1/explore/${b}/like`,
-      headers: owner.authHeader,
-      payload: { action: 'like' } as never,
-    });
-
-    const all = await h.app.inject({ method: 'GET', url: '/v1/explore?sort=trending' });
-    expect(all.json().items[0].trackId).toBe(b);
-    expect(all.json().items[1].trackId).toBe(a);
-
-    // Both are instrumental; the default trending order still applies (b has the engagement).
-    const instrumental = await h.app.inject({ method: 'GET', url: '/v1/explore?vocal=instrumental' });
-    expect(instrumental.json().items.map((t: { trackId: string }) => t.trackId)).toEqual([b, a]);
-
-    const vocals = await h.app.inject({ method: 'GET', url: '/v1/explore?vocal=vocals' });
-    expect(vocals.json().items).toHaveLength(0);
-  });
-});
-
 describe('song visibility', () => {
   it('a private song is invisible on /v1/tracks/:id even with the exact id (SEC-01)', async () => {
     const owner = await h.createUser({ credits: 5 });
@@ -119,9 +77,9 @@ describe('song visibility', () => {
     expect(anonymous.statusCode).toBe(401);
   });
 
-  it('the owner can publish and unpublish; likes already given survive', async () => {
+  it('the owner can publish and unpublish; a stranger loses access on unpublish', async () => {
     const owner = await h.createUser({ credits: 5 });
-    const fan = await h.createUser();
+    const stranger = await h.createUser();
     const trackId = await deliverSong(owner, 'vis-toggle', 'private');
 
     const publish = await h.app.inject({
@@ -132,34 +90,26 @@ describe('song visibility', () => {
     });
     expect(publish.statusCode).toBe(200);
 
-    // A stranger can now read it and like it.
-    const asFan = await h.app.inject({ method: 'GET', url: `/v1/tracks/${trackId}`, headers: fan.authHeader });
-    expect(asFan.statusCode).toBe(200);
-    expect(asFan.json().visibility).toBe('public');
+    // A stranger holding the link can now read it.
+    const asStranger = await h.app.inject({ method: 'GET', url: `/v1/tracks/${trackId}`, headers: stranger.authHeader });
+    expect(asStranger.statusCode).toBe(200);
+    expect(asStranger.json().visibility).toBe('public');
 
-    const like = await h.app.inject({
-      method: 'POST',
-      url: `/v1/explore/${trackId}/like`,
-      headers: fan.authHeader,
-      payload: { action: 'like' } as never,
-    });
-    expect(like.json()).toMatchObject({ liked: true, likeCount: 1 });
-
-    // Unpublishing removes it from the feed but keeps the given like.
+    // Unpublishing revokes the link for everyone but the owner.
     await h.app.inject({
       method: 'POST',
       url: `/v1/tracks/${trackId}/visibility`,
       headers: owner.authHeader,
       payload: { visibility: 'private' } as never,
     });
-    const feed = await h.app.inject({ method: 'GET', url: '/v1/explore' });
-    expect(feed.json().items).toHaveLength(0);
+    const afterRevoke = await h.app.inject({ method: 'GET', url: `/v1/tracks/${trackId}`, headers: stranger.authHeader });
+    expect(afterRevoke.statusCode).toBe(404);
 
-    const row = await query<{ like_count: number; visibility: string }>(
-      `SELECT like_count, visibility FROM tracks WHERE id = ?`,
+    const row = await query<{ visibility: string }>(
+      `SELECT visibility FROM tracks WHERE id = ?`,
       [trackId],
     );
-    expect(row[0]).toMatchObject({ like_count: 1, visibility: 'private' });
+    expect(row[0]).toMatchObject({ visibility: 'private' });
   });
 
   it('only the owner can change visibility', async () => {
@@ -177,40 +127,7 @@ describe('song visibility', () => {
   });
 });
 
-describe('likes and plays', () => {
-  it('likes toggle and are idempotent per (user, song)', async () => {
-    const owner = await h.createUser({ credits: 5 });
-    const trackId = await deliverSong(owner, 'like-song-1', 'public');
-
-    const like = await h.app.inject({
-      method: 'POST',
-      url: `/v1/explore/${trackId}/like`,
-      headers: owner.authHeader,
-      payload: { action: 'like' } as never,
-    });
-    expect(like.json()).toMatchObject({ liked: true, likeCount: 1 });
-
-    // Liking again is an idempotent no-op, not an error and not a double count.
-    const again = await h.app.inject({
-      method: 'POST',
-      url: `/v1/explore/${trackId}/like`,
-      headers: owner.authHeader,
-      payload: { action: 'like' } as never,
-    });
-    expect(again.statusCode).toBe(200);
-    expect(again.json()).toMatchObject({ liked: true, likeCount: 1 });
-    const rows = await query<{ like_count: number }>(`SELECT like_count FROM tracks WHERE id = ?`, [trackId]);
-    expect(Number(rows[0]!.like_count)).toBe(1);
-
-    const unlike = await h.app.inject({
-      method: 'POST',
-      url: `/v1/explore/${trackId}/like`,
-      headers: owner.authHeader,
-      payload: { action: 'unlike' } as never,
-    });
-    expect(unlike.json()).toMatchObject({ liked: false, likeCount: 0 });
-  });
-
+describe('plays', () => {
   it('play counters only move for published songs', async () => {
     const owner = await h.createUser({ credits: 5 });
     const publicId = await deliverSong(owner, 'play-pub', 'public');
@@ -231,7 +148,7 @@ describe('likes and plays', () => {
 
 describe('Google one-time codes', () => {
   it('a code is consumed exactly once and expires quickly', async () => {
-    const { issueAuthCode, consumeAuthCode } = await import('@loopscene/db');
+    const { issueAuthCode, consumeAuthCode } = await import('@yuha/db');
     const user = await h.createUser();
 
     const { code } = await issueAuthCode({ userId: user.id });

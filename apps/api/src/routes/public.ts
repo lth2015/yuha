@@ -1,6 +1,6 @@
 import { readdir } from 'node:fs/promises';
 import type { FastifyInstance } from 'fastify';
-import type { RuntimeInfo } from '@loopscene/contracts';
+import type { RuntimeInfo } from '@yuha/contracts';
 import type { AppContext } from '../context.js';
 import { resolveFromRoot } from '../paths.js';
 
@@ -15,7 +15,7 @@ export default async function publicRoutes(app: FastifyInstance, opts: { ctx: Ap
 
   app.get('/ready', async (_req, reply) => {
     try {
-      const { query } = await import('@loopscene/db');
+      const { query } = await import('@yuha/db');
       await query('SELECT 1');
       return { status: 'ready' };
     } catch (err) {

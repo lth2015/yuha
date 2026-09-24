@@ -1,6 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import type { ReactNode } from 'react';
-import type { EntitlementsView, MeView, RuntimeInfo } from '@loopscene/contracts';
+import type { EntitlementsView, MeView, RuntimeInfo } from '@yuha/contracts';
 import { apiFetch, getToken, setToken } from './api';
 
 /**

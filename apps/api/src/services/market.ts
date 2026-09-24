@@ -1,7 +1,6 @@
-import { AppError } from '@loopscene/contracts';
+import { AppError } from '@yuha/contracts';
 import {
   countLicenses,
-  earningsForCreator,
   getPublicTrack,
   getTrackForUser,
   hasLicense,
@@ -12,7 +11,7 @@ import {
   attachCheckoutSession,
   getUser,
   trackEvent,
-} from '@loopscene/db';
+} from '@yuha/db';
 import type { AppContext } from '../context.js';
 
 /**
@@ -99,9 +98,5 @@ export async function licenseStateFor(trackId: string, viewerId: string | null |
   return { licenseCount: count, licensedByMe: await hasLicense(trackId, viewerId) };
 }
 
-/** Creator-facing earnings dashboard. */
-export async function creatorEarnings(creatorId: string) {
-  return earningsForCreator(creatorId);
-}
 
 export { getTrackForUser };

@@ -19,8 +19,8 @@ import {
   type QueueAdapter,
   type StorageAdapter,
   type TextProvider,
-} from '@loopscene/providers';
-import { getSetting, initDb } from '@loopscene/db';
+} from '@yuha/providers';
+import { getSetting, initDb } from '@yuha/db';
 import { baseFeatures, type AppConfig, type FeatureFlags } from './config.js';
 import { resolveFromRoot } from './paths.js';
 

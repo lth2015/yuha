@@ -2,7 +2,7 @@ import { createHash, createHmac, randomBytes, timingSafeEqual } from 'node:crypt
 import { randomUUID } from 'node:crypto';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
-import { AppError, type MeView } from '@loopscene/contracts';
+import { AppError, type MeView } from '@yuha/contracts';
 import {
   confirmAgeAndTerms,
   consumeAuthCode,
@@ -13,7 +13,7 @@ import {
   trackEvent,
   upsertUser,
   type UserRow,
-} from '@loopscene/db';
+} from '@yuha/db';
 import type { AppContext } from '../context.js';
 import {
   DevAuthAdapter,
@@ -354,7 +354,7 @@ export default async function authRoutes(
 
   /** Account settings reads whether MFA is on. */
   app.get('/v1/auth/mfa/status', { preHandler: app.requireAuth }, async (req) => {
-    const { getEnabledMfaFactor } = await import('@loopscene/db');
+    const { getEnabledMfaFactor } = await import('@yuha/db');
     const factor = await getEnabledMfaFactor(req.user!.id);
     return { enabled: !!factor, confirmedAt: factor?.confirmed_at?.toISOString() ?? null };
   });

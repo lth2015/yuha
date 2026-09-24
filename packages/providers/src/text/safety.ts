@@ -1,4 +1,4 @@
-import { PROMPT_MAX_CODEPOINTS } from '@loopscene/contracts';
+import { PROMPT_MAX_CODEPOINTS } from '@yuha/contracts';
 
 /**
  * Input pre-check (SEC-07 / AI-03 heritage).

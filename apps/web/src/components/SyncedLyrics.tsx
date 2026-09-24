@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef } from 'react';
-import type { LyricTimings } from '@loopscene/contracts';
+import type { LyricTimings } from '@yuha/contracts';
 import { useI18n } from '../lib/i18n';
 import { activeLineIndex, buildLyricTimeline, lineProgress } from '../lib/lyrics';
 

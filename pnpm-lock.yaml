@@ -8,19 +8,19 @@ importers:
 
   .:
     devDependencies:
-      '@loopscene/api':
+      '@yuha/api':
         specifier: workspace:*
         version: link:apps/api
-      '@loopscene/contracts':
+      '@yuha/contracts':
         specifier: workspace:*
         version: link:packages/contracts
-      '@loopscene/db':
+      '@yuha/db':
         specifier: workspace:*
         version: link:packages/db
-      '@loopscene/providers':
+      '@yuha/providers':
         specifier: workspace:*
         version: link:packages/providers
-      '@loopscene/worker':
+      '@yuha/worker':
         specifier: workspace:*
         version: link:apps/worker
       '@types/node':
@@ -47,13 +47,13 @@ importers:
       '@fastify/sensible':
         specifier: ^6.0.2
         version: 6.0.5
-      '@loopscene/contracts':
+      '@yuha/contracts':
         specifier: workspace:*
         version: link:../../packages/contracts
-      '@loopscene/db':
+      '@yuha/db':
         specifier: workspace:*
         version: link:../../packages/db
-      '@loopscene/providers':
+      '@yuha/providers':
         specifier: workspace:*
         version: link:../../packages/providers
       fastify:
@@ -81,7 +81,7 @@ importers:
 
   apps/web:
     dependencies:
-      '@loopscene/contracts':
+      '@yuha/contracts':
         specifier: workspace:*
         version: link:../../packages/contracts
       qrcode:
@@ -118,16 +118,16 @@ importers:
 
   apps/worker:
     dependencies:
-      '@loopscene/api':
+      '@yuha/api':
         specifier: workspace:*
         version: link:../api
-      '@loopscene/contracts':
+      '@yuha/contracts':
         specifier: workspace:*
         version: link:../../packages/contracts
-      '@loopscene/db':
+      '@yuha/db':
         specifier: workspace:*
         version: link:../../packages/db
-      '@loopscene/providers':
+      '@yuha/providers':
         specifier: workspace:*
         version: link:../../packages/providers
       zod:
@@ -156,7 +156,7 @@ importers:
 
   packages/db:
     dependencies:
-      '@loopscene/contracts':
+      '@yuha/contracts':
         specifier: workspace:*
         version: link:../contracts
       mysql2:
@@ -181,10 +181,10 @@ importers:
       '@aws-sdk/s3-request-presigner':
         specifier: ^3.717.0
         version: 3.1127.0
-      '@loopscene/contracts':
+      '@yuha/contracts':
         specifier: workspace:*
         version: link:../contracts
-      '@loopscene/db':
+      '@yuha/db':
         specifier: workspace:*
         version: link:../db
       stripe:

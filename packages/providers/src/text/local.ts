@@ -1,4 +1,4 @@
-import type { Mood, Scene, TempoHint } from '@loopscene/contracts';
+import type { Mood, Scene, TempoHint } from '@yuha/contracts';
 import type { IntentRequest, IntentResult, ReviseRequest, ReviseResult, TextProvider } from './types.js';
 
 /**

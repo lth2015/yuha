@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import type { ProductView } from '@loopscene/contracts';
+import type { ProductView } from '@yuha/contracts';
 import { apiFetch, newIdempotencyKey } from '../lib/api';
 import { useSession } from '../lib/session';
 import { ErrorNotice } from '../components/common';

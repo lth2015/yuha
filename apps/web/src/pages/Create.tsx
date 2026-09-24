@@ -6,7 +6,7 @@ import {
   PROMPT_MAX_CODEPOINTS,
   type JobView,
   type TrackView,
-} from '@loopscene/contracts';
+} from '@yuha/contracts';
 import { ApiError, apiFetch, newIdempotencyKey } from '../lib/api';
 import { useI18n } from '../lib/i18n';
 import { useSession } from '../lib/session';

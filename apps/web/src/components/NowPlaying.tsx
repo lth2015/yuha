@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import type { LyricTimings } from '@loopscene/contracts';
+import type { LyricTimings } from '@yuha/contracts';
 import { useI18n } from '../lib/i18n';
 import { usePlayer } from '../lib/player';
 import { CoverArt } from './CoverArt';
@@ -16,9 +16,6 @@ export function NowPlaying({
   lyrics,
   timings,
   onClose,
-  onLike,
-  liked,
-  likeCount,
   onDownload,
   title,
   artist,
@@ -27,9 +24,6 @@ export function NowPlaying({
   lyrics: string | null;
   timings?: LyricTimings | null;
   onClose: () => void;
-  onLike?: () => void;
-  liked?: boolean;
-  likeCount?: number;
   onDownload?: () => void;
   title: string;
   artist: string;
@@ -103,16 +97,6 @@ export function NowPlaying({
           />
 
           <div className="now-playing__actions">
-            {onLike && (
-              <button
-                type="button"
-                className={`like-btn${liked ? ' like-btn--on' : ''}`}
-                onClick={onLike}
-                aria-pressed={liked}
-              >
-                <span className="icon icon--heart" aria-hidden="true" /> {likeCount ?? 0}
-              </button>
-            )}
             {onDownload && (
               <button type="button" className="btn btn--sm" onClick={onDownload}>
                 {t('song.download')}

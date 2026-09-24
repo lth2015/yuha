@@ -1,7 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import fp from 'fastify-plugin';
 import { ZodError } from 'zod';
-import { AppError, type ApiErrorBody, type ErrorCode } from '@loopscene/contracts';
+import { AppError, type ApiErrorBody, type ErrorCode } from '@yuha/contracts';
 
 /**
  * Uniform error rendering.

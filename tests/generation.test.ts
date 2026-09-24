@@ -15,8 +15,8 @@ import {
   query,
   withTx,
   type JobRow,
-} from '@loopscene/db';
-import { runJobStep } from '@loopscene/worker/pipeline';
+} from '@yuha/db';
+import { runJobStep } from '@yuha/worker/pipeline';
 import { createHarness, ledgerFor, resetData, teardown, type Harness, type TestUser } from './helpers/harness.js';
 
 let h: Harness;

@@ -1,5 +1,5 @@
 import type { PoolConnection } from 'mysql2/promise';
-import type { EntitlementSource, LedgerEntryType } from '@loopscene/contracts';
+import type { EntitlementSource, LedgerEntryType } from '@yuha/contracts';
 import { execute, lockUserEntitlements, newId, query, queryOne, toJson } from './pool.js';
 
 export interface EntitlementBatchRow {

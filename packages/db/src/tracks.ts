@@ -1,5 +1,5 @@
 import type { PoolConnection } from 'mysql2/promise';
-import type { AssetKind, AudioFormat, LyricTimings, TrackState, Visibility, VocalMode } from '@loopscene/contracts';
+import type { AssetKind, AudioFormat, LyricTimings, TrackState, Visibility, VocalMode } from '@yuha/contracts';
 import { execute, newId, query, queryOne } from './pool.js';
 
 export interface TrackRow {
@@ -18,7 +18,6 @@ export interface TrackRow {
   vocal_mode: VocalMode;
   visibility: Visibility;
   play_count: number;
-  like_count: number;
   cover_seed: number;
   lyric_timings: LyricTimings | null;
   created_at: Date;
@@ -26,19 +25,19 @@ export interface TrackRow {
   deleted_at: Date | null;
 }
 
-/** Explore/libary cards want the creator's name next to the song. */
+/** Library cards want the creator's name next to the song. */
 export type TrackWithArtist = TrackRow & { artist_name: string | null; artist_avatar: string | null };
 
 const TRACK_COLUMNS = `
   id, owner_id, project_id, job_id, title, scene, mood, duration_ms, state,
-  suspended_reason, styles, lyrics, vocal_mode, visibility, play_count, like_count,
+  suspended_reason, styles, lyrics, vocal_mode, visibility, play_count,
   cover_seed, lyric_timings, created_at, updated_at, deleted_at
 `;
 
 const TRACK_SELECT = `
   SELECT t.id, t.owner_id, t.project_id, t.job_id, t.title, t.scene, t.mood, t.duration_ms,
          t.state, t.suspended_reason, t.styles, t.lyrics, t.vocal_mode, t.visibility,
-         t.play_count, t.like_count, t.cover_seed, t.lyric_timings, t.created_at, t.updated_at, t.deleted_at,
+         t.play_count, t.cover_seed, t.lyric_timings, t.created_at, t.updated_at, t.deleted_at,
          u.display_name AS artist_name, u.avatar_url AS artist_avatar
     FROM tracks t
     JOIN users u ON u.id = t.owner_id
@@ -226,73 +225,6 @@ export async function listTracks(params: ListTracksParams): Promise<TrackRow[]> 
 }
 
 // -------------------------------------------------------------- explore / social
-
-export interface ExploreParams {
-  limit: number;
-  cursor?: string | undefined;
-  sort: 'trending' | 'new';
-  vocal?: 'instrumental' | 'vocals' | undefined;
-  q?: string | undefined;
-  /** Present when the reader is signed in: fills `likedByMe`. */
-  viewerId?: string | undefined;
-}
-
-/**
- * The public Explore feed. Every row is public and deliverable by construction,
- * so an accidental WHERE slip cannot leak a private song (SEC-01).
- *
- * `trending` orders by engagement (4×likes + plays) with recency as tiebreak;
- * `new` is plain reverse-chronological. Cursor pagination is keyset on the
- * same pair of columns the chosen sort uses, so rows cannot repeat or vanish
- * between pages as counters move.
- */
-export function exploreTrendingScore(row: { like_count: number; play_count: number }): number {
-  return row.like_count * 4 + row.play_count;
-}
-
-export async function listExploreTracks(params: ExploreParams): Promise<TrackWithArtist[]> {
-  const clauses = ["t.visibility = 'public'", "t.state = 'deliverable'", 't.deleted_at IS NULL'];
-  const values: unknown[] = [];
-
-  if (params.cursor) {
-    if (params.sort === 'trending') {
-      // cursor = "<score>|<createdAtIso>"
-      const [score, createdAt] = params.cursor.split('|');
-      const s = Number(score);
-      if (Number.isFinite(s) && createdAt) {
-        clauses.push(
-          '((t.like_count * 4 + t.play_count) < ? OR ((t.like_count * 4 + t.play_count) = ? AND t.created_at < ?))',
-        );
-        values.push(s, s, new Date(createdAt));
-      }
-    } else {
-      values.push(new Date(params.cursor));
-      clauses.push('t.created_at < ?');
-    }
-  }
-  if (params.vocal === 'instrumental') clauses.push("t.vocal_mode = 'instrumental'");
-  if (params.vocal === 'vocals') clauses.push("t.vocal_mode = 'with_vocals'");
-  if (params.q) {
-    values.push(`%${params.q}%`, `%${params.q}%`);
-    clauses.push('(t.title LIKE ? OR JSON_UNQUOTE(JSON_EXTRACT(t.styles, "$")) LIKE ?)');
-  }
-
-  const order =
-    params.sort === 'trending'
-      ? 'ORDER BY (t.like_count * 4 + t.play_count) DESC, t.created_at DESC'
-      : 'ORDER BY t.created_at DESC';
-
-  values.push(params.limit);
-  const rows = await query<TrackWithArtist>(
-    `${TRACK_SELECT}
-      WHERE ${clauses.join(' AND ')}
-      ${order}
-      LIMIT ?`,
-    values,
-  );
-  return rows.map(normaliseRow);
-}
-
 /** Atomic visibility flip; only the owner's row can move (SEC-01). */
 export async function setTrackVisibility(
   params: { trackId: string; ownerId: string; visibility: Visibility },
@@ -305,77 +237,6 @@ export async function setTrackVisibility(
     tx,
   );
   return res.affectedRows > 0;
-}
-
-/**
- * Toggle-like. `song_likes (user_id, track_id)` is unique, so the insert and
- * the like-count increment share one transaction; a double click collapses
- * into a no-op that reports the existing state rather than a double count.
- */
-export async function likeTrack(
-  params: { trackId: string; userId: string },
-  tx: PoolConnection,
-): Promise<{ liked: true; likeCount: number }> {
-  const existing = await queryOne<{ id: string }>(
-    `SELECT id FROM song_likes WHERE user_id = ? AND track_id = ?`,
-    [params.userId, params.trackId],
-    tx,
-  );
-  if (!existing) {
-    await execute(
-      `INSERT INTO song_likes (id, user_id, track_id) VALUES (?, ?, ?)`,
-      [newId(), params.userId, params.trackId],
-      tx,
-    );
-    await execute(
-      `UPDATE tracks SET like_count = like_count + 1, updated_at = UTC_TIMESTAMP(3) WHERE id = ?`,
-      [params.trackId],
-      tx,
-    );
-  }
-  const row = await queryOne<{ like_count: number }>(
-    `SELECT like_count FROM tracks WHERE id = ?`,
-    [params.trackId],
-    tx,
-  );
-  return { liked: true, likeCount: Number(row?.like_count ?? 1) };
-}
-
-export async function unlikeTrack(
-  params: { trackId: string; userId: string },
-  tx: PoolConnection,
-): Promise<{ liked: false; likeCount: number }> {
-  const res = await execute(
-    `DELETE FROM song_likes WHERE user_id = ? AND track_id = ?`,
-    [params.userId, params.trackId],
-    tx,
-  );
-  if (res.affectedRows > 0) {
-    await execute(
-      `UPDATE tracks
-          SET like_count = GREATEST(like_count - 1, 0), updated_at = UTC_TIMESTAMP(3)
-        WHERE id = ?`,
-      [params.trackId],
-      tx,
-    );
-  }
-  const row = await queryOne<{ like_count: number }>(
-    `SELECT like_count FROM tracks WHERE id = ?`,
-    [params.trackId],
-    tx,
-  );
-  return { liked: false, likeCount: Number(row?.like_count ?? 0) };
-}
-
-/** Present when the reader is signed in; drives the heart state on cards. */
-export async function hasLiked(trackIds: string[], viewerId: string): Promise<Set<string>> {
-  if (!trackIds.length) return new Set();
-  const placeholders = trackIds.map(() => '?').join(',');
-  const rows = await query<{ track_id: string }>(
-    `SELECT track_id FROM song_likes WHERE user_id = ? AND track_id IN (${placeholders})`,
-    [viewerId, ...trackIds],
-  );
-  return new Set(rows.map((r) => r.track_id));
 }
 
 /** Fire-and-forget engagement counter; rate limited at the route, not here. */

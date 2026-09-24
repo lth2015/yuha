@@ -1,6 +1,6 @@
 import { useCallback, useState } from 'react';
 import { Link } from 'react-router-dom';
-import type { TrackView } from '@loopscene/contracts';
+import type { TrackView } from '@yuha/contracts';
 import { apiFetch } from '../lib/api';
 import { useI18n } from '../lib/i18n';
 import { formatTime, usePlayer } from '../lib/player';
@@ -12,7 +12,6 @@ import { Eq } from './Eq';
  *
  * The play button plays through the shared queue (the feed the card came from
  * becomes the upcoming queue), and the heart optimistically toggles against
- * POST /v1/explore/:id/like.
  */
 export function SongCard({
   song,
@@ -29,8 +28,6 @@ export function SongCard({
 }) {
   const { t } = useI18n();
   const player = usePlayer();
-  const [liked, setLiked] = useState<boolean>(song.likedByMe ?? false);
-  const [likeCount, setLikeCount] = useState(song.likeCount);
   const [busy, setBusy] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
 
@@ -51,25 +48,6 @@ export function SongCard({
     );
   };
 
-  const toggleLike = async () => {
-    if (busy || liked === null) return;
-    setBusy(true);
-    const action = liked ? 'unlike' : 'like';
-    // Optimistic; the server count is authoritative on response.
-    setLiked(!liked);
-    try {
-      const res = await apiFetch<{ liked: boolean; likeCount: number }>(`/v1/explore/${song.trackId}/like`, {
-        method: 'POST',
-        body: { action },
-      });
-      setLiked(res.liked);
-      setLikeCount(res.likeCount);
-    } catch {
-      setLiked(liked); // roll back
-    } finally {
-      setBusy(false);
-    }
-  };
 
   const setVisibility = async (visibility: 'public' | 'private') => {
     setBusy(true);
@@ -142,17 +120,6 @@ export function SongCard({
       </div>
 
       <div className="song-card__actions">
-        <button
-          type="button"
-          className={`like-btn${liked ? ' like-btn--on' : ''}`}
-          onClick={toggleLike}
-          disabled={busy || liked === null}
-          aria-pressed={liked ?? undefined}
-          aria-label={liked ? t('card.unlike', { title: song.title }) : t('card.like', { title: song.title })}
-        >
-          <span className="icon icon--heart" aria-hidden="true" />
-          <span className="like-btn__count">{likeCount}</span>
-        </button>
 
         {(onRemove || song.state === 'deliverable') && (
           <div className="menu">

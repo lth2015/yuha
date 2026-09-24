@@ -1,5 +1,5 @@
 import type { PoolConnection } from 'mysql2/promise';
-import type { OrderKind, OrderStatus, SubscriptionStatus } from '@loopscene/contracts';
+import type { OrderKind, OrderStatus, SubscriptionStatus } from '@yuha/contracts';
 import { execute, newId, query, queryOne, toJson } from './pool.js';
 
 export interface ProductRow {

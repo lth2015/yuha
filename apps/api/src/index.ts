@@ -1,4 +1,4 @@
-import { closeDb, migrate } from '@loopscene/db';
+import { closeDb, migrate } from '@yuha/db';
 import { ConfigError, loadConfig } from './config.js';
 import { createContext } from './context.js';
 import { buildServer } from './server.js';

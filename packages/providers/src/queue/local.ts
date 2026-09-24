@@ -1,4 +1,4 @@
-import { execute, newId, query, withTx } from '@loopscene/db';
+import { execute, newId, query, withTx } from '@yuha/db';
 import type { QueueAdapter, QueueMessage } from './types.js';
 
 /**

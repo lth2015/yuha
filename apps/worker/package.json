@@ -1,5 +1,5 @@
 {
-  "name": "@loopscene/worker",
+  "name": "@yuha/worker",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -22,10 +22,10 @@
     "start": "node dist/index.js"
   },
   "dependencies": {
-    "@loopscene/api": "workspace:*",
-    "@loopscene/contracts": "workspace:*",
-    "@loopscene/db": "workspace:*",
-    "@loopscene/providers": "workspace:*",
+    "@yuha/api": "workspace:*",
+    "@yuha/contracts": "workspace:*",
+    "@yuha/db": "workspace:*",
+    "@yuha/providers": "workspace:*",
     "zod": "^3.24.1"
   },
   "devDependencies": {

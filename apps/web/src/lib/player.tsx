@@ -1,6 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
-import type { TrackView } from '@loopscene/contracts';
+import type { TrackView } from '@yuha/contracts';
 import { attachBeat as attachBeatSafe } from './beat';
 
 /**
@@ -16,7 +16,7 @@ export type PlayerStatus = 'idle' | 'loading' | 'playing' | 'paused' | 'error';
 /** What the player bar needs to render: view fields + where it can link to. */
 export type PlayerTrack = Pick<
   TrackView,
-  'trackId' | 'title' | 'artistName' | 'coverSeed' | 'durationSeconds' | 'vocalMode' | 'likeCount' | 'likedByMe'
+  'trackId' | 'title' | 'artistName' | 'coverSeed' | 'durationSeconds' | 'vocalMode'
 >;
 
 interface PlayerState {
