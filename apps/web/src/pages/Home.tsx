@@ -57,7 +57,10 @@ export default function Home() {
     }
   }, [prompt]);
 
-  const canSubmit = prompt.trim().length > 0 && !submitting;
+  const written = prompt.trim().length > 0;
+  /** Signed in, has written something, and has nothing left to spend. */
+  const outOfCredits = !!me && credits < 1;
+  const canSubmit = written && !submitting && !outOfCredits;
 
   const pickMood = (mood: (typeof MOOD_KEYS)[number]) => {
     const seeded = t(`mood.${mood}.text`);
@@ -245,18 +248,29 @@ export default function Home() {
 
             <div className="composer__row">
               <span className="composer__cost">
-                {t('composer.cost')}
+                {outOfCredits ? t('composer.outOfCredits') : t('composer.cost')}
                 <br />
                 {me ? t('composer.credits', { n: credits }) : t('composer.creditsLogin')}
               </span>
-              <button type="button" className="btn btn--primary" onClick={submit} disabled={!canSubmit}>
-                {submitting ? t('composer.submitting') : t('composer.submit')}
-                <span aria-hidden="true">↗</span>
-              </button>
+              {outOfCredits ? (
+                // The draft is already in localStorage, so it survives the
+                // trip to checkout and back; say so, or nobody risks leaving.
+                <Link to="/pricing" className="btn btn--primary">
+                  {t('composer.getCredits')}
+                  <span aria-hidden="true">↗</span>
+                </Link>
+              ) : (
+                <button type="button" className="btn btn--primary" onClick={submit} disabled={!canSubmit}>
+                  {submitting ? t('composer.submitting') : t('composer.submit')}
+                  <span aria-hidden="true">↗</span>
+                </button>
+              )}
             </div>
             <p className="composer__feedback" aria-live="polite">
               {error ??
-                (feedbackKey
+                (outOfCredits
+                  ? t('composer.draftKept')
+                  : feedbackKey
                   ? t(feedbackKey.key, feedbackKey.params)
                   : instrumental
                     ? t('composer.instrumentalHint')

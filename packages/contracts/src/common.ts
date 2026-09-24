@@ -26,6 +26,12 @@ export const runtimeInfo = z.object({
   features: z.object({
     subscriptionsEnabled: z.boolean(),
     freeTrialEnabled: z.boolean(),
+    /**
+     * How many credits a new account actually receives. The pricing page used
+     * to hard-code "2"; an operator lowering FREE_TRIAL_UNITS would have made
+     * that page state a number the product does not honour.
+     */
+    freeTrialUnits: z.number().int().nonnegative(),
     wavExportEnabled: z.boolean(),
     commercialDeliveryEnabled: z.boolean(),
     realPaymentsEnabled: z.boolean(),

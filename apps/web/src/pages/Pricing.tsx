@@ -2,30 +2,44 @@ import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import type { ProductView } from '@yuha/contracts';
 import { apiFetch, newIdempotencyKey } from '../lib/api';
+import { useI18n } from '../lib/i18n';
 import { useSession } from '../lib/session';
 import { ErrorNotice } from '../components/common';
 
-function formatMoney(amountMinor: number, currency: string): string {
-  return new Intl.NumberFormat('en-US', {
-    style: 'currency',
-    currency: currency.toUpperCase(),
-    minimumFractionDigits: amountMinor % 100 === 0 && currency.toLowerCase() !== 'jpy' ? 0 : 2,
-  }).format(currency.toLowerCase() === 'jpy' ? amountMinor : amountMinor / 100);
+const LOCALES: Record<string, string> = { zh: 'zh-CN', ja: 'ja-JP', en: 'en-US' };
+
+/** Zero-decimal currencies (JPY) store the whole amount in `amountMinor`. */
+function isZeroDecimal(currency: string): boolean {
+  return currency.toLowerCase() === 'jpy';
 }
 
-const PLAN_COPY: Record<string, { tagline: string; bullets: string[]; highlight?: boolean }> = {
-  drop_5: {
-    tagline: 'One-time pack — no subscription',
-    bullets: ['5 song credits', '90-day validity', 'All features, MP3 downloads'],
-  },
+function formatMoney(amountMinor: number, currency: string, locale: string, minFrac?: number): string {
+  const zero = isZeroDecimal(currency);
+  return new Intl.NumberFormat(locale, {
+    style: 'currency',
+    currency: currency.toUpperCase(),
+    minimumFractionDigits: minFrac ?? (amountMinor % 100 === 0 && !zero ? 0 : 2),
+    maximumFractionDigits: minFrac ?? (zero ? 0 : 2),
+  }).format(zero ? amountMinor : amountMinor / 100);
+}
+
+/** The unit price — the figure a buyer actually compares plans on. */
+function perSong(p: { amountMinor: number; currency: string; units: number }, locale: string): string {
+  const each = p.amountMinor / Math.max(1, p.units);
+  return formatMoney(each, p.currency, locale, isZeroDecimal(p.currency) ? 0 : 2);
+}
+
+/** Copy keys per catalogue entry; the amounts always come from the server. */
+const PLAN_COPY: Record<string, { tag: string; bullets: string[]; highlight?: boolean }> = {
+  drop_5: { tag: 'price.drop.tag', bullets: ['price.drop.b1', 'price.drop.b2', 'price.drop.b3'] },
   pro_monthly: {
-    tagline: 'For regular creators',
+    tag: 'price.pro.tag',
     highlight: true,
-    bullets: ['100 songs per month', 'Unused credits stay for the billing period', 'Cancel anytime, keep access to period end'],
+    bullets: ['price.pro.b1', 'price.pro.b2', 'price.pro.b3'],
   },
   premier_monthly: {
-    tagline: 'For studios and heavy users',
-    bullets: ['400 songs per month', 'Priority queue during peak hours', 'Cancel anytime, keep access to period end'],
+    tag: 'price.premier.tag',
+    bullets: ['price.premier.b1', 'price.premier.b2', 'price.premier.b3'],
   },
 };
 
@@ -35,6 +49,8 @@ const PLAN_COPY: Record<string, { tagline: string; bullets: string[]; highlight?
  */
 export default function Pricing() {
   const navigate = useNavigate();
+  const { t, lang } = useI18n();
+  const locale = LOCALES[lang] ?? 'en-US';
   const { me, runtime } = useSession();
   const [products, setProducts] = useState<ProductView[] | null>(null);
   const [error, setError] = useState<unknown>(null);
@@ -76,11 +92,10 @@ export default function Pricing() {
   return (
     <div className="stack stack--loose pricing">
       <div className="pricing__head">
-        <h1>Simple pricing</h1>
+        <h1>{t('price.h1')}</h1>
         <p>
-          One credit generates one finished song — vocals or instrumental. Failed generations never cost a
-          credit.
-          {freeTrial ? ' New accounts start with 2 free credits.' : ''}
+          {t('price.sub')}
+          {freeTrial ? ` ${t('price.trialNote', { n: runtime?.features.freeTrialUnits ?? 2 })}` : ''}
         </p>
       </div>
 
@@ -96,18 +111,18 @@ export default function Pricing() {
         <div className="grid grid--plans">
           {freeTrial && (
             <article className="plan plan--free">
-              <h2>Free</h2>
-              <p className="plan__price">$0</p>
-              <p className="plan__tagline">Start here</p>
+              <h2>{t('price.free')}</h2>
+              <p className="plan__price">{formatMoney(0, 'usd', locale)}</p>
+              <p className="plan__tagline">{t('price.freeTag')}</p>
               <ul className="plan__bullets">
-                <li>2 welcome credits</li>
-                <li>Full studio, all lengths</li>
+                <li>{t('price.free.b1', { n: runtime?.features.freeTrialUnits ?? 2 })}</li>
+                <li>{t('price.free.b2')}</li>
               </ul>
               {me ? (
-                <span className="plan__current">Included with your account</span>
+                <span className="plan__current">{t('price.freeIncluded')}</span>
               ) : (
                 <Link to="/auth?next=/create" className="btn btn--block">
-                  Sign in with Google
+                  {t('price.signin')}
                 </Link>
               )}
             </article>
@@ -117,39 +132,42 @@ export default function Pricing() {
             .slice()
             .sort((a, b) => a.amountMinor - b.amountMinor)
             .map((p) => {
-              const copy = PLAN_COPY[p.priceKey] ?? {
-                tagline: p.displayName,
-                bullets: [`${p.units} song credits`],
-              };
+              const copy = PLAN_COPY[p.priceKey];
               return (
-                <article key={p.priceKey} className={`plan${copy.highlight ? ' plan--highlight' : ''}`}>
-                  {copy.highlight && <span className="plan__badge">Most popular</span>}
+                <article key={p.priceKey} className={`plan${copy?.highlight ? ' plan--highlight' : ''}`}>
+                  {copy?.highlight && <span className="plan__badge">{t('price.popular')}</span>}
                   <h2>{p.displayName.split('—')[0]!.trim()}</h2>
                   <p className="plan__price">
-                    {formatMoney(p.amountMinor, p.currency)}
-                    {p.kind === 'subscription' && <span className="plan__per">/month</span>}
+                    {formatMoney(p.amountMinor, p.currency, locale)}
+                    {p.kind === 'subscription' && <span className="plan__per">{t('price.month')}</span>}
                   </p>
-                  <p className="plan__tagline">{copy.tagline}</p>
+                  <p className="plan__unit">{t('price.perSong', { amount: perSong(p, locale) })}</p>
+                  <p className="plan__tagline">{copy ? t(copy.tag) : p.displayName}</p>
                   <ul className="plan__bullets">
-                    {copy.bullets.map((b) => (
-                      <li key={b}>{b}</li>
+                    {(copy?.bullets ?? []).map((b) => (
+                      <li key={b}>{t(b)}</li>
                     ))}
                   </ul>
                   {p.available ? (
                     <button
                       type="button"
-                      className={`btn btn--block${copy.highlight ? ' btn--primary' : ''}`}
+                      className={`btn btn--block${copy?.highlight ? ' btn--primary' : ''}`}
                       onClick={() => buy(p.priceKey)}
                       disabled={busyKey === p.priceKey}
                     >
                       {busyKey === p.priceKey
-                        ? 'Opening checkout…'
+                        ? t('price.opening')
                         : p.kind === 'subscription'
-                          ? 'Subscribe'
-                          : 'Buy credits'}
+                          ? t('price.subscribe')
+                          : t('price.buy')}
                     </button>
                   ) : (
-                    <span className="plan__current">Coming soon</span>
+                    // Say *why* it is unavailable. "Coming soon" with no reason
+                    // reads as a stalled product rather than a decision.
+                    <span className="plan__current">
+                      {t('price.soon')}
+                      <span className="plan__soonwhy">{t('price.soonWhy')}</span>
+                    </span>
                   )}
                 </article>
               );
@@ -158,12 +176,12 @@ export default function Pricing() {
       )}
 
       <div className="pricing__notes panel">
-        <h2>The fine print, up front</h2>
+        <h2>{t('price.notes')}</h2>
         <ul className="small">
-          <li>Prices are tax-inclusive. Payment is handled by Stripe; card details never touch our servers.</li>
-          <li>Subscriptions renew monthly and can be cancelled online at any time — access continues to the end of the paid period.</li>
-          <li>Credits from the Starter Pack are valid for 90 days. Subscription credits reset each billing period and are not carried over.</li>
-          <li>You own the songs you generate, under the usage terms shown on each song's usage record.</li>
+          <li>{t('price.note1')}</li>
+          <li>{t('price.note2')}</li>
+          <li>{t('price.note3')}</li>
+          <li>{t('price.note4')}</li>
         </ul>
       </div>
     </div>
