@@ -331,7 +331,7 @@ export default function Create() {
             {t('create.credits', { n: credits })}
           </span>
           {credits < 1 && (
-            <Link to="/pricing" className="btn btn--primary btn--sm">
+            <Link to="/pricing?from=/create" className="btn btn--primary btn--sm">
               {t('create.getCredits')}
             </Link>
           )}
@@ -558,7 +558,7 @@ export default function Create() {
           {credits < 1 && (
             <p className="small">
               {t('create.outOfCredits')}{' '}
-              <Link to="/pricing">{t('create.pickPlan')}</Link>
+              <Link to="/pricing?from=/create">{t('create.pickPlan')}</Link>
               {t('create.pickPlanTail')}
             </p>
           )}

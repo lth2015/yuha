@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import type { OrderView, ProductView } from '@yuha/contracts';
 import { apiFetch, newIdempotencyKey } from '../lib/api';
+import { useI18n } from '../lib/i18n';
 import { formatMoney, formatJst, useSession } from '../lib/session';
 import { Badge, ErrorNotice, Loading } from '../components/common';
 
@@ -97,7 +98,8 @@ export function CheckoutConfirm() {
               <tr>
                 <th>内容</th>
                 <td>
-                  30秒インストBGMの生成 <span className="num">{product.units}</span> 回
+                  楽曲生成（30秒〜4分、ボーカルあり／インスト）{' '}
+                  <span className="num">{product.units}</span> 回分
                 </td>
               </tr>
               <tr>
@@ -200,10 +202,30 @@ export function CheckoutConfirm() {
  * granted is read from the server, so a hand-crafted "?success=true" cannot
  * make the interface claim a payment happened.
  */
+/**
+ * Where a buyer is sent back to after paying.
+ *
+ * Checkout can leave the site entirely (Stripe's hosted page), so the origin
+ * is parked in localStorage rather than in router state or a query string.
+ */
+export const CHECKOUT_RETURN_KEY = 'yuha.checkout-return';
+
+function readReturnPath(): string | null {
+  try {
+    const v = localStorage.getItem(CHECKOUT_RETURN_KEY);
+    // Only ever an in-app path, never an absolute URL from somewhere else.
+    return v && v.startsWith('/') && !v.startsWith('//') ? v : null;
+  } catch {
+    return null;
+  }
+}
+
 export function CheckoutComplete() {
   const [params] = useSearchParams();
   const orderId = params.get('order_id');
   const { refreshEntitlements } = useSession();
+  const { t } = useI18n();
+  const [returnTo] = useState(readReturnPath);
 
   const [order, setOrder] = useState<OrderView | null>(null);
   const [error, setError] = useState<unknown>(null);
@@ -247,43 +269,42 @@ export function CheckoutComplete() {
   const stillWaiting = !granted && attempts < 12;
 
   return (
-    <div style={{ maxWidth: 560, margin: '0 auto' }} className="stack stack--loose">
-      <h1 style={{ fontSize: 26 }}>{granted ? 'お支払いが完了しました' : 'お支払いを確認中です'}</h1>
+    <div className="stack stack--loose checkout-return">
+      <h1>{granted ? t('pay.doneTitle') : t('pay.waitTitle')}</h1>
 
       <ErrorNotice error={error} />
 
       <section className="panel stack">
         {granted ? (
           <>
-            <Badge tone="badge--ok">回数を追加しました</Badge>
+            <Badge tone="badge--ok">{t('pay.granted')}</Badge>
             <p style={{ margin: 0 }}>
               {order && (
                 <>
-                  {formatMoney(order.amountMinor)}（税込）のお支払いを確認しました。
+                  {t('pay.paid', { amount: formatMoney(order.amountMinor) })}
                   <br />
                 </>
               )}
-              生成回数がアカウントに反映されています。
+              {t('pay.credited')}
             </p>
-            <Link className="btn btn--primary" to="/create">
-              つくる
+            {/* Back to the surface they were writing on, where their draft is
+                still waiting — not to a generic studio that reads a different
+                draft key and looks empty. */}
+            <Link className="btn btn--primary" to={returnTo ?? '/create'}>
+              {returnTo ? t('pay.backToWork') : t('pay.goCreate')}
             </Link>
           </>
         ) : (
           <>
-            <Badge tone="badge--warn">確認中</Badge>
+            <Badge tone="badge--warn">{t('pay.checking')}</Badge>
             <p style={{ margin: 0 }}>
-              決済事業者からの確認を待っています。
-              {stillWaiting
-                ? 'この画面は自動で更新されます。'
-                : '確認に時間がかかっています。反映されしだいご利用いただけます。'}
+              {t('pay.waiting')} {stillWaiting ? t('pay.autoRefresh') : t('pay.slow')}
             </p>
             <p className="small muted" style={{ margin: 0 }}>
-              この画面を閉じても処理は続きます。二重に請求されることはありません。
-              しばらくしても反映されない場合は「請求」ページからご確認ください。
+              {t('pay.safeToLeave')}
             </p>
             <Link className="btn btn--secondary" to="/settings/billing">
-              請求ページを見る
+              {t('pay.seeBilling')}
             </Link>
           </>
         )}

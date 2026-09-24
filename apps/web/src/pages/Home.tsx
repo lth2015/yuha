@@ -255,7 +255,7 @@ export default function Home() {
               {outOfCredits ? (
                 // The draft is already in localStorage, so it survives the
                 // trip to checkout and back; say so, or nobody risks leaving.
-                <Link to="/pricing" className="btn btn--primary">
+                <Link to="/pricing?from=/" className="btn btn--primary">
                   {t('composer.getCredits')}
                   <span aria-hidden="true">↗</span>
                 </Link>

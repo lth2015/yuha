@@ -5,6 +5,7 @@ import { apiFetch, newIdempotencyKey } from '../lib/api';
 import { useI18n } from '../lib/i18n';
 import { useSession } from '../lib/session';
 import { ErrorNotice } from '../components/common';
+import { CHECKOUT_RETURN_KEY } from './Checkout';
 
 const LOCALES: Record<string, string> = { zh: 'zh-CN', ja: 'ja-JP', en: 'en-US' };
 
@@ -66,6 +67,18 @@ export default function Pricing() {
     if (!me) {
       navigate(`/auth?next=/pricing`);
       return;
+    }
+    // Park where they came from before leaving for the payment provider, so
+    // the confirmation screen can send them back to the draft they left.
+    try {
+      const from = new URLSearchParams(window.location.search).get('from');
+      if (from && from.startsWith('/') && !from.startsWith('//')) {
+        localStorage.setItem(CHECKOUT_RETURN_KEY, from);
+      } else {
+        localStorage.removeItem(CHECKOUT_RETURN_KEY);
+      }
+    } catch {
+      /* private browsing — the return path is a nicety, not a requirement */
     }
     setBusyKey(priceKey);
     setError(null);
