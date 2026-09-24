@@ -31,6 +31,17 @@ export interface CostSummary {
   windowStart: string;
   windowEnd: string;
   deliveredCount: number;
+  /**
+   * The currency these cost figures are in, or `'mixed'` when the window
+   * contains more than one.
+   *
+   * Cost rows default to `jpy` while the catalogue is priced in `usd`, and
+   * the console formatted both with the same USD-defaulting helper — so a
+   * ¥45 provider call was displayed as "$0.45", right next to real USD
+   * revenue. Summing across currencies is meaningless, so it is reported
+   * rather than hidden.
+   */
+  currency: string;
   /** Cost recorded against real, invoiceable provider calls. */
   actualCostMinor: number;
   /** Cost from modelled/demo events. Never added to the actual figure. */
@@ -64,9 +75,19 @@ export async function costSummary(windowDays = 30): Promise<CostSummary> {
            AND billable = 1 AND event_type IN ('failure','rejected','retry'))          AS billable_failures,
        (SELECT COUNT(*) FROM asset_versions
          WHERE kind = 'export'
-           AND created_at >= DATE_SUB(UTC_TIMESTAMP(3), INTERVAL ? DAY))              AS exports`,
-    [windowDays, windowDays, windowDays, windowDays, windowDays],
+           AND created_at >= DATE_SUB(UTC_TIMESTAMP(3), INTERVAL ? DAY))              AS exports,
+       (SELECT GROUP_CONCAT(DISTINCT currency) FROM provider_cost_events
+         WHERE occurred_at >= DATE_SUB(UTC_TIMESTAMP(3), INTERVAL ? DAY))             AS currencies`,
+    [windowDays, windowDays, windowDays, windowDays, windowDays, windowDays],
   );
+
+  // One currency in the window is reportable; several are not summable, and
+  // saying so beats printing a number that means nothing.
+  const seen = String(row?.['currencies'] ?? '')
+    .split(',')
+    .map((c) => c.trim())
+    .filter(Boolean);
+  const currency = seen.length === 1 ? seen[0]! : seen.length === 0 ? 'jpy' : 'mixed';
 
   const delivered = num(row?.['delivered']);
   const actual = num(row?.['actual']);
@@ -88,6 +109,7 @@ export async function costSummary(windowDays = 30): Promise<CostSummary> {
     windowStart: new Date(Date.now() - windowDays * 86400_000).toISOString(),
     windowEnd: new Date().toISOString(),
     deliveredCount: delivered,
+    currency,
     actualCostMinor: actual,
     estimatedCostMinor: estimated,
     billableFailureCostMinor: num(row?.['billable_failures']),
@@ -103,6 +125,8 @@ export async function costSummary(windowDays = 30): Promise<CostSummary> {
 }
 
 export interface RevenueSummary {
+  /** Currency of these figures, or `'mixed'`. Orders carry their own. */
+  currency: string;
   grossMinor: number;
   refundedMinor: number;
   paymentFeeMinor: number;
@@ -138,10 +162,17 @@ export async function revenueSummary(windowDays = 30): Promise<RevenueSummary> {
          WHERE kind = 'dispute'
            AND occurred_at >= DATE_SUB(UTC_TIMESTAMP(3), INTERVAL ? DAY))              AS disputes,
        (SELECT COUNT(*) FROM orders
-         WHERE status = 'paid' AND entitlement_granted_at IS NULL)                     AS ungranted`,
-    [d, d, d, d, d, d, d],
+         WHERE status = 'paid' AND entitlement_granted_at IS NULL)                     AS ungranted,
+       (SELECT GROUP_CONCAT(DISTINCT currency) FROM payments
+         WHERE occurred_at >= DATE_SUB(UTC_TIMESTAMP(3), INTERVAL ? DAY))              AS currencies`,
+    [d, d, d, d, d, d, d, d],
   );
+  const seen = String(row?.['currencies'] ?? '')
+    .split(',')
+    .map((c) => c.trim())
+    .filter(Boolean);
   return {
+    currency: seen.length === 1 ? seen[0]! : seen.length === 0 ? 'usd' : 'mixed',
     grossMinor: num(row?.['gross']),
     refundedMinor: num(row?.['refunded']),
     paymentFeeMinor: num(row?.['fees']),

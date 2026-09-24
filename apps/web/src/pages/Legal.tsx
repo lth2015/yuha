@@ -89,7 +89,7 @@ export function Terms() {
           card details.
         </p>
         <ul>
-          <li>Starter Pack credits are valid for 90 days from purchase.</li>
+          <li>DROP pack credits are valid for 90 days from purchase.</li>
           <li>Subscription credits reset each billing period and are not carried over.</li>
           <li>Subscriptions renew monthly until cancelled. You can cancel online at any time; access and credits continue to the end of the paid period.</li>
           <li>A generation that fails for technical reasons never consumes a credit.</li>

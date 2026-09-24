@@ -219,8 +219,9 @@ Built: full-song generation (lyrics sung or instrumental, 30s–4min), the
 Simple/Custom studio, a persistent queue player, play counters, link sharing
 on and off, a private library, MP3 download and trimming, per-song usage and
 authorship records, rights-complaint handling, Google OAuth + development
-login, Stripe checkout / subscriptions / refunds (USD catalogue: Starter Pack,
-Pro, Premier), an async job pipeline with the credit ledger, and the
+login, Stripe checkout / subscriptions / refunds (JPY catalogue,
+tax-inclusive: DROP, CREATOR, STUDIO), an async job pipeline with the credit
+ledger, and the
 operations console.
 
 Deliberately **not** built: a public feed or social graph, likes, creator

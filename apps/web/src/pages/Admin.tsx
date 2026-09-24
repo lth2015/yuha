@@ -24,6 +24,7 @@ interface Overview {
   };
   cost: {
     deliveredCount: number;
+    currency: string;
     actualCostMinor: number;
     estimatedCostMinor: number;
     billableFailureCostMinor: number;
@@ -33,6 +34,7 @@ interface Overview {
     adoptedCount: number;
   };
   revenue: {
+    currency: string;
     grossMinor: number;
     refundedMinor: number;
     paymentFeeMinor: number;
@@ -239,13 +241,13 @@ export default function Admin() {
           <div className="card" style={{ gap: 4 }}>
             <span className="small muted">実請求ベースの上流費用</span>
             <strong className="num" style={{ fontSize: 24 }}>
-              {formatMoney(overview.cost.actualCostMinor)}
+              {formatMoney(overview.cost.actualCostMinor, overview.cost.currency)}
             </strong>
           </div>
           <div className="card" style={{ gap: 4 }}>
             <span className="small muted">試算値（予算前提）</span>
             <strong className="num" style={{ fontSize: 24, color: 'var(--text-muted)' }}>
-              {formatMoney(overview.cost.estimatedCostMinor)}
+              {formatMoney(overview.cost.estimatedCostMinor, overview.cost.currency)}
             </strong>
             {/* §11.2: modelled cost is never added to the invoiced figure. */}
             <span className="small muted">請求実績とは合算していません</span>
@@ -253,7 +255,7 @@ export default function Admin() {
           <div className="card" style={{ gap: 4 }}>
             <span className="small muted">課金対象の失敗分</span>
             <strong className="num" style={{ fontSize: 24 }}>
-              {formatMoney(overview.cost.billableFailureCostMinor)}
+              {formatMoney(overview.cost.billableFailureCostMinor, overview.cost.currency)}
             </strong>
             <span className="small muted">利用者には請求していません</span>
           </div>
@@ -275,11 +277,11 @@ export default function Admin() {
           <div className="card" style={{ gap: 4 }}>
             <span className="small muted">総額 / 返金 / 手数料</span>
             <strong className="num" style={{ fontSize: 20 }}>
-              {formatMoney(overview.revenue.grossMinor)}
+              {formatMoney(overview.revenue.grossMinor, overview.revenue.currency)}
             </strong>
             <span className="small muted num">
-              返金 {formatMoney(overview.revenue.refundedMinor)} / 手数料{' '}
-              {formatMoney(overview.revenue.paymentFeeMinor)}
+              返金 {formatMoney(overview.revenue.refundedMinor, overview.revenue.currency)} / 手数料{' '}
+              {formatMoney(overview.revenue.paymentFeeMinor, overview.revenue.currency)}
             </span>
           </div>
           <div className="card" style={{ gap: 4 }}>

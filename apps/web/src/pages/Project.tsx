@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { apiFetch } from '../lib/api';
-import { MOOD_LABELS, SCENE_LABELS, TRACK_STATE_LABELS } from '../lib/messages';
+import { useI18n } from '../lib/i18n';
+import { SCENE_KEY, TRACK_MOOD_KEY, TRACK_STATE_KEY, TRACK_STATE_TONES } from '../lib/messages';
 import { formatJst, useSession } from '../lib/session';
 import { usePlayer } from '../lib/player';
 import { AudioPlayer, Badge, ErrorNotice, Loading } from '../components/common';
@@ -36,6 +37,7 @@ interface TrackDetail {
  * additional cost before it happens.
  */
 export default function Project() {
+  const { t } = useI18n();
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   // Only the stable `stop` callback is captured: the player object's identity
@@ -99,7 +101,7 @@ export default function Project() {
   if (error) return <ErrorNotice error={error} onRetry={() => void load()} />;
   if (!project) return null;
 
-  const sceneLabel = SCENE_LABELS[project.scene]?.title ?? project.scene;
+  const sceneLabel = t(SCENE_KEY(project.scene));
 
   return (
     <div className="stack stack--loose">
@@ -125,7 +127,7 @@ export default function Project() {
       ) : (
         <div className="grid">
           {project.tracks.map((track, index) => {
-            const state = TRACK_STATE_LABELS[track.state] ?? { label: track.state, tone: '' };
+            const state = { label: t(TRACK_STATE_KEY(track.state)), tone: TRACK_STATE_TONES[track.state] ?? '' };
             const isSelected = selected === track.trackId;
             return (
               <article
@@ -145,7 +147,7 @@ export default function Project() {
                   {track.mood && (
                     <>
                       <span>・</span>
-                      <span>{MOOD_LABELS[track.mood] ?? track.mood}</span>
+                      <span>{t(TRACK_MOOD_KEY(track.mood))}</span>
                     </>
                   )}
                 </div>

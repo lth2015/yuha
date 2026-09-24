@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import { useI18n } from '../lib/i18n';
-import { messageFor, PROMPT_HINTS, type UserMessage } from '../lib/messages';
+import { messageFor, isPromptHint, type UserMessage } from '../lib/messages';
 import { ApiError } from '../lib/api';
 import { formatTime, usePlayer } from '../lib/player';
 
@@ -24,9 +24,9 @@ export function ErrorNotice({ error, onRetry }: { error: unknown; onRetry?: () =
 
   return (
     <div className={`alert alert--${msg.tone}`} role="alert" aria-live="assertive">
-      <div className="alert__title">{msg.title}</div>
-      <div>{msg.next}</div>
-      {hintKey && PROMPT_HINTS[hintKey] && <div className="alert__next">{PROMPT_HINTS[hintKey]}</div>}
+      <div className="alert__title">{t(msg.titleKey)}</div>
+      <div>{t(msg.nextKey)}</div>
+      {hintKey && isPromptHint(hintKey) && <div className="alert__next">{t(hintKey)}</div>}
       {appealable && (
         <div className="alert__next small">
           {t('common.rightsNotice')}

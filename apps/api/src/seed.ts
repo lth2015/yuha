@@ -32,13 +32,27 @@ await migrate();
 
 // ---------------------------------------------------------------- catalogue
 
+// ---------------------------------------------------------------------------
+// Priced in JPY, the launch market's currency, tax-inclusive as Japanese
+// consumer law expects. Version 2: version 1 sold songs below what they cost
+// to make — the modelled provider cost is 46 minor units per generation, and
+// the old subscriptions billed 10 and 7.5. Every tier here clears cost with
+// room for the ~10% of generations that fail (which the provider bills and
+// the product absorbs, because a failed generation never spends a credit).
+//
+// The one-off pack and the monthly plan are the numbers PROJECT_TASK set
+// originally; those were cost-aware, and the 2026-09 pivot to "100 songs a
+// month" is what broke the economics.
+//
+// Orders keep the catalogue version they were bought at, so re-pricing never
+// rewrites an existing receipt.
 await upsertProduct({
   price_key: 'drop_5',
-  version: 1,
+  version: 2,
   kind: 'one_time',
-  display_name: 'Starter Pack — 5 songs',
-  amount_minor: 499,
-  currency: 'usd',
+  display_name: 'DROP — 5 songs',
+  amount_minor: 980,
+  currency: 'jpy',
   tax_included: true,
   units: 5,
   validity_days: 90,
@@ -49,13 +63,15 @@ await upsertProduct({
 
 await upsertProduct({
   price_key: 'pro_monthly',
-  version: 1,
+  version: 2,
   kind: 'subscription',
-  display_name: 'Pro — 100 songs / month',
-  amount_minor: 999,
-  currency: 'usd',
+  display_name: 'CREATOR — 15 songs / month',
+  amount_minor: 1980,
+  currency: 'jpy',
   tax_included: true,
-  units: 100,
+  // 15, not the 20 the original spec named: the difference absorbs billable
+  // failures without pushing the margin under 60%.
+  units: 15,
   validity_days: null,
   auto_renew: true,
   stripe_price_id: config.STRIPE_PRICE_ID_PRO_MONTHLY ?? null,
@@ -64,13 +80,13 @@ await upsertProduct({
 
 await upsertProduct({
   price_key: 'premier_monthly',
-  version: 1,
+  version: 2,
   kind: 'subscription',
-  display_name: 'Premier — 400 songs / month',
-  amount_minor: 2999,
-  currency: 'usd',
+  display_name: 'STUDIO — 45 songs / month',
+  amount_minor: 4980,
+  currency: 'jpy',
   tax_included: true,
-  units: 400,
+  units: 45,
   validity_days: null,
   auto_renew: true,
   stripe_price_id: config.STRIPE_PRICE_ID_PREMIER_MONTHLY ?? null,
@@ -79,11 +95,11 @@ await upsertProduct({
 
 await upsertProduct({
   price_key: 'market_license',
-  version: 1,
+  version: 2,
   kind: 'one_time',
-  display_name: 'Market License — one song',
-  amount_minor: 499,
-  currency: 'usd',
+  display_name: 'Licence — one song',
+  amount_minor: 980,
+  currency: 'jpy',
   tax_included: true,
   units: 1,
   validity_days: null,
@@ -92,7 +108,7 @@ await upsertProduct({
   active: true,
 });
 
-console.log('✓ product catalogue seeded (drop_5, pro/premier/market_license — USD)');
+console.log('✓ product catalogue seeded v2 (DROP / CREATOR / STUDIO / licence — JPY, tax-inclusive)');
 
 // ------------------------------------------------------ explore showcase
 

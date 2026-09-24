@@ -35,6 +35,10 @@ export function formatMoney(
   locale = 'en-US',
   opts: { fractionDigits?: number } = {},
 ): string {
+  // Reporting can legitimately answer "mixed" for a window that spans more
+  // than one currency. Intl would throw on that, and a thrown formatter in an
+  // admin console is worse than saying plainly that the figure is not summable.
+  if (currency === 'mixed') return `${amountMinor} (mixed currencies)`;
   const zero = isZeroDecimal(currency);
   const digits = opts.fractionDigits ?? (zero ? 0 : amountMinor % 100 === 0 ? 0 : 2);
   return new Intl.NumberFormat(locale, {
