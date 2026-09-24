@@ -90,12 +90,14 @@ check was about the rendering.
 ## Commands
 
 ```bash
-pnpm dev         # api + worker + web
-pnpm test        # vitest
+pnpm dev             # api + worker + web
+pnpm test            # vitest (needs MySQL: pnpm db:up)
 pnpm typecheck
-pnpm lint
+pnpm check:orphans   # exports nothing imports, baselined
 pnpm build
 ```
+
+`pnpm` needs Node >= 22; the repo has no linter.
 
 ## Docs
 
