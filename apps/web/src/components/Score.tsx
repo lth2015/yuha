@@ -106,7 +106,10 @@ export function Score({
   useEffect(() => {
     const mq = window.matchMedia('(prefers-reduced-motion: reduce)');
     reduced.current = mq.matches;
-    const onChange = (e: MediaQueryListEvent) => { reduced.current = e.matches; };
+    const onChange = (e: MediaQueryListEvent) => {
+      reduced.current = e.matches;
+      dirty.current = true;
+    };
     mq.addEventListener('change', onChange);
     return () => mq.removeEventListener('change', onChange);
   }, []);
@@ -144,7 +147,12 @@ export function Score({
       const { notes } = dataRef.current;
       const { energy, playing } = beat.current;
       const pinned = headRef.current !== undefined;
-      const stillNow = reduced.current || (compact && !playing) || pinned;
+      // A pinned head stops the *sweep*, but while audio is running the
+      // drawing still has to follow the analyser. Treating pinned as "still"
+      // meant the only repaint trigger was `head` changing, which the audio
+      // element reports on `timeupdate` — about 4Hz, so the swell and the
+      // glow stepped instead of animating.
+      const stillNow = reduced.current || ((compact || pinned) && !playing);
       // A still drawing only needs painting when something actually changed.
       if (stillNow && wasStill && !dirty.current) return;
       wasStill = stillNow;

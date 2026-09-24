@@ -82,7 +82,22 @@ export default function Create() {
   const [params] = useSearchParams();
   const editTrackId = params.get('edit');
   const { me, entitlements, refreshEntitlements, runtime } = useSession();
-  const [draft, setDraft] = useState<Draft>(DEFAULT_DRAFT);
+  /**
+   * Hydrated lazily — see the note on the home composer. Loading in one effect
+   * while saving in another keyed on the value means the save runs on mount
+   * holding DEFAULT_DRAFT and writes it over the stored draft. Here it was
+   * worse than losing the draft: the overwrite is valid JSON, so the next
+   * mount restores it and the creator's work silently becomes the defaults.
+   */
+  const [draft, setDraft] = useState<Draft>(() => {
+    if (editTrackId) return DEFAULT_DRAFT;
+    try {
+      const saved = localStorage.getItem(DRAFT_KEY);
+      return saved ? { ...DEFAULT_DRAFT, ...(JSON.parse(saved) as Partial<Draft>) } : DEFAULT_DRAFT;
+    } catch {
+      return DEFAULT_DRAFT;
+    }
+  });
   const [job, setJob] = useState<JobView | null>(null);
   const [result, setResult] = useState<TrackView | null>(null);
   const [error, setError] = useState<unknown>(null);
@@ -117,22 +132,15 @@ export default function Create() {
   }, [editTrackId]);
 
   useEffect(() => {
+    // Editing a track fills the studio from that track; persisting it would
+    // overwrite whatever the creator had in progress of their own.
     if (editTrackId) return;
-    try {
-      const saved = localStorage.getItem(DRAFT_KEY);
-      if (saved) setDraft({ ...DEFAULT_DRAFT, ...(JSON.parse(saved) as Partial<Draft>) });
-    } catch {
-      /* ignore a corrupt draft */
-    }
-  }, [editTrackId]);
-
-  useEffect(() => {
     try {
       localStorage.setItem(DRAFT_KEY, JSON.stringify(draft));
     } catch {
       /* private browsing */
     }
-  }, [draft]);
+  }, [draft, editTrackId]);
 
   const patch = useCallback((p: Partial<Draft>) => setDraft((d) => ({ ...d, ...p })), []);
 

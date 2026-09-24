@@ -36,10 +36,10 @@ export const runtimeInfo = z.object({
     commercialDeliveryEnabled: z.boolean(),
     realPaymentsEnabled: z.boolean(),
     /**
-     * Alipay and WeChat Pay are offered at checkout. One-time purchases only:
-     * both are single-use methods and cannot back a subscription, so the
-     * pricing page has to say so rather than let a buyer discover it on
-     * Stripe's page.
+     * This deployment accepts Alipay and WeChat Pay. Declarative only — the
+     * methods are enabled on the Stripe account, and this just lets the
+     * pricing page say so before a buyer clicks through. One-time purchases
+     * only: both are single-use and cannot back a subscription.
      */
     qrWalletsEnabled: z.boolean(),
   }),

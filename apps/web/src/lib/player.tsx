@@ -1,7 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import type { TrackView } from '@yuha/contracts';
-import { attachBeat as attachBeatSafe } from './beat';
+import { attachBeat as attachBeatSafe, wakeBeat } from './beat';
 
 /**
  * A single shared <audio> element with a queue.
@@ -73,6 +73,10 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     audio.currentTime = 0;
     setCurrent(track);
     setState({ activeId: track.trackId, status: 'loading', currentTime: 0, duration: 0 });
+    // The analyser graph carries the audio (createMediaElementSource
+    // reroutes the element), so a suspended context is silence, not just
+    // still visuals. This is the user gesture; resume here or never.
+    wakeBeat();
     void audio.play().catch(() => setState((s) => ({ ...s, status: 'error' })));
   }, []);
 
@@ -172,8 +176,12 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
   const toggle = useCallback(() => {
     const audio = audioRef.current;
     if (!audio || !current) return;
-    if (audio.paused) void audio.play().catch(() => setState((s) => ({ ...s, status: 'error' })));
-    else audio.pause();
+    if (audio.paused) {
+      wakeBeat();
+      void audio.play().catch(() => setState((s) => ({ ...s, status: 'error' })));
+    } else {
+      audio.pause();
+    }
   }, [current]);
 
   const seek = useCallback((seconds: number) => {

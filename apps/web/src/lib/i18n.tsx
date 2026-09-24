@@ -148,6 +148,7 @@ const zh: Dict = {
   'song.transport': '《{title}》的乐谱与播放位置，可拖动或用方向键定位',
   'wait.eyebrow': '正在录制',
   'wait.failedEyebrow': '录制中断',
+  'wait.tryAgain': '再试一次',
   'wait.failedTitle': '这次没能录成',
   'wait.scoreAria': '你的描述正在被写成音乐。',
   // ---- scene / mood / track state ----
@@ -505,6 +506,7 @@ const ja: Dict = {
   'song.transport': '「{title}」のスコアと再生位置。ドラッグまたは矢印キーで移動できます',
   'wait.eyebrow': 'レコーディング中',
   'wait.failedEyebrow': 'レコーディング中断',
+  'wait.tryAgain': 'もう一度つくる',
   'wait.failedTitle': '録音できませんでした',
   'wait.scoreAria': 'あなたの説明が音楽になっていきます。',
   // ---- scene / mood / track state ----
@@ -862,6 +864,7 @@ const en: Dict = {
   'song.transport': 'Score and playback position for “{title}”. Drag or use the arrow keys to seek.',
   'wait.eyebrow': 'Recording',
   'wait.failedEyebrow': 'Recording stopped',
+  'wait.tryAgain': 'Try again',
   'wait.failedTitle': 'This take did not make it',
   'wait.scoreAria': 'Your description being written into music.',
   // ---- scene / mood / track state ----

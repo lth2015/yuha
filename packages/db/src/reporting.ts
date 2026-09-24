@@ -77,12 +77,18 @@ export async function costSummary(windowDays = 30): Promise<CostSummary> {
          WHERE kind = 'export'
            AND created_at >= DATE_SUB(UTC_TIMESTAMP(3), INTERVAL ? DAY))              AS exports,
        (SELECT GROUP_CONCAT(DISTINCT currency) FROM provider_cost_events
-         WHERE occurred_at >= DATE_SUB(UTC_TIMESTAMP(3), INTERVAL ? DAY))             AS currencies`,
+         WHERE occurred_at >= DATE_SUB(UTC_TIMESTAMP(3), INTERVAL ? DAY)
+           AND billable = 1)                                                          AS currencies`,
     [windowDays, windowDays, windowDays, windowDays, windowDays, windowDays],
   );
 
-  // One currency in the window is reportable; several are not summable, and
-  // saying so beats printing a number that means nothing.
+  // Scoped to `billable = 1`, the same rows every figure above sums. Scanning
+  // all events would let one non-billable row in another currency label the
+  // whole panel 'mixed' when the figures shown are in fact single-currency.
+  //
+  // Note this still spans the actual/estimated split: modelled events default
+  // to `jpy` while a real provider may invoice in another currency, and then
+  // the honest answer for the panel really is 'mixed'.
   const seen = String(row?.['currencies'] ?? '')
     .split(',')
     .map((c) => c.trim())
@@ -164,7 +170,8 @@ export async function revenueSummary(windowDays = 30): Promise<RevenueSummary> {
        (SELECT COUNT(*) FROM orders
          WHERE status = 'paid' AND entitlement_granted_at IS NULL)                     AS ungranted,
        (SELECT GROUP_CONCAT(DISTINCT currency) FROM payments
-         WHERE occurred_at >= DATE_SUB(UTC_TIMESTAMP(3), INTERVAL ? DAY))              AS currencies`,
+         WHERE occurred_at >= DATE_SUB(UTC_TIMESTAMP(3), INTERVAL ? DAY)
+           AND kind IN ('payment','refund','fee'))                                     AS currencies`,
     [d, d, d, d, d, d, d, d],
   );
   const seen = String(row?.['currencies'] ?? '')

@@ -43,22 +43,27 @@ export class StripePaymentsAdapter implements PaymentsAdapter {
     if (!params.stripePriceId) {
       throw new Error(`product ${params.priceKey} has no Stripe price id configured`);
     }
-    // Alipay and WeChat Pay are single-use methods: Stripe rejects a
-    // subscription session that lists them, so they are offered on one-time
-    // payments only. Cards stay in the list — a wallet is an addition, never
-    // a replacement, and a buyer without either wallet must still be able to
-    // pay.
     const oneTime = params.kind !== 'subscription';
-    const wallets = oneTime && params.walletsEnabled === true;
+    // Wallets are enabled on the Stripe account, not listed here.
+    //
+    // Passing `payment_method_types` pins the session to exactly that list and
+    // opts out of the account's automatic payment methods — so listing
+    // ['card','alipay','wechat_pay'] would have *removed* Apple Pay, Google
+    // Pay, Link and, for a Japanese account, konbini. A change meant to add
+    // two methods would have dropped several. Stripe already filters
+    // automatic methods by mode and currency, and will not offer Alipay or
+    // WeChat Pay on a subscription because both are single-use.
+    //
+    // `walletsEnabled` therefore drives only what the pricing page claims we
+    // accept; the session says nothing about methods.
 
     const session = await this.stripe.checkout.sessions.create(
       {
         mode: oneTime ? 'payment' : 'subscription',
-        ...(wallets
+        ...(oneTime && params.walletsEnabled === true
           ? {
-              payment_method_types: ['card', 'alipay', 'wechat_pay'] as const,
-              // WeChat Pay needs to know where the QR will be shown; `web`
-              // renders the scannable code on Stripe's hosted page.
+              // Only meaningful if the account offers WeChat Pay; it tells
+              // Stripe where the QR is rendered. Ignored otherwise.
               payment_method_options: { wechat_pay: { client: 'web' as const } },
             }
           : {}),

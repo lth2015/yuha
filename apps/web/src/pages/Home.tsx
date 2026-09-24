@@ -29,7 +29,25 @@ export default function Home() {
   const { t } = useI18n();
   const { me, entitlements, refreshEntitlements } = useSession();
   const navigate = useNavigate();
-  const [prompt, setPrompt] = useState('');
+  /**
+   * Hydrated lazily rather than in an effect.
+   *
+   * The previous shape — load in one effect, save in another keyed on
+   * `prompt` — destroyed the draft it was meant to keep: on mount the save
+   * effect runs in the same commit as the load, still holding the initial
+   * empty string, and writes it over the stored draft. StrictMode's double
+   * mount then made the loss deterministic, and any remount (navigating back
+   * to the home screen) reproduced it in production too. Reading the stored
+   * value as the initial state removes the race and the empty-textarea flash
+   * with it.
+   */
+  const [prompt, setPrompt] = useState(() => {
+    try {
+      return localStorage.getItem(DRAFT_KEY) ?? '';
+    } catch {
+      return '';
+    }
+  });
   const [activeMood, setActiveMood] = useState<string | null>(null);
   const [instrumental, setInstrumental] = useState(false);
   const [feedbackKey, setFeedbackKey] = useState<{ key: string; params?: Record<string, string | number> } | null>(null);
@@ -40,14 +58,6 @@ export default function Home() {
   const promptRef = useRef<HTMLTextAreaElement | null>(null);
 
   const credits = entitlements?.availableUnits ?? me?.creditsAvailable ?? 0;
-
-  useEffect(() => {
-    try {
-      setPrompt(localStorage.getItem(DRAFT_KEY) ?? '');
-    } catch {
-      /* ignore */
-    }
-  }, []);
 
   useEffect(() => {
     try {
@@ -103,6 +113,21 @@ export default function Home() {
     } finally {
       setSubmitting(false);
     }
+  };
+
+  /**
+   * Back to the composer after a failed take.
+   *
+   * The prompt is deliberately kept: the failure was not the writer's doing,
+   * and the error copy for these codes says the credit was not spent and to
+   * try again — which needs somewhere to try again from. A fresh idempotency
+   * key is minted so the retry is a new request rather than a replay that
+   * would be deduplicated onto the job that just failed.
+   */
+  const startAnother = () => {
+    setJob(null);
+    setError(null);
+    idemKey.current = newIdempotencyKey();
   };
 
   // Poll the job to terminal state, then hand over to the song page.
@@ -161,6 +186,11 @@ export default function Home() {
         </ol>
 
         <div className="wait-page__actions">
+          {failed && (
+            <button type="button" className="btn btn--primary" onClick={startAnother}>
+              {t('wait.tryAgain')}
+            </button>
+          )}
           <Link to="/library" className="btn">
             {t('wait.goLibrary')}
           </Link>
