@@ -559,10 +559,18 @@ th { color: var(--muted); font-weight: 500; font-size: 12px; }
 tr:last-child td { border-bottom: none; }
 
 /* ---------------------------------------------------------------- hero / composer */
-.hero { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 0.9fr); gap: clamp(32px, 5vw, 80px); align-items: start; padding: 56px 0 64px; }
+.hero { display: block; padding: clamp(40px, 7vw, 88px) 0 64px; }
+.hero__copy { max-width: 880px; margin: 0 auto; }
 .eyebrow { font-size: 11px; letter-spacing: 0.14em; font-weight: 600; color: var(--muted); margin: 0 0 20px; }
-.hero__title { font-size: 64px; line-height: 1.18; letter-spacing: -0.045em; font-weight: 600; margin: 0 0 20px; }
-.hero__intro { font-size: 16px; color: var(--muted); margin: 0 0 var(--s8); max-width: 420px; }
+.hero__title {
+  font-size: clamp(44px, 8.4vw, 104px);
+  line-height: 1.02;
+  letter-spacing: -0.055em;
+  font-weight: 700;
+  margin: 0 0 24px;
+  text-wrap: balance;
+}
+.hero__intro { font-size: 17px; color: var(--muted); margin: 0 0 var(--s6); max-width: 46ch; }
 
 .composer { padding: var(--s6); box-shadow: var(--shadow-raised); }
 .composer label { margin-bottom: var(--s2); }
@@ -617,10 +625,11 @@ tr:last-child td { border-bottom: none; }
   position: relative; display: block; border-radius: var(--r-card); overflow: hidden;
   isolation: isolate;
 }
-/* One petal, centre stage with even margins; the tilt gives it life. */
-.cover-art__petal {
-  position: absolute; left: 50%; top: 50%;
-  translate: -50% -50%;
+/* The sleeve's score sits on the lower third, the way a label sits on a
+   record: the field above it carries the tint, the marks carry the song. */
+.cover-art__score {
+  position: absolute; left: 0; right: 0; bottom: 8%;
+  width: 100%;
 }
 .cover-art__index {
   position: absolute; left: 14px; top: 12px;
@@ -965,6 +974,9 @@ tr:last-child td { border-bottom: none; }
   /* The composer below is the create surface; a second CTA up here only
      costs width the 375px nav does not have. */
   .topnav__account .btn--primary { display: none; }
+  /* Japanese and Chinese labels break between characters, so a tight nav
+     wraps them mid-word rather than overflowing — which looks like a bug. */
+  .topnav__account .btn { white-space: nowrap; padding: 8px 14px; }
   .lang-switch { gap: 0; }
   .lang-switch__btn { padding: 6px 9px; font-size: 12px; }
   .tabbar {
@@ -1186,4 +1198,29 @@ tr:last-child td { border-bottom: none; }
   .composer__vocal { flex-direction: column; align-items: stretch; }
   .composer__vocal .seg { display: flex; }
   .composer__advanced { justify-content: center; }
+}
+
+/* ---------------------------------------------------------------- the score */
+/*
+ * A piece of writing drawn as music. It spans the full measure of the hero on
+ * purpose: a staff line running the width of the page is the gesture that
+ * stops this reading like a dashboard, and it is the one element on the
+ * screen that could not belong to any other product.
+ */
+.score {
+  display: block;
+  width: 100%;
+  /* The canvas is transparent; the light field shows through it. */
+  background: transparent;
+}
+
+.hero__score {
+  margin: var(--s6) 0 var(--s8);
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+  padding: var(--s2) 0;
+}
+
+@media (max-width: 767px) {
+  .hero__score { margin: var(--s4) 0 var(--s6); }
 }

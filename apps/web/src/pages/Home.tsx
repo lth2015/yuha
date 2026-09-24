@@ -5,6 +5,7 @@ import { apiFetch, newIdempotencyKey } from '../lib/api';
 import { useI18n } from '../lib/i18n';
 import { useSession } from '../lib/session';
 import { PetalMark } from '../components/Brand';
+import { Score } from '../components/Score';
 
 const DRAFT_KEY = 'yuha.home-draft';
 
@@ -173,6 +174,8 @@ export default function Home() {
           </h1>
           <p className="hero__intro">{t('hero.intro')}</p>
 
+          <Score text={prompt} ghost={t('composer.placeholder')} className="hero__score" height={180} />
+
           <div className="composer panel">
             <label htmlFor="home-prompt">{t('composer.label')}</label>
             <textarea
@@ -258,26 +261,6 @@ export default function Home() {
           </div>
         </div>
 
-        <aside className="art-panel" aria-label="品牌意象：一片被风托起的羽花">
-          <div className="art-panel__index" aria-hidden="true">
-            <span>{t('art.index1')}</span>
-            <span>{t('art.index2')}</span>
-          </div>
-          <PetalMark size={380} className="art-panel__petal is-entering" shadow={false} title="一片花瓣。一点风。" />
-          <div className="art-panel__caption">
-            <span className="art-panel__line" aria-hidden="true" />
-            <h2>
-              {t('art.h2a')}
-              <br />
-              {t('art.h2b')}
-            </h2>
-            <p>
-              {t('art.pa')}
-              <br />
-              {t('art.pb')}
-            </p>
-          </div>
-        </aside>
       </section>
     </div>
   );
