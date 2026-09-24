@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import type { ProductView, TrackView } from '@yuha/contracts';
 import { apiFetch, newIdempotencyKey } from '../lib/api';
@@ -8,7 +8,9 @@ import { useSession } from '../lib/session';
 import { AmbientStage } from '../components/AmbientStage';
 import { CoverArt } from '../components/CoverArt';
 import { ErrorNotice } from '../components/common';
+import { Score } from '../components/Score';
 import { SyncedLyrics } from '../components/SyncedLyrics';
+import { scoreFromSeed } from '../lib/score';
 
 interface SongDetailResponse extends TrackView {
   lyrics: string | null;
@@ -40,6 +42,9 @@ export default function SongDetail() {
   const [copied, setCopied] = useState(false);
   const [licensePrice, setLicensePrice] = useState<number | null>(null);
   const [licensing, setLicensing] = useState(false);
+  // `player.currentTime` re-renders this several times a second while the song
+  // plays; the score itself only depends on the seed.
+  const songScore = useMemo(() => (song ? scoreFromSeed(song.coverSeed, 72) : null), [song?.coverSeed]);
 
   const load = useCallback(() => {
     if (!id) return;
@@ -243,19 +248,21 @@ export default function SongDetail() {
             <span className="song-spread__time num">
               {formatTime(active ? player.currentTime : 0)} / {formatTime(song.durationSeconds)}
             </span>
-            <div
-              className="song-spread__track"
-              role="presentation"
-              onClick={(e) => {
-                const rect = e.currentTarget.getBoundingClientRect();
-                player.seek(((e.clientX - rect.left) / rect.width) * song.durationSeconds);
-              }}
-            >
-              <span
-                className="song-spread__fill"
-                style={{ width: `${active && player.duration ? (player.currentTime / player.duration) * 100 : 0}%` }}
-              />
-            </div>
+            <Score
+              score={songScore ?? undefined}
+              head={active && player.duration ? player.currentTime / player.duration : 0}
+              onSeek={
+                song.previewUrl
+                  ? (f) => {
+                      if (!active) void play();
+                      player.seek(f * (player.duration || song.durationSeconds));
+                    }
+                  : undefined
+              }
+              className="song-spread__score"
+              height={104}
+              label={t('song.transport', { title: song.title })}
+            />
           </div>
         </div>
       </div>

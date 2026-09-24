@@ -661,6 +661,10 @@ tr:last-child td { border-bottom: none; }
 .cover-art {
   position: relative; display: block; border-radius: var(--r-card); overflow: hidden;
   isolation: isolate;
+  /* The component inlines a pixel width; this is what lets a narrow screen
+     override it. Capping the height instead would not work — the sleeve
+     keeps its square through aspect-ratio, not through a fixed height. */
+  max-width: 100%;
 }
 /* The sleeve's score sits on the lower third, the way a label sits on a
    record: the field above it carries the tint, the marks carry the song. */
@@ -856,18 +860,13 @@ tr:last-child td { border-bottom: none; }
 .song-spread__meta { color: var(--muted); font-size: 15px; margin: 0 0 var(--s6); }
 .song-spread__actions { display: flex; align-items: center; gap: var(--s4) var(--s6); flex-wrap: wrap; margin: 0 0 var(--s4); }
 .song-spread__note { font-size: 12px; color: var(--muted); margin: 0 0 var(--s2); }
-.song-spread__player { display: flex; align-items: center; gap: 14px; margin-top: var(--s4); }
+.song-spread__player { display: flex; flex-direction: column; align-items: stretch; gap: 6px; margin-top: var(--s6); }
 .song-spread__time { font-size: 12px; color: var(--muted); white-space: nowrap; }
-.song-spread__track { flex: 1; height: 28px; display: flex; align-items: center; cursor: pointer; }
-.song-spread__track::before {
-  content: ''; position: relative; width: 100%; height: 4px; border-radius: 999px; background: var(--line);
-}
-.song-spread__fill {
-  position: absolute; height: 4px; border-radius: 999px; background: var(--ink);
-  transition: width 0.25s linear;
-}
-.song-spread__track { position: relative; }
-.song-spread__fill { position: absolute; left: 0; }
+/* The transport is the song's own score; it needs room, so the row it sits
+   in stacks the time readout above it instead of beside it. */
+/* `flex: 1` here made sense while the row was horizontal; in a column it
+   stretches the canvas vertically and throws away the height prop. */
+.song-spread__score { width: 100%; min-width: 0; flex: none; }
 
 /* quiet text controls */
 .text-action {
@@ -883,7 +882,7 @@ tr:last-child td { border-bottom: none; }
 .text-action.is-strong { color: var(--petal-deep); border-color: color-mix(in srgb, var(--petal-deep) 45%, transparent); }
 
 @media (max-width: 900px) {
-  .song-spread { grid-template-columns: 1fr; }
+  .song-spread { grid-template-columns: minmax(0, 1fr); }
   .song-spread__cover { max-width: 420px; margin: 0 auto; width: 100%; }
 }
 
@@ -1245,6 +1244,11 @@ tr:last-child td { border-bottom: none; }
   /* The canvas is transparent; the light field shows through it. */
   background: transparent;
 }
+
+/* A seekable score is a transport control, so it takes a pointer, a focus
+   ring, and touch-action: none — otherwise dragging it scrolls the page. */
+.score.is-seekable { cursor: pointer; touch-action: none; }
+.score.is-seekable:focus-visible { outline: 2px solid var(--focus); outline-offset: 3px; border-radius: 4px; }
 
 .hero__score {
   margin: var(--s6) 0 var(--s8);

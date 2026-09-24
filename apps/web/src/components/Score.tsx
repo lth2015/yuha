@@ -32,6 +32,8 @@ export function Score({
   compact = false,
   ghost,
   progress,
+  head,
+  onSeek,
 }: {
   /** The writing to read as music. Ignored when `score` is given. */
   text?: string;
@@ -57,6 +59,14 @@ export function Score({
    * happening is exactly the dishonesty this product has ruled out.
    */
   progress?: number;
+  /**
+   * 0..1 — where the playhead actually is. Given this, the head stops
+   * sweeping and reports playback position instead, which turns the drawing
+   * into the transport for the song rather than an animation beside it.
+   */
+  head?: number;
+  /** Makes the score seekable. Receives 0..1. */
+  onSeek?: ((fraction: number) => void) | undefined;
 }) {
   const resolved = score ?? scoreFromText(text ?? '');
   const isGhost = !score && !(text ?? '').trim() && !!ghost?.trim();
@@ -66,6 +76,7 @@ export function Score({
   /** Set whenever something that affects the drawing changes. */
   const dirty = useRef(true);
   const progressRef = useRef(progress);
+  const headRef = useRef(head);
   const beat = useRef({ energy: 0, playing: false });
   const reduced = useRef(false);
 
@@ -81,6 +92,11 @@ export function Score({
     progressRef.current = progress;
     dirty.current = true;
   }, [progress]);
+
+  useEffect(() => {
+    headRef.current = head;
+    dirty.current = true;
+  }, [head]);
 
   useEffect(() => subscribeBeat((energy, playing) => {
     beat.current = { energy, playing };
@@ -126,7 +142,8 @@ export function Score({
       raf = requestAnimationFrame(draw);
       const { notes } = dataRef.current;
       const { energy, playing } = beat.current;
-      const stillNow = reduced.current || (compact && !playing);
+      const pinned = headRef.current !== undefined;
+      const stillNow = reduced.current || (compact && !playing) || pinned;
       // A still drawing only needs painting when something actually changed.
       if (stillNow && wasStill && !dirty.current) return;
       wasStill = stillNow;
@@ -162,9 +179,11 @@ export function Score({
       const still = stillNow;
       const cut = progressRef.current;
       const cycle = still ? 0.5 : ((now - start) / 5200) % 1;
-      // While recording, the head works the written region only — it cannot
-      // run ahead of what has actually been committed.
-      const headX = (cut === undefined ? cycle : cycle * cut) * w;
+      // A pinned head reports real playback position. Otherwise the head
+      // sweeps, and while recording it works the written region only — it
+      // cannot run ahead of what has actually been committed.
+      const at = headRef.current ?? (cut === undefined ? cycle : cycle * cut);
+      const headX = Math.max(0, Math.min(1, at)) * w;
 
       for (const n of notes) {
         if (n.rest) continue;
@@ -182,9 +201,15 @@ export function Score({
         const r = Math.round(255 + (139 - 255) * t);
         const g = Math.round(122 + (124 - 122) * t);
         const b = Math.round(77 + (255 - 77) * t);
-        // Past the cut a note is present but not yet real.
+        // Past the recording cut a note is present but not yet real. Past
+        // the playhead it is real but not yet reached — a softer difference.
         const written = cut === undefined || n.x <= cut;
-        const alpha = (0.34 + n.weight * 0.26 + near * 0.4) * (written ? 1 : 0.16);
+        const pin = headRef.current;
+        // A head at zero means the song has not started, not that every note
+        // is unreached — dimming the whole score there reads as disabled.
+        const reached = pin === undefined || pin <= 0 || n.x <= pin;
+        const dim = written ? (reached ? 1 : 0.5) : 0.16;
+        const alpha = (0.34 + n.weight * 0.26 + near * 0.4) * dim;
         ctx.lineWidth = lw;
         ctx.lineCap = 'round';
         ctx.strokeStyle = `rgba(${r}, ${g}, ${b}, ${Math.min(1, alpha)})`;
@@ -249,6 +274,23 @@ export function Score({
   // Derived from the prop, not from the ref: the ref is updated in an effect
   // and would always describe the previous keystroke.
   const described = resolved;
+  const seek = (clientX: number) => {
+    const el = canvasRef.current;
+    if (!el || !onSeek) return;
+    const r = el.getBoundingClientRect();
+    if (!r.width) return;
+    onSeek(Math.max(0, Math.min(1, (clientX - r.left) / r.width)));
+  };
+
+  const onKeyDown = (e: React.KeyboardEvent) => {
+    if (!onSeek || head === undefined) return;
+    const stepBy = e.shiftKey ? 0.1 : 0.02;
+    if (e.key === 'ArrowRight') { e.preventDefault(); onSeek(Math.min(1, head + stepBy)); }
+    else if (e.key === 'ArrowLeft') { e.preventDefault(); onSeek(Math.max(0, head - stepBy)); }
+    else if (e.key === 'Home') { e.preventDefault(); onSeek(0); }
+    else if (e.key === 'End') { e.preventDefault(); onSeek(1); }
+  };
+
   // An empty label marks the canvas decorative: inside a sleeve the wrapper
   // already carries the description, and a second role="img" would make a
   // screen reader announce the same artwork twice.
@@ -256,14 +298,34 @@ export function Score({
   return (
     <canvas
       ref={canvasRef}
-      className={`score${className ? ` ${className}` : ''}`}
+      className={`score${className ? ` ${className}` : ''}${onSeek ? ' is-seekable' : ''}`}
       style={{ height }}
-      {...(decorative
-        ? { 'aria-hidden': true }
-        : {
-            role: 'img',
+      {...(onSeek
+        ? {
+            // Interactive, so it is a slider and must be operable by keyboard,
+            // not only by pointer.
+            role: 'slider',
+            tabIndex: 0,
             'aria-label': label ?? describe(isGhost, described),
-          })}
+            'aria-valuemin': 0,
+            'aria-valuemax': 100,
+            'aria-valuenow': Math.round((head ?? 0) * 100),
+            'aria-valuetext': `${Math.round((head ?? 0) * 100)}%`,
+            onPointerDown: (e: React.PointerEvent<HTMLCanvasElement>) => {
+              e.currentTarget.setPointerCapture(e.pointerId);
+              seek(e.clientX);
+            },
+            onPointerMove: (e: React.PointerEvent<HTMLCanvasElement>) => {
+              if (e.buttons) seek(e.clientX);
+            },
+            onKeyDown,
+          }
+        : decorative
+          ? { 'aria-hidden': true }
+          : {
+              role: 'img',
+              'aria-label': label ?? describe(isGhost, described),
+            })}
     />
   );
 }

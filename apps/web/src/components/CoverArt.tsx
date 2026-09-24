@@ -65,7 +65,7 @@ export function CoverArt({
   return (
     <span
       className={`cover-art${className ? ` ${className}` : ''}${playing ? ' is-playing' : ''}`}
-      style={{ background: art.field, width: size, height: size }}
+      style={{ background: art.field, width: size, aspectRatio: '1 / 1' }}
       role="img"
       aria-label={t('cover.aria', { title })}
     >

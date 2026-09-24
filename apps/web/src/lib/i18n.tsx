@@ -142,6 +142,7 @@ const zh: Dict = {
   'footer.made': '© {year} NetStars Co., Ltd.',
 
   // ---- studio (/create) ----
+  'song.transport': '《{title}》的乐谱与播放位置，可拖动或用方向键定位',
   'wait.eyebrow': '正在录制',
   'wait.failedEyebrow': '录制中断',
   'wait.failedTitle': '这次没能录成',
@@ -316,6 +317,7 @@ const ja: Dict = {
   'footer.made': '© {year} NetStars Co., Ltd.',
 
   // ---- studio (/create) ----
+  'song.transport': '「{title}」のスコアと再生位置。ドラッグまたは矢印キーで移動できます',
   'wait.eyebrow': 'レコーディング中',
   'wait.failedEyebrow': 'レコーディング中断',
   'wait.failedTitle': '録音できませんでした',
@@ -490,6 +492,7 @@ const en: Dict = {
   'footer.made': '© {year} NetStars Co., Ltd.',
 
   // ---- studio (/create) ----
+  'song.transport': 'Score and playback position for “{title}”. Drag or use the arrow keys to seek.',
   'wait.eyebrow': 'Recording',
   'wait.failedEyebrow': 'Recording stopped',
   'wait.failedTitle': 'This take did not make it',
