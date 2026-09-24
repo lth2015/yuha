@@ -64,10 +64,7 @@ const zh: Dict = {
   'art.h2a': '一片花瓣。', 'art.h2b': '一点风。',
   'art.pa': '把没有说出口的，', 'art.pb': '交给下一段旋律。',
 
-  'wait.heading': '你的音乐，正在路上。',
   'wait.sub': '可以离开这个页面，稍后在「我的作品」查看。',
-  'wait.s1': '正在确认这次创作', 'wait.s2': '已加入队列', 'wait.s3': '正在生成你的音乐', 'wait.s4': '已完成，可以试听',
-  'wait.done': '已完成', 'wait.doing': '进行中', 'wait.todo': '待完成',
   'wait.failed': '这次没有完成，额度已按服务端确认退回。你可以修改描述后重试。',
   'wait.goLibrary': '去我的作品',
 
@@ -145,6 +142,10 @@ const zh: Dict = {
   'footer.made': '© {year} NetStars Co., Ltd.',
 
   // ---- studio (/create) ----
+  'wait.eyebrow': '正在录制',
+  'wait.failedEyebrow': '录制中断',
+  'wait.failedTitle': '这次没能录成',
+  'wait.scoreAria': '你的描述正在被写成音乐。',
   'create.h1': '创作',
   'create.h1.edit': '改写这首歌',
   'create.credits': '{n} 次额度',
@@ -242,10 +243,7 @@ const ja: Dict = {
   'art.h2a': 'ひとひらの花びら。', 'art.h2b': 'すこしの風。',
   'art.pa': '言えなかったことを、', 'art.pb': '次のメロディにゆだねる。',
 
-  'wait.heading': '音楽は、いま向かっています。',
   'wait.sub': 'ページを離れても大丈夫。あとで「マイ作品」で確認できます。',
-  'wait.s1': '創作を確認中', 'wait.s2': 'キューに追加されました', 'wait.s3': '音楽を生成中', 'wait.s4': '完成、試聴できます',
-  'wait.done': '完了', 'wait.doing': '進行中', 'wait.todo': '待機',
   'wait.failed': '今回は完成しませんでした。クレジットは返却されています。書き直して再試行できます。',
   'wait.goLibrary': 'マイ作品へ',
 
@@ -318,6 +316,10 @@ const ja: Dict = {
   'footer.made': '© {year} NetStars Co., Ltd.',
 
   // ---- studio (/create) ----
+  'wait.eyebrow': 'レコーディング中',
+  'wait.failedEyebrow': 'レコーディング中断',
+  'wait.failedTitle': '録音できませんでした',
+  'wait.scoreAria': 'あなたの説明が音楽になっていきます。',
   'create.h1': '制作',
   'create.h1.edit': 'この曲を書き直す',
   'create.credits': 'クレジット {n} 回',
@@ -415,10 +417,7 @@ const en: Dict = {
   'art.h2a': 'One petal.', 'art.h2b': 'A little wind.',
   'art.pa': 'Give what you could not say', 'art.pb': 'to the next melody.',
 
-  'wait.heading': 'Your music is on its way.',
   'wait.sub': 'You can leave this page — check “My songs” later.',
-  'wait.s1': 'Confirming this creation', 'wait.s2': 'Queued', 'wait.s3': 'Generating your music', 'wait.s4': 'Done — ready to play',
-  'wait.done': 'Done', 'wait.doing': 'In progress', 'wait.todo': 'Waiting',
   'wait.failed': 'It did not finish this time; your credit was returned as confirmed by the server. Adjust the words and try again.',
   'wait.goLibrary': 'Go to My songs',
 
@@ -491,6 +490,10 @@ const en: Dict = {
   'footer.made': '© {year} NetStars Co., Ltd.',
 
   // ---- studio (/create) ----
+  'wait.eyebrow': 'Recording',
+  'wait.failedEyebrow': 'Recording stopped',
+  'wait.failedTitle': 'This take did not make it',
+  'wait.scoreAria': 'Your description being written into music.',
   'create.h1': 'Create',
   'create.h1.edit': 'Edit song',
   'create.credits': '{n} credits',

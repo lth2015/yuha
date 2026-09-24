@@ -4,8 +4,8 @@ import type { JobView } from '@yuha/contracts';
 import { apiFetch, newIdempotencyKey } from '../lib/api';
 import { useI18n } from '../lib/i18n';
 import { useSession } from '../lib/session';
-import { PetalMark } from '../components/Brand';
 import { Score } from '../components/Score';
+import { JOB_PHASES, fractionOfPhase, phaseKey } from '../lib/phases';
 
 const DRAFT_KEY = 'yuha.home-draft';
 
@@ -123,41 +123,45 @@ export default function Home() {
     return () => clearTimeout(t);
   }, [job, navigate]);
 
-  const waitSteps = useMemo(
-    () => [
-      { key: 'validating', label: t('wait.s1') },
-      { key: 'queued', label: t('wait.s2') },
-      { key: 'generating', label: t('wait.s3') },
-      { key: 'done', label: t('wait.s4') },
-    ],
-    [t],
-  );
 
   // ---- generation state (real stages only, no fake progress) ----
   if (job) {
-    const stepIdx = waitSteps.findIndex((s) => s.key === job.phase);
+    const failed = job.phase === 'failed';
+    const stepIdx = JOB_PHASES.indexOf(job.phase as (typeof JOB_PHASES)[number]);
     return (
       <div className="wait-page" aria-live="polite">
-        <PetalMark size={100} className="wait-page__mark is-moving" shadow={false} title="YUHA" />
-        <h1>{t('wait.heading')}</h1>
-        <p className="muted">{t('wait.sub')}</p>
-        <ol className="wait-page__steps panel">
-          {waitSteps.map((s, i) => (
-            <li key={s.key} className={i < stepIdx ? 'is-done' : i === stepIdx ? 'is-current' : 'is-future'}>
+        <p className="eyebrow">{failed ? t('wait.failedEyebrow') : t('wait.eyebrow')}</p>
+        <h1 className="wait-page__title">{failed ? t('wait.failedTitle') : t(phaseKey(job.phase))}</h1>
+        <p className="muted wait-page__sub">{failed ? t('wait.failed') : t('wait.sub')}</p>
+
+        {/* Their own description, being written to tape. The written region is
+            the job's real phase — nothing here moves on a timer. */}
+        <Score
+          text={prompt}
+          progress={failed ? undefined : fractionOfPhase(job.phase)}
+          className="wait-page__score"
+          height={200}
+          label={t('wait.scoreAria')}
+        />
+
+        <ol className="wait-page__rail">
+          {JOB_PHASES.map((phase, i) => (
+            <li
+              key={phase}
+              className={i < stepIdx ? 'is-done' : i === stepIdx ? 'is-current' : 'is-future'}
+              aria-current={i === stepIdx ? 'step' : undefined}
+            >
               <span className="status-dot" aria-hidden="true" />
-              {s.label}
-              <b>{i < stepIdx ? t('wait.done') : i === stepIdx ? t('wait.doing') : t('wait.todo')}</b>
+              {t(`create.phase.${phase}`)}
             </li>
           ))}
         </ol>
-        {job.phase === 'failed' && (
-          <p className="state-note" role="alert">
-            {t('wait.failed')}
-          </p>
-        )}
-        <Link to="/library" className="btn">
-          {t('wait.goLibrary')}
-        </Link>
+
+        <div className="wait-page__actions">
+          <Link to="/library" className="btn">
+            {t('wait.goLibrary')}
+          </Link>
+        </div>
       </div>
     );
   }

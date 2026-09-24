@@ -31,6 +31,7 @@ export function Score({
   /** Square sleeves want a denser, calmer drawing than the hero band. */
   compact = false,
   ghost,
+  progress,
 }: {
   /** The writing to read as music. Ignored when `score` is given. */
   text?: string;
@@ -46,6 +47,16 @@ export function Score({
   height?: number;
   label?: string;
   compact?: boolean;
+  /**
+   * 0..1 — how much of the score has been committed to tape. Notes past it
+   * stay ghosted and the playhead works only within the written region, so
+   * the drawing reads as a recording being laid down.
+   *
+   * It must be fed from something real. This is driven by the job's phase,
+   * never by a timer: a bar that advances on its own while nothing is
+   * happening is exactly the dishonesty this product has ruled out.
+   */
+  progress?: number;
 }) {
   const resolved = score ?? scoreFromText(text ?? '');
   const isGhost = !score && !(text ?? '').trim() && !!ghost?.trim();
@@ -54,6 +65,7 @@ export function Score({
   const ghostRef = useRef(isGhost);
   /** Set whenever something that affects the drawing changes. */
   const dirty = useRef(true);
+  const progressRef = useRef(progress);
   const beat = useRef({ energy: 0, playing: false });
   const reduced = useRef(false);
 
@@ -64,6 +76,11 @@ export function Score({
     dataRef.current = isGhost ? scoreFromText(ghost!) : (score ?? scoreFromText(text ?? ''));
     dirty.current = true;
   }, [text, score, ghost, isGhost]);
+
+  useEffect(() => {
+    progressRef.current = progress;
+    dirty.current = true;
+  }, [progress]);
 
   useEffect(() => subscribeBeat((energy, playing) => {
     beat.current = { energy, playing };
@@ -143,8 +160,11 @@ export function Score({
 
       // The playhead: a slow idle sweep, or real progress while audio plays.
       const still = stillNow;
+      const cut = progressRef.current;
       const cycle = still ? 0.5 : ((now - start) / 5200) % 1;
-      const headX = cycle * w;
+      // While recording, the head works the written region only — it cannot
+      // run ahead of what has actually been committed.
+      const headX = (cut === undefined ? cycle : cycle * cut) * w;
 
       for (const n of notes) {
         if (n.rest) continue;
@@ -162,7 +182,9 @@ export function Score({
         const r = Math.round(255 + (139 - 255) * t);
         const g = Math.round(122 + (124 - 122) * t);
         const b = Math.round(77 + (255 - 77) * t);
-        const alpha = 0.34 + n.weight * 0.26 + near * 0.4;
+        // Past the cut a note is present but not yet real.
+        const written = cut === undefined || n.x <= cut;
+        const alpha = (0.34 + n.weight * 0.26 + near * 0.4) * (written ? 1 : 0.16);
         ctx.lineWidth = lw;
         ctx.lineCap = 'round';
         ctx.strokeStyle = `rgba(${r}, ${g}, ${b}, ${Math.min(1, alpha)})`;
@@ -180,7 +202,7 @@ export function Score({
         ctx.stroke();
 
         // The head of the note, brightest right under the playhead.
-        if (near > 0.15) {
+        if (near > 0.15 && written) {
           ctx.fillStyle = `rgba(${Math.min(255, r + 40)}, ${Math.min(255, g + 40)}, ${Math.min(255, b + 30)}, ${near * 0.9})`;
           ctx.beginPath();
           ctx.arc(x, top, 1.4 + near * 2.1, 0, Math.PI * 2);

@@ -606,18 +606,55 @@ tr:last-child td { border-bottom: none; }
 @keyframes petal-enter { from { opacity: 0; transform: translateY(18px) rotate(-16deg); } to { opacity: 1; transform: translateY(0) rotate(-10deg); } }
 
 /* ---------------------------------------------------------------- wait page */
-.wait-page { max-width: 560px; margin: 40px auto 72px; text-align: center; padding: var(--s6); }
-.wait-page__mark { margin: 0 auto 28px; }
-.wait-page__mark.is-moving { animation: petal-breathe 2400ms ease-in-out 2; }
-@keyframes petal-breathe { 0%, 100% { transform: translateY(0) rotate(-2deg); } 50% { transform: translateY(-6px) rotate(2deg); } }
-.wait-page h1 { font-size: 28px; letter-spacing: -0.025em; font-weight: 500; margin: 0 0 12px; }
-.wait-page p { font-size: 14px; color: var(--muted); margin: 0 0 28px; }
-.wait-page__steps { padding: var(--s6); margin: var(--s8) 0; border-radius: var(--r-card); list-style: none; text-align: left; }
-.wait-page__steps li { display: flex; gap: 12px; align-items: center; padding: 8px 0; font-size: 14px; }
-.wait-page__steps b { font-size: 12px; font-weight: 400; margin-left: auto; color: var(--muted); }
+/* ---------------------------------------------------------------- recording */
+/*
+ * The wait screen. This is the only surface a user stares at for tens of
+ * seconds, so it shows the thing they actually care about — their own
+ * description being committed to tape — rather than a spinner and a list.
+ * The written region of the score is the job's real phase.
+ */
+.wait-page { max-width: 880px; margin: clamp(32px, 6vw, 72px) auto 72px; padding: 0 var(--s4); }
+.wait-page__title {
+  font-size: clamp(32px, 5.2vw, 56px);
+  line-height: 1.05; letter-spacing: -0.04em; font-weight: 700;
+  margin: 0 0 12px;
+}
+.wait-page__sub { font-size: 15px; margin: 0 0 var(--s6); max-width: 46ch; }
+.wait-page__score {
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+  padding: var(--s2) 0;
+  margin: 0 0 var(--s6);
+}
+
+/* The rail reads as a transport, not a checklist: one line, left to right. */
+.wait-page__rail {
+  display: flex; flex-wrap: wrap; gap: var(--s2) var(--s6);
+  list-style: none; padding: 0; margin: 0 0 var(--s8);
+}
+.wait-page__rail li {
+  display: flex; align-items: center; gap: 8px;
+  font-size: 13px; color: var(--faint);
+  transition: color var(--t-ui) var(--ease-ui);
+}
+.wait-page__rail .is-done { color: var(--muted); }
+.wait-page__rail .is-current { color: var(--ink); font-weight: 500; }
+.wait-page__actions { display: flex; gap: var(--s4); flex-wrap: wrap; }
+
 .status-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--line); flex: none; }
-.wait-page__steps .is-done .status-dot { background: var(--ink); }
-.wait-page__steps .is-current .status-dot { background: var(--petal); }
+.wait-page__rail .is-done .status-dot { background: var(--muted); }
+.wait-page__rail .is-current .status-dot {
+  background: var(--petal);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--petal) 22%, transparent);
+  animation: dot-pulse 1.8s var(--ease-ui) infinite;
+}
+@keyframes dot-pulse {
+  0%, 100% { box-shadow: 0 0 0 3px color-mix(in srgb, var(--petal) 20%, transparent); }
+  50% { box-shadow: 0 0 0 7px color-mix(in srgb, var(--petal) 8%, transparent); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .wait-page__rail .is-current .status-dot { animation: none; }
+}
 .state-note { font-size: 14px; color: var(--danger); margin-bottom: var(--s4); }
 
 /* ---------------------------------------------------------------- covers + masonry */
@@ -902,11 +939,6 @@ tr:last-child td { border-bottom: none; }
 .studio__facts dt { color: var(--muted); }
 .studio__facts dd { margin: 0; font-weight: 500; text-align: right; }
 .studio__row { display: grid; grid-template-columns: 1fr 1fr; gap: var(--s4); }
-.progress-card__head { display: flex; align-items: center; gap: var(--s4); margin-bottom: var(--s4); }
-.progress-steps { display: flex; gap: 8px; list-style: none; padding: 0; margin: 0 0 var(--s4); flex-wrap: wrap; }
-.progress-steps li { padding: 6px 14px; border-radius: 999px; font-size: 13px; font-weight: 500; border: 1px solid var(--line); color: var(--muted); }
-.progress-steps li.is-done { color: var(--ok); border-color: color-mix(in srgb, var(--ok) 40%, transparent); }
-.progress-steps li.is-current { color: var(--bg); background: var(--ink); border-color: var(--ink); }
 .studio__edit { display: flex; gap: 14px; align-items: flex-start; padding: var(--s4) var(--s6); border-radius: var(--r-card); border: 1px solid color-mix(in srgb, var(--petal) 30%, transparent); background: var(--petal-soft); }
 .studio__edit-icon { width: 34px; height: 34px; flex: none; display: grid; place-items: center; border-radius: 10px; background: var(--petal-soft); color: var(--petal); font-size: 16px; }
 

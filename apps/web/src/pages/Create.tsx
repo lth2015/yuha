@@ -9,6 +9,8 @@ import {
 } from '@yuha/contracts';
 import { ApiError, apiFetch, newIdempotencyKey } from '../lib/api';
 import { useI18n } from '../lib/i18n';
+import { JOB_PHASES as PHASE_STEPS, fractionOfPhase } from '../lib/phases';
+import { Score } from '../components/Score';
 import { useSession } from '../lib/session';
 import { ErrorNotice } from '../components/common';
 
@@ -61,15 +63,6 @@ const DURATIONS: Array<{ value: Draft['durationSeconds']; label: string }> = [
   { value: 240, label: '4:00' },
 ];
 
-/** Phase order for the progress rail; the label comes from the dictionary. */
-const PHASE_STEPS: Array<JobView['phase']> = [
-  'validating',
-  'queued',
-  'generating',
-  'processing',
-  'verifying',
-  'done',
-];
 
 function countCodePoints(s: string): number {
   return [...s].length;
@@ -242,71 +235,69 @@ export default function Create() {
   // ------------------------------------------------------------------ states
 
   if (job) {
-    const stepIdx = PHASE_STEPS.indexOf(job.phase);
+    const failed = job.phase === 'failed';
+    const stepIdx = PHASE_STEPS.indexOf(job.phase as (typeof PHASE_STEPS)[number]);
     return (
-      <div className="studio stack stack--loose">
-        <h1>{job.title ?? t('create.defaultTitle')}</h1>
-        <div className={`progress-card panel${job.phase === 'failed' ? ' progress-card--failed' : ''}`}>
-          {job.phase === 'failed' ? (
-            <>
-              <h2>{t('create.job.failed')}</h2>
-              <p className="small">
-                {job.errorCode === 'upstream_rejected'
-                  ? t('create.job.failedUpstream')
-                  : t('create.job.failedTech')}
-              </p>
-              <div className="progress-card__actions">
-                <button type="button" className="btn btn--primary" onClick={startAnother}>
-                  {t('create.job.startAnother')}
-                </button>
-              </div>
-            </>
+      <div className="wait-page" aria-live="polite">
+        <p className="eyebrow">{failed ? t('wait.failedEyebrow') : t('wait.eyebrow')}</p>
+        <h1 className="wait-page__title">
+          {failed ? t('create.job.failed') : (job.title ?? t('create.defaultTitle'))}
+        </h1>
+        <p className="muted wait-page__sub">
+          {failed
+            ? job.errorCode === 'upstream_rejected'
+              ? t('create.job.failedUpstream')
+              : t('create.job.failedTech')
+            : job.estimate.delayed
+              ? t('create.job.delayed')
+              : t('create.job.eta', {
+                  min: job.estimate.minSeconds,
+                  max: job.estimate.maxSeconds,
+                })}
+        </p>
+
+        {/* The same recording surface as the home screen. There were two
+            different progress UIs before, so one job looked like different
+            progress depending on where you happened to be watching it. */}
+        <Score
+          text={draft.prompt || draft.lyrics}
+          progress={failed ? undefined : fractionOfPhase(job.phase)}
+          className="wait-page__score"
+          height={200}
+          label={t('wait.scoreAria')}
+        />
+
+        <ol className="wait-page__rail">
+          {PHASE_STEPS.map((phase, i) => (
+            <li
+              key={phase}
+              className={i < stepIdx ? 'is-done' : i === stepIdx ? 'is-current' : 'is-future'}
+              aria-current={i === stepIdx ? 'step' : undefined}
+            >
+              <span className="status-dot" aria-hidden="true" />
+              {t(`create.phase.${phase}`)}
+            </li>
+          ))}
+        </ol>
+
+        <div className="wait-page__actions">
+          {failed ? (
+            <button type="button" className="btn btn--primary" onClick={startAnother}>
+              {t('create.job.startAnother')}
+            </button>
           ) : (
-            <>
-              <div className="progress-card__head">
-                <div className="spinner" aria-hidden="true" />
-                <div>
-                  <h2>{t(`create.phase.${PHASE_STEPS[Math.max(stepIdx, 0)] ?? 'working'}`)}…</h2>
-                  <p className="small muted">
-                    {job.estimate.delayed
-                      ? t('create.job.delayed')
-                      : t('create.job.eta', {
-                          min: job.estimate.minSeconds,
-                          max: job.estimate.maxSeconds,
-                        })}
-                  </p>
-                </div>
-              </div>
-              <ol className="progress-steps" aria-live="polite">
-                {PHASE_STEPS.map((phase, i) => (
-                  <li
-                    key={phase}
-                    className={i < stepIdx ? 'is-done' : i === stepIdx ? 'is-current' : ''}
-                    aria-current={i === stepIdx ? 'step' : undefined}
-                  >
-                    {t(`create.phase.${phase}`)}
-                  </li>
-                ))}
-              </ol>
-              {result && result.previewUrl && (
-                <div className="progress-card__done">
-                  <p className="small">
-                    <span className="icon icon--check" aria-hidden="true" /> {t('create.job.doneOpen')}{' '}
-                    <Link to={`/song/${result.trackId}`}>
-                      {t('create.job.open', { title: result.title })}
-                    </Link>
-                    {t('create.job.or')}{' '}
-                    <button type="button" className="linklike" onClick={startAnother}>
-                      {t('create.job.startAnother')}
-                    </button>
-                    .
-                  </p>
-                </div>
-              )}
-            </>
+            <Link to="/library" className="btn">
+              {t('wait.goLibrary')}
+            </Link>
+          )}
+          {result && result.previewUrl && (
+            <Link to={`/song/${result.trackId}`} className="btn btn--primary">
+              {t('create.job.open', { title: result.title })}
+            </Link>
           )}
         </div>
-        <p className="small muted">
+
+        <p className="small muted" style={{ marginTop: 'var(--s6)' }}>
           {job.jobId.slice(0, 8)} · {job.durationSeconds}s ·{' '}
           {job.instrumental ? t('create.vocals.instrumental') : t('composer.vocals')}
           {runtime?.demo ? ` · ${t('create.job.demoAudio')}` : ''}
