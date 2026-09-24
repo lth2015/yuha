@@ -67,6 +67,13 @@ jobs:
       - name: Typecheck
         run: pnpm typecheck
 
+      - name: Orphaned exports
+        # Catches a call site removed without its callee — how `wakeBeat`, the
+        # only AudioContext resume, was lost for three commits while type
+        # checking, the build and screenshots all stayed green. Baselined, so
+        # it fails only on new orphans.
+        run: pnpm check:orphans
+
       - name: Test
         run: pnpm test
         env:

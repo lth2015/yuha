@@ -60,6 +60,33 @@ Per-repo skill configuration (issue tracker, triage labels, domain docs) is not
 scaffolded yet — run `/setup-matt-pocock-skills` once to generate
 `docs/agents/*.md`.
 
+## Verifying
+
+Verify the **claim**, not the render. A screenshot and a passing typecheck say
+the page drew; they do not say the thing it promises is true.
+
+This is not abstract. The composer told users "what you wrote is saved" for
+three commits while a race between the load and save effects wiped the draft
+on every mount. The string rendered correctly in all three languages, the
+`aria-label` was right, and every check run against it passed — because every
+check was about the rendering.
+
+- **A promise in the UI is a test.** "Saved" → reload and look. "No credit
+  spent" → read the ledger. "Cancel anytime" → cancel.
+- **Deleting a file: list its exports and grep each one first.** `wakeBeat`,
+  the only thing that resumed the AudioContext, was lost by removing the
+  component that happened to call it — a component correctly identified as
+  decorative. `pnpm check:orphans` now catches that shape.
+- **Run the command that establishes a fact before stating the fact.**
+- **Third-party API semantics: check them or mark them unverified.** Passing
+  `payment_method_types` to Stripe silently opts out of the account's other
+  payment methods; the comment above that call confidently asserted the
+  opposite.
+- **Prefer a scripted invariant to an eye.** The ones in this repo — brace
+  balance after CSS edits, SQL placeholder counts, contrast maths, dictionary
+  key parity, orphaned exports — have each caught real defects. Eyeballing
+  caught none of them.
+
 ## Commands
 
 ```bash

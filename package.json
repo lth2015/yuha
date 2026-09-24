@@ -12,6 +12,7 @@
     "build": "pnpm -r --filter \"./packages/**\" build && pnpm -r --filter \"./apps/**\" build",
     "typecheck": "pnpm -r typecheck",
     "lint": "pnpm -r lint",
+    "check:orphans": "node scripts/find-orphan-exports.mjs",
     "test": "vitest run",
     "test:watch": "vitest",
     "dev": "concurrently -n api,worker,web -c green,magenta,cyan \"pnpm dev:api\" \"pnpm dev:worker\" \"pnpm dev:web\"",
