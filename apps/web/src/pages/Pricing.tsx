@@ -79,6 +79,7 @@ export default function Pricing() {
   };
 
   const freeTrial = runtime?.features.freeTrialEnabled;
+  const qrWallets = runtime?.features.qrWalletsEnabled === true;
 
   return (
     <div className="stack stack--loose pricing">
@@ -134,6 +135,12 @@ export default function Pricing() {
                   </p>
                   <p className="plan__unit">{t('price.perSong', { amount: formatPerUnit(p.amountMinor, p.units, p.currency, locale) })}</p>
                   <p className="plan__tagline">{copy ? t(copy.tag) : p.displayName}</p>
+                  {/* Said here rather than discovered on Stripe's page. */}
+                  {qrWallets && (
+                    <p className="plan__pay">
+                      {p.kind === 'subscription' ? t('price.pay.sub') : t('price.pay.oneTime')}
+                    </p>
+                  )}
                   <ul className="plan__bullets">
                     {(copy?.bullets ?? []).map((b) => (
                       <li key={b}>{t(b)}</li>

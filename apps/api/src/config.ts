@@ -122,6 +122,15 @@ const envSchema = z.object({
   STRIPE_WEBHOOK_SECRET: z.string().optional(),
   STRIPE_PUBLISHABLE_KEY: z.string().optional(),
   STRIPE_PRICE_ID_DROP_5: z.string().optional(),
+  /**
+   * QR wallets (Alipay, WeChat Pay) on one-time checkouts.
+   *
+   * Off unless asked for: both must be enabled on the Stripe account first,
+   * and listing a method the account cannot take fails at the checkout page
+   * rather than at boot. They are single-use methods, so they are never
+   * offered for subscriptions — Stripe rejects the session outright.
+   */
+  STRIPE_WALLETS_ENABLED: bool(false),
   STRIPE_PRICE_ID_PRO_MONTHLY: z.string().optional(),
   STRIPE_PRICE_ID_PREMIER_MONTHLY: z.string().optional(),
 

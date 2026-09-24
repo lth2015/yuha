@@ -122,6 +122,7 @@ export async function createCheckout(
     cancelUrl: `${ctx.config.PUBLIC_WEB_URL}${params.cancelPath ?? '/pricing'}`,
     idempotencyKey: `${params.userId}:${params.idempotencyKey}`,
     existingCustomerId: activeSub?.stripe_customer_id ?? null,
+    walletsEnabled: ctx.config.STRIPE_WALLETS_ENABLED,
   });
 
   await attachCheckoutSession({

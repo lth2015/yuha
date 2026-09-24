@@ -1238,6 +1238,7 @@ tr:last-child td { border-bottom: none; }
   color: var(--faint);
   font-variant-numeric: tabular-nums;
 }
+.plan__pay { margin: -2px 0 0; font-size: 12px; color: var(--faint); line-height: 1.5; }
 .plan__current { display: flex; flex-direction: column; gap: 4px; font-size: 13px; color: var(--muted); }
 .plan__soonwhy { font-size: 12px; color: var(--faint); line-height: 1.5; }
 

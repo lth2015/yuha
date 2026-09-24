@@ -77,6 +77,7 @@ export async function createLicenseCheckout(
     cancelUrl: `${ctx.config.PUBLIC_WEB_URL}/song/${track.id}`,
     idempotencyKey: `${params.userId}:${params.idempotencyKey}`,
     existingCustomerId: activeSub?.stripe_customer_id ?? null,
+    walletsEnabled: ctx.config.STRIPE_WALLETS_ENABLED,
   });
 
   await attachCheckoutSession({ orderId: order.id, sessionId: session.sessionId, customerId: session.customerId });

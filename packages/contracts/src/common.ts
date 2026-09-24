@@ -35,6 +35,13 @@ export const runtimeInfo = z.object({
     wavExportEnabled: z.boolean(),
     commercialDeliveryEnabled: z.boolean(),
     realPaymentsEnabled: z.boolean(),
+    /**
+     * Alipay and WeChat Pay are offered at checkout. One-time purchases only:
+     * both are single-use methods and cannot back a subscription, so the
+     * pricing page has to say so rather than let a buyer discover it on
+     * Stripe's page.
+     */
+    qrWalletsEnabled: z.boolean(),
   }),
   adapters: z.object({
     auth: z.string(),

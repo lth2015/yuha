@@ -43,9 +43,25 @@ export class StripePaymentsAdapter implements PaymentsAdapter {
     if (!params.stripePriceId) {
       throw new Error(`product ${params.priceKey} has no Stripe price id configured`);
     }
+    // Alipay and WeChat Pay are single-use methods: Stripe rejects a
+    // subscription session that lists them, so they are offered on one-time
+    // payments only. Cards stay in the list — a wallet is an addition, never
+    // a replacement, and a buyer without either wallet must still be able to
+    // pay.
+    const oneTime = params.kind !== 'subscription';
+    const wallets = oneTime && params.walletsEnabled === true;
+
     const session = await this.stripe.checkout.sessions.create(
       {
-        mode: params.kind === 'subscription' ? 'subscription' : 'payment',
+        mode: oneTime ? 'payment' : 'subscription',
+        ...(wallets
+          ? {
+              payment_method_types: ['card', 'alipay', 'wechat_pay'] as const,
+              // WeChat Pay needs to know where the QR will be shown; `web`
+              // renders the scannable code on Stripe's hosted page.
+              payment_method_options: { wechat_pay: { client: 'web' as const } },
+            }
+          : {}),
         line_items: [{ price: params.stripePriceId, quantity: 1 }],
         success_url: params.successUrl,
         cancel_url: params.cancelUrl,
@@ -61,8 +77,13 @@ export class StripePaymentsAdapter implements PaymentsAdapter {
           price_key: params.priceKey,
           price_version: String(params.priceVersion),
         },
-        ...(params.kind === 'subscription'
+        ...(oneTime
           ? {
+              payment_intent_data: {
+                metadata: { order_id: params.orderId, user_id: params.userId },
+              },
+            }
+          : {
               subscription_data: {
                 metadata: {
                   order_id: params.orderId,
@@ -70,11 +91,6 @@ export class StripePaymentsAdapter implements PaymentsAdapter {
                   price_key: params.priceKey,
                   price_version: String(params.priceVersion),
                 },
-              },
-            }
-          : {
-              payment_intent_data: {
-                metadata: { order_id: params.orderId, user_id: params.userId },
               },
             }),
       },
