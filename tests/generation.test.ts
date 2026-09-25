@@ -421,6 +421,19 @@ describe('capability honesty (AI-05)', () => {
       [jobId],
     );
     expect(track[0]!.vocal_mode).toBe('with_vocals');
-    expect(track[0]!.duration_ms).toBe(120000);
+    // duration_ms is the probed length of the delivered file, not the request.
+    // An mp3 frame is 1152 samples — about 26ms at 44.1kHz — so the encoder
+    // cannot land on 120.000s and this fixture probes 120033ms. Asserting
+    // 120000 exactly claimed a precision nothing in the pipeline promises.
+    //
+    // The bound is fixed here rather than read from AUDIO_DURATION_TOLERANCE_MS
+    // on purpose. That config is the pipeline's own acceptance window, and a
+    // test whose expectation comes from the code under test cannot fail when
+    // that code goes wrong: raise the tolerance to 30s and the pipeline would
+    // accept a 90s file for a 120s request while this assertion stayed green.
+    // 250ms is ~10 frames of headroom and still 360x tighter than the fault
+    // this line exists to catch — a 30s fixture delivered against a 120s
+    // request, which is exactly what it caught the first time it ever ran.
+    expect(Math.abs(track[0]!.duration_ms - 120_000)).toBeLessThanOrEqual(250);
   });
 });
