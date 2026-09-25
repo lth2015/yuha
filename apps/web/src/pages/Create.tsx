@@ -12,12 +12,11 @@ import { useI18n } from '../lib/i18n';
 import { JOB_PHASES as PHASE_STEPS, fractionOfPhase } from '../lib/phases';
 import { Score } from '../components/Score';
 import { useSession } from '../lib/session';
-import { ErrorNotice } from '../components/common';
+import { ErrorNotice, Loading } from '../components/common';
 
 const DRAFT_KEY = 'sonare.draft';
 
 interface Draft {
-  mode: 'simple' | 'custom';
   title: string;
   prompt: string;
   lyrics: string;
@@ -29,7 +28,6 @@ interface Draft {
 }
 
 const DEFAULT_DRAFT: Draft = {
-  mode: 'simple',
   title: '',
   prompt: '',
   lyrics: '',
@@ -63,19 +61,10 @@ const DURATIONS: Array<{ value: Draft['durationSeconds']; label: string }> = [
   { value: 240, label: '4:00' },
 ];
 
-
 function countCodePoints(s: string): number {
   return [...s].length;
 }
 
-/**
- * The Create studio.
- *
- * Simple mode: describe the song; the platform writes the brief. Custom mode:
- * your lyrics and style tags. One credit = one song, shown before submission;
- * the idempotency key is minted when the form is first filled and reused for
- * every retry of that submission, so a double click cannot double charge.
- */
 /** The creator's own stored draft, or the defaults. */
 function readStoredDraft(): Draft {
   try {
@@ -86,6 +75,38 @@ function readStoredDraft(): Draft {
   }
 }
 
+/**
+ * How many of the folded-away settings the creator has actually moved. Shown
+ * on the closed disclosure, because progressive disclosure must hide controls
+ * without hiding *state*: a folded panel holding a non-default setting that
+ * the page gives no sign of is a worse failure than the long form it replaced.
+ */
+function advancedTouched(d: Draft): number {
+  let n = 0;
+  if (d.title.trim()) n += 1;
+  if (d.lyrics.trim()) n += 1;
+  if (d.energy !== DEFAULT_DRAFT.energy) n += 1;
+  if (d.visibility !== DEFAULT_DRAFT.visibility) n += 1;
+  return n;
+}
+
+/**
+ * The Create studio.
+ *
+ * One column, and the score above it: the same band the home composer and the
+ * waiting screen draw, reading the description as music while it is written.
+ * The page it replaces was a two-column form with a sticky summary that
+ * restated the controls sitting a few centimetres to its left.
+ *
+ * Description, style, length and vocals stand alone; title, your own lyrics,
+ * energy and visibility fold away. `mode` is no longer a tab the creator has
+ * to understand — the server reads it for exactly one thing, whether to pass
+ * lyrics through, so it is derived from whether there are lyrics to pass.
+ *
+ * One credit = one song, shown before submission; the idempotency key is
+ * minted when the form is first filled and reused for every retry of that
+ * submission, so a double click cannot double charge.
+ */
 export default function Create() {
   const navigate = useNavigate();
   const { t } = useI18n();
@@ -100,21 +121,12 @@ export default function Create() {
    * mount restores it and the creator's work silently becomes the defaults.
    */
   const [draft, setDraft] = useState<Draft>(() => (editTrackId ? DEFAULT_DRAFT : readStoredDraft()));
+  const [more, setMore] = useState(() => advancedTouched(readStoredDraft()) > 0);
   const [job, setJob] = useState<JobView | null>(null);
   const [result, setResult] = useState<TrackView | null>(null);
   const [error, setError] = useState<unknown>(null);
   const [submitting, setSubmitting] = useState(false);
-  const [editSource, setEditSource] = useState<TrackView & { lyrics: string | null } | null>(null);
-  /**
-   * True once the draft has been filled from a track being edited.
-   *
-   * `editTrackId` can change without a remount — 'Start another' navigates
-   * from /create?edit=X to /create on the same component instance — and the
-   * lazy initializer does not re-run. Without this the save effect would
-   * then see `editTrackId === null` holding the edited track's settings and
-   * write them over the creator's own stored draft.
-   */
-  const draftIsFromTrack = useRef(false);
+  const [editSource, setEditSource] = useState<(TrackView & { lyrics: string | null }) | null>(null);
   const [instructions, setInstructions] = useState('');
   const idemKey = useRef<string>(newIdempotencyKey());
   const pollTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -122,39 +134,44 @@ export default function Create() {
 
   useEffect(() => {
     if (!editTrackId) return;
-    // Editing loads the source song and prefills the studio; nothing is
-    // submitted until the creator writes instructions and confirms the credit.
+    // Editing loads the source song so the studio can name it and state what
+    // the rewrite will keep. Nothing is submitted until the creator writes
+    // instructions and confirms the credit.
     apiFetch<TrackView & { lyrics: string | null }>(`/v1/tracks/${editTrackId}`)
-      .then((track) => {
-        setEditSource(track);
-        draftIsFromTrack.current = true;
-        setDraft((d) => ({
-          ...d,
-          mode: 'custom',
-          title: d.title || track.title,
-          lyrics: track.lyrics ?? d.lyrics,
-          styles: track.styles.length ? track.styles : d.styles,
-          instrumental: track.vocalMode === 'instrumental',
-          durationSeconds: (DURATIONS.find((x) => x.value === Math.round(track.durationSeconds))?.value ??
-            d.durationSeconds) as Draft['durationSeconds'],
-          visibility: track.visibility,
-        }));
-      })
-      .catch(() => undefined);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+      .then(setEditSource)
+      .catch((err) => setError(err));
   }, [editTrackId]);
 
+  /**
+   * Ending a rewrite session, however it ends.
+   *
+   * `/create?edit=X` → `/create` is the same route, so React Router does not
+   * remount and the lazy initializer does not re-run: the component keeps the
+   * DEFAULT_DRAFT it chose because an edit id was present at mount. A ref used
+   * to guard the save effect instead, and it outlived the edit id — so leaving
+   * the rewrite surface by any route other than its own button left the
+   * composer showing an empty form while the real draft sat in storage, and
+   * every keystroke after that was silently dropped. Reproduced before fixing:
+   * type on /create after an edit session and nothing is written.
+   */
   useEffect(() => {
-    // Editing a track fills the studio from that track; persisting it would
-    // overwrite whatever the creator had in progress of their own. The ref
-    // keeps that true after the edit id is gone but the content is not.
-    if (editTrackId || draftIsFromTrack.current) return;
+    if (editTrackId || !editSource) return;
+    setEditSource(null);
+    setInstructions('');
+    setDraft(readStoredDraft());
+  }, [editTrackId, editSource]);
+
+  useEffect(() => {
+    // Guarded on `editSource` rather than a ref: it is state, so it clears in
+    // the same commit that restores the draft, and no render can slip through
+    // holding the rewrite session's empty draft with the guard already down.
+    if (editTrackId || editSource) return;
     try {
       localStorage.setItem(DRAFT_KEY, JSON.stringify(draft));
     } catch {
       /* private browsing */
     }
-  }, [draft, editTrackId]);
+  }, [draft, editTrackId, editSource]);
 
   const patch = useCallback((p: Partial<Draft>) => setDraft((d) => ({ ...d, ...p })), []);
 
@@ -165,13 +182,21 @@ export default function Create() {
         apiFetch<TrackView>(`/v1/tracks/${job.trackId}`)
           .then(setResult)
           .catch(() => undefined);
+      } else if (job?.phase === 'failed') {
+        // A failed generation is refunded server-side. Without this the studio
+        // still shows the pre-failure balance, and a creator who was down to
+        // their last credit is told to buy the one just returned to them.
+        void refreshEntitlements();
       }
       return;
     }
+    let cancelled = false;
     let delay = 2000;
     const tick = async () => {
+      if (cancelled) return;
       try {
         const next = await apiFetch<JobView>(`/v1/jobs/${job.jobId}`);
+        if (cancelled) return;
         setJob(next);
         if (next.phase === 'done' && next.trackId) {
           void refreshEntitlements();
@@ -179,28 +204,44 @@ export default function Create() {
       } catch {
         /* transient poll failure: keep trying with backoff */
       }
+      if (cancelled) return;
       if (delay < 10000) delay = Math.min(delay * 1.6, 10000);
+      // Held in a ref so cleanup can reach the timer this chain is actually
+      // waiting on; a local would leave every re-run's chain alive beside it.
       pollTimer.current = setTimeout(tick, delay);
     };
     pollTimer.current = setTimeout(tick, delay);
     return () => {
+      cancelled = true;
       if (pollTimer.current) clearTimeout(pollTimer.current);
     };
   }, [job, refreshEntitlements]);
 
   const promptLength = countCodePoints(draft.prompt);
   const lyricsLength = countCodePoints(draft.lyrics);
+
+  /**
+   * The server reads `mode` for exactly one thing: whether to pass the
+   * creator's lyrics to the text model (worker/pipeline). So it is that
+   * question, not a tab — and instrumental songs have no lyrics to pass.
+   */
+  const mode: 'simple' | 'custom' =
+    draft.lyrics.trim() && !draft.instrumental ? 'custom' : 'simple';
+
   const canSubmit = useMemo(() => {
     if (submitting || credits < 1) return false;
     if (editTrackId) return instructions.trim().length > 0;
-    if (draft.mode === 'simple') return draft.prompt.trim().length > 0;
-    return draft.prompt.trim().length > 0 || draft.styles.length > 0 || draft.lyrics.trim().length > 0;
-  }, [submitting, credits, draft, instructions, editTrackId]);
+    // Mirrors createGenerationRequest: simple mode requires a description,
+    // custom mode is satisfied by the lyrics that made it custom.
+    return mode === 'custom' || draft.prompt.trim().length > 0;
+  }, [submitting, credits, editTrackId, instructions, mode, draft.prompt]);
 
   const toggleStyle = (style: string) => {
     setDraft((d) => ({
       ...d,
-      styles: d.styles.includes(style) ? d.styles.filter((s) => s !== style) : [...d.styles, style].slice(0, 6),
+      styles: d.styles.includes(style)
+        ? d.styles.filter((s) => s !== style)
+        : [...d.styles, style].slice(0, MAX_STYLE_TAGS),
     }));
   };
 
@@ -215,12 +256,10 @@ export default function Create() {
       const body = editTrackId
         ? { instructions: instructions.trim() }
         : {
-            mode: draft.mode,
+            mode,
             ...(draft.title.trim() ? { title: draft.title.trim() } : {}),
             prompt: draft.prompt.trim(),
-            ...(draft.mode === 'custom' && draft.lyrics.trim() && !draft.instrumental
-              ? { lyrics: draft.lyrics.trim() }
-              : {}),
+            ...(mode === 'custom' ? { lyrics: draft.lyrics.trim() } : {}),
             styles: draft.styles,
             instrumental: draft.instrumental,
             energy: draft.energy,
@@ -249,18 +288,11 @@ export default function Create() {
   const startAnother = () => {
     setJob(null);
     setResult(null);
+    setError(null);
     idemKey.current = newIdempotencyKey();
-    // Leaving an edit session restores the creator's own draft. Clearing only
-    // title/prompt/lyrics would leave the edited track's styles, length and
-    // energy behind, and the save effect would then write those over the
-    // draft this is supposed to be protecting.
-    if (draftIsFromTrack.current) {
-      draftIsFromTrack.current = false;
-      setEditSource(null);
-      setDraft(readStoredDraft());
-    } else {
-      patch({ title: '', prompt: '', lyrics: '' });
-    }
+    // Leaving an edit session is handled by the effect above, which also
+    // covers the ways out that are not this button.
+    if (!editTrackId) patch({ title: '', prompt: '', lyrics: '' });
     navigate('/create');
   };
 
@@ -292,7 +324,7 @@ export default function Create() {
             different progress UIs before, so one job looked like different
             progress depending on where you happened to be watching it. */}
         <Score
-          text={draft.prompt || draft.lyrics}
+          text={instructions || draft.prompt || draft.lyrics}
           progress={failed ? undefined : fractionOfPhase(job.phase)}
           className="wait-page__score"
           height={200}
@@ -338,80 +370,249 @@ export default function Create() {
     );
   }
 
+  const balanceLine = (
+    <span className="composer__cost">
+      {t('create.aside.costValue')}
+      <br />
+      {t('create.balanceAfter', { n: Math.max(credits - 1, 0) })}
+    </span>
+  );
+
+  const head = (
+    <div className="studio__head">
+      <h1>{editTrackId ? t('create.h1.edit') : t('create.h1')}</h1>
+      <div className="studio__balance" aria-live="polite">
+        <span className="credit-pill">
+          <span className="icon icon--note" aria-hidden="true" />
+          {t('create.credits', { n: credits })}
+        </span>
+        {credits < 1 && (
+          <Link to="/pricing?from=/create" className="btn btn--primary btn--sm">
+            {t('create.getCredits')}
+          </Link>
+        )}
+      </div>
+    </div>
+  );
+
+  const outOfCreditsNote = credits < 1 && (
+    <p className="small studio__oop">
+      {t('create.outOfCredits')} <Link to="/pricing?from=/create">{t('create.pickPlan')}</Link>
+      {t('create.pickPlanTail')}
+    </p>
+  );
+
+  // -------------------------------------------------------------- edit a song
+  /*
+   * A rewrite sends the instructions and nothing else: the server keeps the
+   * original's length, vocal mode and visibility, and the revision supplies
+   * the title, styles and lyrics. The old screen prefilled the whole create
+   * form here and let all of it be edited, and every one of those changes was
+   * silently discarded at submit — the form said "2:00" was a choice when it
+   * was a fact. So the rewrite surface states what carries over instead of
+   * offering controls that do nothing.
+   */
+  if (editTrackId) {
+    if (!editSource) {
+      return (
+        <div className="studio">
+          {head}
+          <ErrorNotice error={error} />
+          {!error && <Loading label={t('create.edit.loading')} />}
+        </div>
+      );
+    }
+    const kept = [
+      DURATIONS.find((d) => d.value === Math.round(editSource.durationSeconds))?.label ??
+        `${Math.round(editSource.durationSeconds)}s`,
+      editSource.vocalMode === 'instrumental' ? t('create.vocals.instrumental') : t('composer.vocals'),
+      editSource.visibility === 'public' ? t('create.aside.linkOpen') : t('create.aside.private'),
+    ].join(' · ');
+
+    return (
+      <div className="studio">
+        {head}
+        <ErrorNotice error={error} />
+        <Score
+          text={instructions}
+          ghost={t('create.edit.placeholder')}
+          className="studio__score"
+          height={148}
+          label={t('create.scoreAria')}
+        />
+        <form className="composer panel studio__composer" onSubmit={submit} noValidate>
+          <div className="studio__edit" role="status">
+            <div className="studio__edit-icon" aria-hidden="true">
+              <span className="icon icon--edit" />
+            </div>
+            <div>
+              <strong>{t('create.edit.banner', { title: editSource.title })}</strong>
+              <p className="small muted" style={{ margin: 0 }}>
+                {t('create.edit.hint')}
+              </p>
+            </div>
+          </div>
+
+          <label htmlFor="instructions">{t('create.edit.label')}</label>
+          <textarea
+            id="instructions"
+            value={instructions}
+            maxLength={PROMPT_MAX_CODEPOINTS}
+            onChange={(e) => setInstructions(e.target.value)}
+            placeholder={t('create.edit.placeholder')}
+            aria-describedby="instructions-format instructions-count"
+            required
+          />
+          <div className="composer__meta">
+            <span id="instructions-format">{t('create.edit.keeps', { kept })}</span>
+            <span id="instructions-count" className="num">
+              {countCodePoints(instructions)} / {PROMPT_MAX_CODEPOINTS}
+            </span>
+          </div>
+
+          <div className="composer__row studio__submit">
+            {balanceLine}
+            <div className="studio__submit-actions">
+              <button type="button" className="btn" onClick={startAnother}>
+                {t('create.edit.cancel')}
+              </button>
+              <button type="submit" className="btn btn--primary btn--lg" disabled={!canSubmit}>
+                {submitting ? t('create.submitting') : t('create.submit')}
+              </button>
+            </div>
+          </div>
+          {outOfCreditsNote}
+          <p className="composer__feedback">{t('create.guarantee')}</p>
+        </form>
+      </div>
+    );
+  }
+
   // ------------------------------------------------------------------ studio
+
+  const touched = advancedTouched(draft);
+  const format = t('create.format', {
+    length: DURATIONS.find((d) => d.value === draft.durationSeconds)?.label ?? '',
+    vocals: draft.instrumental
+      ? t('create.vocals.instrumental')
+      : draft.lyrics.trim()
+        ? t('create.aside.vocalsYours')
+        : t('composer.vocals'),
+    visibility: draft.visibility === 'public' ? t('create.aside.linkOpen') : t('create.aside.private'),
+  });
 
   return (
     <div className="studio">
-      {editSource && (
-        <div className="studio__edit" role="status">
-          <div className="studio__edit-icon" aria-hidden="true">
-            <span className="icon icon--edit" />
-          </div>
-          <div>
-            <strong>{t('create.edit.banner', { title: editSource.title })}</strong>
-            <p className="small muted" style={{ margin: 0 }}>
-              {t('create.edit.hint')}
-            </p>
-          </div>
-        </div>
-      )}
-      <div className="studio__head">
-        <h1>{editSource ? t('create.h1.edit') : t('create.h1')}</h1>
-        <div className="studio__balance" aria-live="polite">
-          <span className="credit-pill">
-            <span className="icon icon--note" aria-hidden="true" />
-            {t('create.credits', { n: credits })}
-          </span>
-          {credits < 1 && (
-            <Link to="/pricing?from=/create" className="btn btn--primary btn--sm">
-              {t('create.getCredits')}
-            </Link>
-          )}
-        </div>
-      </div>
-
+      {head}
       <ErrorNotice error={error} />
 
-      <form className="studio__grid" onSubmit={submit} noValidate>
-        <div className="panel studio__form stack">
-          {editSource && (
-            <div>
-              <label htmlFor="instructions">{t('create.edit.label')}</label>
-              <textarea
-                id="instructions"
-                rows={3}
-                value={instructions}
-                onChange={(e) => setInstructions(e.target.value)}
-                placeholder={t('create.edit.placeholder')}
-                required
-              />
-            </div>
-          )}
-          <div className="seg seg--wide" role="tablist" aria-label={t('create.mode')}>
-            <button
-              type="button"
-              role="tab"
-              aria-selected={draft.mode === 'simple'}
-              className={`seg__btn${draft.mode === 'simple' ? ' is-active' : ''}`}
-              onClick={() => patch({ mode: 'simple' })}
-            >
-              {t('create.mode.simple')}
-            </button>
-            <button
-              type="button"
-              role="tab"
-              aria-selected={draft.mode === 'custom'}
-              className={`seg__btn${draft.mode === 'custom' ? ' is-active' : ''}`}
-              onClick={() => patch({ mode: 'custom' })}
-            >
-              {t('create.mode.custom')}
-            </button>
-          </div>
-          <p className="small muted" style={{ marginTop: 0 }}>
-            {draft.mode === 'simple' ? t('create.mode.simpleHint') : t('create.mode.customHint')}
-          </p>
+      {/* Their own words, read as music, before anything else on the page. */}
+      <Score
+        text={draft.prompt || draft.lyrics}
+        ghost={t('create.prompt.placeholderSimple')}
+        className="studio__score"
+        height={148}
+        label={t('create.scoreAria')}
+      />
 
-          {draft.mode === 'custom' && (
+      <form className="composer panel studio__composer" onSubmit={submit} noValidate>
+        <label htmlFor="prompt">{t('create.prompt.simple')}</label>
+        <textarea
+          id="prompt"
+          value={draft.prompt}
+          maxLength={PROMPT_MAX_CODEPOINTS}
+          onChange={(e) => patch({ prompt: e.target.value })}
+          placeholder={t('create.prompt.placeholderSimple')}
+          aria-describedby="prompt-format prompt-count"
+        />
+        <div className="composer__meta">
+          <span id="prompt-format">{format}</span>
+          <span id="prompt-count" className="num">
+            {promptLength} / {PROMPT_MAX_CODEPOINTS}
+          </span>
+        </div>
+
+        <div className="studio__dial studio__dial--styles">
+          <span className="studio__dial-label" id="styles-label">
+            {t('create.styles', { n: MAX_STYLE_TAGS })}
+          </span>
+          <div className="chips" role="group" aria-labelledby="styles-label">
+            {STYLE_PRESETS.map((s) => (
+              <button
+                key={s}
+                type="button"
+                className={`chip chip--btn${draft.styles.includes(s) ? ' is-on' : ''}`}
+                aria-pressed={draft.styles.includes(s)}
+                disabled={draft.styles.length >= MAX_STYLE_TAGS && !draft.styles.includes(s)}
+                onClick={() => toggleStyle(s)}
+              >
+                {s}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div className="studio__dials">
+          <div className="studio__dial">
+            <span className="studio__dial-label" id="dur-label">
+              {t('create.length')}
+            </span>
+            <div className="chips" role="group" aria-labelledby="dur-label">
+              {DURATIONS.map((d) => (
+                <button
+                  key={d.value}
+                  type="button"
+                  className={`chip chip--btn${draft.durationSeconds === d.value ? ' is-on' : ''}`}
+                  aria-pressed={draft.durationSeconds === d.value}
+                  onClick={() => patch({ durationSeconds: d.value })}
+                >
+                  {d.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="studio__dial">
+            <span className="studio__dial-label" id="voc-label">
+              {t('create.vocals')}
+            </span>
+            <div className="seg" role="group" aria-labelledby="voc-label">
+              <button
+                type="button"
+                className={`seg__btn${!draft.instrumental ? ' is-active' : ''}`}
+                aria-pressed={!draft.instrumental}
+                onClick={() => patch({ instrumental: false })}
+              >
+                {t('create.vocals.sing')}
+              </button>
+              <button
+                type="button"
+                className={`seg__btn${draft.instrumental ? ' is-active' : ''}`}
+                aria-pressed={draft.instrumental}
+                onClick={() => patch({ instrumental: true })}
+              >
+                {t('create.vocals.instrumental')}
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <div className="studio__more">
+          <button
+            type="button"
+            className="studio__more-toggle"
+            aria-expanded={more}
+            aria-controls="studio-more"
+            onClick={() => setMore((v) => !v)}
+          >
+            <span className="studio__more-caret" aria-hidden="true" />
+            {more ? t('create.more.hide') : t('create.more')}
+            {!more && touched > 0 && (
+              <span className="studio__more-badge">{t('create.more.count', { n: touched })}</span>
+            )}
+          </button>
+
+          <div id="studio-more" className="studio__more-panel stack" hidden={!more}>
             <div>
               <label htmlFor="title">{t('create.title')}</label>
               <input
@@ -422,30 +623,7 @@ export default function Create() {
                 placeholder={t('create.title.placeholder')}
               />
             </div>
-          )}
 
-          <div>
-            <label htmlFor="prompt">
-              {draft.mode === 'simple' ? t('create.prompt.simple') : t('create.prompt.custom')}
-            </label>
-            <textarea
-              id="prompt"
-              rows={draft.mode === 'simple' ? 5 : 3}
-              value={draft.prompt}
-              onChange={(e) => patch({ prompt: e.target.value })}
-              placeholder={
-                draft.mode === 'simple'
-                  ? t('create.prompt.placeholderSimple')
-                  : t('create.prompt.placeholderCustom')
-              }
-              aria-describedby="prompt-count"
-            />
-            <div id="prompt-count" className="field-count">
-              {promptLength}/{PROMPT_MAX_CODEPOINTS}
-            </div>
-          </div>
-
-          {draft.mode === 'custom' && (
             <div>
               <label htmlFor="lyrics">
                 {t('create.lyrics')}{' '}
@@ -458,146 +636,59 @@ export default function Create() {
                 onChange={(e) => patch({ lyrics: e.target.value })}
                 placeholder={'[Verse]\nCity lights blur into gold\n…'}
                 disabled={draft.instrumental}
-                aria-describedby="lyrics-count"
+                aria-describedby="lyrics-hint lyrics-count"
               />
-              <div id="lyrics-count" className="field-count">
-                {lyricsLength}/{LYRICS_MAX_CODEPOINTS}
-              </div>
-            </div>
-          )}
-
-          <div>
-            <label id="styles-label">{t('create.styles', { n: MAX_STYLE_TAGS })}</label>
-            <div className="chips" role="group" aria-labelledby="styles-label">
-              {STYLE_PRESETS.map((s) => (
-                <button
-                  key={s}
-                  type="button"
-                  className={`chip chip--btn${draft.styles.includes(s) ? ' is-on' : ''}`}
-                  aria-pressed={draft.styles.includes(s)}
-                  onClick={() => toggleStyle(s)}
-                >
-                  {s}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          <div className="studio__row">
-            <div>
-              <label id="dur-label">{t('create.length')}</label>
-              <div className="chips" role="group" aria-labelledby="dur-label">
-                {DURATIONS.map((d) => (
-                  <button
-                    key={d.value}
-                    type="button"
-                    className={`chip chip--btn${draft.durationSeconds === d.value ? ' is-on' : ''}`}
-                    aria-pressed={draft.durationSeconds === d.value}
-                    onClick={() => patch({ durationSeconds: d.value })}
-                  >
-                    {d.label}
-                  </button>
-                ))}
+              <div className="composer__meta">
+                <span id="lyrics-hint">{t('create.lyrics.hint')}</span>
+                <span id="lyrics-count" className="num">
+                  {lyricsLength} / {LYRICS_MAX_CODEPOINTS}
+                </span>
               </div>
             </div>
 
             <div>
-              <label htmlFor="instrumental">{t('create.vocals')}</label>
-              <div className="seg" role="group" aria-label={t('create.vocals')}>
-                <button
-                  type="button"
-                  className={`seg__btn${draft.instrumental ? ' is-active' : ''}`}
-                  aria-pressed={draft.instrumental}
-                  onClick={() => patch({ instrumental: true })}
-                >
-                  {t('create.vocals.instrumental')}
-                </button>
-                <button
-                  type="button"
-                  className={`seg__btn${!draft.instrumental ? ' is-active' : ''}`}
-                  aria-pressed={!draft.instrumental}
-                  onClick={() => patch({ instrumental: false })}
-                >
-                  {t('create.vocals.sing')}
-                </button>
-              </div>
+              <label htmlFor="energy">
+                {t('create.energy')}{' '}
+                <span className="muted num">{Math.round(draft.energy * 100)}%</span>
+              </label>
+              <input
+                id="energy"
+                type="range"
+                min={0}
+                max={1}
+                step={0.05}
+                value={draft.energy}
+                onChange={(e) => patch({ energy: Number(e.target.value) })}
+              />
             </div>
-          </div>
 
-          <div>
-            <label htmlFor="energy">
-              {t('create.energy')} <span className="muted">({Math.round(draft.energy * 100)}%)</span>
-            </label>
-            <input
-              id="energy"
-              type="range"
-              min={0}
-              max={1}
-              step={0.05}
-              value={draft.energy}
-              onChange={(e) => patch({ energy: Number(e.target.value) })}
-            />
-          </div>
-
-          <div className="checkbox-row">
-            <input
-              id="visibility"
-              type="checkbox"
-              checked={draft.visibility === 'public'}
-              onChange={(e) => patch({ visibility: e.target.checked ? 'public' : 'private' })}
-            />
-            <label htmlFor="visibility">{t('create.visibility')}</label>
+            <div className="checkbox-row">
+              <input
+                id="visibility"
+                type="checkbox"
+                checked={draft.visibility === 'public'}
+                onChange={(e) => patch({ visibility: e.target.checked ? 'public' : 'private' })}
+              />
+              <label htmlFor="visibility">{t('create.visibility')}</label>
+            </div>
           </div>
         </div>
 
-        <aside className="panel studio__aside stack">
-          <h2 className="studio__aside-title">{t('create.aside.h2')}</h2>
-          <dl className="studio__facts">
-            <div>
-              <dt>{t('create.aside.cost')}</dt>
-              <dd>{t('create.aside.costValue')}</dd>
-            </div>
-            <div>
-              <dt>{t('create.aside.balance')}</dt>
-              <dd>{t('create.aside.balanceValue', { n: Math.max(credits - 1, 0) })}</dd>
-            </div>
-            <div>
-              <dt>{t('create.length')}</dt>
-              <dd>{DURATIONS.find((d) => d.value === draft.durationSeconds)?.label}</dd>
-            </div>
-            <div>
-              <dt>{t('create.vocals')}</dt>
-              <dd>
-                {draft.instrumental
-                  ? t('create.vocals.instrumental')
-                  : draft.lyrics.trim()
-                    ? t('create.aside.vocalsYours')
-                    : t('create.aside.vocalsAi')}
-              </dd>
-            </div>
-            <div>
-              <dt>{t('create.aside.visibility')}</dt>
-              <dd>
-                {draft.visibility === 'public'
-                  ? t('create.aside.linkOpen')
-                  : t('create.aside.private')}
-              </dd>
-            </div>
-          </dl>
-          <button type="submit" className="btn btn--primary btn--lg btn--block" disabled={!canSubmit}>
-            {submitting ? t('create.submitting') : t('create.submit')}
-          </button>
-          {credits < 1 && (
-            <p className="small">
-              {t('create.outOfCredits')}{' '}
-              <Link to="/pricing?from=/create">{t('create.pickPlan')}</Link>
-              {t('create.pickPlanTail')}
-            </p>
+        <div className="composer__row studio__submit">
+          {balanceLine}
+          {credits < 1 ? (
+            <Link to="/pricing?from=/create" className="btn btn--primary btn--lg">
+              {t('create.getCredits')}
+              <span aria-hidden="true">↗</span>
+            </Link>
+          ) : (
+            <button type="submit" className="btn btn--primary btn--lg" disabled={!canSubmit}>
+              {submitting ? t('create.submitting') : t('create.submit')}
+            </button>
           )}
-          <p className="small muted">
-            {t('create.guarantee')}
-          </p>
-        </aside>
+        </div>
+        {outOfCreditsNote}
+        <p className="composer__feedback">{t('create.guarantee')}</p>
       </form>
     </div>
   );

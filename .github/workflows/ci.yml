@@ -74,6 +74,13 @@ jobs:
         # it fails only on new orphans.
         run: pnpm check:orphans
 
+      - name: Dictionary parity
+        # Missing keys fall back to Chinese instead of throwing, so a dropped
+        # ja key ships as Chinese text on a Japanese page and nothing reports
+        # it. Also checks that each translation of a key carries the same
+        # {placeholders}.
+        run: pnpm check:i18n
+
       - name: Test
         run: pnpm test
         env:

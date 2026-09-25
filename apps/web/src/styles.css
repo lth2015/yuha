@@ -514,7 +514,11 @@ code { font-family: var(--mono); font-size: 0.86em; background: var(--surface-so
 
 /* forms */
 label { display: block; font-size: 14px; font-weight: 600; margin-bottom: 6px; }
-input[type='text'], input[type='email'], input[type='search'], input[type='number'], input[type='url'], textarea, select {
+/* `input:not([type])` is in the list because a bare <input> defaults to
+   type=text but matches no [type='...'] selector: the studio's title field
+   rendered at the UA default, 147x22 with a grey 2px border, in the middle
+   of the dark studio. Measured, not noticed — it reads as "small field". */
+input:not([type]), input[type='text'], input[type='email'], input[type='search'], input[type='number'], input[type='url'], textarea, select {
   width: 100%; min-height: var(--tap); padding: 10px 14px;
   border-radius: var(--r-control); border: 1px solid var(--line);
   background: var(--surface); color: var(--ink); font: inherit;
@@ -540,6 +544,12 @@ input[type='range'] { width: 100%; accent-color: var(--ink); min-height: var(--t
 .chip--btn { cursor: pointer; font-weight: 500; color: var(--ink); border-color: var(--control-line); transition: background-color var(--t-ui) var(--ease-ui), color var(--t-ui) var(--ease-ui); }
 .chip--btn:hover { border-color: var(--ink); }
 .chip--btn:active { transform: scale(0.98); }
+/* A disabled chip (the 7th style tag) kept the enabled border, the hover
+   lift and cursor:pointer, so the only sign the limit had been reached was
+   that clicking did nothing. */
+.chip--btn:disabled { opacity: 0.38; cursor: default; border-color: var(--line); }
+.chip--btn:disabled:hover { border-color: var(--line); }
+.chip--btn:disabled:active { transform: none; }
 .chip--btn.is-on, .chip--mood[aria-pressed='true'] { background: var(--ink); color: var(--bg); border-color: var(--ink); }
 
 .seg { display: inline-flex; padding: 3px; gap: 2px; border-radius: var(--r-control); background: var(--surface-soft); border: 1px solid var(--line); }
@@ -934,19 +944,73 @@ tr:last-child td { border-bottom: none; }
 .now-playing__lyrics .lyrics-sync__line { font-size: clamp(20px, 2vw, 30px); }
 @media (max-width: 900px) { .now-playing__body { grid-template-columns: 1fr; align-items: start; overflow-y: auto; } .now-playing__cover { width: min(52vw, 260px); } }
 
-/* ---------------------------------------------------------------- studio */
+/* ---------------------------------------------------------------- studio
+ *
+ * One column at the same measure as the home composer and the waiting screen,
+ * so the three surfaces a song passes through are visibly one room. The shape
+ * before this was a two-column form with a 300px sticky summary that restated
+ * the controls beside it — "Length: 2:00" alongside the length chips — and
+ * put the primary action in that sidebar, away from the thing it acts on.
+ */
+.studio { max-width: 880px; margin: 0 auto; display: flex; flex-direction: column; gap: var(--s4); }
 .studio__head { display: flex; align-items: center; justify-content: space-between; gap: var(--s4); flex-wrap: wrap; }
 .studio__head h1 { margin: 0; }
 .studio__balance { display: flex; align-items: center; gap: var(--s4); }
-.studio__grid { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: var(--s4); align-items: start; }
-.studio__aside { position: sticky; top: 104px; }
-.studio__aside-title { margin: 0; font-size: 12px; text-transform: uppercase; letter-spacing: 0.12em; color: var(--muted); }
-.studio__facts { margin: 0 0 var(--s4); display: flex; flex-direction: column; gap: 10px; }
-.studio__facts > div { display: flex; justify-content: space-between; gap: var(--s4); font-size: 14px; }
-.studio__facts dt { color: var(--muted); }
-.studio__facts dd { margin: 0; font-weight: 500; text-align: right; }
-.studio__row { display: grid; grid-template-columns: 1fr 1fr; gap: var(--s4); }
-.studio__edit { display: flex; gap: 14px; align-items: flex-start; padding: var(--s4) var(--s6); border-radius: var(--r-card); border: 1px solid color-mix(in srgb, var(--petal) 30%, transparent); background: var(--petal-soft); }
+.studio__score { margin: var(--s2) 0 0; }
+.studio__composer { box-shadow: var(--shadow-raised); }
+/* The panel answers focus, so the writing surface is the lit one. */
+.studio__composer:focus-within { box-shadow: var(--shadow-raised), 0 0 0 1px var(--line-strong); }
+.studio__composer textarea#prompt { min-height: 132px; }
+.studio__composer .chips { margin: 0; }
+
+/* Length and vocals: the two decisions that change what the listener gets. */
+/* Flex, not 1fr+auto: the grid stretched the length column and left a
+   240px hole between the two dials and their labels. */
+.studio__dials { display: flex; flex-wrap: wrap; gap: var(--s4) var(--s8); align-items: flex-start; margin-top: var(--s4); }
+.studio__dial { display: flex; flex-direction: column; gap: var(--s2); min-width: 0; }
+.studio__dial-label { font-size: 12px; font-weight: 600; letter-spacing: 0.04em; color: var(--muted); }
+/* The style tags are a dial too, and full width: twelve chips wrap. */
+.studio__dial--styles { width: 100%; margin-top: var(--s4); }
+
+/* Progressive disclosure: title, your own lyrics, energy, visibility. */
+.studio__more { border-top: 1px solid var(--line); margin-top: var(--s4); padding-top: var(--s4); }
+.studio__more-toggle {
+  display: inline-flex; align-items: center; gap: var(--s2);
+  min-height: var(--tap); padding: 0; border: none; background: none;
+  color: var(--muted); font: inherit; font-size: 14px; font-weight: 500; cursor: pointer;
+  transition: color var(--t-ui) var(--ease-ui);
+}
+.studio__more-toggle:hover { color: var(--ink); }
+.studio__more-toggle:focus-visible { outline: 2px solid var(--focus); outline-offset: 3px; border-radius: 6px; }
+.studio__more-caret {
+  width: 8px; height: 8px; flex: none;
+  border-right: 1.5px solid currentColor; border-bottom: 1.5px solid currentColor;
+  transform: rotate(45deg) translate(-1px, -1px);
+  transition: transform var(--t-ui) var(--ease-ui);
+}
+.studio__more-toggle[aria-expanded='true'] .studio__more-caret { transform: rotate(225deg) translate(-1px, -1px); }
+.studio__more-badge {
+  font-size: 11px; font-weight: 600; color: var(--petal);
+  padding: 2px 8px; border-radius: 999px; background: var(--petal-soft);
+}
+/* `.stack` sets display:flex at author origin, which outranks the UA rule for
+   [hidden]. Without this the folded panel stays on screen. */
+.studio__more-panel[hidden] { display: none; }
+.studio__more-panel { margin-top: var(--s4); animation: view-enter var(--t-panel) var(--ease-out) both; }
+.studio__more-panel label { font-weight: 500; }
+/* `.composer textarea` is deliberately chromeless — the prompt should read
+   as a sheet you write on, not a box. The folded fields are ordinary
+   fields, so they take the form styling back. */
+.studio__more-panel textarea { border: 1px solid var(--line); background: var(--surface); padding: 10px 14px; }
+.studio__more-panel textarea:disabled { opacity: 0.5; }
+.studio__more-panel .composer__meta { margin-top: 4px; }
+
+.studio__submit { margin-top: var(--s6); align-items: center; }
+.studio__submit-actions { display: flex; gap: var(--s2); flex-wrap: wrap; justify-content: flex-end; }
+.studio__oop { margin: var(--s3) 0 0; }
+
+.studio__edit { display: flex; gap: 14px; align-items: flex-start; margin-bottom: var(--s4); padding: var(--s4) var(--s4); border-radius: var(--r-control); border: 1px solid color-mix(in srgb, var(--petal) 30%, transparent); background: var(--petal-soft); }
+.studio__edit strong { display: block; margin-bottom: 2px; }
 .studio__edit-icon { width: 34px; height: 34px; flex: none; display: grid; place-items: center; border-radius: 10px; background: var(--petal-soft); color: var(--petal); font-size: 16px; }
 
 /* ---------------------------------------------------------------- pricing */
@@ -1014,8 +1078,6 @@ tr:last-child td { border-bottom: none; }
   .hero { gap: 32px; padding-top: 36px; }
   .hero__title { font-size: 48px; }
   .art-panel { min-height: 520px; }
-  .studio__grid { grid-template-columns: 1fr; }
-  .studio__aside { position: static; }
   .split { grid-template-columns: 1fr; }
 }
 @media (max-width: 900px) {
@@ -1060,7 +1122,12 @@ tr:last-child td { border-bottom: none; }
   .art-panel__caption p { font-size: 11px; max-width: 140px; }
   .song-page__hero { flex-direction: column; }
   .song-page__art { width: min(220px, 60%); margin: 0 auto; }
-  .studio__row { grid-template-columns: 1fr; }
+  .studio__dials { flex-direction: column; }
+  .studio__dial .seg { width: 100%; }
+  .studio__submit { flex-direction: column; align-items: stretch; }
+  .studio__submit .btn { width: 100%; justify-content: center; }
+  .studio__submit-actions { justify-content: stretch; }
+  .studio__submit-actions .btn { flex: 1; }
   .player-bar__inner { grid-template-columns: minmax(0, 1fr); gap: 6px; }
   .player-bar__queue { display: none; }
   h1 { font-size: 28px; }
@@ -1085,8 +1152,6 @@ tr:last-child td { border-bottom: none; }
 
 /* The notes only rise while music plays. */
 
-@media (prefers-reduced-motion: reduce) {
-}
 
 /* ---- language switcher ------------------------------------------------------ */
 .lang-switch {
