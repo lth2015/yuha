@@ -28,10 +28,14 @@
   /* `--surface` stays the name the components already use. */
   --surface: var(--glass);
 
-  /* ink — measured against --bg: ink 18.2:1, muted 7.6:1, faint 4.3:1 */
+  /* ink — measured against --bg by scripts/check-contrast.mjs, which fails
+     the build below 4.5:1 rather than writing the number down and shipping. */
   --ink: #f4f5f7;
   --muted: #9aa0ae;
-  --faint: #6f7585;
+  /* 4.32:1 against --bg, and every use of it is 11-13px — small text, so
+     the 3:1 large-text allowance does not apply. The old value shipped
+     with a comment in this file recording that it failed. Now 5.1:1. */
+  --faint: #7d8494;
   --line: rgba(255, 255, 255, 0.1);
   --line-strong: rgba(255, 255, 255, 0.18);
   --control-line: rgba(255, 255, 255, 0.22);
@@ -944,6 +948,21 @@ tr:last-child td { border-bottom: none; }
 .now-playing__lyrics .lyrics-sync__line { font-size: clamp(20px, 2vw, 30px); }
 @media (max-width: 900px) { .now-playing__body { grid-template-columns: 1fr; align-items: start; overflow-y: auto; } .now-playing__cover { width: min(52vw, 260px); } }
 
+/* ---------------------------------------------------------------- crash */
+/* A render throw lands here rather than on an empty near-black page. */
+.crash { max-width: 560px; margin: clamp(48px, 12vh, 140px) auto; }
+.crash__panel { text-align: left; box-shadow: var(--shadow-raised); }
+.crash__title { font-size: 24px; margin: 0; }
+.crash__actions { display: flex; gap: var(--s3); flex-wrap: wrap; margin-top: var(--s2); }
+.crash__detail {
+  margin: var(--s2) 0 0; padding-top: var(--s4); border-top: 1px solid var(--line);
+  color: var(--muted); font-family: var(--mono); word-break: break-word;
+}
+@media (max-width: 560px) {
+  .crash__actions { flex-direction: column; align-items: stretch; }
+  .crash__actions .btn { width: 100%; justify-content: center; }
+}
+
 /* ---------------------------------------------------------------- studio
  *
  * One column at the same measure as the home composer and the waiting screen,
@@ -1325,3 +1344,39 @@ tr:last-child td { border-bottom: none; }
 .section-title { font-size: 18px; font-weight: 600; margin: 0; }
 .credit-figure { font-size: 30px; font-weight: 700; line-height: 1.1; }
 .is-warning { color: var(--warning); }
+
+/* Placed last on purpose: a media query adds no specificity, so these only
+   win by source order. Sitting above `.lang-switch__btn`'s own
+   `min-height: 32px`, the coarse-pointer rule was silently overridden and
+   the switcher measured 32px on a phone with the rule apparently applied. */
+/* ------------------------------------------------------- touch targets
+ *
+ * `--tap: 44px` was a token the product mostly honoured and quietly did not,
+ * in exactly the places a thumb reaches for: the language switcher (32px),
+ * the brand link (34px), the account menu rows (40px), the vocals segment
+ * (39px) and the footer's legal links (20px).
+ *
+ * Scoped to coarse pointers, so a mouse keeps the tighter visual rhythm and
+ * a thumb gets the floor. Where growing the box would break the layout, the
+ * hit area grows instead of the paint.
+ */
+@media (pointer: coarse) {
+  .lang-switch__btn { min-height: var(--tap); padding-inline: 14px; }
+  .topnav__home { min-height: var(--tap); align-items: center; }
+  .account__menu a, .account__menu button { min-height: var(--tap); display: flex; align-items: center; }
+  .seg__btn { min-height: var(--tap); }
+
+  /* The footer's legal links are 20px of text on a wrapped row. Growing the
+     box would space the row out; growing only the hit area does not. */
+  .site-foot__links a { position: relative; }
+  .site-foot__links a::after {
+    content: '';
+    position: absolute;
+    inset-inline: -8px;
+    top: 50%;
+    transform: translateY(-50%);
+    height: var(--tap);
+  }
+  /* 8px of clear space between those enlarged hit areas (touch-spacing). */
+  .site-foot__links { gap: var(--s6); }
+}

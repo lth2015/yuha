@@ -29,9 +29,19 @@ export function toMajor(amountMinor: number, currency: string): number {
   return isZeroDecimal(currency) ? amountMinor : amountMinor / 100;
 }
 
+/**
+ * `currency` is required, and deliberately has no default.
+ *
+ * It used to default to `'usd'`. Four call sites in the checkout flow omitted
+ * it, so a ¥980 pack rendered as **$9.80** — including on the 最終確認画面,
+ * directly in front of the characters（税込）, which is the one screen
+ * 特定商取引法 requires to state the real price at the moment the payment
+ * obligation is created. Centralising the formatter did not fix that; the
+ * default did. A required parameter turns every such call into a build error.
+ */
 export function formatMoney(
   amountMinor: number,
-  currency = 'usd',
+  currency: string,
   locale = 'en-US',
   opts: { fractionDigits?: number } = {},
 ): string {

@@ -3,6 +3,7 @@ import { Link, useNavigate, useParams } from 'react-router-dom';
 import type { ProductView, TrackView } from '@yuha/contracts';
 import { apiFetch, newIdempotencyKey } from '../lib/api';
 import { formatTime, usePlayer } from '../lib/player';
+import { fetchProducts, findLicenceProduct } from '../lib/catalog';
 import { useI18n } from '../lib/i18n';
 import { LOCALES, formatMoney } from '../lib/money';
 import { useSession } from '../lib/session';
@@ -56,12 +57,15 @@ export default function SongDetail() {
   useEffect(load, [load]);
 
   useEffect(() => {
-    apiFetch<ProductView[]>('/v1/products')
-      .then((ps) => {
-        const p = ps.find((x) => x.priceKey === 'market_license');
-        if (p) setLicenseProduct(p);
-      })
-      .catch(() => undefined);
+    // Not `.catch(() => undefined)`. That swallowed a shape mismatch for eight
+    // days, leaving the licence button permanently disabled with its price
+    // interpolated to an empty string and nothing written anywhere.
+    fetchProducts()
+      .then((ps) => setLicenseProduct(findLicenceProduct(ps)))
+      .catch((err) => {
+        console.error('the catalogue could not be read; licensing is unavailable', err);
+        setLicenseProduct(null);
+      });
   }, []);
 
   if (error) {
@@ -183,7 +187,7 @@ export default function SongDetail() {
             {song.styles.length > 0 && <> · {song.styles.join(' / ')}</>}
           </p>
 
-          <div className="song-spread__actions" aria-label="作品操作">
+          <div className="song-spread__actions" aria-label={t('song.actions.aria')}>
             {song.visibility === 'public' && (
               <button type="button" className="text-action" onClick={share}>
                 {copied ? t('song.copied') : t('song.share')}
@@ -230,15 +234,25 @@ export default function SongDetail() {
                   className="text-action is-strong"
                   onClick={buyLicense}
                   disabled={licensing || !me || licenseProduct === null}
-                  title={me ? '购买使用授权，创作者获得 70%' : '登录后可购买授权'}
+                  /* No `title`: it is not a reliable accessible name and never
+                     reaches touch users. The one here was also a hardcoded
+                     Chinese literal promising "创作者获得 70%" — a revenue share
+                     migration 0005 removed. The string outlived the feature. */
+                  aria-label={
+                    licenseProduct
+                      ? t('song.license.aria', {
+                          price: formatMoney(licenseProduct.amountMinor, licenseProduct.currency, LOCALES[lang]),
+                        })
+                      : t('song.license.unavailable')
+                  }
                 >
                   {licensing
                     ? t('song.licensing')
-                    : t('song.license', {
-                        price: licenseProduct
-                          ? formatMoney(licenseProduct.amountMinor, licenseProduct.currency, LOCALES[lang])
-                          : '',
-                      })}
+                    : licenseProduct
+                      ? t('song.license', {
+                          price: formatMoney(licenseProduct.amountMinor, licenseProduct.currency, LOCALES[lang]),
+                        })
+                      : t('song.license.unavailable')}
                 </button>
               )
             )}

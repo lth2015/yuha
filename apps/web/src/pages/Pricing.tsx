@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import type { ProductView } from '@yuha/contracts';
 import { apiFetch, newIdempotencyKey } from '../lib/api';
+import { fetchProducts } from '../lib/catalog';
 import { useI18n } from '../lib/i18n';
 import { LOCALES, formatMoney, formatPerUnit } from '../lib/money';
 import { useSession } from '../lib/session';
@@ -36,9 +37,7 @@ export default function Pricing() {
   const [busyKey, setBusyKey] = useState<string | null>(null);
 
   useEffect(() => {
-    apiFetch<ProductView[]>('/v1/products')
-      .then(setProducts)
-      .catch(setError);
+    fetchProducts().then(setProducts).catch(setError);
   }, []);
 
   const buy = async (priceKey: string) => {
@@ -79,6 +78,8 @@ export default function Pricing() {
   };
 
   const freeTrial = runtime?.features.freeTrialEnabled;
+  /** Whatever the catalogue is priced in; the free tier must match it. */
+  const catalogueCurrency = products?.[0]?.currency ?? 'jpy';
   const qrWallets = runtime?.features.qrWalletsEnabled === true;
 
   return (
@@ -104,7 +105,10 @@ export default function Pricing() {
           {freeTrial && (
             <article className="plan plan--free">
               <h2>{t('price.free')}</h2>
-              <p className="plan__price">{formatMoney(0, 'usd', locale)}</p>
+              {/* The catalogue's currency, not a literal: "US$0" sitting beside
+                  JP¥980 was the first thing visible once this page rendered
+                  again. Free is free in whatever the plans beside it cost. */}
+              <p className="plan__price">{formatMoney(0, catalogueCurrency, locale)}</p>
               <p className="plan__tagline">{t('price.freeTag')}</p>
               <ul className="plan__bullets">
                 <li>{t('price.free.b1', { n: runtime?.features.freeTrialUnits ?? 2 })}</li>

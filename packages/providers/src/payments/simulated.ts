@@ -65,6 +65,9 @@ export class SimulatedPaymentsAdapter implements PaymentsAdapter {
     url.searchParams.set('session_id', sessionId);
     url.searchParams.set('order_id', params.orderId);
     url.searchParams.set('amount', String(params.amountMinor));
+    // Without this the demo confirmation screen had no currency to format
+    // with and fell back to USD, printing $49.80 for a 4,980-yen plan.
+    url.searchParams.set('currency', params.currency);
     return { sessionId, url: url.toString(), customerId: session.customerId, simulated: true };
   }
 

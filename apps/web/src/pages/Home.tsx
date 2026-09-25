@@ -111,7 +111,7 @@ export default function Home() {
       setJob(res);
       void refreshEntitlements();
     } catch (err) {
-      setError(err instanceof Error ? err.message : '提交失败，请重试');
+      setError(err instanceof Error ? err.message : t('composer.submitFailed'));
     } finally {
       setSubmitting(false);
     }

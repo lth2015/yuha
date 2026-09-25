@@ -13,6 +13,7 @@
     "typecheck": "pnpm -r typecheck",
     "check:orphans": "node scripts/find-orphan-exports.mjs",
     "check:i18n": "node scripts/check-i18n.mjs",
+    "check:contrast": "node scripts/check-contrast.mjs",
     "test": "vitest run",
     "test:watch": "vitest",
     "dev": "concurrently -n api,worker,web -c green,magenta,cyan \"pnpm dev:api\" \"pnpm dev:worker\" \"pnpm dev:web\"",

@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useState, type ReactNode } from 'react';
-import { Link, NavLink, useNavigate } from 'react-router-dom';
+import { Link, NavLink, useLocation, useNavigate } from 'react-router-dom';
 import type { TrackView } from '@yuha/contracts';
 import { apiFetch } from '../lib/api';
 import { usePlayer } from '../lib/player';
 import { useI18n } from '../lib/i18n';
 import { useSession } from '../lib/session';
 import { BrandLogo, PetalMark } from './Brand';
+import { ErrorBoundary } from './ErrorBoundary';
 import { LightField } from './LightField';
 import { LANGS } from '../lib/i18n';
 import { NowPlaying } from './NowPlaying';
@@ -53,6 +54,7 @@ export function Layout({ children }: { children: ReactNode }) {
   const { t, lang, setLang } = useI18n();
   const { me, entitlements, signOut, runtime } = useSession();
   const navigate = useNavigate();
+  const location = useLocation();
   const player = usePlayer();
   const credits = entitlements?.availableUnits ?? me?.creditsAvailable ?? 0;
   const [nowPlaying, setNowPlaying] = useState<NowPlayingSong | null>(null);
@@ -99,11 +101,11 @@ export function Layout({ children }: { children: ReactNode }) {
 
       <header className="topnav">
         <div className="topnav__inner">
-          <Link to="/" className="topnav__home" aria-label="YUHA 创作首页">
+          <Link to="/" className="topnav__home" aria-label={t('nav.homeAria')}>
             <BrandLogo width={128} />
           </Link>
 
-          <nav className="topnav__nav" aria-label={t('nav.skip').replace('跳到内容', '主导航')}>
+          <nav className="topnav__nav" aria-label={t('nav.mainAria')}>
             {[
               { to: '/', key: 'nav.create', end: true },
               { to: '/library', key: 'nav.library', end: false },
@@ -202,7 +204,10 @@ export function Layout({ children }: { children: ReactNode }) {
       </header>
 
       <main id="main" className="content">
-        {children}
+        {/* Keyed on the path so navigating away clears a crashed route. A
+            boundary that stays broken until a full reload turns one bad page
+            into a bad session. */}
+        <ErrorBoundary key={location.pathname}>{children}</ErrorBoundary>
       </main>
 
       <SiteFooter />
@@ -227,8 +232,8 @@ export function Layout({ children }: { children: ReactNode }) {
 
       {nowPlayingOpen && (
         <NowPlaying
-          title={nowPlaying?.title ?? player.current?.title ?? '正在播放'}
-          artist={nowPlaying?.artistName ?? player.current?.artistName ?? '创作者'}
+          title={nowPlaying?.title ?? player.current?.title ?? t('player.untitled')}
+          artist={nowPlaying?.artistName ?? player.current?.artistName ?? t('player.unknownArtist')}
           coverSeed={nowPlaying?.coverSeed ?? player.current?.coverSeed ?? 1}
           lyrics={nowPlaying?.lyrics ?? null}
           timings={nowPlaying?.lyricTimings ?? null}

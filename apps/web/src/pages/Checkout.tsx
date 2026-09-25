@@ -4,6 +4,7 @@ import type { OrderView, ProductView } from '@yuha/contracts';
 import { apiFetch, newIdempotencyKey } from '../lib/api';
 import { useI18n } from '../lib/i18n';
 import { formatMoney, formatJst, useSession } from '../lib/session';
+import { LOCALES } from '../lib/money';
 import { Badge, ErrorNotice, Loading } from '../components/common';
 
 interface Disclosure {
@@ -27,6 +28,7 @@ export function CheckoutConfirm() {
   const [params] = useSearchParams();
   const priceKey = params.get('price') ?? 'drop_5';
   const { runtime } = useSession();
+  const { t, lang } = useI18n();
 
   const [product, setProduct] = useState<ProductView | null>(null);
   const [disclosure, setDisclosure] = useState<Disclosure | null>(null);
@@ -92,7 +94,7 @@ export function CheckoutConfirm() {
               <tr>
                 <th>お支払い金額</th>
                 <td className="num">
-                  <strong>{formatMoney(product.amountMinor)}</strong>（税込）
+                  <strong>{formatMoney(product.amountMinor, product.currency, LOCALES[lang])}</strong>（税込）
                 </td>
               </tr>
               <tr>
@@ -121,7 +123,7 @@ export function CheckoutConfirm() {
                     <>
                       毎月自動更新（次回請求予定：
                       <span className="num">{formatJst(nextChargeDate, false)}</span> 頃・
-                      {formatMoney(product.amountMinor)}）
+                      {formatMoney(product.amountMinor, product.currency, LOCALES[lang])}）
                     </>
                   ) : (
                     '自動更新はありません'
@@ -184,7 +186,7 @@ export function CheckoutConfirm() {
         disabled={!agreed || submitting || !product.available}
         onClick={() => void proceed()}
       >
-        {submitting ? '手続き中…' : `${formatMoney(product.amountMinor)} を支払う`}
+        {submitting ? t('checkout.submitting') : t('checkout.pay', { amount: formatMoney(product.amountMinor, product.currency, LOCALES[lang]) })}
       </button>
 
       <p className="small muted" style={{ margin: 0, textAlign: 'center' }}>
@@ -224,7 +226,7 @@ export function CheckoutComplete() {
   const [params] = useSearchParams();
   const orderId = params.get('order_id');
   const { refreshEntitlements } = useSession();
-  const { t } = useI18n();
+  const { t, lang } = useI18n();
   const [returnTo] = useState(readReturnPath);
 
   const [order, setOrder] = useState<OrderView | null>(null);
@@ -281,7 +283,7 @@ export function CheckoutComplete() {
             <p style={{ margin: 0 }}>
               {order && (
                 <>
-                  {t('pay.paid', { amount: formatMoney(order.amountMinor) })}
+                  {t('pay.paid', { amount: formatMoney(order.amountMinor, order.currency, LOCALES[lang]) })}
                   <br />
                 </>
               )}
@@ -324,12 +326,16 @@ export function CheckoutSimulate() {
   const [params] = useSearchParams();
   const navigate = useNavigate();
   const { runtime } = useSession();
+  const { lang } = useI18n();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<unknown>(null);
 
   const sessionId = params.get('session_id');
   const orderId = params.get('order_id');
   const amount = Number(params.get('amount') ?? '0');
+  // Carried through the simulated checkout URL; the screen used to have no
+  // currency at all and formatted yen as dollars.
+  const currency = params.get('currency') ?? 'jpy';
 
   const settle = async (outcome: 'paid' | 'failed') => {
     if (!sessionId) return;
@@ -370,7 +376,7 @@ export function CheckoutSimulate() {
       <section className="panel stack">
         <div className="row row--between">
           <span className="muted">お支払い金額</span>
-          <strong className="num">{formatMoney(amount)}</strong>
+          <strong className="num">{formatMoney(amount, currency, LOCALES[lang])}</strong>
         </div>
         <hr className="divider" />
         <button
