@@ -32,6 +32,13 @@ interface PendingRequest {
   providerRequestId: string;
   readyAt: number;
   fixture: string;
+  /**
+   * Read off the fixture name once, when it is chosen. poll() used to re-parse
+   * the name and fall back to 30 if the pattern missed — the same guess that made
+   * a stale fixture set undiagnosable, in a second place. Selection is the only
+   * step that knows how long the file is, so it is the only step that decides.
+   */
+  declaredDurationSeconds: number;
   hang: boolean;
 }
 
@@ -104,23 +111,53 @@ export class DemoMusicProvider implements MusicProvider {
 
   /**
    * Same intent always maps to the same fixture, so re-runs are reproducible.
-   * Fixture names carry the length (`night_walk_calm-120s.mp3`); the pool is
-   * restricted to the CLOSEST length ≥ the request (falling back to the longest
-   * available), so a 60s request never draws a 4-minute file.
+   * Fixture names carry the length (`night_walk_calm-120s.mp3`) and the pool is
+   * restricted to the CLOSEST length ≥ the request, so a 60s request never draws
+   * a 4-minute file. Returns null when nothing on disk is long enough.
+   *
+   * A name the pattern does not match is excluded rather than assumed to be 30s.
+   * That assumption is what made a stale fixture set undiagnosable: fixtures
+   * generated before the script wrote suffixed names all measured as 30s, so a
+   * 120s request drew a 30s file and reported `output_check_failed`. The adapter
+   * cannot know an unlabelled file's length, and guessing is worse than saying so.
    */
-  private pickFixture(req: MusicSubmitRequest, fixtures: string[]): string {
+  private pickFixture(
+    req: MusicSubmitRequest,
+    fixtures: string[],
+  ): { fixture: string; declaredDurationSeconds: number } | null {
     const wanted = req.intent.durationSeconds;
-    const withLen = fixtures.map((f) => {
+    const withLen = fixtures.flatMap((f) => {
       const m = /-(\d+)s\.mp3$/.exec(f);
-      return { f, len: m ? Number(m[1]) : 30 };
+      return m ? [{ f, len: Number(m[1]) }] : [];
     });
     const usable = withLen.filter((x) => x.len >= wanted).sort((a, b) => a.len - b.len);
-    const shortest = usable.length ? usable.filter((x) => x.len === usable[0]!.len) : withLen;
-    const pool = shortest.map((x) => x.f);
+    if (!usable.length) return null;
+    const len = usable[0]!.len;
+    const pool = usable.filter((x) => x.len === len).map((x) => x.f);
     const seed = createHash('sha256')
       .update(`${req.intent.scene}:${req.intent.mood}:${req.requestKey}`)
       .digest();
-    return pool[seed.readUInt32BE(0) % pool.length]!;
+    return { fixture: pool[seed.readUInt32BE(0) % pool.length]!, declaredDurationSeconds: len };
+  }
+
+  /**
+   * Returned when the generated fixtures cannot serve the requested length.
+   *
+   * `failed` rather than a thrown error: a throw leaves the job mid-flight, its
+   * lease expires and another worker retries it forever, whereas this is a
+   * terminal state whose code lands in `generation_jobs.error_code` where the
+   * next reader will find it. The message carries the remedy because the reader
+   * is a developer whose generated fixtures are stale, and the fix is one command.
+   */
+  private fixtureMissing(wantedSeconds: number, providerRequestId: string): MusicSubmitResult {
+    return {
+      status: 'failed',
+      providerRequestId,
+      code: 'demo_fixture_missing',
+      message:
+        `no demo fixture of at least ${wantedSeconds}s in ${this.opts.fixturesDir}. ` +
+        'Run "pnpm fixtures:audio" to generate them.',
+    };
   }
 
   async submit(req: MusicSubmitRequest): Promise<MusicSubmitResult> {
@@ -138,11 +175,15 @@ export class DemoMusicProvider implements MusicProvider {
       // Record the request anyway: the point of UNKNOWN is that the upstream
       // may well have accepted it, which is exactly what poll() must discover.
       const fixtures = await this.listFixtures();
+      const picked = this.pickFixture(req, fixtures);
+      // A fixture set that cannot serve the request at all is the more basic
+      // problem, and reporting it beats simulating upstream ambiguity.
+      if (!picked) return this.fixtureMissing(req.intent.durationSeconds, providerRequestId);
       this.inflight.set(req.requestKey, {
         requestKey: req.requestKey,
         providerRequestId,
         readyAt: Date.now() + (this.opts.latencyMs ?? 800),
-        fixture: this.pickFixture(req, fixtures),
+        ...picked,
         hang: false,
       });
       return { status: 'unknown', providerRequestId: null, code: 'demo_injected_unknown', message: 'timeout' };
@@ -155,11 +196,14 @@ export class DemoMusicProvider implements MusicProvider {
     const existing = this.inflight.get(req.requestKey);
     if (existing) return { status: 'submitted', providerRequestId: existing.providerRequestId };
 
+    const picked = this.pickFixture(req, fixtures);
+    if (!picked) return this.fixtureMissing(req.intent.durationSeconds, providerRequestId);
+
     this.inflight.set(req.requestKey, {
       requestKey: req.requestKey,
       providerRequestId,
       readyAt: Date.now() + (this.opts.latencyMs ?? 800),
-      fixture: this.pickFixture(req, fixtures),
+      ...picked,
       hang,
     });
     return { status: 'submitted', providerRequestId };
@@ -171,14 +215,13 @@ export class DemoMusicProvider implements MusicProvider {
     if (pending.hang || Date.now() < pending.readyAt) return { status: 'pending' };
 
     const buffer = await readFile(join(this.opts.fixturesDir, pending.fixture));
-    const m = /-(\d+)s\.mp3$/.exec(pending.fixture);
     return {
       status: 'completed',
       audio: {
         kind: 'buffer',
         buffer,
         format: 'mp3',
-        declaredDurationSeconds: m ? Number(m[1]) : 30,
+        declaredDurationSeconds: pending.declaredDurationSeconds,
         providerRequestId: pending.providerRequestId,
       },
     };
