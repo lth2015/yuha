@@ -57,6 +57,19 @@ export default function Home() {
   const idemKey = useRef(newIdempotencyKey());
   /** The self-rescheduling poll timer, so the effect cleanup can actually stop it. */
   const pollTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  /**
+   * The backoff, in a ref because it has to outlive the effect.
+   *
+   * It was a local. Every tick calls `setJob`, `job` is in this effect's
+   * dependencies, so the effect tore down and re-ran on each poll and the
+   * local went back to 2000 — the `* 1.6` line ran, scheduled a longer timer,
+   * and cleanup immediately cleared it. Measured before fixing: 14 polls in a
+   * 26-second window, every gap exactly 2.0s, against a comment that said
+   * "with backoff". A working one makes about 6 in the same window.
+   */
+  const pollDelay = useRef(2000);
+  /** Which job the backoff belongs to; a new one starts at the floor again. */
+  const polledJobId = useRef<string | null>(null);
   const promptRef = useRef<HTMLTextAreaElement | null>(null);
 
   const credits = entitlements?.availableUnits ?? me?.creditsAvailable ?? 0;
@@ -147,7 +160,10 @@ export default function Home() {
     }
 
     let cancelled = false;
-    let delay = 2000;
+    if (polledJobId.current !== job.jobId) {
+      polledJobId.current = job.jobId;
+      pollDelay.current = 2000;
+    }
     const tick = async () => {
       if (cancelled) return;
       try {
@@ -158,15 +174,15 @@ export default function Home() {
         /* transient poll failure */
       }
       if (cancelled) return;
-      if (delay < 10000) delay = Math.min(delay * 1.6, 10000);
+      if (pollDelay.current < 10000) pollDelay.current = Math.min(pollDelay.current * 1.6, 10000);
       // Held in a ref, not a local: the previous shape lost this handle, so
       // cleanup could only ever clear the *first* timer. Every `setJob` then
       // re-ran the effect and started another chain beside the one still
       // running, and a surviving chain could revive a job the user had
       // already dismissed.
-      pollTimer.current = setTimeout(tick, delay);
+      pollTimer.current = setTimeout(tick, pollDelay.current);
     };
-    pollTimer.current = setTimeout(tick, delay);
+    pollTimer.current = setTimeout(tick, pollDelay.current);
     return () => {
       cancelled = true;
       if (pollTimer.current) clearTimeout(pollTimer.current);
