@@ -206,7 +206,13 @@ export const trackView = z.object({
   vocalMode: VocalMode,
   visibility: Visibility,
   durationSeconds: z.number(),
-  playCount: z.number().int().nonnegative(),
+  /*
+   * No `playCount`. It is still counted in `tracks.play_count` and still
+   * incremented by POST /v1/explore/:id/plays, because operations needs to
+   * know what is actually listened to. It is deliberately absent from the
+   * view a client receives: a number that cannot reach the browser cannot
+   * be rendered back onto a song page by a later change.
+   */
   /** Deterministic seed for the generated cover art. */
   coverSeed: z.number().int(),
   /** Timings for synced lyrics; null when the song has no lyrics. */

@@ -40,7 +40,6 @@ export function toPublicTrackView(
     vocalMode: row.vocal_mode,
     visibility: row.visibility,
     durationSeconds: row.duration_ms / 1000,
-    playCount: row.play_count,
     coverSeed: row.cover_seed,
     lyricTimings: (row.lyric_timings ?? null) as LyricTimings | null,
     licenseCount: opts.licenseCount ?? 0,

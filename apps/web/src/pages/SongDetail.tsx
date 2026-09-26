@@ -183,7 +183,11 @@ export default function SongDetail() {
           </p>
           <h1 className="song-spread__title">{song.title}</h1>
           <p className="song-spread__meta">
-            {song.artistName ?? t(isOwner ? 'song.you' : 'song.creator')} · {t('song.plays', { n: song.playCount.toLocaleString() })}
+            {/* No play count. Plays are still recorded server-side, because the
+                operations dashboard needs to know what gets listened to — but
+                showing the number turns a private song into a performance, and
+                a song with two plays into a failure. */}
+            {song.artistName ?? t(isOwner ? 'song.you' : 'song.creator')}
             {song.styles.length > 0 && <> · {song.styles.join(' / ')}</>}
           </p>
 

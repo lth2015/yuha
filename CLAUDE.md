@@ -42,10 +42,26 @@ Rules of engagement:
 
 ## Scope decisions
 
-- **No public feed, no likes.** The Explore surface and the whole like system
-  are gone — routes, schema, tests. Songs are private, and "public" means
-  anyone holding the link can open it. Do not reintroduce a browsable feed or
-  engagement counters without asking.
+- **No public feed, no likes, no visible counters.** There is no browsable
+  feed and no like system: no list endpoint, no Explore page, and migration
+  0005 dropped `song_likes` and `tracks.like_count`. Songs are private, and
+  "public" means anyone holding the link can open it.
+
+  This bullet used to claim the Explore *routes, schema and tests* were gone
+  too. They were not — `routes/explore.ts`, `tracks.play_count` and
+  `tests/explore.test.ts` all still existed, and the song page rendered a play
+  count next to the creator's name. A scope decision that the code contradicts
+  is worse than no decision, so this now describes what is actually true.
+
+  Plays **are** still counted: `POST /v1/explore/:id/plays` increments
+  `tracks.play_count`, because operations needs to know what gets listened to.
+  They are never shown to anyone — `playCount` is deliberately absent from the
+  track view a client receives, so it cannot be rendered back onto a page by a
+  later change. Showing the number turns a private song into a performance,
+  and a song with two plays into a failure.
+
+  Do not reintroduce a browsable feed, a like system, or any user-visible
+  engagement counter without asking.
 - **No creator revenue sharing.** The platform sells its own service; the
   earnings ledger and per-sale share rate are removed. What a licence records
   is who authored a song, who holds usage rights, and what was paid.
