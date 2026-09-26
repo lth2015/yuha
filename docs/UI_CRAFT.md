@@ -351,17 +351,44 @@ grid with no explanation — the same failure as §3.1, arrived at from the othe
 direction. There is now an explicit empty state, proved by forcing the filter
 to match nothing.
 
-### 5b.5 Not fixed: graceful failure is silent failure
+### 5b.5 Graceful failure is silent failure — now recorded
 
-The error boundary is a real improvement and a real regression at the same
-time. Before it, a crash produced a blank page and a user who complained.
-Now it produces a calm panel, a `console.error`, and very likely no report at
-all. There is no client-side error reporting in this product — no endpoint, no
-third-party collector, nothing.
+The error boundary was a real improvement and a real regression at the same
+time. Before it, a crash produced a blank page and a user who complained —
+which is how `/pricing` was eventually found to have been broken for eight
+days. After it, the same crash produced a calm panel, a `console.error`, and
+very likely no report at all.
 
-Left undone deliberately: where client errors go is an infrastructure and
-privacy decision (what is collected, retained, and for how long), not a patch.
-Recorded here so it is a choice rather than an oversight.
+This was first left undone as an owner's decision, then taken. Three choices
+were made in the taking, and they are the reason it is safe to keep:
+
+**Self-hosted, not a third-party collector.** `POST /v1/client-errors` writes
+through the existing `trackEvent` into `analytics_events`, which already
+carries the §11.1 contract — never the raw prompt, the email address or any
+card data. Shipping user data to an outside service is a decision about this
+product's users, and nothing here required making it.
+
+**Unauthenticated, and unattributable.** A crash on the sign-in screen is the
+one most worth hearing about, so requiring a session would lose it. The
+browser sends no token — `apiFetch` would have attached one, so the reporter
+uses bare `fetch`, which also depends on less code that may be part of what
+just broke. `user_ref` is null. A crash groups by message and route, not by
+who hit it, and a test asserts that a token sent anyway changes nothing.
+
+**No URL ever leaves the browser.** Only a normalised path: `/song/:id`, never
+`location.href`. The query string on this product carries drafts and edit
+targets, and on the composer the prompt itself.
+
+Rate limited at 30 per five minutes per IP, with the client capping at three
+distinct reports per page load. Verified end to end rather than reasoned
+about: a deliberate throw in `Library` produced one row — `{"route":
+"/library", "component": "Library"}` — and a second page load produced exactly
+one more, so the dedupe survives StrictMode's double mount.
+
+Reviewing the route caught one more thing: it was written with
+`.catch(() => undefined)` on the write, which is rule 3, broken in the commit
+that cites rule 3. A failed write must not turn a crash report into a 500, but
+it must not vanish either. It logs.
 
 ## 6. What this document does not claim
 

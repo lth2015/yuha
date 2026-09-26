@@ -15,6 +15,7 @@ import generationRoutes from './routes/generations.js';
 import projectRoutes from './routes/projects.js';
 import publicRoutes from './routes/public.js';
 import rightsRoutes from './routes/rights.js';
+import telemetryRoutes from './routes/telemetry.js';
 import trackRoutes from './routes/tracks.js';
 
 export async function buildServer(ctx: AppContext): Promise<FastifyInstance> {
@@ -91,6 +92,7 @@ export async function buildServer(ctx: AppContext): Promise<FastifyInstance> {
   await app.register(fileRoutes, { ctx });
   await app.register(billingRoutes, { ctx });
   await app.register(rightsRoutes, { ctx });
+  await app.register(telemetryRoutes, { ctx });
   await app.register(adminRoutes, { ctx });
 
   return app;

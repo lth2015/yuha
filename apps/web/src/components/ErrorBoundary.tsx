@@ -1,6 +1,7 @@
 import { Component, type ErrorInfo, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import { useI18n } from '../lib/i18n';
+import { reportCrash } from '../lib/report';
 
 /**
  * A render throw degrades to a panel, not to a blank page.
@@ -58,6 +59,9 @@ export class ErrorBoundary extends Component<{ children: ReactNode }, State> {
     // Keep the component trail: `getDerivedStateFromError` does not receive it,
     // and it is the part that says *where*.
     console.error('render failed', error, info.componentStack);
+    // And tell the server. Without this the panel below turns a crash into
+    // something nobody reports and nobody counts.
+    reportCrash(error, info.componentStack);
   }
 
   override render() {

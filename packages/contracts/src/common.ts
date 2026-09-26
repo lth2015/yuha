@@ -80,3 +80,26 @@ export const paginated = <T extends z.ZodTypeAny>(item: T) =>
 /** Idempotency key header used by POST /v1/generations and /v1/checkout. */
 export const IDEMPOTENCY_HEADER = 'idempotency-key';
 export const idempotencyKeySchema = z.string().min(8).max(128).regex(/^[A-Za-z0-9._:-]+$/);
+
+/**
+ * A crash reported by the browser.
+ *
+ * Deliberately narrow. The error boundary makes a crash *look* handled, which
+ * means nobody complains about it any more — so something has to record it, and
+ * what gets recorded has to be safe to keep.
+ *
+ * `route` is a normalised path (`/song/:id`), never `location.href`: the query
+ * string on this product carries drafts and edit targets. There is no user id,
+ * no user agent and no full stack. §11.1 applies to this as to every other
+ * analytics event — never the raw prompt, the email address or any card data.
+ */
+export const clientErrorReport = z.object({
+  /** The thrown message, truncated client-side. */
+  message: z.string().trim().min(1).max(300),
+  /** Path with ids collapsed, so the same crash groups across users. */
+  route: z.string().trim().max(120),
+  /** The nearest component name from the React stack, if one was readable. */
+  component: z.string().trim().max(80).nullable().default(null),
+  lang: z.string().trim().max(8).nullable().default(null),
+});
+export type ClientErrorReport = z.infer<typeof clientErrorReport>;
