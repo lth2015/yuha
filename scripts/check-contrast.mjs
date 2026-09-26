@@ -15,7 +15,7 @@ import { readFileSync } from 'node:fs';
 const CSS = new URL('../apps/web/src/styles.css', import.meta.url);
 const src = readFileSync(CSS, 'utf8');
 
-/** Tokens that carry text, and the minimum each must hold against `--bg`. */
+/** Tokens that carry text, and the minimum each must hold. */
 const TEXT_TOKENS = {
   '--ink': 4.5,
   '--muted': 4.5,
@@ -26,6 +26,22 @@ const TEXT_TOKENS = {
   '--warning': 4.5,
   '--petal': 4.5,
 };
+
+/**
+ * Every background text actually sits on — not just the page.
+ *
+ * The first version of this check measured against `--bg` alone and passed
+ * `--faint` at 5.31:1. But `--faint` is used *inside panels*, and a panel sits
+ * on `--surface-soft`, which is lighter: the real ratio there was 4.44:1, still
+ * failing, with a green build. The gate written to stop a contrast failure
+ * shipped one of its own, for exactly the reason recorded as rule 10 — a check
+ * has to be asked what it cannot see.
+ *
+ * Glass surfaces are translucent over a moving light field, so their rendered
+ * colour is not knowable from the stylesheet. `--surface-soft` is the lightest
+ * opaque surface in the system and is used as the conservative stand-in.
+ */
+const SURFACES = ['--bg', '--surface-solid', '--surface-soft'];
 
 function readToken(name) {
   // First definition wins, which is the `:root` block.
@@ -49,10 +65,14 @@ function ratio(a, b) {
   return (hi + 0.05) / (lo + 0.05);
 }
 
-const bg = readToken('--bg');
-if (!bg) {
-  console.log('✗ could not read --bg from styles.css');
-  process.exit(1);
+const surfaces = [];
+for (const name of SURFACES) {
+  const value = readToken(name);
+  if (!value) {
+    console.log(`✗ could not read ${name} from styles.css`);
+    process.exit(1);
+  }
+  surfaces.push([name, value]);
 }
 
 const failures = [];
@@ -63,12 +83,19 @@ for (const [token, min] of Object.entries(TEXT_TOKENS)) {
     failures.push(`${token} — not found in :root`);
     continue;
   }
-  const r = ratio(value, bg);
-  rows.push(`  ${token.padEnd(10)} ${value.padEnd(9)} ${r.toFixed(2).padStart(6)}:1  (min ${min})`);
-  if (r < min) failures.push(`${token} is ${r.toFixed(2)}:1 against ${bg}, below ${min}:1`);
+  const ratios = surfaces.map(([name, bg]) => [name, ratio(value, bg)]);
+  const worst = ratios.reduce((a, b) => (a[1] <= b[1] ? a : b));
+  rows.push(
+    `  ${token.padEnd(10)} ${value.padEnd(9)} ` +
+      ratios.map(([n, r]) => `${n.replace('--', '')} ${r.toFixed(2)}`).join('  ') +
+      `   (min ${min})`,
+  );
+  if (worst[1] < min) {
+    failures.push(`${token} is ${worst[1].toFixed(2)}:1 on ${worst[0]}, below ${min}:1`);
+  }
 }
 
-console.log(`contrast against --bg ${bg}:`);
+console.log(`contrast on ${surfaces.map(([n]) => n).join(', ')}:`);
 for (const r of rows) console.log(r);
 
 if (failures.length) {
@@ -77,4 +104,4 @@ if (failures.length) {
   console.log('\nRaise the token, or if it is only ever used at >=18.66px, move it out of TEXT_TOKENS and say where.');
   process.exit(1);
 }
-console.log(`\n✓ ${rows.length} text tokens clear WCAG AA`);
+console.log(`\n✓ ${rows.length} text tokens clear WCAG AA on every surface they sit on`);

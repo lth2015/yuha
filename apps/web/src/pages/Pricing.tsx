@@ -80,6 +80,24 @@ export default function Pricing() {
   const freeTrial = runtime?.features.freeTrialEnabled;
   /** Whatever the catalogue is priced in; the free tier must match it. */
   const catalogueCurrency = products?.[0]?.currency ?? 'jpy';
+  /**
+   * Only what PLAN_COPY describes.
+   *
+   * The catalogue also carries `market_license`, a per-song usage licence, and
+   * it rendered here as a plan: its raw displayName ("Licence — one song") as
+   * the tagline and "buy credits" as the button, for something that is not
+   * credits. You licence a particular song, so that purchase belongs on that
+   * song's page (`SongDetail`), which is where it has always actually worked.
+   *
+   * Filtering on the copy rather than on the one price key is the point: a
+   * product added to the catalogue without copy stays off this page instead of
+   * appearing as a broken card. That trade has a cost — a catalogue whose keys
+   * stop matching PLAN_COPY would leave this grid empty — so `plans.length`
+   * is checked below rather than assumed.
+   */
+  const plans = (products ?? [])
+    .filter((p) => PLAN_COPY[p.priceKey])
+    .sort((a, b) => a.amountMinor - b.amountMinor);
   const qrWallets = runtime?.features.qrWalletsEnabled === true;
 
   return (
@@ -124,24 +142,7 @@ export default function Pricing() {
             </article>
           )}
 
-          {products
-            /*
-             * Only what PLAN_COPY describes.
-             *
-             * The catalogue also carries `market_license`, a per-song usage
-             * licence, and it rendered here as a plan: its raw displayName
-             * ("Licence — one song") as the tagline and "buy credits" as the
-             * button, for something that is not credits. You licence a
-             * particular song, so that purchase belongs on that song's page
-             * (`SongDetail`), which is where it has always actually worked.
-             *
-             * Filtering on the copy rather than on the one price key is the
-             * point: a product added to the catalogue without copy now stays
-             * off this page instead of appearing as a broken card.
-             */
-            .filter((p) => PLAN_COPY[p.priceKey])
-            .sort((a, b) => a.amountMinor - b.amountMinor)
-            .map((p) => {
+          {plans.map((p) => {
               const copy = PLAN_COPY[p.priceKey]!;
               return (
                 <article key={p.priceKey} className={`plan${copy.highlight ? ' plan--highlight' : ''}`}>
@@ -186,8 +187,20 @@ export default function Pricing() {
                     </span>
                   )}
                 </article>
-              );
-            })}
+            );
+          })}
+        </div>
+      )}
+
+      {/* A catalogue that produced no renderable plan is stated, not drawn as
+          an empty grid. Showing nothing without saying so is the failure this
+          whole round started from. */}
+      {products !== null && plans.length === 0 && (
+        <div className="empty" role="status">
+          <p>{t('price.noPlans')}</p>
+          <Link to="/create" className="btn">
+            {t('price.noPlansAction')}
+          </Link>
         </div>
       )}
 

@@ -247,8 +247,15 @@ scar at is decoration.
 9. **`--tap` is a floor, applied at touch width** — §3.8.
 10. **Ask a new check what it cannot see, before trusting that it saw nothing.**
     The hardcoded-string checker read quoted strings only, reported 22 and
-    passed. The real number was 116. A green check is a claim like any other —
-    §3.4, and §3.1, where "no issues found" meant "the page rendered nothing".
+    passed. The real number was 116. The contrast gate measured one background
+    and passed a token failing on another. Both were written *in the round that
+    recorded this rule* — §3.4, §5b.1, and §3.1, where "no issues found" meant
+    "the page rendered nothing".
+11. **A fix is finished when its comment is true.** Three separate comments in
+    this round described behaviour the code did not have: a "loud and specific"
+    message nothing displayed, a check that "removes the class" and removed
+    half, and an empty state promised in a file before it existed — §5b.2,
+    §5b.3, §5b.4.
 
 ---
 
@@ -295,6 +302,66 @@ Items 9 and 10 change what the product *is*, not how well it does what it
 does. They are recorded here, not taken.
 
 ---
+
+## 5b. What the third review round found
+
+All four findings were in the fixes from §5, not in older code. Two of them
+were in the *checks themselves*.
+
+### 5b.1 The contrast gate gave a false pass
+
+`--faint` was raised from 4.32 to 5.31:1 and the gate went green. But
+`check-contrast.mjs` measured against `--bg` only, and `--faint` is used
+*inside panels* — on `--surface-soft`, where the real ratio was **4.44:1**,
+still failing.
+
+| | on `--bg` | on `--surface-solid` | on `--surface-soft` |
+| --- | --- | --- | --- |
+| old `#7d8494` | 5.31 | 4.82 | **4.44** |
+| now `#7f8696` | 5.45 | 4.95 | 4.56 |
+
+So the round that made a contrast measurement into a gate shipped a contrast
+failure through that gate, for precisely the reason it had just written down as
+rule 10. The gate now measures every surface text sits on, and says in its own
+header that glass surfaces are not knowable from the stylesheet so
+`--surface-soft` stands in as the conservative case.
+
+### 5b.2 A diagnostic nobody could read
+
+`fetchProducts` threw `Error("GET /v1/products returned object without an
+items array")` with a comment calling it "loud and specific". It is neither:
+`messageFor()` maps anything that is not an `ApiError` to the generic UNKNOWN
+message, so `ErrorNotice` showed none of it. The text reached no one. It is
+now logged as well as thrown.
+
+### 5b.3 Half a fix, described as a whole one
+
+The same function checked that `items` was an array and then **cast** the
+elements. `{items: [1, 2, 3]}` would have passed. The contracts package
+exports the `productView` schema, and zod is already in the client bundle
+(`messages.ts` imports `ERROR_CODES` as a value), so the proper parse was free
+and simply had not been done. Malformed rows are now dropped loudly rather
+than thrown on — one bad row should not cost the whole pricing page.
+
+### 5b.4 Filtering the plans grid could empty it silently
+
+Filtering on `PLAN_COPY` keeps un-described products off `/pricing`, which is
+right. It also means a catalogue whose keys stop matching renders an empty
+grid with no explanation — the same failure as §3.1, arrived at from the other
+direction. There is now an explicit empty state, proved by forcing the filter
+to match nothing.
+
+### 5b.5 Not fixed: graceful failure is silent failure
+
+The error boundary is a real improvement and a real regression at the same
+time. Before it, a crash produced a blank page and a user who complained.
+Now it produces a calm panel, a `console.error`, and very likely no report at
+all. There is no client-side error reporting in this product — no endpoint, no
+third-party collector, nothing.
+
+Left undone deliberately: where client errors go is an infrastructure and
+privacy decision (what is collected, retained, and for how long), not a patch.
+Recorded here so it is a choice rather than an oversight.
 
 ## 6. What this document does not claim
 

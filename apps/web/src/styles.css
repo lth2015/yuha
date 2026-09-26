@@ -32,10 +32,18 @@
      the build below 4.5:1 rather than writing the number down and shipping. */
   --ink: #f4f5f7;
   --muted: #9aa0ae;
-  /* 4.32:1 against --bg, and every use of it is 11-13px — small text, so
-     the 3:1 large-text allowance does not apply. The old value shipped
-     with a comment in this file recording that it failed. Now 5.1:1. */
-  --faint: #7d8494;
+  /*
+   * Every use of this is 11-13px — small text, so the 3:1 large-text
+   * allowance does not apply, and it has now failed twice.
+   *
+   * #6f7585 was 4.32:1 against the page, shipped with a comment in this file
+   * recording that it failed. #7d8494 cleared the page at 5.31:1 — but
+   * `--faint` is used *inside panels*, and a panel sits on --surface-soft,
+   * where it was still 4.44:1. The gate only measured the page, so raising it
+   * produced a green build and an unchanged defect. Now 4.56:1 at worst,
+   * measured on every surface.
+   */
+  --faint: #7f8696;
   --line: rgba(255, 255, 255, 0.1);
   --line-strong: rgba(255, 255, 255, 0.18);
   --control-line: rgba(255, 255, 255, 0.22);
