@@ -265,7 +265,35 @@ export function CheckoutComplete() {
     };
   }, [orderId, refreshEntitlements]);
 
-  if (!orderId) return <ErrorNotice error={error} />;
+  /*
+   * No order id — say so.
+   *
+   * This used to `return <ErrorNotice error={error} />` with `error` still
+   * null, and ErrorNotice renders nothing when there is no error: the page
+   * came back completely blank. That is the failure that left /pricing white
+   * for eight days, here on the return from payment, which is the worst
+   * moment a product can show someone an empty screen. Reached by a redirect
+   * that drops the parameter, a bookmark, or a reload of a stale tab.
+   */
+  if (!orderId) {
+    return (
+      <div className="stack stack--loose checkout-return">
+        <h1>{t('pay.noOrder.title')}</h1>
+        <ErrorNotice error={error} />
+        <section className="panel stack">
+          <p style={{ margin: 0 }}>{t('pay.noOrder.body')}</p>
+          <div className="row" style={{ flexWrap: 'wrap' }}>
+            <Link className="btn btn--primary" to="/settings/billing">
+              {t('pay.noOrder.billing')}
+            </Link>
+            <Link className="btn" to={returnTo ?? '/create'}>
+              {returnTo ? t('pay.backToWork') : t('pay.goCreate')}
+            </Link>
+          </div>
+        </section>
+      </div>
+    );
+  }
 
   const granted = order?.entitlementGranted === true;
   const stillWaiting = !granted && attempts < 12;

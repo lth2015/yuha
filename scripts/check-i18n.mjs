@@ -155,22 +155,41 @@ function stripComments(src) {
  * for eight days for the same reason.
  */
 const JSX_TEXT = />([^<>{}]*)</g;
-const hardcoded = [];
+
+/**
+ * Keyed by the text, not by the line.
+ *
+ * The first version keyed each entry `file:line`, so inserting twenty-eight
+ * lines anywhere above a baselined string reported it as new and failed the
+ * build — which is exactly what happened, and exactly what the sibling
+ * orphan-export checker warns about in its own source: "keyed by file+name,
+ * not by line: moving code must not look like a new orphan". The warning was
+ * already written down when this was built the other way.
+ *
+ * Two identical strings in one file collapse to one entry. That under-reports
+ * rather than inventing work, which is the trade every check here makes.
+ */
+const keyOf = (file, text) => `${file}#${text.trim().replace(/\s+/g, ' ').slice(0, 48)}`;
+
+const hardcoded = new Map(); // stable key -> line, for the message only
 for (const [file, src] of files) {
   stripComments(src).split('\n').forEach((line, i) => {
-    const at = () => hardcoded.push(`${file}:${i + 1}`);
+    const at = (text) => {
+      const k = keyOf(file, text);
+      if (!hardcoded.has(k)) hardcoded.set(k, i + 1);
+    };
     const inString = /(['"])((?:\\.|(?!\1).)*)\1/g;
     let m;
     while ((m = inString.exec(line)) !== null) {
-      if (CJK.test(m[2])) at();
+      if (CJK.test(m[2])) at(m[2]);
     }
     JSX_TEXT.lastIndex = 0;
     while ((m = JSX_TEXT.exec(line)) !== null) {
-      if (CJK.test(m[1])) at();
+      if (CJK.test(m[1])) at(m[1]);
     }
   });
 }
-const uniqueHardcoded = [...new Set(hardcoded)].sort();
+const uniqueHardcoded = [...hardcoded.keys()].sort();
 const hcBaseline = existsSync(BASELINE_FILE)
   ? new Set(JSON.parse(readFileSync(BASELINE_FILE, 'utf8')))
   : new Set();
@@ -194,7 +213,7 @@ const fixedHardcoded = [...hcBaseline].filter((k) => !uniqueHardcoded.includes(k
 if (fixedHardcoded.length) {
   const byFile = new Map();
   for (const k of fixedHardcoded) {
-    const file = k.slice(0, k.lastIndexOf(':'));
+    const file = k.slice(0, k.indexOf('#'));
     byFile.set(file, (byFile.get(file) ?? 0) + 1);
   }
   console.log(`✓ ${fixedHardcoded.length} baselined string(s) now come from the dictionary:`);
@@ -205,7 +224,10 @@ if (fixedHardcoded.length) {
 }
 
 for (const m of missing) problems.push(m);
-for (const h of freshHardcoded) problems.push(`${h} — user-facing text not from the dictionary`);
+for (const h of freshHardcoded) {
+  const [file, text] = h.split('#');
+  problems.push(`${file}:${hardcoded.get(h)} — not from the dictionary: "${text}"`);
+}
 
 if (problems.length) {
   console.log(`${problems.length} dictionary problem(s):\n`);

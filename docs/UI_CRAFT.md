@@ -390,6 +390,44 @@ Reviewing the route caught one more thing: it was written with
 that cites rule 3. A failed write must not turn a crash report into a 500, but
 it must not vanish either. It logs.
 
+## 5c. The route sweep
+
+Rule 1 says a page is not done until it has been opened. Every route had not
+been. All 22 were, in one pass: no crashes, no control without an accessible
+name, one `<h1>` wherever a page renders a heading.
+
+Two things came out of it.
+
+### 5c.1 `/checkout/complete` rendered nothing without an order id
+
+```tsx
+if (!orderId) return <ErrorNotice error={error} />;   // error is still null
+```
+
+`ErrorNotice` returns `null` when there is no error, so the page came back
+completely blank — the §3.1 failure, on the return from payment, which is the
+worst moment a product can show someone an empty screen. Reached by a redirect
+that drops the parameter, a bookmark, or a reload of a stale tab. It now names
+the problem and offers billing and the composer.
+
+`/projects/:id` and `/checkout/simulate` also looked nearly empty in the sweep
+and turned out to be correct: a "Not found" state with a retry, and the demo
+notice. Checked rather than assumed.
+
+### 5c.2 `/legal/tokushoho` is `/legal/company` — open question
+
+`Tokushoho()` is `return <Company />`. That page carries the operator block
+(name, representative, address, contact, phone) and a refunds section.
+
+特定商取引法に基づく表記 also requires the **price**, any **additional fees**,
+the **payment method**, the **payment timing** and the **delivery timing**.
+Those exist in the product — on the 最終確認画面 in `Checkout` — but the 表記
+page must itself be reachable before a purchase, and it does not carry them.
+
+Not drafted here, for the reason item 10 gives: this is copy a qualified person
+writes. Recorded so it is a known gap rather than an assumption that two URLs
+pointing at one page was deliberate.
+
 ## 6. What this document does not claim
 
 - That Suno is badly built. It is a far larger product and the three `<h1>`s
