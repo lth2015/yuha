@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { apiFetch } from '../lib/api';
+import { useI18n } from '../lib/i18n';
 import { formatMoney, formatJst, useSession } from '../lib/session';
 import { Badge, ErrorNotice, Loading } from '../components/common';
 
@@ -69,12 +70,13 @@ interface RightsCase {
  * with the reason, never as 0% — a zero would read as a real, bad result.
  */
 function Metric({ label, m, percent = true }: { label: string; m: Measured; percent?: boolean }) {
+  const { t } = useI18n();
   return (
     <div className="card" style={{ gap: 4 }}>
       <span className="small muted">{label}</span>
       {m.value === null ? (
         <>
-          <strong style={{ color: 'var(--text-muted)' }}>算出できません</strong>
+          <strong style={{ color: 'var(--text-muted)' }}>{t('admin.notComputable')}</strong>
           <span className="small muted">{m.unavailableReason}</span>
         </>
       ) : (
@@ -83,7 +85,8 @@ function Metric({ label, m, percent = true }: { label: string; m: Measured; perc
             {percent ? `${(m.value * 100).toFixed(1)}%` : m.value.toFixed(1)}
           </strong>
           <span className="small muted">
-            母数 n=<span className="num">{m.n}</span>
+            {t('admin.sampleSize')}
+            <span className="num">{m.n}</span>
           </span>
         </>
       )}
@@ -99,6 +102,7 @@ function Metric({ label, m, percent = true }: { label: string; m: Measured; perc
  * the audit log with the before/after state.
  */
 export default function Admin() {
+  const { t } = useI18n();
   const { me } = useSession();
   const [overview, setOverview] = useState<Overview | null>(null);
   const [cases, setCases] = useState<RightsCase[]>([]);
@@ -148,7 +152,7 @@ export default function Admin() {
     }
   };
 
-  if (loading) return <Loading label="管理データを読み込み中" />;
+  if (loading) return <Loading label={t('admin.loading')} />;
   if (!overview) return <ErrorNotice error={error} onRetry={() => void load()} />;
 
   const ops = overview.operations;
@@ -157,7 +161,7 @@ export default function Admin() {
   return (
     <div className="stack stack--loose">
       <div className="row row--between">
-        <h1 style={{ fontSize: 28, margin: 0 }}>運営ダッシュボード</h1>
+        <h1 style={{ fontSize: 28, margin: 0 }}>{t('admin.h1')}</h1>
         <div className="row">
           <Badge>{overview.mode}</Badge>
           <Badge tone={isAdmin ? 'badge--accent' : ''}>{me?.role}</Badge>
@@ -168,22 +172,24 @@ export default function Admin() {
       <ErrorNotice error={error} onRetry={() => void load()} />
 
       <section className="stack">
-        <h2 style={{ fontSize: 18 }}>稼働状況</h2>
+        <h2 style={{ fontSize: 18 }}>{t('admin.ops.h2')}</h2>
         <div className="grid">
           <div className="card" style={{ gap: 4 }}>
-            <span className="small muted">Outbox 最古の未送信</span>
+            <span className="small muted">{t('admin.ops.outbox')}</span>
             <strong className="num" style={{ fontSize: 24 }}>
-              {ops.oldestPendingOutboxSeconds === null ? '—' : `${ops.oldestPendingOutboxSeconds}秒`}
+              {ops.oldestPendingOutboxSeconds === null
+                ? '—'
+                : t('admin.seconds', { n: ops.oldestPendingOutboxSeconds })}
             </strong>
           </div>
           <div className="card" style={{ gap: 4 }}>
-            <span className="small muted">Webhook 未処理</span>
+            <span className="small muted">{t('admin.ops.webhook')}</span>
             <strong className="num" style={{ fontSize: 24 }}>
               {ops.webhookBacklog}
             </strong>
           </div>
           <div className="card" style={{ gap: 4 }}>
-            <span className="small muted">確認中で滞留（15分超）</span>
+            <span className="small muted">{t('admin.ops.stale')}</span>
             <strong
               className="num"
               style={{ fontSize: 24, color: ops.staleUnknownJobs > 0 ? 'var(--warning)' : undefined }}
@@ -192,13 +198,13 @@ export default function Admin() {
             </strong>
           </div>
           <div className="card" style={{ gap: 4 }}>
-            <span className="small muted">DLQ 滞留</span>
+            <span className="small muted">{t('admin.ops.dlq')}</span>
             <strong className="num" style={{ fontSize: 24 }}>
               {ops.deadLetteredMessages}
             </strong>
           </div>
           <div className="card" style={{ gap: 4 }}>
-            <span className="small muted">台帳の不一致</span>
+            <span className="small muted">{t('admin.ops.ledger')}</span>
             <strong
               className="num"
               style={{
@@ -209,18 +215,18 @@ export default function Admin() {
               {ops.ledgerDiscrepancies}
             </strong>
             <span className="small muted">
-              {ops.ledgerDiscrepancies > 0 ? '自動修正しません。原因を調査してください' : '整合しています'}
+              {ops.ledgerDiscrepancies > 0 ? t('admin.ops.ledgerBad') : t('admin.ops.ledgerOk')}
             </span>
           </div>
-          <Metric label="技術的成功率（7日）" m={ops.technicalSuccessRate} />
+          <Metric label={t('admin.ops.successRate')} m={ops.technicalSuccessRate} />
         </div>
 
         <div className="table-wrap">
           <table>
             <thead>
               <tr>
-                <th>状態</th>
-                <th>件数</th>
+                <th>{t('admin.jobs.state')}</th>
+                <th>{t('admin.jobs.count')}</th>
               </tr>
             </thead>
             <tbody>
@@ -236,62 +242,64 @@ export default function Admin() {
       </section>
 
       <section className="stack">
-        <h2 style={{ fontSize: 18 }}>コスト（直近30日）</h2>
+        <h2 style={{ fontSize: 18 }}>{t('admin.cost.h2')}</h2>
         <div className="grid">
           <div className="card" style={{ gap: 4 }}>
-            <span className="small muted">実請求ベースの上流費用</span>
+            <span className="small muted">{t('admin.cost.actual')}</span>
             <strong className="num" style={{ fontSize: 24 }}>
               {formatMoney(overview.cost.actualCostMinor, overview.cost.currency)}
             </strong>
           </div>
           <div className="card" style={{ gap: 4 }}>
-            <span className="small muted">試算値（予算前提）</span>
+            <span className="small muted">{t('admin.cost.modelled')}</span>
             <strong className="num" style={{ fontSize: 24, color: 'var(--text-muted)' }}>
               {formatMoney(overview.cost.estimatedCostMinor, overview.cost.currency)}
             </strong>
             {/* §11.2: modelled cost is never added to the invoiced figure. */}
-            <span className="small muted">請求実績とは合算していません</span>
+            <span className="small muted">{t('admin.cost.notSummed')}</span>
           </div>
           <div className="card" style={{ gap: 4 }}>
-            <span className="small muted">課金対象の失敗分</span>
+            <span className="small muted">{t('admin.cost.failures')}</span>
             <strong className="num" style={{ fontSize: 24 }}>
               {formatMoney(overview.cost.billableFailureCostMinor, overview.cost.currency)}
             </strong>
-            <span className="small muted">利用者には請求していません</span>
+            <span className="small muted">{t('admin.cost.notBilled')}</span>
           </div>
-          <Metric label="1納品あたりコスト" m={overview.cost.costPerDelivery} percent={false} />
-          <Metric label="採用1件あたりコスト" m={overview.cost.costPerAdoptedResult} percent={false} />
+          <Metric label={t('admin.cost.perDelivery')} m={overview.cost.costPerDelivery} percent={false} />
+          <Metric label={t('admin.cost.perAdopted')} m={overview.cost.costPerAdoptedResult} percent={false} />
           <div className="card" style={{ gap: 4 }}>
-            <span className="small muted">書き出し / 採用報告</span>
+            <span className="small muted">{t('admin.cost.exportsAdopted')}</span>
             <strong className="num" style={{ fontSize: 24 }}>
               {overview.cost.exportCount} / {overview.cost.adoptedCount}
             </strong>
-            <span className="small muted">ダウンロードは採用と同一ではありません</span>
+            <span className="small muted">{t('admin.cost.downloadNote')}</span>
           </div>
         </div>
       </section>
 
       <section className="stack">
-        <h2 style={{ fontSize: 18 }}>売上（直近30日）</h2>
+        <h2 style={{ fontSize: 18 }}>{t('admin.rev.h2')}</h2>
         <div className="grid">
           <div className="card" style={{ gap: 4 }}>
-            <span className="small muted">総額 / 返金 / 手数料</span>
+            <span className="small muted">{t('admin.rev.grossLabel')}</span>
             <strong className="num" style={{ fontSize: 20 }}>
               {formatMoney(overview.revenue.grossMinor, overview.revenue.currency)}
             </strong>
             <span className="small muted num">
-              返金 {formatMoney(overview.revenue.refundedMinor, overview.revenue.currency)} / 手数料{' '}
-              {formatMoney(overview.revenue.paymentFeeMinor, overview.revenue.currency)}
+              {t('admin.rev.refundFee', {
+                refund: formatMoney(overview.revenue.refundedMinor, overview.revenue.currency),
+                fee: formatMoney(overview.revenue.paymentFeeMinor, overview.revenue.currency),
+              })}
             </span>
           </div>
           <div className="card" style={{ gap: 4 }}>
-            <span className="small muted">支払い済み注文</span>
+            <span className="small muted">{t('admin.rev.paidOrders')}</span>
             <strong className="num" style={{ fontSize: 24 }}>
               {overview.revenue.paidOrderCount}
             </strong>
           </div>
           <div className="card" style={{ gap: 4 }}>
-            <span className="small muted">課金済みで未付与</span>
+            <span className="small muted">{t('admin.rev.ungranted')}</span>
             <strong
               className="num"
               style={{
@@ -301,10 +309,10 @@ export default function Admin() {
             >
               {overview.revenue.ungrantedPaidOrders}
             </strong>
-            <span className="small muted">自動復旧の対象です</span>
+            <span className="small muted">{t('admin.rev.autoRecover')}</span>
           </div>
           <div className="card" style={{ gap: 4 }}>
-            <span className="small muted">返金 / チャージバック</span>
+            <span className="small muted">{t('admin.rev.refundDispute')}</span>
             <strong className="num" style={{ fontSize: 24 }}>
               {overview.revenue.refundCount} / {overview.revenue.disputeCount}
             </strong>
@@ -313,34 +321,33 @@ export default function Admin() {
       </section>
 
       <section className="stack">
-        <h2 style={{ fontSize: 18 }}>ファネル（成熟コホートのみ）</h2>
+        <h2 style={{ fontSize: 18 }}>{t('admin.funnel.h2')}</h2>
         <div className="grid">
-          <Metric label="初日アクティベーション" m={overview.funnel.activationDay1} />
-          <Metric label="14日以内の有料転換" m={overview.funnel.paidConversion14d} />
-          <Metric label="7日目の再利用" m={overview.funnel.reuseDay7} />
-          <Metric label="初回更新率" m={overview.funnel.firstRenewal} />
+          <Metric label={t('admin.funnel.activation')} m={overview.funnel.activationDay1} />
+          <Metric label={t('admin.funnel.conversion')} m={overview.funnel.paidConversion14d} />
+          <Metric label={t('admin.funnel.reuse')} m={overview.funnel.reuseDay7} />
+          <Metric label={t('admin.funnel.renewal')} m={overview.funnel.firstRenewal} />
         </div>
         <p className="small muted" style={{ margin: 0 }}>
-          観察期間が終了していないユーザーは母数から除外しています。
-          未成熟なコホートは、成功にも失敗にも数えません。
+          {t('admin.funnel.note')}
         </p>
       </section>
 
       <section className="stack">
-        <h2 style={{ fontSize: 18 }}>権利申立</h2>
+        <h2 style={{ fontSize: 18 }}>{t('admin.cases.h2')}</h2>
         {cases.length === 0 ? (
-          <p className="muted">現在お申し立てはありません。</p>
+          <p className="muted">{t('admin.cases.none')}</p>
         ) : (
           <div className="table-wrap">
             <table>
               <thead>
                 <tr>
-                  <th>受付番号</th>
-                  <th>種類</th>
-                  <th>状態</th>
-                  <th>申立者</th>
-                  <th>受付</th>
-                  <th>操作</th>
+                  <th>{t('rights.caseNumber')}</th>
+                  <th>{t('admin.cases.type')}</th>
+                  <th>{t('admin.cases.status')}</th>
+                  <th>{t('admin.cases.reporter')}</th>
+                  <th>{t('admin.cases.received')}</th>
+                  <th>{t('export.actions')}</th>
                 </tr>
               </thead>
               <tbody>
@@ -362,7 +369,7 @@ export default function Admin() {
                             disabled={busy === c.id}
                             onClick={() => void resolveCase(c.id, 'dismissed')}
                           >
-                            却下・復旧
+                            {t('admin.cases.dismiss')}
                           </button>
                           <button
                             type="button"
@@ -370,11 +377,11 @@ export default function Admin() {
                             disabled={busy === c.id}
                             onClick={() => void resolveCase(c.id, 'upheld')}
                           >
-                            認容・停止
+                            {t('admin.cases.uphold')}
                           </button>
                         </div>
                       ) : (
-                        <span className="small muted">管理者のみ操作できます</span>
+                        <span className="small muted">{t('admin.cases.adminOnly')}</span>
                       )}
                     </td>
                   </tr>
@@ -384,8 +391,7 @@ export default function Admin() {
           </div>
         )}
         <p className="small muted" style={{ margin: 0 }}>
-          判断には必ず理由を記録します。操作者・日時・変更前後の状態は監査ログに保存されます。
-          停止しても、すでに外部に保存されたファイルを技術的に回収することはできません。
+          {t('admin.cases.auditNote')}
         </p>
       </section>
     </div>

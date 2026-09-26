@@ -264,15 +264,28 @@ scar at is decoration.
 | 6 | `--faint` contrast | §3.5 | **done** — 4.32 → 5.31:1, gated by `check:contrast` |
 | 7 | Checkout pay button, Home error, Layout nav + player | §3.4 | **done** — and `check:i18n` now gates the class |
 | 8 | Touch targets | §3.8 | **done** — coarse-pointer only; desktop rhythm unchanged |
-| 9 | `Admin` / `Rights` / `Project` / `Export` full translation | §3.4 | **deferred, baselined** (116 sites) — see below |
+| 9 | `Admin` / `Rights` / `Project` / `Export` full translation | §3.4 | **done** — 97 sites, 116 → 19 remaining |
 | 10 | The 特商法 table's own strings | §3.4 | **deferred deliberately** — a statutory disclosure is a legal review, not a dictionary entry |
-| 11 | The licence sits in the plans grid with a "buy credits" button | new | **product decision** — a per-song licence is not a credit pack; owner's call whether it belongs on `/pricing` at all |
-| 12 | Hero teaches the input format | §1.1 | needs a product decision, not a patch |
-| 13 | Daily free allowance vs one-time grant | §1.4 | commercial decision — owner's call |
+| 11 | The licence sits in the plans grid with a "buy credits" button | new | **done** — off `/pricing`; licensing lives on the song page, where it always worked |
+| 12 | Hero teaches the input format | §1.1 | **declined** — the brand slogan stays |
+| 13 | Daily free allowance vs one-time grant | §1.4 | **declined** — the one-time grant stays |
 
-Item 9 is recorded in `scripts/i18n-hardcoded.baseline.json`. The baseline is a
-debt register, not an exemption: it fails the build on anything *new*, and the
-116 entries are the ones this round did not pay off.
+Item 9 is paid off. `scripts/i18n-hardcoded.baseline.json` now holds **19**
+entries, all of them the 特商法 table in item 10. The checker also reports debt
+that has been *cleared*, which it did not before: four files were translated in
+full while it still printed "116 baselined", describing a codebase that no
+longer existed.
+
+One defect came out of doing it, worth recording because it is not obvious.
+The privacy sentence on the rights form wraps a link:
+
+> ご入力いただいた情報は…詳しくは**プライバシーポリシー**をご覧ください。
+
+Japanese puts the verb last, so the sentence continues *after* the link.
+Splitting it into "text + link" — which is correct for English and Chinese —
+left the Japanese with no predicate at all. It needs a third, trailing key, the
+way `create.pickPlanTail` already did. **A sentence cannot be split around an
+inline element in a shared structure across languages.**
 
 Item 10 is a deliberate refusal rather than laziness. Translating cancellation
 and refund terms changes what a consumer is agreeing to. That needs someone

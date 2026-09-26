@@ -182,6 +182,28 @@ if (process.argv.includes('--write-baseline')) {
 }
 const freshHardcoded = uniqueHardcoded.filter((h) => !hcBaseline.has(h));
 
+/*
+ * Debt that has been paid off, reported.
+ *
+ * Without this the register only ever grows stale: four files were translated
+ * in full while the baseline still claimed 116 outstanding sites, so the
+ * number in the build log described a codebase that no longer existed. The
+ * sibling orphan-export check has always reported this; this one did not.
+ */
+const fixedHardcoded = [...hcBaseline].filter((k) => !uniqueHardcoded.includes(k));
+if (fixedHardcoded.length) {
+  const byFile = new Map();
+  for (const k of fixedHardcoded) {
+    const file = k.slice(0, k.lastIndexOf(':'));
+    byFile.set(file, (byFile.get(file) ?? 0) + 1);
+  }
+  console.log(`✓ ${fixedHardcoded.length} baselined string(s) now come from the dictionary:`);
+  for (const [file, n] of [...byFile].sort((a, b) => b[1] - a[1])) {
+    console.log(`    ${file}  ${n}`);
+  }
+  console.log('  run with --write-baseline to record that.\n');
+}
+
 for (const m of missing) problems.push(m);
 for (const h of freshHardcoded) problems.push(`${h} — user-facing text not from the dictionary`);
 

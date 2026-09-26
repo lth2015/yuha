@@ -91,13 +91,12 @@ export default function Project() {
     // UI-05: the extra cost is confirmed explicitly, never charged silently.
     const available = entitlements?.availableUnits ?? 0;
     const ok = window.confirm(
-      `別のバージョンを作成すると、あらためて1回分を消費します。\n\n` +
-        `現在の残り: ${available} 回\nこの操作後: ${Math.max(0, available - 1)} 回\n\n続けますか？`,
+      t('project.regen.confirm', { now: available, after: Math.max(0, available - 1) }),
     );
     if (ok) navigate(`/create?scene=${encodeURIComponent(project?.scene ?? 'night_walk')}`);
   };
 
-  if (loading) return <Loading label="プロジェクトを読み込み中" />;
+  if (loading) return <Loading label={t('project.loading')} />;
   if (error) return <ErrorNotice error={error} onRetry={() => void load()} />;
   if (!project) return null;
 
@@ -109,19 +108,19 @@ export default function Project() {
         <div className="stack stack--tight">
           <h1 style={{ fontSize: 28, margin: 0 }}>{project.title}</h1>
           <span className="muted small">
-            {sceneLabel} ・ 作成 {formatJst(project.createdAt, false)}
+            {t('project.created', { scene: sceneLabel, date: formatJst(project.createdAt, false) })}
           </span>
         </div>
         <Link className="btn btn--ghost" to="/library">
-          作品一覧
+          {t('project.allWorks')}
         </Link>
       </div>
 
       {project.tracks.length === 0 ? (
         <div className="empty">
-          <p>このプロジェクトにはまだ楽曲がありません。</p>
+          <p>{t('project.empty')}</p>
           <Link className="btn btn--primary" to="/create">
-            作成する
+            {t('project.create')}
           </Link>
         </div>
       ) : (
@@ -141,12 +140,12 @@ export default function Project() {
                 </div>
 
                 <div className="row small muted">
-                  <span>バージョン {index + 1}</span>
-                  <span>・</span>
-                  <span className="num">{track.durationSeconds.toFixed(1)}秒</span>
+                  <span>{t('project.version', { n: index + 1 })}</span>
+                  <span aria-hidden="true">·</span>
+                  <span className="num">{t('project.seconds', { n: track.durationSeconds.toFixed(1) })}</span>
                   {track.mood && (
                     <>
-                      <span>・</span>
+                      <span aria-hidden="true">·</span>
                       <span>{t(TRACK_MOOD_KEY(track.mood))}</span>
                     </>
                   )}
@@ -165,11 +164,11 @@ export default function Project() {
                     onClick={() => setSelected(track.trackId)}
                     aria-pressed={isSelected}
                   >
-                    {isSelected ? '選択中' : 'これを選ぶ'}
+                    {isSelected ? t('project.selected') : t('project.select')}
                   </button>
                   {track.state === 'deliverable' && (
                     <Link className="btn btn--secondary" to={`/tracks/${track.trackId}/export`}>
-                      カット・書き出し
+                      {t('project.export')}
                     </Link>
                   )}
                 </div>
@@ -180,20 +179,19 @@ export default function Project() {
       )}
 
       <section className="panel stack">
-        <h2 style={{ fontSize: 18, margin: 0 }}>別のバージョンを作る</h2>
+        <h2 style={{ fontSize: 18, margin: 0 }}>{t('project.regen.h2')}</h2>
         <p className="muted small" style={{ margin: 0 }}>
-          気分やテンポの言葉を少し変えるのがおすすめです。
-          好みに合わないことは技術的な失敗にはあたらないため、あらためて1回分を消費します。
+          {t('project.regen.hint')}
         </p>
         <div className="row">
           <button type="button" className="btn btn--secondary" onClick={regenerate}>
-            もう1回つくる（1回消費）
+            {t('project.regen.action')}
           </button>
           <span className="small muted">
-            残り <span className="num">{entitlements?.availableUnits ?? 0}</span> 回
+            {t('project.remaining', { n: entitlements?.availableUnits ?? 0 })}
           </span>
           <button type="button" className="btn btn--ghost" onClick={() => void refreshEntitlements()}>
-            残高を更新
+            {t('project.refresh')}
           </button>
         </div>
       </section>

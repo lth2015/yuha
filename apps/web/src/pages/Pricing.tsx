@@ -125,20 +125,34 @@ export default function Pricing() {
           )}
 
           {products
-            .slice()
+            /*
+             * Only what PLAN_COPY describes.
+             *
+             * The catalogue also carries `market_license`, a per-song usage
+             * licence, and it rendered here as a plan: its raw displayName
+             * ("Licence — one song") as the tagline and "buy credits" as the
+             * button, for something that is not credits. You licence a
+             * particular song, so that purchase belongs on that song's page
+             * (`SongDetail`), which is where it has always actually worked.
+             *
+             * Filtering on the copy rather than on the one price key is the
+             * point: a product added to the catalogue without copy now stays
+             * off this page instead of appearing as a broken card.
+             */
+            .filter((p) => PLAN_COPY[p.priceKey])
             .sort((a, b) => a.amountMinor - b.amountMinor)
             .map((p) => {
-              const copy = PLAN_COPY[p.priceKey];
+              const copy = PLAN_COPY[p.priceKey]!;
               return (
-                <article key={p.priceKey} className={`plan${copy?.highlight ? ' plan--highlight' : ''}`}>
-                  {copy?.highlight && <span className="plan__badge">{t('price.popular')}</span>}
+                <article key={p.priceKey} className={`plan${copy.highlight ? ' plan--highlight' : ''}`}>
+                  {copy.highlight && <span className="plan__badge">{t('price.popular')}</span>}
                   <h2>{p.displayName.split('—')[0]!.trim()}</h2>
                   <p className="plan__price">
                     {formatMoney(p.amountMinor, p.currency, locale)}
                     {p.kind === 'subscription' && <span className="plan__per">{t('price.month')}</span>}
                   </p>
                   <p className="plan__unit">{t('price.perSong', { amount: formatPerUnit(p.amountMinor, p.units, p.currency, locale) })}</p>
-                  <p className="plan__tagline">{copy ? t(copy.tag) : p.displayName}</p>
+                  <p className="plan__tagline">{t(copy.tag)}</p>
                   {/* Said here rather than discovered on Stripe's page. */}
                   {qrWallets && (
                     <p className="plan__pay">
@@ -146,7 +160,7 @@ export default function Pricing() {
                     </p>
                   )}
                   <ul className="plan__bullets">
-                    {(copy?.bullets ?? []).map((b) => (
+                    {copy.bullets.map((b) => (
                       <li key={b}>{t(b)}</li>
                     ))}
                   </ul>

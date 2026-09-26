@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import type { ExportView, LicenseSnapshotView } from '@yuha/contracts';
 import { apiFetch } from '../lib/api';
+import { useI18n } from '../lib/i18n';
 import { formatJst, useSession } from '../lib/session';
 import { AudioPlayer, Badge, ErrorNotice, Loading } from '../components/common';
 
@@ -31,6 +32,7 @@ interface TrackDetail {
  * not a copyright certificate.
  */
 export default function Export() {
+  const { t } = useI18n();
   const { id } = useParams<{ id: string }>();
   const { runtime } = useSession();
 
@@ -105,7 +107,7 @@ export default function Export() {
     }
   };
 
-  if (loading) return <Loading label="楽曲を読み込み中" />;
+  if (loading) return <Loading label={t('export.loading')} />;
   if (!track) return <ErrorNotice error={error} onRetry={() => void load()} />;
 
   return (
@@ -114,7 +116,7 @@ export default function Export() {
         <div className="stack stack--tight">
           <h1 style={{ fontSize: 28, margin: 0 }}>{track.title}</h1>
           <span className="muted small">
-            元の長さ <span className="num">{track.durationSeconds.toFixed(1)}秒</span>
+            {t('export.originalLength')} <span className="num">{t('export.seconds', { n: track.durationSeconds.toFixed(1) })}</span>
           </span>
         </div>
 
@@ -123,10 +125,10 @@ export default function Export() {
         <AudioPlayer id={`track-${track.trackId}`} url={track.previewUrl} label={track.title} />
 
         <section className="panel stack">
-          <h2 style={{ fontSize: 18, margin: 0 }}>カットして書き出す</h2>
+          <h2 style={{ fontSize: 18, margin: 0 }}>{t('export.h2')}</h2>
 
           <fieldset className="stack stack--tight">
-            <legend>長さ</legend>
+            <legend>{t('export.length')}</legend>
             <div className="row">
               {([15, 30] as const).map((d) => (
                 <button
@@ -136,7 +138,7 @@ export default function Export() {
                   aria-pressed={clipDuration === d}
                   onClick={() => setClipDuration(d)}
                 >
-                  {d}秒
+                  {t('export.seconds', { n: d })}
                 </button>
               ))}
             </div>
@@ -144,7 +146,7 @@ export default function Export() {
 
           {clipDuration === 15 && (
             <div>
-              <label htmlFor="start">開始位置</label>
+              <label htmlFor="start">{t('export.start')}</label>
               <input
                 id="start"
                 type="range"
@@ -153,12 +155,12 @@ export default function Export() {
                 step={0.5}
                 value={clipStart}
                 onChange={(e) => setClipStart(Number(e.target.value))}
-                aria-valuetext={`${clipStart.toFixed(1)}秒から`}
+                aria-valuetext={t('export.startFrom', { n: clipStart.toFixed(1) })}
               />
               <div className="row row--between small muted">
-                <span className="num">{clipStart.toFixed(1)}秒</span>
+                <span className="num">{t('export.seconds', { n: clipStart.toFixed(1) })}</span>
                 <span className="num">
-                  〜 {(clipStart + clipDuration).toFixed(1)}秒
+                  {t('export.toSeconds', { n: (clipStart + clipDuration).toFixed(1) })}
                 </span>
               </div>
             </div>
@@ -171,11 +173,11 @@ export default function Export() {
               checked={fadeOut}
               onChange={(e) => setFadeOut(e.target.checked)}
             />
-            <label htmlFor="fade">終わりを1秒フェードアウトする</label>
+            <label htmlFor="fade">{t('export.fade')}</label>
           </div>
 
           <fieldset className="stack stack--tight">
-            <legend>形式</legend>
+            <legend>{t('export.format')}</legend>
             <div className="row">
               <button
                 type="button"
@@ -200,10 +202,7 @@ export default function Export() {
                   WAV
                 </button>
               ) : (
-                <span className="small muted">
-                  WAVは、供給元が非圧縮音源を提供するプランでのみ選べます。
-                  MP3をWAVに変換しても音質は良くなりません。
-                </span>
+                <span className="small muted">{t('export.wavUnavailable')}</span>
               )}
             </div>
           </fieldset>
@@ -214,55 +213,57 @@ export default function Export() {
             onClick={() => void createExport()}
             disabled={working || track.state !== 'deliverable'}
           >
-            {working ? '書き出し中…' : '書き出してダウンロード'}
+            {working ? t('export.working') : t('export.action')}
           </button>
           <p className="small muted" style={{ margin: 0 }}>
-            カットと再ダウンロードでは生成回数を消費しません。元の音源はそのまま残ります。
+            {t('export.freeNote')}
           </p>
         </section>
 
         {result && (
           <section className="panel stack">
             <div className="row row--between">
-              <h2 style={{ fontSize: 18, margin: 0 }}>書き出しが完了しました</h2>
-              {result.reused && <Badge>既存ファイルを再利用</Badge>}
+              <h2 style={{ fontSize: 18, margin: 0 }}>{t('export.done')}</h2>
+              {result.reused && <Badge>{t('export.reused')}</Badge>}
             </div>
             <div className="row small muted">
-              <span className="num">{result.clipDurationSeconds}秒</span>
-              <span>・</span>
+              <span className="num">{t('export.seconds', { n: result.clipDurationSeconds })}</span>
+              <span aria-hidden="true">·</span>
               <span>{result.format.toUpperCase()}</span>
-              <span>・</span>
+              <span aria-hidden="true">·</span>
               <span className="num">{(result.byteSize / 1024).toFixed(0)} KB</span>
             </div>
             <a className="btn btn--primary" href={result.downloadUrl}>
-              ダウンロード
+              {t('export.download')}
             </a>
             <p className="small muted" style={{ margin: 0 }}>
-              ダウンロードリンクは {formatJst(result.downloadUrlExpiresAt)} まで有効です。
-              期限が切れた場合は下の一覧から再取得できます。
+              {t('export.expires', { date: formatJst(result.downloadUrlExpiresAt) })}
             </p>
           </section>
         )}
 
         {track.exports.length > 0 && (
           <section className="panel stack">
-            <h2 style={{ fontSize: 18, margin: 0 }}>書き出し履歴</h2>
+            <h2 style={{ fontSize: 18, margin: 0 }}>{t('export.history')}</h2>
             <div className="table-wrap">
               <table>
                 <thead>
                   <tr>
-                    <th>長さ</th>
-                    <th>形式</th>
-                    <th>作成日時</th>
-                    <th>操作</th>
+                    <th>{t('export.length')}</th>
+                    <th>{t('export.format')}</th>
+                    <th>{t('export.createdAt')}</th>
+                    <th>{t('export.actions')}</th>
                   </tr>
                 </thead>
                 <tbody>
                   {track.exports.map((e) => (
                     <tr key={e.exportId}>
                       <td className="num">
-                        {e.clipStartSeconds.toFixed(1)}〜{(e.clipStartSeconds + e.clipDurationSeconds).toFixed(1)}秒
-                        {e.fadeOut && <span className="muted small"> ・フェード</span>}
+                        {t('export.range', {
+                          from: e.clipStartSeconds.toFixed(1),
+                          to: (e.clipStartSeconds + e.clipDurationSeconds).toFixed(1),
+                        })}
+                        {e.fadeOut && <span className="muted small"> · {t('export.faded')}</span>}
                       </td>
                       <td>{e.format.toUpperCase()}</td>
                       <td className="small muted">{formatJst(e.createdAt)}</td>
@@ -272,7 +273,7 @@ export default function Export() {
                           className="btn btn--ghost"
                           onClick={() => void redownload(e.exportId)}
                         >
-                          再ダウンロード
+                          {t('export.redownload')}
                         </button>
                       </td>
                     </tr>
@@ -287,30 +288,34 @@ export default function Export() {
       <aside className="stack sticky-side">
         {/* UI-09: named a usage-terms record, never a copyright certificate. */}
         <section className="panel panel--tight stack stack--tight">
-          <h2 style={{ fontSize: 17, margin: 0 }}>利用条件記録</h2>
+          <h2 style={{ fontSize: 17, margin: 0 }}>{t('export.licence.h2')}</h2>
           {!licence ? (
             <p className="small muted" style={{ margin: 0 }}>
-              この楽曲の利用条件記録はまだありません。
+              {t('export.licence.none')}
             </p>
           ) : (
             <>
               <div className="row row--between small">
-                <span className="muted">状態</span>
+                <span className="muted">{t('export.licence.status')}</span>
                 <Badge tone={licence.status === 'active' ? 'badge--ok' : 'badge--warn'}>
-                  {licence.status === 'active' ? '有効' : licence.status === 'suspended' ? '確認中' : '取消'}
+                  {licence.status === 'active'
+                    ? t('export.licence.active')
+                    : licence.status === 'suspended'
+                      ? t('export.licence.suspended')
+                      : t('export.licence.revoked')}
                 </Badge>
               </div>
               <div className="row row--between small">
-                <span className="muted">生成日時</span>
+                <span className="muted">{t('export.licence.generatedAt')}</span>
                 <span>{formatJst(licence.generatedAt)}</span>
               </div>
               <div className="row row--between small">
-                <span className="muted">地域</span>
+                <span className="muted">{t('export.licence.territory')}</span>
                 <span>{licence.territory}</span>
               </div>
 
               <div className="stack stack--tight" style={{ marginTop: 'var(--s1)' }}>
-                <strong className="small">利用できる範囲</strong>
+                <strong className="small">{t('export.licence.allowed')}</strong>
                 <ul className="small muted" style={{ margin: 0, paddingLeft: '1.2em' }}>
                   {licence.allowedUses.map((u) => (
                     <li key={u}>{u}</li>
@@ -319,7 +324,7 @@ export default function Export() {
               </div>
 
               <div className="stack stack--tight">
-                <strong className="small">禁止される利用</strong>
+                <strong className="small">{t('export.licence.prohibited')}</strong>
                 <ul className="small muted" style={{ margin: 0, paddingLeft: '1.2em' }}>
                   {licence.prohibitedUses.map((u) => (
                     <li key={u}>{u}</li>
@@ -330,7 +335,7 @@ export default function Export() {
               <hr className="divider" />
               <div className="small muted">
                 <div>
-                  音源ハッシュ(SHA-256):
+                  {t('export.licence.hash')}
                   <br />
                   <code style={{ wordBreak: 'break-all', fontSize: 11 }}>{licence.sourceSha256}</code>
                 </div>
@@ -343,13 +348,12 @@ export default function Export() {
         </section>
 
         <section className="panel panel--tight stack stack--tight">
-          <h2 style={{ fontSize: 17, margin: 0 }}>権利について気になったら</h2>
+          <h2 style={{ fontSize: 17, margin: 0 }}>{t('export.rights.h2')}</h2>
           <p className="small muted" style={{ margin: 0 }}>
-            権利に関するお申し立てや、生成結果への懸念はこちらから受け付けています。
-            お申し立てに費用はかかりません。
+            {t('export.rights.body')}
           </p>
           <Link className="btn btn--ghost" to="/help/rights">
-            権利申立・お問い合わせ
+            {t('rights.h1')}
           </Link>
         </section>
       </aside>
