@@ -1,6 +1,10 @@
 #!/usr/bin/env node
 /**
- * Blocks until Postgres accepts connections (used by `pnpm bootstrap`).
+ * Blocks until MySQL accepts connections (used by `pnpm bootstrap`).
+ *
+ * It said Postgres, and defaulted to 5432, left over from the era when the
+ * spec named Postgres. It only ever worked because DATABASE_URL always
+ * carries an explicit port.
  * Uses a raw TCP probe plus the startup handshake so it has no dependencies of
  * its own and can run before `pnpm install` has finished linking workspaces.
  */
@@ -8,12 +12,12 @@ import { connect } from 'node:net';
 
 const url = new URL(process.argv[2] ?? process.env.DATABASE_URL ?? '');
 if (!url.hostname) {
-  console.error('usage: wait-for-postgres.mjs <postgres-url>   (or set DATABASE_URL)');
+  console.error('usage: wait-for-db.mjs <mysql-url>   (or set DATABASE_URL)');
   process.exit(1);
 }
 
 const host = url.hostname;
-const port = Number.parseInt(url.port || '5432', 10);
+const port = Number.parseInt(url.port || '3306', 10);
 const deadline = Date.now() + 60_000;
 
 function probe() {
