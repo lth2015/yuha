@@ -11,6 +11,12 @@ export interface StripeOptions {
   webhookSecret: string;
   /** Guard: a live key must never be used outside production mode. */
   expectLiveMode: boolean;
+  /**
+   * Overrides the SDK's pinned API version. Needed by accounts with Managed
+   * Payments, which requires 2025-03-31.basil or greater. Unset means the
+   * SDK's own default, so nothing changes for accounts that do not need it.
+   */
+  apiVersion?: string;
 }
 
 /**
@@ -35,7 +41,31 @@ export class StripePaymentsAdapter implements PaymentsAdapter {
     if (!isLive && opts.expectLiveMode) {
       throw new Error('production mode requires a live Stripe secret key, not a test key');
     }
-    this.stripe = new Stripe(opts.secretKey, { maxNetworkRetries: 2, timeout: 20_000 });
+    /*
+     * The API version is configurable and defaults to the SDK's own.
+     *
+     * An account with Managed Payments enabled refuses a Checkout Session on
+     * the version this SDK pins by default:
+     *
+     *   "Managed Payments is not supported on API version 2025-02-24.acacia.
+     *    Update your API version, or set the API Version of this request to
+     *    2025-03-31.basil or greater."
+     *
+     * Only a live call finds that. Pinning per-client is the route Stripe's
+     * own message points at and needs no SDK upgrade, so the default is left
+     * alone and an account that needs a newer version asks for one.
+     *
+     * The cost of setting it: this SDK's types were generated against its own
+     * version, so responses from a newer one are not type-checked. Everything
+     * this adapter reads — session id, url, customer, and the webhook event
+     * envelope — is long-standing, but that is an argument for care, not a
+     * guarantee.
+     */
+    this.stripe = new Stripe(opts.secretKey, {
+      maxNetworkRetries: 2,
+      timeout: 20_000,
+      ...(opts.apiVersion ? { apiVersion: opts.apiVersion as Stripe.LatestApiVersion } : {}),
+    });
     this.webhookSecret = opts.webhookSecret;
   }
 

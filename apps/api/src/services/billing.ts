@@ -94,6 +94,34 @@ export async function createCheckout(
     if (existing.status === 'paid') throw new AppError('CONFLICT', 'this order has already been paid');
   }
 
+  const activeSub = await getActiveSubscription(params.userId);
+
+  /*
+   * A second subscription is a duplicate charge, not an upgrade.
+   *
+   * `activeSub` was read only to reuse the Stripe customer, so a subscriber
+   * who pressed a different plan's button got a second live subscription and
+   * two monthly invoices. Stripe creates it happily; nothing downstream
+   * merges them.
+   *
+   * Placed after the idempotency replay above and before `insertOrder`, so a
+   * genuinely in-flight session can still be resumed while a new purchase is
+   * refused before anything is written. The first draft of this sat below
+   * `insertOrder` with a comment claiming no order row was created — the test
+   * that counts orders is what caught it.
+   *
+   * Changing plan or stopping goes through the existing management flow at
+   * /settings/billing, which is what `SUBSCRIPTION_ALREADY_ACTIVE` points at.
+   * One-time packs are unaffected: buying credits while subscribed is normal.
+   */
+  if (product.kind === 'subscription' && activeSub) {
+    throw new AppError(
+      'SUBSCRIPTION_ALREADY_ACTIVE',
+      'this account already has an active subscription; change or cancel it from billing',
+      { currentPriceKey: activeSub.price_key, status: activeSub.status },
+    );
+  }
+
   const order =
     existing ??
     (await insertOrder({
@@ -107,7 +135,6 @@ export async function createCheckout(
       metadata: { units: product.units, validity_days: product.validity_days },
     }));
 
-  const activeSub = await getActiveSubscription(params.userId);
   const session = await ctx.payments.createCheckout({
     orderId: order.id,
     userId: params.userId,

@@ -314,6 +314,33 @@ describe('subscription', () => {
     );
   }
 
+  it('a second subscription is refused, and no order is created for it', async () => {
+    const user = await h.createUser();
+    await seedSubscription(user, new Date(Date.now() + 30 * 86400_000));
+
+    const before = await query<{ n: number }>('SELECT COUNT(*) AS n FROM orders WHERE user_id = ?', [user.id]);
+    const res = await checkout(user, 'premier_monthly', 'dup-sub-1');
+
+    // Stripe would happily create a second live subscription and bill twice;
+    // nothing downstream merges them. Changing plan goes through billing.
+    expect(res.statusCode).toBe(409);
+    expect(res.json().error.code).toBe('SUBSCRIPTION_ALREADY_ACTIVE');
+
+    // Refused before anything is written, not compensated afterwards.
+    const after = await query<{ n: number }>('SELECT COUNT(*) AS n FROM orders WHERE user_id = ?', [user.id]);
+    expect(Number(after[0]!.n)).toBe(Number(before[0]!.n));
+  });
+
+  it('a subscriber can still buy a one-time pack', async () => {
+    const user = await h.createUser();
+    await seedSubscription(user, new Date(Date.now() + 30 * 86400_000));
+
+    // Buying credits while subscribed is ordinary, and must not be caught by
+    // the duplicate-subscription guard.
+    const res = await checkout(user, 'drop_5', 'onetime-while-subbed');
+    expect(res.statusCode).toBe(200);
+  });
+
   it('PAY-06: an invoice grants exactly one period of 20 units', async () => {
     const user = await h.createUser();
     await seedSubscription(user, new Date(Date.now() + 30 * 86400_000));

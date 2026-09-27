@@ -189,6 +189,8 @@ function buildPayments(cfg: AppConfig): PaymentsAdapter {
     secretKey: cfg.STRIPE_SECRET_KEY!,
     webhookSecret: cfg.STRIPE_WEBHOOK_SECRET!,
     expectLiveMode: cfg.mode === 'production',
+    // Only when the account needs one; otherwise the SDK's own pin stands.
+    ...(cfg.STRIPE_API_VERSION ? { apiVersion: cfg.STRIPE_API_VERSION } : {}),
   });
 }
 

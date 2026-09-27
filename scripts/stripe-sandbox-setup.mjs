@@ -92,6 +92,20 @@ function unitAmountFor(row) {
   return Number(row.amount_minor);
 }
 
+/*
+ * Stripe refuses a Checkout Session whose line item has no product tax code:
+ *
+ *   "Invalid line_items[0]: the product tax code is missing."
+ *
+ * Only a live call surfaces that. `txcd_10000000` — "General - Electronically
+ * Supplied Services" — is Stripe's documented catch-all for a digital service
+ * and is used so the sandbox works. **Which code is correct is a tax
+ * determination, not an engineering one**: a music service might belong under
+ * a digital-audio or SaaS code instead, and that changes what is charged in
+ * some jurisdictions. Override it once someone qualified has decided.
+ */
+const TAX_CODE = process.env.STRIPE_TAX_CODE || env.STRIPE_TAX_CODE || 'txcd_10000000';
+
 const results = [];
 for (const row of rows) {
   const cur = String(row.currency).toLowerCase();
@@ -124,6 +138,7 @@ for (const row of rows) {
     }
     const product = await stripe.products.create({
       name: row.display_name,
+      tax_code: TAX_CODE,
       metadata: { price_key: row.price_key, units: String(row.units), source: 'yuha catalogue' },
     });
     price = await stripe.prices.create({
@@ -138,6 +153,17 @@ for (const row of rows) {
       tax_behavior: 'inclusive',
       metadata: { price_key: row.price_key },
     });
+  }
+
+  // A reused Price may hang off a Product created before the tax code was
+  // required. Products, unlike Prices, can be updated.
+  const productId = typeof price.product === 'string' ? price.product : price.product?.id;
+  if (productId) {
+    const prod = await stripe.products.retrieve(productId);
+    if (prod.tax_code !== TAX_CODE) {
+      await stripe.products.update(productId, { tax_code: TAX_CODE });
+      console.log(`  set tax_code ${TAX_CODE} on ${row.price_key}`);
+    }
   }
 
   results.push({ price_key: row.price_key, price_id: price.id, amount: `${cur.toUpperCase()} ${amount}`, reused: Boolean(matches) });

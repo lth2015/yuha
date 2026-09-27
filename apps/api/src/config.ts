@@ -121,6 +121,8 @@ const envSchema = z.object({
   STRIPE_SECRET_KEY: z.string().optional(),
   STRIPE_WEBHOOK_SECRET: z.string().optional(),
   STRIPE_PUBLISHABLE_KEY: z.string().optional(),
+  /** Only set when the account needs a version newer than the SDK's default. */
+  STRIPE_API_VERSION: z.string().optional(),
   STRIPE_PRICE_ID_DROP_5: z.string().optional(),
   /**
    * QR wallets (Alipay, WeChat Pay) on one-time checkouts.
