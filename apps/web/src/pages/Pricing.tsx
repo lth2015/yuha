@@ -60,10 +60,20 @@ export default function Pricing() {
     setBusyKey(priceKey);
     setError(null);
     try {
+      /*
+       * The key goes in the *body*. `createCheckoutRequest` validates it
+       * there, and passing it as `apiFetch`'s option only sets the
+       * `idempotency-key` header — so every purchase from this page was
+       * rejected with VALIDATION_FAILED and the button did nothing. The
+       * generic "fix the fields marked in red" that surfaced instead is
+       * nonsense on a page with no fields.
+       *
+       * `Checkout.tsx` has always sent it correctly. Same endpoint, two call
+       * sites, one of them wrong — exactly how /v1/products was broken.
+       */
       const res = await apiFetch<{ orderId: string; checkoutUrl: string; simulated: boolean }>('/v1/checkout', {
         method: 'POST',
-        idempotencyKey: newIdempotencyKey('checkout'),
-        body: { priceKey },
+        body: { priceKey, idempotencyKey: newIdempotencyKey('checkout') },
       });
       if (res.simulated) {
         navigate(`/checkout/confirm?order_id=${res.orderId}&simulated=1`);
