@@ -10,7 +10,8 @@ Status at the top, so a sign-off cannot skim past it:
 | | |
 | --- | --- |
 | Payment **logic** | proven — 39 automated tests, run 2026-09-27 |
-| Payment **contract with Stripe** | **not started** — needs sandbox keys |
+| Payment **contract with Stripe** | **partly done** — sandbox keys in, catalogue created, webhook not yet wired |
+| **Text model (TokenStars)** | **verified against the live API**, 2026-09-27 — see part E |
 | Music generation | **mock**, and cannot be accepted here at all — see part D |
 
 ---
@@ -146,3 +147,35 @@ deliberately: no agreement with a music provider is signed. Accepting music
 generation needs a second pass against the real API once there is one, and the
 API refuses to start in production mode with the demo adapter, so this cannot
 be shipped by accident.
+
+---
+
+## Part E — TokenStars, verified against the live API
+
+Unlike music, this one **was** exercised against the real service on
+2026-09-27, with the account owner's key, through the real adapter.
+
+| Claim | Result |
+| --- | --- |
+| Endpoint, auth, model id | `POST https://www.tokenstars.ai/v1/chat/completions`, `Authorization: Bearer` — works |
+| Intent extraction | valid against our schema on the first attempt, no repair round trip |
+| Usage accounting | `prompt_tokens` / `completion_tokens` / `total_tokens` returned as documented (353 / 136 / 489 on a representative call) |
+| `response_format: {type:'json_object'}` | **accepted** — this was an undocumented assumption and is now confirmed. It also costs fewer completion tokens than letting the model wrap the object in prose |
+| `finish_reason: 'length'` on truncation | **confirmed** — which is what the truncation handling keys on |
+| Request id | an `x-request-id` header is returned; `TOKENSTARS_REQUEST_ID_HEADER=x-request-id` is now set and the id reaches our logs |
+
+Two things the live call revealed that the documentation does not mention:
+
+- **The gateway fronts Azure OpenAI.** Responses carry `x-ms-region`,
+  `x-ms-served-model` and `x-ms-rai-invoked: true`. So an upstream content
+  block arrives as `finish_reason: 'content_filter'`, **not** as the
+  `message.refusal` field the adapter originally looked for — that branch
+  would never have fired. It now keys on the real signal, and a policy block
+  is reported as a refusal rather than a technical failure, which matters
+  because a refusal must not be charged as though the system broke.
+- **Text is served from `Japan East`**, and the rate limit on this key is 2500
+  requests and 2,500,000 tokens per minute.
+
+Still estimated, not measured: `costMinor` stays `costIsEstimate: true`. The
+calls return token counts but no price, and no billing basis has been
+confirmed, so the JPY figure remains modelled.

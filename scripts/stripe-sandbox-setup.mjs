@@ -55,9 +55,16 @@ if (!dbUrl) {
 }
 
 const conn = await mysql.createConnection(dbUrl);
+/*
+ * `active`, not `available`: the API's ProductView carries an `available`
+ * field computed in `toProductView`, and there is no such column. Only the
+ * newest catalogue version is offered, so an older version's Prices are left
+ * alone rather than recreated.
+ */
 const [rows] = await conn.execute(
   `SELECT price_key, kind, amount_minor, currency, units, display_name
-     FROM product_catalog WHERE available = 1 ORDER BY amount_minor`,
+     FROM product_catalog WHERE active = 1 AND version = (SELECT MAX(version) FROM product_catalog)
+      ORDER BY amount_minor`,
 );
 await conn.end();
 
@@ -147,6 +154,7 @@ const ENV_NAME = {
   drop_5: 'STRIPE_PRICE_ID_DROP_5',
   pro_monthly: 'STRIPE_PRICE_ID_PRO_MONTHLY',
   premier_monthly: 'STRIPE_PRICE_ID_PREMIER_MONTHLY',
+  market_license: 'STRIPE_PRICE_ID_MARKET_LICENSE',
 };
 
 console.log('\ncreated / reused:\n');
@@ -157,4 +165,5 @@ console.log('\nPaste into .env:\n');
 for (const r of results) {
   if (ENV_NAME[r.price_key]) console.log(`${ENV_NAME[r.price_key]}=${r.price_id}`);
 }
-console.log('\n`market_license` has no env slot: the licence is resolved from the catalogue by price key, not from .env.');
+console.log('\nRe-run `pnpm seed` afterwards: seed.ts copies these into product_catalog.stripe_price_id,');
+console.log('which is the column checkout actually reads.');

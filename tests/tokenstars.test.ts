@@ -150,6 +150,25 @@ describe('the reply it accepts', () => {
   });
 });
 
+describe('refusal', () => {
+  it('treats an upstream content-policy block as a refusal, not a failure', async () => {
+    // The gateway fronts Azure OpenAI (x-ms-rai-invoked on live responses), so
+    // a policy block arrives as finish_reason "content_filter" rather than the
+    // message.refusal field OpenAI documents. Confirmed against the live API.
+    const calls = stub(completion('', 'content_filter'));
+    const res = await provider().extractIntent(request());
+    expect(res.status).toBe('refused');
+    // A refusal must not burn a second paid call trying to repair it.
+    expect(calls).toHaveLength(1);
+  });
+
+  it('reads the request id from the configured header', async () => {
+    stub(completion(JSON.stringify(INTENT)), { headers: { 'x-request-id': 'req-abc-123' } });
+    const res = await provider({ requestIdHeader: 'x-request-id' }).extractIntent(request());
+    expect(res.requestId).toBe('req-abc-123');
+  });
+});
+
 describe('truncation', () => {
   it('names a truncated reply instead of calling it invalid JSON', async () => {
     // finish_reason "length" is in the documented response body. Without

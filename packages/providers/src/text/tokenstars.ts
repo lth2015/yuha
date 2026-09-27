@@ -18,9 +18,20 @@ import type { IntentRequest, IntentResult, ReviseRequest, ReviseResult, TextProv
  *     against TokenStars. It is off unless `structuredOutputs` is set.
  *   - `choices[].message.refusal` is not in the documented response at all
  *     (the documented message fields are role, content, name, tool_calls,
- *     tool_call_id, reasoning_content). The refusal branch below is therefore
- *     speculative: a real refusal may well arrive as ordinary content, or as
- *     an error status, and would then be reported as text_response_unmapped.
+ *     tool_call_id, reasoning_content). It is kept only as a fallback.
+ *
+ * Settled by calling the live API on 2026-09-27 rather than left open:
+ *
+ *   - `response_format: { type: 'json_object' }` **is** accepted, and costs
+ *     fewer completion tokens than letting the model wrap the object in prose.
+ *   - `finish_reason: 'length'` is returned on truncation, as documented.
+ *   - An `x-request-id` header is returned and is now read, so a failure can
+ *     be quoted to support.
+ *   - The gateway fronts Azure OpenAI (`x-ms-region: Japan East`,
+ *     `x-ms-served-model`, `x-ms-rai-invoked: true`). Content policy therefore
+ *     surfaces as `finish_reason: 'content_filter'`, which is what the refusal
+ *     branch keys on. Text is served from Japan, which matters for the same
+ *     data-residency reason the music provider's region does.
  *
  *   - baseUrl and chat path default to the documented values and remain
  *     overridable; the model id always comes from configuration (never guessed);
@@ -300,6 +311,22 @@ export class TokenStarsTextProvider implements TextProvider {
         usage,
         code: `tokenstars_${res.status}`,
         message: res.text,
+      };
+    }
+
+    /*
+     * A content-policy block is a refusal, not a technical failure: the
+     * creator needs to rewrite, and the credit must not be spent as though
+     * the system broke. Azure returns it as `finish_reason: 'content_filter'`
+     * — confirmed by the `x-ms-rai-invoked` header on live responses — not as
+     * the `message.refusal` field this adapter originally looked for.
+     */
+    if (TokenStarsTextProvider.finishReason(res.json) === 'content_filter') {
+      return {
+        status: 'refused',
+        requestId: res.requestId,
+        usage,
+        reason: 'the upstream content filter declined this request',
       };
     }
 
