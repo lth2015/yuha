@@ -22,7 +22,7 @@ interface Disclosure {
  * acceptable for a demo and must be replaced with counsel-reviewed text before
  * real charging.
  */
-function useDisclosure() {
+export function useDisclosure() {
   const [disclosure, setDisclosure] = useState<Disclosure | null>(null);
   useEffect(() => {
     apiFetch<Disclosure>('/v1/legal/business-disclosure').then(setDisclosure).catch(() => setDisclosure(null));
@@ -30,7 +30,7 @@ function useDisclosure() {
   return disclosure;
 }
 
-function DraftBanner({ isPlaceholder }: { isPlaceholder: boolean }) {
+export function DraftBanner({ isPlaceholder }: { isPlaceholder: boolean }) {
   if (!isPlaceholder) return null;
   return (
     <div className="alert alert--warn">
@@ -43,7 +43,7 @@ function DraftBanner({ isPlaceholder }: { isPlaceholder: boolean }) {
   );
 }
 
-function LegalPage({ title, updated = '2026-09-18', children }: { title: string; updated?: string; children: ReactNode }) {
+export function LegalPage({ title, updated = '2026-09-18', children }: { title: string; updated?: string; children: ReactNode }) {
   return (
     <article className="legal-page">
       <h1>{title}</h1>
@@ -291,7 +291,9 @@ export function Company() {
   );
 }
 
-/** Kept under the original route for JP-specific disclosure when required. */
-export function Tokushoho() {
-  return <Company />;
-}
+/*
+ * `Tokushoho` used to live here as `return <Company />`. It is now its own
+ * page: 特定商取引法に基づく表記 requires fields this one does not carry
+ * (price, payment method, payment and delivery timing), and a statutory
+ * document is not the same object as an about-us page.
+ */

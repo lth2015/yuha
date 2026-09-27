@@ -171,8 +171,26 @@ const JSX_TEXT = />([^<>{}]*)</g;
  */
 const keyOf = (file, text) => `${file}#${text.trim().replace(/\s+/g, ' ').slice(0, 48)}`;
 
+/*
+ * A file may opt out, with a reason, by carrying `i18n-exempt-file:` in a
+ * comment. That is for text which is deliberately in one language and is not
+ * translation debt — a statutory disclosure addressed to consumers under one
+ * country's law reads in that country's language whoever is looking at it.
+ *
+ * Distinct from the baseline on purpose. The baseline is a debt register and
+ * should shrink; an exemption is a decision and should be visible, so the
+ * exempt files are printed on every run rather than quietly skipped.
+ */
+const EXEMPT = /i18n-exempt-file:\s*(.+)/;
+const exempt = [];
+
 const hardcoded = new Map(); // stable key -> line, for the message only
 for (const [file, src] of files) {
+  const ex = EXEMPT.exec(src);
+  if (ex) {
+    exempt.push(`${file} — ${ex[1].trim().slice(0, 72)}`);
+    continue;
+  }
   stripComments(src).split('\n').forEach((line, i) => {
     const at = (text) => {
       const k = keyOf(file, text);
@@ -242,3 +260,7 @@ if (problems.length) {
 console.log(`✓ ${all.length} keys agree across ${LANGS.join('/')} (keys and placeholders)`);
 console.log(`✓ every key used in ${files.length} files is defined`);
 console.log(`✓ no new hardcoded UI strings (${hcBaseline.size} baselined)`);
+if (exempt.length) {
+  console.log(`  ${exempt.length} file(s) deliberately exempt:`);
+  for (const e of exempt) console.log(`    ${e}`);
+}
