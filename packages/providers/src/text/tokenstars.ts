@@ -4,10 +4,23 @@ import type { IntentRequest, IntentResult, ReviseRequest, ReviseResult, TextProv
 /**
  * TokenStars text-model adapter (docs.tokenstars.ai — OpenAI-compatible).
  *
- * Contract per the published documentation: POST {baseUrl}/v1/chat/completions
- * with `Authorization: Bearer <key>`, an OpenAI messages array, optional
- * response_format (json_object), usage in the reply. Tool calling exists but is
- * not needed for our flows.
+ * Contract read from docs.tokenstars.ai on 2026-09-27: POST
+ * {baseUrl}/v1/chat/completions with `Authorization: Bearer <key>`, an OpenAI
+ * messages array, `temperature` in 0..2, `max_tokens`, and a reply carrying
+ * `choices[].message.content`, `choices[].finish_reason` and `usage` with
+ * prompt/completion/total token counts. Tool calling exists and is unused.
+ *
+ * Two things this adapter relies on that the documentation does **not** state,
+ * marked rather than assumed:
+ *
+ *   - `response_format` is documented only as an object, with no shape. That
+ *     `{ type: 'json_object' }` is accepted is an OpenAI convention, untested
+ *     against TokenStars. It is off unless `structuredOutputs` is set.
+ *   - `choices[].message.refusal` is not in the documented response at all
+ *     (the documented message fields are role, content, name, tool_calls,
+ *     tool_call_id, reasoning_content). The refusal branch below is therefore
+ *     speculative: a real refusal may well arrive as ordinary content, or as
+ *     an error status, and would then be reported as text_response_unmapped.
  *
  *   - baseUrl and chat path default to the documented values and remain
  *     overridable; the model id always comes from configuration (never guessed);
@@ -87,6 +100,26 @@ export class TokenStarsTextProvider implements TextProvider {
       costMinor: this.cfg.estimatedCostMinorPerRequest,
       costIsEstimate: true,
     };
+  }
+
+  /**
+   * A reply budget that fits what the schema actually asks for.
+   *
+   * The intent schema tells the model to echo the creator's lyrics back inside
+   * the JSON object, and the product allows 3000 codepoints of them. The flat
+   * `max_tokens: 400` left room for roughly 1200 characters of English and
+   * about 220 of Japanese, so any song with real lyrics came back cut off
+   * mid-object. That surfaced as `text_schema_invalid` — "the model cannot
+   * produce the shape" — which is the wrong diagnosis and sent a second paid
+   * call at the same budget, guaranteed to truncate identically.
+   *
+   * CJK is near one token per character, so the lyrics are budgeted at that
+   * rate rather than the ~4 characters per token an English estimate would
+   * give. Over-budgeting costs nothing: `max_tokens` is a ceiling.
+   */
+  private budgetFor(lyrics: string | null): number {
+    const SKELETON_TOKENS = 400;
+    return SKELETON_TOKENS + (lyrics ? [...lyrics].length + 200 : 0);
   }
 
   private async call(messages: Array<{ role: string; content: string }>, opts: { responseFormat?: boolean; maxTokens?: number } = {}): Promise<{
@@ -200,6 +233,12 @@ export class TokenStarsTextProvider implements TextProvider {
     }
   }
 
+  /** `finish_reason` is in the documented response body and was never read. */
+  private static finishReason(json: unknown): string | null {
+    const r = (json as { choices?: Array<{ finish_reason?: string }> } | null)?.choices?.[0]?.finish_reason;
+    return typeof r === 'string' ? r : null;
+  }
+
   private static content(json: unknown): string | null {
     const c = (json as { choices?: Array<{ message?: { content?: string } }> } | null)?.choices?.[0]?.message
       ?.content;
@@ -232,12 +271,17 @@ export class TokenStarsTextProvider implements TextProvider {
       user_lyrics: req.mode === 'custom' ? req.lyrics : null,
     });
 
+    const maxTokens = this.budgetFor(req.mode === 'custom' ? req.lyrics : null);
+
     let res;
     try {
-      res = await this.call([
-        { role: 'system', content: SYSTEM_PROMPT },
-        { role: 'user', content: userMessage },
-      ]);
+      res = await this.call(
+        [
+          { role: 'system', content: SYSTEM_PROMPT },
+          { role: 'user', content: userMessage },
+        ],
+        { maxTokens },
+      );
     } catch (err) {
       return {
         status: 'failed',
@@ -280,18 +324,37 @@ export class TokenStarsTextProvider implements TextProvider {
       return { status: 'ok', intent: first, requestId: res.requestId, usage, repaired: false };
     }
 
+    /*
+     * A reply the model was cut off from finishing is not a model that cannot
+     * produce the shape. Repairing it would re-run at the same ceiling and
+     * truncate in the same place, for a second charge, so it is named and
+     * returned instead.
+     */
+    if (TokenStarsTextProvider.finishReason(res.json) === 'length') {
+      return {
+        status: 'failed',
+        requestId: res.requestId,
+        usage,
+        code: 'text_truncated',
+        message: `the reply hit the ${maxTokens}-token ceiling before the object closed`,
+      };
+    }
+
     // AI-03: exactly one structural repair attempt, then give up.
     let repair;
     try {
-      repair = await this.call([
-        { role: 'system', content: SYSTEM_PROMPT },
-        { role: 'user', content: userMessage },
-        { role: 'assistant', content },
-        {
-          role: 'user',
-          content: 'That was not valid JSON for the schema. Reply with the JSON object only.',
-        },
-      ]);
+      repair = await this.call(
+        [
+          { role: 'system', content: SYSTEM_PROMPT },
+          { role: 'user', content: userMessage },
+          { role: 'assistant', content },
+          {
+            role: 'user',
+            content: 'That was not valid JSON for the schema. Reply with the JSON object only.',
+          },
+        ],
+        { maxTokens },
+      );
     } catch {
       return {
         status: 'failed',
