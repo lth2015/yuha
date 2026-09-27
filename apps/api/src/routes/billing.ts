@@ -123,10 +123,26 @@ export default async function billingRoutes(app: FastifyInstance, opts: { ctx: A
 
       if (!result.verified || !result.event) {
         req.log.warn({ reason: result.error }, 'rejected webhook with invalid signature');
-        // Recorded for audit, flagged unverified, never processed.
+        /*
+         * Recorded for audit, flagged unverified, never processed
+         * (`claimWebhookEvents` requires `signature_verified = 1`).
+         *
+         * Bucketed to the minute rather than given a unique id per request.
+         * This route is public and unauthenticated, and the global rate limit
+         * is registered with `global: false` — a forged POST is rejected, but
+         * the row it wrote was still a write, so anyone could grow this table
+         * for as long as they cared to send requests. The minute bucket lets
+         * the existing UNIQUE (provider, event_id) absorb the flood: the
+         * second and later attempts in the same minute are a no-op insert.
+         *
+         * A rate limit on this route was the other option and was not taken:
+         * Stripe bursts during a backfill, and throttling real deliveries to
+         * bound an audit table is the wrong trade. Per-request detail stays in
+         * the warn line above; the table keeps "probed during this minute".
+         */
         await recordWebhookEvent({
           provider: 'stripe',
-          eventId: `unverified:${Date.now()}:${Math.random().toString(36).slice(2, 10)}`,
+          eventId: `unverified:${new Date().toISOString().slice(0, 16)}`,
           eventType: 'unverified',
           signatureVerified: false,
           payload: { reason: result.error ?? 'unknown' },

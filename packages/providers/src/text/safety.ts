@@ -49,15 +49,32 @@ const STYLE_OF_PATTERNS: RegExp[] = [
 ];
 
 /**
- * Quoted lyrics of an existing work. Requesting original lyrics is fine (and is
- * now a product feature); reproducing identifiable chunks of known songs is not.
- * Heuristic: 24+ consecutive characters inside quote marks, or an explicit
- * "lyrics of <title>" phrasing.
+ * Quoted lyrics of an existing work — not any use of the word "lyrics".
+ *
+ * Requesting original lyrics is fine, and is a product feature; reproducing
+ * identifiable chunks of known songs is not.
+ *
+ * The Japanese rule here used to be /(の|という)(歌詞| lyrics)/, which matches
+ * any noun followed by の歌詞. That blocked 「オリジナルの歌詞」 and
+ * 「自分の歌詞」 — the exact thing the composer asks the user to supply — and
+ * it was found by a real acceptance run being refused PROMPT_BLOCKED for the
+ * lyrics "[Verse]\n検収のための歌詞". The same check runs over the lyrics body,
+ * where a bare noun + の + 歌詞 is ordinary writing, not a citation.
+ *
+ * What is actually worth refusing is a request for a *named* work's lyrics, or
+ * an explicit ask to reproduce lyrics verbatim. Those are the four rules below.
+ * A long quoted block stays caught by the first pattern regardless of wording.
  */
 const QUOTED_LYRICS_PATTERNS: RegExp[] = [
   /[「『"][^」』"]{24,}[」』"]/,
   /\b(lyrics?|words)\s+(of|to|for)\s+[A-Z][\w.'-]+/i,
-  /(の|という)(歌詞| lyrics)/i,
+  // 「名前」の歌詞 — a titled work, quoted, then referred to for its lyrics.
+  /[「『][^」』]{1,60}[」』]\s*(という)?\s*(曲|歌|ソング)?\s*の\s*歌詞/,
+  // Asking for lyrics to be reproduced rather than written.
+  /歌詞\s*を\s*(そのまま|まるごと|丸ごと|全部|引用|コピー|再現)/,
+  // Somebody else's, explicitly.
+  /(既存|実在|有名|他人)[^。\n]{0,12}歌詞/,
+  /(アーティスト|歌手|バンド|アイドル)[^。\n]{0,12}の歌詞/,
 ];
 
 /** Voice / person imitation and implied endorsement. */

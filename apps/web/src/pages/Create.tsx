@@ -316,10 +316,23 @@ export default function Create() {
 
   if (job) {
     const failed = job.phase === 'failed';
+    /*
+     * `done` is a state of its own, not "still recording".
+     *
+     * This branched on `failed` only, so a finished job kept the "recording in
+     * progress" eyebrow and fell through to the ETA line — whose estimate had
+     * decayed to zero, printing "通常 0〜0 秒で完成します" under a heading that
+     * said the take was still running, next to a link to open the finished
+     * song. Seen on the acceptance run; it does not settle, because there is
+     * no later state to settle into.
+     */
+    const done = job.phase === 'done';
     const stepIdx = PHASE_STEPS.indexOf(job.phase as (typeof PHASE_STEPS)[number]);
     return (
       <div className="wait-page" aria-live="polite">
-        <p className="eyebrow">{failed ? t('wait.failedEyebrow') : t('wait.eyebrow')}</p>
+        <p className="eyebrow">
+          {failed ? t('wait.failedEyebrow') : done ? t('wait.doneEyebrow') : t('wait.eyebrow')}
+        </p>
         <h1 className="wait-page__title">
           {failed ? t('create.job.failed') : (job.title ?? t('create.defaultTitle'))}
         </h1>
@@ -328,12 +341,14 @@ export default function Create() {
             ? job.errorCode === 'upstream_rejected'
               ? t('create.job.failedUpstream')
               : t('create.job.failedTech')
-            : job.estimate.delayed
-              ? t('create.job.delayed')
-              : t('create.job.eta', {
-                  min: job.estimate.minSeconds,
-                  max: job.estimate.maxSeconds,
-                })}
+            : done
+              ? t('create.job.done')
+              : job.estimate.delayed
+                ? t('create.job.delayed')
+                : t('create.job.eta', {
+                    min: job.estimate.minSeconds,
+                    max: job.estimate.maxSeconds,
+                  })}
         </p>
 
         {/* The same recording surface as the home screen. There were two

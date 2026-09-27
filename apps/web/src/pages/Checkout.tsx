@@ -222,6 +222,23 @@ function readReturnPath(): string | null {
   }
 }
 
+/*
+ * Waiting budget for the return from the payment page.
+ *
+ * Stripe usually delivers within seconds and the worker drains its queue on a
+ * one-second tick, so the first minute is checked briskly; after that the
+ * backoff stretches rather than hammering an endpoint that is clearly waiting
+ * on something slow. 24 attempts spans about 85 seconds, and "check again"
+ * re-arms the whole loop, so the page can always recover on its own.
+ */
+const MAX_POLLS = 24;
+
+function pollDelay(attempt: number): number {
+  if (attempt < 8) return 1500;
+  if (attempt < 16) return 3000;
+  return 6000;
+}
+
 export function CheckoutComplete() {
   const [params] = useSearchParams();
   const orderId = params.get('order_id');
@@ -231,11 +248,17 @@ export function CheckoutComplete() {
 
   const [order, setOrder] = useState<OrderView | null>(null);
   const [error, setError] = useState<unknown>(null);
-  const [attempts, setAttempts] = useState(0);
+  const [waiting, setWaiting] = useState(true);
+  // Bumped by "check again" to re-arm the loop below after it has given up.
+  const [round, setRound] = useState(0);
 
   useEffect(() => {
     if (!orderId) return;
     let cancelled = false;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    // Effect-local, so StrictMode's second mount counts from zero in its own
+    // closure instead of sharing a counter with the run it just tore down.
+    let attempt = 0;
 
     const poll = async () => {
       if (cancelled) return;
@@ -243,27 +266,44 @@ export function CheckoutComplete() {
         const res = await apiFetch<OrderView>(`/v1/orders/${orderId}`);
         if (cancelled) return;
         setOrder(res);
+        setError(null);
         if (res.entitlementGranted) {
           await refreshEntitlements();
+          if (!cancelled) setWaiting(false);
           return;
         }
       } catch (err) {
+        if (cancelled) return;
         setError(err);
       }
-      // Bounded polling: the webhook may take a moment, but we never spin forever.
-      setAttempts((a) => {
-        if (a >= 12) return a;
-        timer = setTimeout(() => void poll(), 2000);
-        return a + 1;
-      });
+      attempt += 1;
+      if (attempt >= MAX_POLLS) {
+        setWaiting(false);
+        return;
+      }
+      /*
+       * Scheduling lives here, not inside a `setState` updater.
+       *
+       * It used to be `setAttempts((a) => { ...; timer = setTimeout(...) })`.
+       * React may call an updater more than once — StrictMode does so on every
+       * render to surface exactly this kind of impurity — and each extra call
+       * armed another timer while `timer` kept only the last one, so the rest
+       * were never cleared. The loop doubled: measured on a real sandbox
+       * payment it fired 25 requests in 8.1s and then stopped dead, because
+       * the counter had also been incremented twice per round. The comment
+       * above it said "bounded polling"; it was neither bounded the way it
+       * claimed nor still running when the webhook landed 57s later.
+       */
+      timer = setTimeout(() => void poll(), pollDelay(attempt));
     };
 
-    let timer = setTimeout(() => void poll(), 500);
+    setWaiting(true);
+    timer = setTimeout(() => void poll(), 500);
     return () => {
       cancelled = true;
-      clearTimeout(timer);
+      if (timer) clearTimeout(timer);
     };
-  }, [orderId, refreshEntitlements]);
+  }, [orderId, refreshEntitlements, round]);
 
   /*
    * No order id — say so.
@@ -296,7 +336,7 @@ export function CheckoutComplete() {
   }
 
   const granted = order?.entitlementGranted === true;
-  const stillWaiting = !granted && attempts < 12;
+  const stillWaiting = !granted && waiting;
 
   return (
     <div className="stack stack--loose checkout-return">
@@ -333,9 +373,20 @@ export function CheckoutComplete() {
             <p className="small muted" style={{ margin: 0 }}>
               {t('pay.safeToLeave')}
             </p>
-            <Link className="btn btn--secondary" to="/settings/billing">
-              {t('pay.seeBilling')}
-            </Link>
+            <div className="row" style={{ flexWrap: 'wrap' }}>
+              {/* Any fixed budget can be outlived by a delayed delivery. Without
+                  this the page promised "it will show up as soon as it lands"
+                  and then stopped looking, so a grant that arrived a minute
+                  later was never shown on the screen that promised it. */}
+              {!stillWaiting && (
+                <button type="button" className="btn btn--primary" onClick={() => setRound((r) => r + 1)}>
+                  {t('pay.checkAgain')}
+                </button>
+              )}
+              <Link className="btn btn--secondary" to="/settings/billing">
+                {t('pay.seeBilling')}
+              </Link>
+            </div>
           </>
         )}
       </section>
