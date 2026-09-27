@@ -78,12 +78,24 @@ await upsertProduct({
   active: true,
 });
 
+/*
+ * PREMIER moved to 3,980 as catalogue v3.
+ *
+ * A new version rather than an edit: `subscriptions` and `orders` carry the
+ * `price_version` they were sold at, and `getProductVersion` resolves by
+ * (price_key, version) without filtering on `active`. So a subscriber on v2
+ * keeps renewing at the price they agreed to, while v2 is no longer offered.
+ * Editing the v2 row in place would silently reprice existing subscriptions.
+ *
+ * Stripe Prices are immutable for the same reason; the v3 row carries a new
+ * price id and the old Price is left alone.
+ */
 await upsertProduct({
   price_key: 'premier_monthly',
-  version: 2,
+  version: 3,
   kind: 'subscription',
   display_name: 'STUDIO — 45 songs / month',
-  amount_minor: 4980,
+  amount_minor: 3980,
   currency: 'jpy',
   tax_included: true,
   units: 45,

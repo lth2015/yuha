@@ -57,13 +57,19 @@ if (!dbUrl) {
 const conn = await mysql.createConnection(dbUrl);
 /*
  * `active`, not `available`: the API's ProductView carries an `available`
- * field computed in `toProductView`, and there is no such column. Only the
- * newest catalogue version is offered, so an older version's Prices are left
- * alone rather than recreated.
+ * field computed in `toProductView`, and there is no such column.
+ *
+ * Newest active version **per price key**, matching `listProducts`. A global
+ * MAX(version) was wrong and would have quietly dropped every other product
+ * the moment one of them was versioned up — which is exactly what happened
+ * when PREMIER moved to v3.
  */
 const [rows] = await conn.execute(
   `SELECT price_key, kind, amount_minor, currency, units, display_name
-     FROM product_catalog WHERE active = 1 AND version = (SELECT MAX(version) FROM product_catalog)
+     FROM (
+       SELECT *, ROW_NUMBER() OVER (PARTITION BY price_key ORDER BY version DESC) AS rn
+         FROM product_catalog WHERE active = 1
+     ) ranked WHERE rn = 1
       ORDER BY amount_minor`,
 );
 await conn.end();
