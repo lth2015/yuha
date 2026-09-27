@@ -12,6 +12,7 @@
     "build": "pnpm -r --filter \"./packages/**\" build && pnpm -r --filter \"./apps/**\" build",
     "typecheck": "pnpm -r typecheck",
     "preflight": "node scripts/preflight.mjs",
+    "stripe:setup": "node scripts/stripe-sandbox-setup.mjs",
     "acceptance": "node scripts/preflight.mjs --verbose && pnpm dev",
     "check:orphans": "node scripts/find-orphan-exports.mjs",
     "check:i18n": "node scripts/check-i18n.mjs",
