@@ -194,6 +194,24 @@ jobs:
             --set image.api.digest=sha256:0000000000000000000000000000000000000000000000000000000000000000 \
             --set image.worker.digest=sha256:0000000000000000000000000000000000000000000000000000000000000000 \
             > /dev/null
+      - name: Render with each environment's real values
+        # The chart was only ever rendered with ad-hoc --set flags, so nothing
+        # checked the files a deploy actually passes. Helm ignores keys it does
+        # not recognise, which is exactly how a typo in deploy/envs reaches a
+        # cluster as a missing setting rather than as an error.
+        run: |
+          set -euo pipefail
+          DIGEST=sha256:0000000000000000000000000000000000000000000000000000000000000000
+          for values in deploy/envs/*.yaml; do
+            echo "rendering with $values"
+            helm template yuha infra/helm/loopscene \
+              --values "$values" \
+              --set image.registry=example.dkr.ecr.ap-northeast-1.amazonaws.com \
+              --set image.api.digest=$DIGEST \
+              --set image.worker.digest=$DIGEST \
+              > /dev/null
+          done
+
       - name: Reject an unpinned image reference
         # The chart must fail rather than deploy a mutable tag (§4.2).
         run: |

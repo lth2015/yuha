@@ -1,0 +1,129 @@
+# Helm values for production. Non-secret configuration only.
+#
+# Every empty string below is an output of `terraform apply` in
+# infra/terraform/, which has never been run against a real account. The chart
+# fails rather than rendering a half-configured release, which is the intended
+# behaviour: a deployment that starts with a blank bucket name is worse than
+# one that refuses to start.
+nameOverride: yuha
+runMode: production
+
+image:
+  # <account>.dkr.ecr.ap-northeast-1.amazonaws.com — from the ECR outputs.
+  registry: ""
+  # Terraform names these `loopscene-<environment>-{api,worker}`; the chart's
+  # own defaults still say `sonare-*` from an earlier naming round.
+  api:
+    repository: loopscene-production-api
+    digest: ""   # set by the workflow, never committed
+  worker:
+    repository: loopscene-production-worker
+    digest: ""
+  pullPolicy: IfNotPresent
+
+serviceAccount:
+  api:
+    name: yuha-api
+    roleArn: ""      # terraform output api_role_arn
+  worker:
+    name: yuha-worker
+    roleArn: ""      # terraform output worker_role_arn
+
+envFromSecret: sonare-runtime
+
+api:
+  replicaCount: 2
+  port: 4000
+
+ingress:
+  enabled: true
+  className: alb
+  host: ""           # staging hostname
+  certificateArn: "" # ACM certificate in ap-northeast-1
+
+config:
+  publicWebUrl: ""
+  publicApiUrl: ""
+  logLevel: warn
+
+  authAdapter: google
+  google:
+    clientId: ""
+    redirectUri: ""
+  cognito:
+    region: ap-northeast-1
+    userPoolId: ""   # terraform output cognito_user_pool_id
+    appClientId: ""  # terraform output cognito_app_client_id
+
+  storage:
+    quarantineBucket: ""  # terraform output quarantine_bucket
+    deliveryBucket: ""    # terraform output delivery_bucket
+    kmsKeyId: ""          # terraform output kms_media_key_arn
+    downloadUrlTtlSeconds: 900
+
+  queue:
+    region: ap-northeast-1
+    url: ""               # terraform output sqs_queue_url
+
+  tokenstars:
+    baseUrl: ""
+    modelId: ""
+    chatPath: /v1/chat/completions
+    requestIdHeader: x-request-id
+    structuredOutputs: "true"
+
+  music:
+    # Switch to the real adapter only once an agreement is signed; until then
+    # production would be selling synthetic audio.
+    adapter: demo
+    providerId: demo-local
+    baseUrl: ""
+    model: ""
+    contractVersion: ""
+    licenseVersion: ""
+    submitPath: ""
+    pollPath: ""
+    cancelPath: ""
+    requestIdField: ""
+    statusField: ""
+    audioUrlField: ""
+    statusMap: ""
+    idempotencyHeader: ""
+    allowedAudioHosts: ""
+    supportsInstrumental: "true"
+    supportsCancel: "false"
+    supportsWebhook: "false"
+    supportsStatusQuery: "true"
+    # No signed agreement with a music provider yet, so staging runs the demo
+    # adapter and the cost figure stays flagged as modelled.
+    commercialDelivery: "false"
+    dataRegion: ap-northeast-1
+    costMinorPerRequest: "46"
+    billFailedRequests: "false"
+    costIsEstimate: "true"
+
+  stripe:
+    publishableKey: ""
+    priceIdDrop5: ""
+    priceIdProMonthly: ""
+    priceIdPremierMonthly: ""
+
+  features:
+    subscriptionsEnabled: "true"
+    freeTrialEnabled: "false"
+    wavExportEnabled: "false"
+
+  limits:
+    maxConcurrentJobsPerUser: "3"
+    dailyBudgetMinor: "50000"
+    generationRateLimitPerHour: "60"
+    exportRateLimitPerHour: "120"
+
+  legal:
+    entityName: ""
+    representative: ""
+    address: ""
+    contact: ""
+    # 特定商取引法 requires a telephone number, and /legal/tokushoho marks this
+    # row 要法務確認 while it is empty.
+    phone: ""

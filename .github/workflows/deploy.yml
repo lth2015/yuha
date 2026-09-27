@@ -1,0 +1,193 @@
+# Ship a commit to EKS in Tokyo.
+#
+# `ci.yml` builds the image with `push: false`, validates the Terraform and
+# lints the chart. Everything was built and checked and nothing was ever
+# delivered; this is the part that delivers it.
+#
+# Inputs live in `deploy/`. The only repository configuration is the IAM role
+# ARN — there is no static AWS key anywhere, by design.
+name: Deploy
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: Target environment
+        type: choice
+        options: [staging, production]
+        default: staging
+        required: true
+  push:
+    tags: ['v*']
+
+# Two deploys to one environment must not interleave: the second helm upgrade
+# would race the first one's migration hook. Never cancel in progress — a
+# half-applied migration is worse than a queued deploy.
+concurrency:
+  group: deploy-${{ inputs.environment || 'production' }}
+  cancel-in-progress: false
+
+env:
+  AWS_REGION: ap-northeast-1
+  NAMESPACE: yuha
+  RELEASE: yuha
+
+jobs:
+  deploy:
+    # A tag deploys production; the manual trigger says which.
+    environment: ${{ inputs.environment || 'production' }}
+    runs-on: ${{ (inputs.environment || 'production') == 'production' && vars.DEPLOY_RUNNER_PRODUCTION || 'ubuntu-latest' }}
+    timeout-minutes: 30
+
+    permissions:
+      contents: read
+      id-token: write   # the OIDC token exchanged for the deploy role
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Resolve target
+        id: target
+        run: |
+          set -euo pipefail
+          ENVIRONMENT="${{ inputs.environment || 'production' }}"
+          echo "environment=$ENVIRONMENT" >> "$GITHUB_OUTPUT"
+          echo "cluster=loopscene-$ENVIRONMENT" >> "$GITHUB_OUTPUT"
+          echo "values=deploy/envs/$ENVIRONMENT.yaml" >> "$GITHUB_OUTPUT"
+          test -f "deploy/envs/$ENVIRONMENT.yaml"
+
+      - name: Production needs a runner inside the VPC
+        if: steps.target.outputs.environment == 'production'
+        run: |
+          set -euo pipefail
+          # infra/terraform/compute.tf keeps the production EKS endpoint
+          # private. A GitHub-hosted runner cannot reach it, and would fail
+          # several minutes later with a connection timeout that reads like an
+          # outage. Say what is actually wrong, immediately.
+          if [ -z "${{ vars.DEPLOY_RUNNER_PRODUCTION }}" ]; then
+            echo "::error::The production EKS endpoint is private (cluster_endpoint_public_access = false)."
+            echo "::error::Set the repository variable DEPLOY_RUNNER_PRODUCTION to a self-hosted runner label inside the VPC."
+            echo "::error::See deploy/README.md — 'Production reaches the cluster differently'."
+            exit 1
+          fi
+
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+          role-session-name: gha-deploy-${{ github.run_id }}
+
+      - uses: aws-actions/amazon-ecr-login@v2
+        id: ecr
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Build and push
+        id: image
+        env:
+          REGISTRY: ${{ steps.ecr.outputs.registry }}
+          ENVIRONMENT: ${{ steps.target.outputs.environment }}
+        run: |
+          set -euo pipefail
+          SHA="${GITHUB_SHA}"
+          API_REPO="loopscene-${ENVIRONMENT}-api"
+          WORKER_REPO="loopscene-${ENVIRONMENT}-worker"
+
+          # The ECR repositories are IMMUTABLE, so re-running a deploy for a
+          # commit that is already published must reuse it rather than fail on
+          # the push. Redeploying the same commit is a normal thing to want.
+          digest_of() {
+            aws ecr describe-images --repository-name "$1" --image-ids imageTag="$SHA" \
+              --query 'imageDetails[0].imageDigest' --output text 2>/dev/null || true
+          }
+
+          API_DIGEST="$(digest_of "$API_REPO")"
+          if [ -z "$API_DIGEST" ] || [ "$API_DIGEST" = "None" ]; then
+            # One image serves both: the worker Deployment overrides the
+            # command. It is pushed to both repositories because Terraform
+            # gives them separate lifecycle policies.
+            docker buildx build \
+              --platform linux/amd64 \
+              --tag "$REGISTRY/$API_REPO:$SHA" \
+              --tag "$REGISTRY/$WORKER_REPO:$SHA" \
+              --cache-from type=gha \
+              --cache-to type=gha,mode=max \
+              --push .
+            API_DIGEST="$(digest_of "$API_REPO")"
+          else
+            echo "$SHA already published; reusing it."
+          fi
+
+          WORKER_DIGEST="$(digest_of "$WORKER_REPO")"
+          for d in "$API_DIGEST" "$WORKER_DIGEST"; do
+            case "$d" in
+              sha256:*) ;;
+              *) echo "::error::could not resolve an image digest (got '$d')"; exit 1 ;;
+            esac
+          done
+
+          echo "registry=$REGISTRY"        >> "$GITHUB_OUTPUT"
+          echo "api_digest=$API_DIGEST"    >> "$GITHUB_OUTPUT"
+          echo "worker_digest=$WORKER_DIGEST" >> "$GITHUB_OUTPUT"
+
+      - uses: azure/setup-helm@v4
+        with:
+          version: v3.16.3
+
+      - name: Point kubectl at the cluster
+        run: aws eks update-kubeconfig --name "${{ steps.target.outputs.cluster }}" --region "$AWS_REGION"
+
+      - name: Sync secrets from Secrets Manager
+        env:
+          ENVIRONMENT: ${{ steps.target.outputs.environment }}
+        run: |
+          set -euo pipefail
+          ACCOUNT_ID="$(aws sts get-caller-identity --query Account --output text)"
+          # The chart mounts `sonare-runtime`; this is what creates it. Applied
+          # before the release so the migration hook has a DATABASE_URL.
+          sed -e "s/__NAMESPACE__/${NAMESPACE}/g" \
+              -e "s/__ENVIRONMENT__/${ENVIRONMENT}/g" \
+              -e "s/__ACCOUNT_ID__/${ACCOUNT_ID}/g" \
+              deploy/cluster/external-secrets.yaml | kubectl apply -n "$NAMESPACE" -f -
+
+          kubectl wait --for=condition=Ready externalsecret/sonare-runtime \
+            -n "$NAMESPACE" --timeout=120s
+
+      - name: helm upgrade
+        run: |
+          set -euo pipefail
+          # --atomic rolls the release back if the migration hook or the
+          # rollout fails, so a bad deploy does not leave half the pods on the
+          # new image. The chart refuses a mutable tag, so both images are
+          # pinned by digest.
+          helm upgrade --install "$RELEASE" infra/helm/loopscene \
+            --namespace "$NAMESPACE" --create-namespace \
+            --values "${{ steps.target.outputs.values }}" \
+            --set image.registry="${{ steps.image.outputs.registry }}" \
+            --set image.api.digest="${{ steps.image.outputs.api_digest }}" \
+            --set image.worker.digest="${{ steps.image.outputs.worker_digest }}" \
+            --atomic \
+            --wait \
+            --timeout 15m
+
+      - name: Verify what was deployed is what is serving
+        run: |
+          set -euo pipefail
+          kubectl rollout status deploy -n "$NAMESPACE" -l app.kubernetes.io/instance="$RELEASE" --timeout=5m
+          # Ask the running pod, rather than trusting that a rollout finishing
+          # means the thing it rolled out works.
+          kubectl run deploy-check-${GITHUB_RUN_ID} -n "$NAMESPACE" \
+            --rm -i --restart=Never --image=curlimages/curl:8.11.0 --quiet -- \
+            curl -fsS --max-time 10 "http://${RELEASE}-api:4000/health"
+
+      - name: Report
+        if: always()
+        run: |
+          echo "### Deploy — ${{ steps.target.outputs.environment }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "| | |" >> "$GITHUB_STEP_SUMMARY"
+          echo "|---|---|" >> "$GITHUB_STEP_SUMMARY"
+          echo "| commit | \`${GITHUB_SHA}\` |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| cluster | \`${{ steps.target.outputs.cluster }}\` |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| api digest | \`${{ steps.image.outputs.api_digest }}\` |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| result | ${{ job.status }} |" >> "$GITHUB_STEP_SUMMARY"
