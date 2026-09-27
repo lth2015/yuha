@@ -98,7 +98,8 @@ Set the browser to 375px wide, or use a real phone on the same network.
 | # | Promise | How to check it |
 | --- | --- | --- |
 | 7.1 | Nothing scrolls sideways | Every page in section 1–6. |
-| 7.2 | Things are big enough to hit | The language switcher, footer links and segmented controls are all at least 44px on a touch device. |
+| 7.2 | Things are big enough to hit | The language switcher, footer links, segmented controls, card overflow buttons and song titles are all at least 44px on a touch device. |
+| 7.2a | …except links inside a sentence | A link in running prose (the "Privacy Policy" in the rights form's privacy note, and the same on account settings) stays inline. WCAG 2.5.8 exempts targets "in a sentence or block of text", and giving one a 44px box would overlap the lines above and below it. Two overlapping targets are worse than one small one — do not "fix" these. |
 | 7.3 | The composer still leads | `/create` keeps the score, the description and one primary button above the fold. |
 
 ## 8. The scripted checks

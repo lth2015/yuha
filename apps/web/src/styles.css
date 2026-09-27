@@ -1418,4 +1418,21 @@ tr:last-child td { border-bottom: none; }
   }
   /* 8px of clear space between those enlarged hit areas (touch-spacing). */
   .site-foot__links { gap: var(--s6); }
+
+  /*
+   * Found by walking the acceptance list at 375px, not by looking: the
+   * library's own controls were the ones still under the floor.
+   *
+   * The card's overflow button was 40x40 — close enough to look right and
+   * four pixels short. The card title is the main way into a song and was a
+   * 23px line of text; it grows rather than gaining an overlapping hit area,
+   * because the artist line sits directly beneath it and two overlapping
+   * targets are worse than one small one.
+   */
+  .menu__btn { width: var(--tap); height: var(--tap); }
+  .song-card__title a {
+    display: flex;
+    align-items: center;
+    min-height: var(--tap);
+  }
 }
