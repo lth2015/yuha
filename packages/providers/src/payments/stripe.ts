@@ -183,11 +183,25 @@ export class StripePaymentsAdapter implements PaymentsAdapter {
         current_period_start?: number;
         current_period_end?: number;
       };
-      const item = s.items?.data?.[0];
+      const item = s.items?.data?.[0] as
+        | (Stripe.SubscriptionItem & { current_period_start?: number; current_period_end?: number })
+        | undefined;
+      /*
+       * The period lives on the item now.
+       *
+       * 2026-08-26.dahlia removed `current_period_start` / `current_period_end`
+       * from the Subscription object and put them on each subscription item.
+       * Reading only the top level returned null for both, so a paid
+       * subscription was stored with no period at all and the entitlement
+       * batch had nothing to expire against. The top level is still read first
+       * for accounts pinned to an older version.
+       */
+      const periodStart = s.current_period_start ?? item?.current_period_start;
+      const periodEnd = s.current_period_end ?? item?.current_period_end;
       return {
         status: s.status,
-        currentPeriodStart: s.current_period_start ? new Date(s.current_period_start * 1000) : null,
-        currentPeriodEnd: s.current_period_end ? new Date(s.current_period_end * 1000) : null,
+        currentPeriodStart: periodStart ? new Date(periodStart * 1000) : null,
+        currentPeriodEnd: periodEnd ? new Date(periodEnd * 1000) : null,
         cancelAtPeriodEnd: s.cancel_at_period_end,
         canceledAt: s.canceled_at ? new Date(s.canceled_at * 1000) : null,
         customerId: typeof s.customer === 'string' ? s.customer : '',
@@ -205,9 +219,14 @@ export class StripePaymentsAdapter implements PaymentsAdapter {
       { cancel_at_period_end: true },
       { idempotencyKey: `cancel:${idempotencyKey}` },
     )) as Stripe.Subscription & { current_period_end?: number };
+    // Same move as in `retrieveSubscription`: without the item fallback the
+    // cancellation reports no effective date, and the UI has nothing to put in
+    // "usable until".
+    const item = s.items?.data?.[0] as (Stripe.SubscriptionItem & { current_period_end?: number }) | undefined;
+    const periodEnd = s.current_period_end ?? item?.current_period_end;
     return {
       cancelAtPeriodEnd: s.cancel_at_period_end,
-      effectiveAt: s.current_period_end ? new Date(s.current_period_end * 1000) : null,
+      effectiveAt: periodEnd ? new Date(periodEnd * 1000) : null,
     };
   }
 

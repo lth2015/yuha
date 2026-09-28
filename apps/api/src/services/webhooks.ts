@@ -101,6 +101,51 @@ function metaString(obj: Record<string, unknown>, key: string): string | null {
 }
 
 /**
+ * Where a subscription invoice keeps the things we need.
+ *
+ * On 2026-08-26.dahlia an Invoice has no top-level `subscription` and no
+ * top-level `metadata`; both sit under `parent.subscription_details`. We read
+ * `invoice['subscription']` and bailed on the first line of `handleInvoicePaid`
+ * for every subscription invoice ever delivered — a paid CREATOR subscription
+ * granted nothing, and the event was still marked processed.
+ *
+ * Both shapes are accepted. The old one is not dead code: events sit in
+ * `webhook_events` and can be replayed long after the account's API version
+ * moves, and a Stripe account pinned to an older version still sends it.
+ */
+function invoiceSubscription(invoice: Record<string, unknown>): string | null {
+  const direct = invoice['subscription'];
+  if (typeof direct === 'string') return direct;
+  const details = subscriptionDetails(invoice);
+  const nested = details?.['subscription'];
+  return typeof nested === 'string' ? nested : null;
+}
+
+function invoiceMeta(invoice: Record<string, unknown>, key: string): string | null {
+  return metaString(invoice, key) ?? metaString(subscriptionDetails(invoice) ?? {}, key);
+}
+
+function subscriptionDetails(invoice: Record<string, unknown>): Record<string, unknown> | null {
+  const parent = invoice['parent'] as Record<string, unknown> | undefined;
+  const details = parent?.['subscription_details'];
+  return details && typeof details === 'object' ? (details as Record<string, unknown>) : null;
+}
+
+/**
+ * The current period, which also moved: a Subscription no longer carries
+ * `current_period_start` / `current_period_end`, its items do. The invoice's
+ * own `period_start` / `period_end` are not a substitute — on a first invoice
+ * they are the same instant, so a batch dated from them expires as it is
+ * created and the subscriber's credits vanish immediately.
+ */
+function subscriptionPeriod(sub: Record<string, unknown>): { start: Date | null; end: Date | null } {
+  const items = (sub['items'] as { data?: Array<Record<string, unknown>> } | undefined)?.data?.[0];
+  const start = sub['current_period_start'] ?? items?.['current_period_start'];
+  const end = sub['current_period_end'] ?? items?.['current_period_end'];
+  return { start: numberToDate(start), end: numberToDate(end) };
+}
+
+/**
  * One-time purchase completed.
  *
  * PAY-03: the amount, currency and paid status are re-verified against the
@@ -238,20 +283,34 @@ async function handleCheckoutFailed(ctx: AppContext, event: StripeEventLike): Pr
  */
 async function handleInvoicePaid(ctx: AppContext, event: StripeEventLike): Promise<void> {
   const invoice = event.data.object;
-  const subscriptionId = invoice['subscription'];
-  if (typeof subscriptionId !== 'string') return;
+  const subscriptionId = invoiceSubscription(invoice);
+  if (!subscriptionId) return;
   if (invoice['paid'] !== true && invoice['status'] !== 'paid') return;
 
   const sub = await findSubscriptionByStripeId(subscriptionId);
-  const userId = sub?.user_id ?? metaString(invoice, 'user_id');
+  const userId = sub?.user_id ?? invoiceMeta(invoice, 'user_id');
   if (!userId) return;
 
   const live = await ctx.payments.retrieveSubscription(subscriptionId);
-  const periodStart = live?.currentPeriodStart ?? numberToDate(invoice['period_start']);
-  const periodEnd = live?.currentPeriodEnd ?? numberToDate(invoice['period_end']);
+  /*
+   * Order of preference for the period, worst case last.
+   *
+   * The live subscription is authoritative. Our own stored row is next,
+   * because `customer.subscription.created` may already have written a correct
+   * period even when this invoice cannot be resolved live. The invoice's own
+   * dates are the floor: on a first invoice `period_start === period_end`, so
+   * a batch dated from them expires the instant it is granted.
+   */
+  const periodStart =
+    live?.currentPeriodStart ?? sub?.current_period_start ?? numberToDate(invoice['period_start']);
+  const invoiceEnd = numberToDate(invoice['period_end']);
+  const periodEnd =
+    live?.currentPeriodEnd ??
+    sub?.current_period_end ??
+    (invoiceEnd && periodStart && invoiceEnd.getTime() > periodStart.getTime() ? invoiceEnd : null);
   const invoiceId = String(invoice['id'] ?? '');
 
-  const priceKey = sub?.price_key ?? metaString(invoice, 'price_key') ?? 'creator_monthly';
+  const priceKey = sub?.price_key ?? invoiceMeta(invoice, 'price_key') ?? 'creator_monthly';
   const product =
     (sub ? await getProductVersion(priceKey, sub.price_version) : null) ?? (await getActiveProduct(priceKey));
   if (!product) throw new Error(`unknown subscription product ${priceKey}`);
@@ -293,6 +352,26 @@ async function handleInvoicePaid(ctx: AppContext, event: StripeEventLike): Promi
       },
       tx,
     );
+
+    /*
+     * The order that opened this subscription has now been fulfilled.
+     *
+     * `handleCheckoutCompleted` deliberately does not grant for subscriptions
+     * — the invoice does, and granting in both places would double it (PAY-06)
+     * — but nothing then recorded that the order was satisfied, so
+     * `entitlement_granted_at` stayed null forever. Two things read that:
+     * the billing page, which showed a delivered ¥1,980 subscription as
+     * 「処理中」 next to the 15 credits it had already handed over, and
+     * `listUngrantedPaidOrders`, which backs the UngrantedPaidOrders alarm
+     * (`infra/terraform/monitoring.tf:158`, fires above zero). The alarm has no
+     * publisher yet, so it would have gone permanently red the day someone
+     * wired one up, for every subscriber the product ever had.
+     *
+     * `markEntitlementGranted` COALESCEs, so a renewal invoice carrying the
+     * same order id in its metadata leaves the original timestamp alone.
+     */
+    const orderId = invoiceMeta(invoice, 'order_id');
+    if (orderId) await markEntitlementGranted(orderId, tx);
 
     const charge = invoice['charge'];
     if (typeof charge === 'string') {
@@ -390,8 +469,10 @@ async function handleSubscriptionChanged(ctx: AppContext, event: StripeEventLike
         priceKey,
         priceVersion: existing?.price_version ?? product?.version ?? 1,
         status: (live?.status ?? String(obj['status'] ?? 'incomplete')) as SubscriptionStatus,
-        currentPeriodStart: live?.currentPeriodStart ?? numberToDate(obj['current_period_start']),
-        currentPeriodEnd: live?.currentPeriodEnd ?? numberToDate(obj['current_period_end']),
+        // The payload's own period, read from wherever this API version keeps
+        // it, so a subscription still gets dated when the live re-read fails.
+        currentPeriodStart: live?.currentPeriodStart ?? subscriptionPeriod(obj).start,
+        currentPeriodEnd: live?.currentPeriodEnd ?? subscriptionPeriod(obj).end,
         cancelAtPeriodEnd: live?.cancelAtPeriodEnd ?? obj['cancel_at_period_end'] === true,
         canceledAt: live?.canceledAt ?? numberToDate(obj['canceled_at']),
         eventAt: new Date(event.created * 1000),
