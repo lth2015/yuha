@@ -2,6 +2,12 @@
 
 What is unfinished, what is blocked, and on whom. `PROJECT_TASK.md` §13.
 
+Every claim below was checked against the code on **2026-09-28**, because six
+of them had come to say the opposite of what the repository does. Anything that
+cannot be checked from inside this repository — anything needing AWS
+credentials, or a payment completed by hand — says so, rather than carrying an
+older answer forward as if it still held.
+
 Two kinds of entry:
 
 - **Blocked** — the code exists and the boundary is defined; an external
@@ -52,10 +58,44 @@ licence records that say so.
 
 | Item | Missing | Consequence |
 | --- | --- | --- |
-| TokenStars | Base URL, API key, **exact model id**, chat path, request-id header; whether structured outputs, refusal states, usage and request ids pass through | AI-01 unverified. The adapter refuses to start rather than guessing any of these. |
-| Stripe | Account, test-mode keys, webhook secret, versioned price ids | PAY-03 and PAY-12 blocked. 3DS and the failure/authentication matrix unexercised. |
 | Cognito | User pool, app client, SES sender + verified domain | Real token verification and the email-OTP UI unverified. |
-| AWS | An authorised account | Terraform `validate`s and Helm renders, but **nothing has been applied**. No deployment, S3, SQS, monitoring, rollback or recovery has been exercised. |
+| AWS | An authorised account | Terraform `validate`s and Helm renders. Whether anything was ever **applied** is unknown from here: `terraform state list` has not been run, and this repository holds no state file. Until it is, treat deployment, S3, SQS, monitoring, rollback and recovery as unexercised. |
+
+### No longer blocked, as of 2026-09-27
+
+Both were rows in the table above. They are kept on record rather than deleted,
+because "obtained" and "verified" are different claims and the gap between them
+is where the next piece of work is.
+
+- **TokenStars.** Base URL, key, model id, chat path and request-id header are
+  configured, and the adapter was called against the live service with the
+  owner's key — four calls, `54d5b42`. AI-01 is verified. Two assumptions moved
+  under that call: `response_format: { type: 'json_object' }` is accepted, and
+  truncation arrives as `finish_reason: 'length'`. Two things the documentation
+  does not mention were read off the response headers: the gateway fronts Azure
+  OpenAI, so a content-policy block arrives as `finish_reason:
+  'content_filter'` and not in `message.refusal` — the refusal branch could
+  never have fired, and every policy block would have been billed as a
+  technical failure — and an `x-request-id` header is returned, so failures are
+  now quotable to support. **What this does not include:** the 12 tests in
+  `tests/tokenstars.test.ts` run against a stubbed transport. They pin the
+  contract read from the vendor's documentation; they are not live coverage, and
+  nothing re-checks the live API on a schedule.
+- **Stripe.** Sandbox keys, `whsec_`, an API-version pin and four Price ids are
+  configured, the catalogue exists in the sandbox with the ids in
+  `product_catalog.stripe_price_id`, and the **one-time** path has been walked
+  end to end against real Stripe (`26e7799`), with every assertion read out of
+  the database: a declined card leaves the order `pending` and grants nothing; a
+  refund revokes the unused units and sets the order `refunded`, with
+  `refund.created` and `charge.refunded` producing one revoke between them;
+  signature rejection was exercised over tampered bodies, garbage, an absent
+  header, the wrong secret and a stale timestamp; a replayed real event returns
+  `duplicate: true` with the ledger unmoved. PAY-03 is verified. **What this
+  does not include:** PAY-12 only in part — the flow is hosted and no card data
+  reaches us, success and decline are covered live, and the
+  requires-authentication (3DS) card has not been run. The subscription half has
+  never been completed against Stripe at all. Both are §3 items now, not
+  credential blocks.
 
 ---
 
@@ -63,16 +103,17 @@ licence records that say so.
 
 | Item | Why it matters | Effort |
 | --- | --- | --- |
-| **Unintended-vocal detection** (AI-07) | The launch promise is instrumental-only. Current checks cover decodability, duration, silence and integrity — none of which detects a voice. Needs a classifier plus the human review AI-07 requires. Until then "instrumental" rests on the provider's parameter, not on our verification. | Medium |
+| **Unintended-vocal detection** (AI-07) | Vocals are a product feature; what is unverified is the *instrumental* choice being honoured. PROJECT_TASK AI-07 asks for a check and a failure path when instrumental was requested, and the output checks cover decodability, duration, silence and integrity — none of which detects a voice. Needs a classifier plus the human review AI-07 requires. Until then "instrumental" rests on the provider's parameter, not on our verification. (This row previously read "the launch promise is instrumental-only", which contradicts `CLAUDE.md` and §5.) | Medium |
 | **CloudWatch metric publication** | `monitoring.tf` alarms on `UpstreamFailureRate`, `DailyBudgetConsumedRatio`, `WebhookBacklog`, `LedgerDiscrepancies`, `UngrantedPaidOrders`, `StaleUnknownJobs`. The worker computes all of these but does **not yet publish** them. They are set `treat_missing_data = "breaching"` so they fail loudly rather than looking healthy. | Small |
-| **Daily budget enforcement** | `DAILY_BUDGET_MINOR` is configured and recorded in cost events, but no code refuses a generation when the cap is reached. §12.3 wants generation paused while order lookup and downloads continue. | Small |
-| **Colour contrast measurement** (UI-14) | The palette is the specified one, but 4.5:1 has not been **measured**. `--text-muted #A9AFBE` on `--panel #1A1C22` is the case to check first. **Blocking for the `docs/UI_DESIGN.md` redesign**, which adds an ambient gradient — any text sitting on the mesh rather than on a panel must be measured against the gradient's lightest point, not the base colour. | Small |
+| **Contrast on translucent surfaces** (UI-14) | Measured and gated, not outstanding: `scripts/check-contrast.mjs` checks 8 text tokens against `--bg`, `--surface-solid` and `--surface-soft` on every run, and all 8 clear 4.5:1 — the tightest is `--faint` at 4.56 on `--surface-soft`. What the gate cannot see is glass: a translucent surface over a moving light field has no colour in the stylesheet, so `--surface-soft`, the lightest opaque surface, stands in for it. That is a conservative substitution, not a measurement. Text placed on the `docs/UI_DESIGN.md` gradient rather than on a panel still needs measuring against the rendered lightest point. | Small |
 | **Screen reader and real-device testing** (UI-13, UI-14) | Verified at three widths in a desktop browser only. VoiceOver, TalkBack and physical mobile playback are untested. | Small |
+| **Nobody has heard the audio** | The delivered file is a real 180.000s 192kbps MP3 and Chrome decodes it to `readyState 4`, but playback itself has never been verified: in the browser pane used for acceptance the `AudioContext` advances 0.006s per 2s of wall clock, so nothing sounds there (`26e7799`). This is the only link in the core promise that no check of any kind covers, and it needs a human at a machine with audio output. | Small, and only a human can close it |
 | **OpenAI-style OpenAPI document** | `docs/API.md` is complete and accurate but hand-written. §10 accepts "OpenAPI or equivalent"; a generated document from the zod schemas would stay in sync automatically. | Medium |
 | **Account deletion execution** (SEC-11) | The request is recorded with a correct retention statement, but no job actually deletes the account and its audio after identity confirmation. | Medium |
 | **Track retention sweep** | Soft-deleted tracks keep their S3 objects; nothing removes them on a schedule. | Small |
 | **Analytics `preview_10s` event** | The player detects 10 seconds of real listening and the activation metric queries it, but the client does not yet POST it. Day-1 activation will therefore report as not computable. | Small |
-| **Subscription checkout end-to-end** | Subscription grants, renewals, failures and cancellation are all tested at the service layer. The full Stripe subscription checkout has not been walked because subscriptions are off by default (§7). | Small, once Stripe exists |
+| **Subscription checkout end-to-end** | Grants, renewals, failures and cancellation are tested at the service layer, and the duplicate-subscription guard has a unit test (`SUBSCRIPTION_ALREADY_ACTIVE`, `tests/payments.test.ts`) that has never fired against Stripe. No subscription payment has been completed against the sandbox (`615d232`: sessions are created, no test card was entered). The reason previously given here — "subscriptions are off by default" — was wrong: `FEATURE_SUBSCRIPTIONS_ENABLED` defaults to **true** (`apps/api/src/config.ts:161`). The conclusion stands; only the reason was false. | Small; the environment is ready |
+| **The 3DS / requires-authentication path** (PAY-12) | Success and decline are covered against live Stripe. The authentication-required card (`4000 0025 0000 3155`) and the abandoned-authentication return have not been run, so the half of PAY-12 that is about a user who never finishes authenticating is unproven. | Small |
 | **Load testing** | §12.3 targets (P95 <1s create, <120s generation, ≥95% success) cannot be meaningfully measured against a synthesised fixture that returns instantly. | Blocked on a real provider |
 
 ---
@@ -87,6 +128,10 @@ licence records that say so.
 | Duration tolerance and loudness target | Currently ±750ms and −14 LUFS. Reasonable defaults, but they should be confirmed against the real provider's output characteristics. |
 | Which failures the supplier bills for | Configured conservatively as "failures are billable" (`MUSIC_BILL_FAILED_REQUESTS=true`) because assuming the opposite would understate cost. The contract decides. |
 | Legal entity, terms, privacy policy | All placeholder. Production refuses to start without real values, but refusing to start is not the same as having them. |
+| Which plan names users see | The catalogue, pricing page and purchase history say **CREATOR** (¥1,980 / 15 songs) and **STUDIO** (¥3,980 / 45 songs); the internal keys and every Stripe id say `pro_monthly` and `premier_monthly` (`apps/api/src/seed.ts`). Both names are live at once. Which side changes is a naming decision, and a receipt that names the wrong plan is the failure mode. |
+| The Stripe tax code | `scripts/stripe-sandbox-setup.mjs` sets `txcd_10000000`, Stripe's catch-all for an electronically supplied service, because a product without a tax code is rejected outright. It is overridable via `STRIPE_TAX_CODE`. Whether it is the *correct* code for this service is a tax determination. |
+| The remaining 特商法 wording | `apps/web/src/pages/Tokushoho.tsx` renders **要法務確認** against two items that genuinely need counsel: the available payment methods (they depend on what the Stripe account has enabled, so the page cannot state them) and the cancellation and refund wording (the current text is a draft in `docs/`). A third 要法務確認 is not a legal question at all — it is the fallback when the product catalogue fails to load, so a failed fetch reads to the user as "a lawyer has not checked this". That is worth separating. Unrelated, and not a decision: `scripts/check-i18n.mjs` reports 19 baselined hardcoded strings across the app, with this page deliberately exempt as a Japanese statutory disclosure. |
+| Who reads the crash reports | Not "where do they go" — `POST /v1/client-errors` exists, takes no session, and writes an `analytics_events` row named `client_error` (`apps/api/src/routes/telemetry.ts`). Nothing in the repository ever reads those rows: no alarm, no dashboard, no metric. A crash reporter nobody watches is the same as no crash reporter, and choosing the destination is an operations decision. |
 
 ---
 
@@ -95,16 +140,27 @@ licence records that say so.
 Not oversights — §1.2 excludes them, and none is reachable through a hidden
 entry point or a provider default:
 
-lyrics · vocals · voice imitation · cover versions · reference-audio or humming
-upload · music distribution (Spotify etc.) · royalty splitting · Content ID
-registration · a marketplace · public community, follows, rankings or remixing ·
+lyrics quoted from existing songs · voice imitation · cover versions ·
+reference-audio or humming upload · music distribution (Spotify etc.) ·
+royalty splitting · Content ID registration · a marketplace ·
+public community, follows, rankings or remixing ·
 annual and unlimited plans · auto top-up · transferable or withdrawable credit
 balances · native iOS/Android apps · video upload or cloud video composition ·
 self-trained models and GPU clusters.
 
-`vocalMode` is re-imposed server-side on every request regardless of what the
-client or the text model returns, and the input screen rejects lyric, vocal and
-voice-imitation prompts before any spend occurs.
+**Vocals and original lyrics are in scope**, and this list used to say
+otherwise. `CLAUDE.md` promises full songs with vocals, `VocalMode` is
+`instrumental | with_vocals` (`packages/contracts/src/enums.ts:93`) and custom
+mode accepts a `lyrics` field. Reading §5 as written would have led someone to
+delete a shipped feature.
+
+`vocalMode` is set server-side from the request's `instrumental` flag
+(`apps/api/src/services/generation.ts:206`), never from whatever the text model
+returns. The input screen rejects voice imitation, artist and title references,
+and asking for someone else's lyrics verbatim
+(`packages/providers/src/text/safety.ts`) — it does not reject a request for
+original lyrics, though one over-broad pattern did until `26e7799`, refusing
+「オリジナルの歌詞」 among others.
 
 ---
 

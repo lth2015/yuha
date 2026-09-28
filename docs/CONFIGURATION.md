@@ -65,7 +65,7 @@ cp .env.example .env   # 然后按需填写下表中的值
 | `STRIPE_SECRET_KEY` | [Stripe Dashboard](https://dashboard.stripe.com/test/apikeys) → Secret key（`sk_test_…`） |
 | `STRIPE_WEBHOOK_SECRET` | Stripe CLI：`stripe listen --forward-to localhost:4000/v1/webhooks/stripe` 输出的 `whsec_…` |
 | `STRIPE_PUBLISHABLE_KEY` | 同页 Publishable key（`pk_test_…`） |
-| `STRIPE_PRICE_ID_DROP_5` / `_PRO_MONTHLY` / `_PREMIER_MONTHLY` / `_MARKET_LICENSE` | 在 Stripe 后台建 4 个价格（$4.99 一次性 / $9.99 月 / $29.99 月 / $4.99 一次性），把 `price_…` 填进来 |
+| `STRIPE_PRICE_ID_DROP_5` / `_PRO_MONTHLY` / `_PREMIER_MONTHLY` / `_MARKET_LICENSE` | 在 Stripe 后台建 4 个价格，金额与 `apps/api/src/seed.ts` 的目录一致：DROP ¥980 一次性 / CREATOR（`pro_monthly`）¥1,980 月 / STUDIO（`premier_monthly`）¥3,980 月 / Licence ¥980 一次性。JPY 是零小数货币，Stripe 的 `unit_amount` 直接写 980，不要乘 100。把 `price_…` 填进来 |
 
 启用：`PAYMENTS_ADAPTER=stripe`、`RUN_MODE=integration`。Webhook 事件至少订阅：`checkout.session.completed`、`invoice.paid`、`customer.subscription.updated`、`customer.subscription.deleted`、`charge.refunded`。
 

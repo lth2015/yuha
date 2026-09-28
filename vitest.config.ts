@@ -4,7 +4,7 @@ export default defineConfig({
   test: {
     include: ['tests/**/*.test.ts'],
     // The credit ledger tests deliberately race concurrent transactions against
-    // one PostgreSQL instance. Running files in parallel would let unrelated
+    // one MySQL instance. Running files in parallel would let unrelated
     // suites truncate the tables mid-race, so they run one at a time.
     fileParallelism: false,
     sequence: { concurrent: false },
