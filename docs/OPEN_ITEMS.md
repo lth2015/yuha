@@ -91,11 +91,14 @@ is where the next piece of work is.
   signature rejection was exercised over tampered bodies, garbage, an absent
   header, the wrong secret and a stale timestamp; a replayed real event returns
   `duplicate: true` with the ledger unmoved. PAY-03 is verified. **What this
-  does not include:** PAY-12 only in part — the flow is hosted and no card data
-  reaches us, success and decline are covered live, and the
-  requires-authentication (3DS) card has not been run. The subscription half has
-  never been completed against Stripe at all. Both are §3 items now, not
-  credential blocks.
+  does not include:** nothing of PAY-03 or PAY-12 remains unexercised against
+  live Stripe. Success, decline, 3DS-abandoned and the subscription half have
+  all now been walked (`a0d355d`), and the subscription walk found that
+  subscribers paid and received nothing — the Invoice and Subscription field
+  layout had moved and the handler discarded every subscription invoice on its
+  first line. Two failure cases are still open and are listed in
+  `docs/ACCEPTANCE_PAYMENTS.md` Part B: B5 (listener stopped, paid, restarted,
+  resent) and B7 (the same charge refunded twice).
 
 ---
 
@@ -112,8 +115,7 @@ is where the next piece of work is.
 | **Account deletion execution** (SEC-11) | The request is recorded with a correct retention statement, but no job actually deletes the account and its audio after identity confirmation. | Medium |
 | **Track retention sweep** | Soft-deleted tracks keep their S3 objects; nothing removes them on a schedule. | Small |
 | **Analytics `preview_10s` event** | The player detects 10 seconds of real listening and the activation metric queries it, but the client does not yet POST it. Day-1 activation will therefore report as not computable. | Small |
-| **Subscription checkout end-to-end** | Grants, renewals, failures and cancellation are tested at the service layer, and the duplicate-subscription guard has a unit test (`SUBSCRIPTION_ALREADY_ACTIVE`, `tests/payments.test.ts`) that has never fired against Stripe. No subscription payment has been completed against the sandbox (`615d232`: sessions are created, no test card was entered). The reason previously given here — "subscriptions are off by default" — was wrong: `FEATURE_SUBSCRIPTIONS_ENABLED` defaults to **true** (`apps/api/src/config.ts:161`). The conclusion stands; only the reason was false. | Small; the environment is ready |
-| **The 3DS / requires-authentication path** (PAY-12) | Success and decline are covered against live Stripe. The authentication-required card (`4000 0025 0000 3155`) and the abandoned-authentication return have not been run, so the half of PAY-12 that is about a user who never finishes authenticating is unproven. | Small |
+| **Subscription renewal and dunning** | The first period is now proven end to end against Stripe (`a0d355d`): purchase, grant, the duplicate-subscription guard firing for the first time outside a unit test, and cancellation agreeing with Stripe on both the flag and the period end. What has still never happened is a **second** period — a renewal invoice, and `invoice.payment_failed` on a card that stops working. Both are a month away in real time; forcing them needs a test clock. | Small, with a test clock |
 | **Load testing** | §12.3 targets (P95 <1s create, <120s generation, ≥95% success) cannot be meaningfully measured against a synthesised fixture that returns instantly. | Blocked on a real provider |
 
 ---

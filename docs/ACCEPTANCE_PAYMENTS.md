@@ -58,12 +58,18 @@ worth doing rather than a formality.
 
 ---
 
-## Part B — the sandbox pass: one-time done, subscription outstanding
+## Part B — the sandbox pass: one-time and subscription both walked
 
-No longer blocked. The credentials are in `.env` and the one-time path has been
-walked (`26e7799`), with every assertion read out of the database. What is left
-is the subscription half and two of the seven failure cases; both are marked
-below rather than described as a whole part that has not started.
+No longer blocked. The credentials are in `.env`, the one-time path was walked
+in `26e7799` and the subscription path in `a0d355d`, with every assertion read
+out of the database. Two of the seven failure cases remain (B5, B7) and are
+marked as such below.
+
+The subscription pass did not confirm the design; it broke it. A paid ¥1,980
+CREATOR subscription granted **nothing** — see *What the subscription pass
+found* below. That is the reason to walk a path against the real provider even
+when the suite is green, and the reason Part A opens with what a green suite
+cannot tell you.
 
 ### What is needed
 
@@ -128,29 +134,59 @@ the dashboard → credits increase → generate → play → download.
 | # | Do | Expect | Run? |
 | --- | --- | --- | --- |
 | B1 | Pay with `4000 0000 0000 0002` (declined) | no order paid, no credits, message says so | **done** `26e7799` — the order stayed `pending` and nothing was granted |
-| B2 | Pay with `4000 0025 0000 3155` (3DS) and abandon the challenge | no credits; the session expires | **not run** |
+| B2 | Pay with `4000 0025 0000 3155` (3DS) and abandon the challenge | no credits; the session expires | **done** — the PaymentIntent reached `requires_action` / `use_stripe_sdk`, so the challenge was genuinely raised rather than skipped. Leaving the page granted nothing and emitted **no webhook at all**; the order stayed `pending`. Expiring the session (`stripe checkout sessions expire`, rather than waiting 24h) delivered `checkout.session.expired`, which moved the order to `canceled` with the balance untouched. No code change was needed — `handleCheckoutFailed` already refuses to downgrade a paid order, and `tests/payments.test.ts` already covers the terminal state |
 | B3 | Pay, then close the tab before returning | credits still arrive, from the webhook alone | **done** `26e7799`, the hard way: the return page had already stopped polling and the webhook landed 57s later, so the grant came from the webhook alone. That is B3, and it is also how the polling defect was found |
 | B4 | `stripe events resend <id>` on a completed checkout | balance unchanged | **done** `26e7799` — returned `duplicate: true`, ledger unmoved |
 | B5 | Stop `stripe listen`, pay, restart it, resend | credits arrive exactly once | **not run** |
 | B6 | Refund in the dashboard | only unused credits are revoked | **done** `26e7799` — the 5 unused units revoked, order `refunded` |
 | B7 | Refund the same charge twice | second refund changes nothing | **not run.** What was run is a different thing and should not be mistaken for it: `refund.created` and `charge.refunded` describing *one* refund produced one revoke between them. A second refund of the same charge has only a unit test |
 
-### The subscription pass — not run
+### The subscription pass — run in `a0d355d`
 
-Nothing in this table has happened against Stripe. `615d232` created real
-subscription-mode sessions and entered no card; every subscription assertion the
-suite makes is at the service layer, against the simulated adapter.
+Walked with CREATOR (¥1,980) on `4242 4242 4242 4242`.
 
-Subscriptions are **on** — `FEATURE_SUBSCRIPTIONS_ENABLED` defaults to `true`
-(`apps/api/src/config.ts`) — so this needs no configuration change, only a test
-card.
+| # | Do | Expect | Result |
+| --- | --- | --- | --- |
+| S1 | Subscribe to CREATOR or STUDIO and pay | one `subscriptions` row, `status = active`, `current_period_end` set | **pass, after the fix.** On the first attempt the row was written with `current_period_start` and `current_period_end` both null |
+| S2 | Read `entitlement_batches` | a row with `source = 'subscription_period'`, `granted_units` equal to the tier's units — CREATOR 15, STUDIO 45 | **pass, after the fix.** On the first attempt there was no row at all |
+| S3 | While subscribed, press the *other* tier's subscribe button | the API returns `SUBSCRIPTION_ALREADY_ACTIVE` (409) **and `orders` gains no row**. Count the rows; do not read the message. The first version of this guard sat below `insertOrder` and wrote an order before refusing, and only a row count caught it | **pass.** 409, `orders` stayed at 9. First time this guard has ever fired outside a unit test |
+| S4 | Cancel, then use credits before the period ends | `cancel_at_period_end = 1`, and the granted units stay usable until `current_period_end` without carrying over past it | **pass.** Our row and Stripe agree on `cancel_at_period_end` and on the period end; the 15 units remain available |
 
-| # | Do | Expect |
-| --- | --- | --- |
-| S1 | Subscribe to CREATOR or STUDIO and pay | one `subscriptions` row, `status = active`, `current_period_end` set |
-| S2 | Read `entitlement_batches` | a row with `source = 'subscription_period'`, `granted_units` equal to the tier's units — CREATOR 15, STUDIO 45 |
-| S3 | While subscribed, press the *other* tier's subscribe button | the API returns `SUBSCRIPTION_ALREADY_ACTIVE` (409) **and `orders` gains no row**. Count the rows; do not read the message. The first version of this guard sat below `insertOrder` and wrote an order before refusing, and only a row count caught it |
-| S4 | Cancel, then use credits before the period ends | `cancel_at_period_end = 1`, and the granted units stay usable until `current_period_end` without carrying over past it |
+### What the subscription pass found
+
+Stripe accepted the card. `customer.subscription.created` and `invoice.paid`
+were both delivered and both answered 200. The buyer's balance stayed at zero,
+and every event was marked `processed` — because nothing failed. The handler
+returned.
+
+On API version `2026-08-26.dahlia` the Invoice object no longer carries a
+top-level `subscription` or `metadata`, and the Subscription object no longer
+carries `current_period_start` / `current_period_end`:
+
+| Read | Actually at |
+| --- | --- |
+| `invoice.subscription` | `invoice.parent.subscription_details.subscription` |
+| `invoice.metadata` | `invoice.parent.subscription_details.metadata` |
+| `subscription.current_period_*` | `subscription.items.data[0].current_period_*` |
+
+`handleInvoicePaid` opens with `if (typeof subscriptionId !== 'string') return`,
+so every subscription invoice Stripe has ever sent was discarded on the first
+line of the handler.
+
+Two details worth carrying forward:
+
+- **The period is not a detail.** A first invoice has `period_start ===
+  period_end`. A batch dated from the invoice expires the instant it is granted,
+  so reading the id correctly and the period carelessly still delivers nothing.
+- **Delivery was not recorded.** `handleCheckoutCompleted` deliberately does not
+  grant for subscriptions (PAY-06), and nothing else marked the order, so
+  `entitlement_granted_at` stayed null for every subscriber. The billing page
+  showed a delivered subscription as 「処理中」, and `listUngrantedPaidOrders` —
+  which backs an alarm that fires above zero — would have counted every
+  subscriber forever, going red the day someone published the metric.
+
+None of this was visible to the test suite, and would not have become visible by
+adding more of the same tests. See the caveat in Part A.
 
 One-time packs are deliberately unaffected by S3 — buying credits while
 subscribed is ordinary, and a guard that blocked it would be a regression.

@@ -22,9 +22,16 @@ locally); sign-in is Google OAuth plus a development login for demo mode.
 
 > **This is not ready to charge anyone.** No music-provider agreement is signed,
 > no legal review has happened, and no AWS account has been provisioned. Demo
-> mode uses synthesised audio and simulated payments, and says so continuously in
-> the interface. See [`docs/LAUNCH_READINESS.md`](docs/LAUNCH_READINESS.md) for
-> the full list of what is still missing.
+> mode defaults to synthesised audio and simulated payments, and says so
+> continuously in the interface. See
+> [`docs/LAUNCH_READINESS.md`](docs/LAUNCH_READINESS.md) for the full list of
+> what is still missing.
+>
+> "Demo" describes the defaults, not a ceiling. Each adapter is chosen
+> independently, so a local run can hold real Stripe **test-mode** keys and a
+> real TokenStars key while the music stays synthesised — which is how the
+> payment path was actually exercised. Only `production` mode forbids the
+> stand-ins, and it refuses to boot if any of them is selected.
 
 ---
 
@@ -80,7 +87,7 @@ half-real service (`PROJECT_TASK.md` §3.1).
 
 | Mode | Identity | Audio | Payments | Notes |
 | --- | --- | --- | --- | --- |
-| `demo` | dev login | synthesised fixtures | simulated | Local development. Banner always visible. |
+| `demo` | dev login | synthesised fixtures | simulated *(default)* | Local development. Banner always visible. Any adapter can be overridden — `PAYMENTS_ADAPTER=stripe` with test keys is the supported way to exercise real checkout locally. |
 | `integration` | Cognito or dev | real provider as credentials allow | Stripe **test** mode | Record which dependencies are real per run. |
 | `production` | Cognito only | licensed provider only | Stripe live | Refuses to boot without real legal-entity details. |
 
@@ -148,16 +155,33 @@ pnpm db:up          # the test database runs on :53307, separate from dev
 pnpm test
 ```
 
-103 tests run against a **real MySQL instance**, never an in-memory stand-in —
-§12.1 requires the ledger transactions, concurrency and unique constraints to be
-verified against the engine that actually enforces them.
+159 tests across 13 files run against a **real MySQL instance**, never an
+in-memory stand-in — §12.1 requires the ledger transactions, concurrency and
+unique constraints to be verified against the engine that actually enforces
+them.
 
 | File | Covers |
 | --- | --- |
 | `tests/ledger.test.ts` | GEN-01/03/08/09/11, PAY-05/09, reconciliation, concurrent contention |
 | `tests/generation.test.ts` | The HTTP surface and the real worker pipeline: GEN-01…12, AI-03/05/06 |
 | `tests/payments.test.ts` | PAY-01…11 through the real webhook pipeline |
+| `tests/stripe-invoice-shape.test.ts` | The Invoice/Subscription field layout Stripe actually sends |
 | `tests/security.test.ts` | SEC-01…13, SSRF guards, run-mode boundaries, audit logging |
+| `tests/budget.test.ts` | The daily upstream spend cap and what it refuses |
+| `tests/market.test.ts` | Licensing a song, and who may not license one |
+| `tests/mfa.test.ts` | TOTP enrollment, challenge, recovery codes |
+| `tests/demo-provider.test.ts` | What the demo adapter refuses to pretend it can do |
+| `tests/tokenstars.test.ts` | Reply budget, truncation, refusal states |
+| `tests/telemetry.test.ts`, `tests/explore.test.ts`, `tests/lyrics.test.ts` | Analytics events, play counting, lyric timing |
+
+One caveat worth knowing before trusting a green run: most payment tests drive
+the **simulated** adapter, whose fixtures were written from the same
+understanding of Stripe that the production code holds. A simulator agrees with
+the belief it was built from, so it cannot detect that Stripe has changed. It
+did not: subscribers paid and received nothing for as long as the current API
+version has been in use, while every test passed. `stripe-invoice-shape.test.ts`
+exists because of that, and its payloads are trimmed copies of real ones —
+keep them that way.
 
 Fault injection uses markers (`__FAULT_FAIL__`, `__FAULT_REJECT__`,
 `__FAULT_UNKNOWN__`) carried in the generation brief, so failure tests drive the
@@ -208,6 +232,10 @@ alerts, rollback and recovery.
 | [`docs/API.md`](docs/API.md) | Endpoints, error codes, idempotency rules |
 | [`docs/OPERATIONS.md`](docs/OPERATIONS.md) | Deploy, refund, compensate, reconcile, alert, roll back, recover |
 | [`docs/ACCEPTANCE.md`](docs/ACCEPTANCE.md) | Every UI/GEN/PAY/AI/SEC item with a result and evidence |
+| [`docs/ACCEPTANCE_PAYMENTS.md`](docs/ACCEPTANCE_PAYMENTS.md) | What the Stripe sandbox has actually been made to do, and what is still only argued |
+| [`docs/CONFIGURATION.md`](docs/CONFIGURATION.md) | Every environment variable, and which run modes refuse which values |
+| [`docs/DEPLOY_AWS.md`](docs/DEPLOY_AWS.md) | The AWS deployment path, none of which has been applied |
+| [`docs/UI_CRAFT.md`](docs/UI_CRAFT.md) | The detail rules the interface is held to |
 | [`docs/OPEN_ITEMS.md`](docs/OPEN_ITEMS.md) | What is unfinished, what is blocked, and on whom |
 | [`docs/LAUNCH_READINESS.md`](docs/LAUNCH_READINESS.md) | What must be true before charging anyone |
 
@@ -216,13 +244,18 @@ alerts, rollback and recovery.
 ## Scope
 
 Built: full-song generation (lyrics sung or instrumental, 30s–4min), the
-Simple/Custom studio, a persistent queue player, play counters, link sharing
-on and off, a private library, MP3 download and trimming, per-song usage and
-authorship records, rights-complaint handling, Google OAuth + development
-login, Stripe checkout / subscriptions / refunds (JPY catalogue,
-tax-inclusive: DROP, CREATOR, STUDIO), an async job pipeline with the credit
-ledger, and the
-operations console.
+Simple/Custom studio, a persistent queue player, link sharing on and off, a
+private library, MP3 download and trimming, per-song usage and authorship
+records, rights-complaint handling, Google OAuth + development login, Stripe
+checkout / subscriptions / refunds (JPY catalogue, tax-inclusive: DROP ¥980,
+CREATOR ¥1,980/month, STUDIO ¥3,980/month), an async job pipeline with the
+credit ledger, and the operations console.
+
+Plays are counted server-side and shown to **nobody**: `playCount` is
+deliberately absent from the track view a client receives
+(`packages/contracts/src/generation.ts`), so no later change can render it onto
+a page by accident. Operations needs to know what gets listened to; a private
+song with two plays should not be made to look like a failure.
 
 Deliberately **not** built: a public feed or social graph, likes, creator
 revenue sharing, voice imitation of real people, cover versions,
@@ -259,8 +292,9 @@ integration of Google's authenticator surface with our own verified flow.
 
 ## Licensing and the authorship record
 
-A song whose link is open can be licensed by another user ($4.99,
-`market_license` catalogue key). The buyer receives per-track download rights.
+A song whose link is open can be licensed by another user (**¥980**,
+tax-inclusive, `market_license` catalogue key). The buyer receives per-track
+download rights.
 The platform sells its own service and does **not** split that revenue with
 creators, so there is no earnings ledger and no payout machinery.
 

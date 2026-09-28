@@ -71,17 +71,22 @@ by server state rather than a constant someone could forget to flip.
 
 ---
 
-## 3. Payments — BLOCKED on an account
+## 3. Payments — BLOCKED on the operating entity's account
+
+The engineering is no longer what is blocking this. A **sandbox** account exists
+and the whole path has been walked against it; what is missing is an account
+belonging to the company that will actually take the money, and the reviews that
+come with it.
 
 | Requirement | State |
 | --- | --- |
-| Stripe account for the real operating entity | ✗ |
-| Test-mode verification: success, failure, 3DS, interrupted return | ✗ Blocked |
-| Webhook endpoint registered with its own secret | ✗ Blocked |
-| Versioned price ids | ✗ Blocked |
-| JP 3DS configuration reviewed | ✗ Blocked |
+| Stripe account for the real operating entity | ✗ — the account in use is a sandbox, and a sandbox cannot be promoted |
+| Test-mode verification: success, failure, 3DS, interrupted return | ✓ All four, against live test-mode Stripe, read out of the database rather than the screen (`26e7799`, `a0d355d`; `docs/ACCEPTANCE_PAYMENTS.md` Part B) |
+| Webhook endpoint registered with its own secret | ◐ Signature verification is proven — tampered bodies, garbage, an absent header, the wrong secret and a stale timestamp are all rejected — but the endpoint is `stripe listen`, not one registered in a dashboard. Registering it is part of the real account |
+| Versioned price ids | ✓ Every catalogue row carries one, across versions (`premier_monthly` v2 and v3 hold different ids, which is what kept v2 subscribers on v2 when the price changed) |
+| JP 3DS configuration reviewed | ✗ The flow works — a `requires_action` challenge is raised and an abandoned one grants nothing — but which transactions *should* be challenged in Japan is a compliance decision, not an engineering one |
 | Digital-content review by the payment provider | ✗ Blocked |
-| Payment logic (orders, idempotency, refunds, subscriptions) | ✓ Built and tested through the same pipeline Stripe events use |
+| Payment logic (orders, idempotency, refunds, subscriptions) | ✓ Built, tested, **and corrected by the live walk.** The suite was green while subscribers paid and received nothing: the Invoice field layout had moved and the simulated adapter agreed with our stale assumption. Treat "tested" and "exercised against the provider" as different claims |
 
 ---
 
