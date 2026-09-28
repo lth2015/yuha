@@ -19,6 +19,7 @@ import {
   upsertSubscription,
   withTx,
   query,
+  queryOne,
   type WebhookEventRow,
 } from '@yuha/db';
 import type { AppContext } from '../context.js';
@@ -523,15 +524,51 @@ async function handleRefund(ctx: AppContext, event: StripeEventLike): Promise<vo
     // Refunds are idempotent by the refund object id.
     if (!inserted) return;
 
-    const batches = await query<{ id: string }>(
-      `SELECT id FROM entitlement_batches
+    const batches = await query<{ id: string; granted_units: number }>(
+      `SELECT id, granted_units FROM entitlement_batches
         WHERE user_id = ? AND source = 'one_time_order' AND source_ref = ?`,
       [order.user_id, order.id],
       tx,
     );
     for (const b of batches) {
+      /*
+       * How much of the pack the refund actually paid back.
+       *
+       * This used to revoke every unused unit regardless of amount, so a ¥300
+       * refund on a ¥980 DROP took back all five songs: 30% of the money
+       * returned and 100% of the goods gone, leaving the buyer ¥680 down with
+       * nothing. The order was already being written as `partially_refunded`,
+       * so the distinction existed everywhere except here.
+       *
+       * `amount` is the cumulative `amount_refunded` from the charge where
+       * Stripe sends one, so two partial refunds settle against the running
+       * total rather than each taking its own share of the original.
+       *
+       * The batch's `granted_units` shrinks as units are revoked, so the
+       * original size is recovered from the ledger — the ledger is the record,
+       * and reconstructing from it is what keeps a second partial refund from
+       * measuring against an already-reduced pack.
+       */
+      const prior = await queryOne<{ revoked: number }>(
+        `SELECT COALESCE(SUM(units), 0) AS revoked FROM ledger_entries
+          WHERE batch_id = ? AND entry_type = 'revoke'`,
+        [b.id],
+        tx,
+      );
+      const alreadyRevoked = Number(prior?.revoked ?? 0);
+      const originalUnits = b.granted_units + alreadyRevoked;
+
+      let maxUnits: number | undefined;
+      if (order.amount_minor > 0 && amount > 0 && amount < order.amount_minor) {
+        // Floored, so rounding leaves the buyer holding slightly more than the
+        // surviving payment strictly buys. The other direction takes songs from
+        // someone who still paid for them.
+        const target = Math.floor((originalUnits * amount) / order.amount_minor);
+        maxUnits = Math.max(0, target - alreadyRevoked);
+      }
+
       const res = await revokeUnusedUnits(
-        { userId: order.user_id, batchId: b.id, reason: `refund:${order.id}` },
+        { userId: order.user_id, batchId: b.id, reason: `refund:${order.id}`, maxUnits },
         tx,
       );
       if (res.remainingReserved > 0 || res.remainingConsumed > 0) {

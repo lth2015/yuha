@@ -417,8 +417,27 @@ export async function compensateUnits(
  * Only units that are neither reserved nor consumed can be pulled back, so a
  * refund cannot drive a balance negative or cancel work already delivered.
  */
+/**
+ * Takes back units nobody has spent yet.
+ *
+ * `maxUnits` caps how many, for a refund that returned only part of the money.
+ * Without it this revoked every unused unit in the batch whatever the amount,
+ * so a ¥300 refund on a ¥980 pack took back all five songs — 30% of the money
+ * returned, 100% of the goods gone. Omit it and the whole unused remainder
+ * goes, which is what a full refund wants.
+ *
+ * Reserved and consumed units are never touched: a song already generated is
+ * not clawed back, and the caller is told what it could not reach so a human
+ * can decide.
+ */
 export async function revokeUnusedUnits(
-  params: { userId: string; batchId: string; reason: string; actorId?: string | null },
+  params: {
+    userId: string;
+    batchId: string;
+    reason: string;
+    actorId?: string | null;
+    maxUnits?: number;
+  },
   tx: PoolConnection,
 ): Promise<{ revoked: number; remainingReserved: number; remainingConsumed: number }> {
   await lockUserEntitlements(params.userId, tx);
@@ -429,7 +448,9 @@ export async function revokeUnusedUnits(
   );
   if (!batch) return { revoked: 0, remainingReserved: 0, remainingConsumed: 0 };
 
-  const revokable = batch.granted_units - batch.reserved_units - batch.consumed_units;
+  const unused = batch.granted_units - batch.reserved_units - batch.consumed_units;
+  const cap = params.maxUnits ?? unused;
+  const revokable = Math.max(0, Math.min(unused, cap));
   if (revokable > 0) {
     await execute(
       `UPDATE entitlement_batches

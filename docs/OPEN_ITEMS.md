@@ -96,9 +96,10 @@ is where the next piece of work is.
   all now been walked (`a0d355d`), and the subscription walk found that
   subscribers paid and received nothing — the Invoice and Subscription field
   layout had moved and the handler discarded every subscription invoice on its
-  first line. Two failure cases are still open and are listed in
-  `docs/ACCEPTANCE_PAYMENTS.md` Part B: B7 (the same charge refunded twice).
-  B5 has now been run and found a hole that no test and no alarm could see — a
+  first line. All seven failure cases in `docs/ACCEPTANCE_PAYMENTS.md` Part B
+  have now been run too, and the last two each found a defect rather than
+  confirming one. B7: a partial refund revoked the *entire* unused batch, so
+  returning 30% of the money took 100% of the songs. B5 found a hole that no test and no alarm could see — a
   payment the provider settled and never told us about left the order `pending`
   with the money gone, while `UngrantedPaidOrders` correctly read zero because
   it counts *paid* orders. `reconcilePendingCheckouts` closes it.
@@ -122,6 +123,47 @@ is where the next piece of work is.
 | **Analytics `preview_10s` event** | The player detects 10 seconds of real listening and the activation metric queries it, but the client does not yet POST it. Day-1 activation will therefore report as not computable. | Small |
 | **Subscription renewal and dunning** | The first period is now proven end to end against Stripe (`a0d355d`): purchase, grant, the duplicate-subscription guard firing for the first time outside a unit test, and cancellation agreeing with Stripe on both the flag and the period end. What has still never happened is a **second** period — a renewal invoice, and `invoice.payment_failed` on a card that stops working. Both are a month away in real time; forcing them needs a test clock. | Small, with a test clock |
 | **Load testing** | §12.3 targets (P95 <1s create, <120s generation, ≥95% success) cannot be meaningfully measured against a synthesised fixture that returns instantly. | Blocked on a real provider |
+
+---
+
+## 3b. Long term: the generation agent workflow
+
+Recorded 2026-09-29 from a product discussion, deliberately **not** started.
+The premise is right — if the model is rented, the only defensible layer is what
+surrounds it — but the shape proposed needs correcting before anyone builds it.
+
+**What cannot be built the way it sounds.** Staging an agent over timbre, scale,
+melody and chords assumes the provider exposes those as controllable inputs.
+Text-to-music APIs take a prompt, tags and optionally lyrics. You cannot instruct
+one to use a particular mode or cadence and have it comply, so a "chord
+optimisation" stage emits text *describing* chords and hopes — prompt decoration
+with extra cost and latency, not control.
+
+The harder half is verification. Checking that the output carries the requested
+harmony needs chord recognition, key detection and beat tracking: real audio
+ML, none of which exists here. **A check stage that cannot measure anything is
+the most expensive kind of theatre** — it bills, it delays, and it emits
+confident claims about musical quality that nobody verified. That is the exact
+failure this repository keeps finding in itself; see the Verifying section of
+`CLAUDE.md`.
+
+**What is worth building, roughly in order:**
+
+| Layer | Why it holds |
+| --- | --- |
+| **Lyrics** | The one place with genuine control *and* a code-checkable result: syllables per line, rhyme scheme, stress against meter, and for Japanese **mora** counts and pitch accent rather than syllables. Most competitors handle Japanese lyrics crudely. This is the strongest candidate for a real moat |
+| **Selection over generation** | Generate N candidates and *choose*. Everything decidable here is measurable: duration accuracy, loudness against the −14 LUFS target already configured, silence, clipping, and whether vocals are present when vocals were asked for — which is **AI-07**, still unbuilt, and the honest core of any "check" stage |
+| **Brief compilation** | Turning 「雨の午後、備忘録のような曲」 into the tag shape a *specific* provider responds to. Unglamorous, provider-specific, and it accumulates — it is also what survives changing providers |
+
+**The constraint that shapes all of it.** Unit economics assume ~45 JPY per
+music request and 0.5 JPY for GPT. CREATOR is ¥1,980 for 15 songs — **¥132 of
+revenue per song**. A five-stage workflow sampling several candidates heads
+straight for 5× the music call and the margin disappears. Any design here has to
+carry its own cost model, and the cheap layers (lyrics, selection) are also the
+defensible ones, which is convenient rather than coincidental.
+
+Blocked behind §1 regardless: none of this can be tuned against a synthesised
+tone, so it waits on a provider agreement.
 
 ---
 
