@@ -11,6 +11,7 @@ import { LightField } from './LightField';
 import { LANGS } from '../lib/i18n';
 import { NowPlaying } from './NowPlaying';
 import { PlayerBar } from './PlayerBar';
+import { PageTitleContext, pageTitleKey } from '../lib/title';
 
 /**
  * YUHA app shell — top navigation per the acceptance spec: 88px desktop / 72px
@@ -25,6 +26,21 @@ interface NowPlayingSong extends TrackView {
 
 
 
+/**
+ * A signed-in person's name, never blank.
+ *
+ * This was `me.displayName ?? me.email`, and `??` only falls through on
+ * null/undefined. Google's `name` claim is stored when it is any string, and
+ * `COALESCE` in the upsert keeps an empty one, so a blank name reached the
+ * header — where `(…)[0]!.toUpperCase()` threw on `""[0]`. The header renders
+ * outside the ErrorBoundary, so that one throw unmounted the whole app: a white
+ * screen on every page, for that account, for good. Reproduced by blanking a
+ * dev user's name, not reasoned about.
+ */
+function accountName(me: { displayName: string | null; email: string }): string {
+  return me.displayName?.trim() || me.email;
+}
+
 function SiteFooter() {
   const { t } = useI18n();
   const { runtime } = useSession();
@@ -38,6 +54,11 @@ function SiteFooter() {
         <Link to="/legal/privacy">{t('footer.privacy')}</Link>
         <Link to="/legal/company">{t('footer.company')}</Link>
         <Link to="/help/rights">{t('footer.rights')}</Link>
+        {/* Reachable from every page, not only from the final confirmation
+            screen — the pricing page is an advertisement and prices appear on
+            it. Checkout.tsx was the only thing linking here. Where exactly the
+            disclosure must sit is a legal call; making it findable is not. */}
+        <Link to="/legal/tokushoho">{t('footer.tokushoho')}</Link>
         <a href="https://netstars.co.jp" target="_blank" rel="noreferrer">
           NetStars
         </a>
@@ -60,6 +81,15 @@ export function Layout({ children }: { children: ReactNode }) {
   const [nowPlaying, setNowPlaying] = useState<NowPlayingSong | null>(null);
   const [nowPlayingOpen, setNowPlayingOpen] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [titleOverride, setTitleOverride] = useState<string | null>(null);
+
+  // See lib/title.ts. Written here, once, so a page's override and the route's
+  // default can never race each other on a language switch.
+  useEffect(() => {
+    const key = pageTitleKey(location.pathname);
+    document.title =
+      key === null ? `YUHA — ${t('footer.slogan')}` : `${titleOverride ?? t(key)} — YUHA`;
+  }, [location.pathname, lang, t, titleOverride]);
 
   useEffect(() => {
     if (!nowPlayingOpen) return;
@@ -144,6 +174,12 @@ export function Layout({ children }: { children: ReactNode }) {
                   <button
                     type="button"
                     className="account__btn"
+                    // The button holds only an avatar (alt="") or an
+                    // aria-hidden initial, so it had no name at all: every
+                    // signed-in page failed axe's button-name, and a screen
+                    // reader announced an unlabelled "menu button". Who is
+                    // signed in is exactly what this control is about.
+                    aria-label={t('account.menuAria', { name: accountName(me) })}
                     aria-haspopup="menu"
                     aria-expanded={menuOpen}
                     onClick={() => setMenuOpen((v) => !v)}
@@ -152,13 +188,13 @@ export function Layout({ children }: { children: ReactNode }) {
                       <img className="account__avatar" src={me.avatarUrl} alt="" referrerPolicy="no-referrer" />
                     ) : (
                       <span className="account__initial" aria-hidden="true">
-                        {(me.displayName ?? me.email)[0]!.toUpperCase()}
+                        {(accountName(me)[0] ?? '?').toUpperCase()}
                       </span>
                     )}
                   </button>
                   <div className="account__menu" role="menu">
                     <div className="account__who">
-                      <strong>{me.displayName ?? t('card.creator')}</strong>
+                      <strong>{me.displayName?.trim() || t('card.creator')}</strong>
                       <span className="small">{me.email}</span>
                     </div>
                     <Link role="menuitem" to="/library" onClick={() => setMenuOpen(false)}>
@@ -207,12 +243,17 @@ export function Layout({ children }: { children: ReactNode }) {
         {/* Keyed on the path so navigating away clears a crashed route. A
             boundary that stays broken until a full reload turns one bad page
             into a bad session. */}
-        <ErrorBoundary key={location.pathname}>{children}</ErrorBoundary>
+        <PageTitleContext.Provider value={setTitleOverride}>
+          <ErrorBoundary key={location.pathname}>{children}</ErrorBoundary>
+        </PageTitleContext.Provider>
       </main>
 
       <SiteFooter />
 
-      <nav className="tabbar" aria-label={t('nav.skip')}>
+      {/* Was labelled with nav.skip, so the mobile navigation landmark was
+          announced as "skip to content". Only one of this and .topnav__nav is
+          ever displayed (styles.css), so they share the main-navigation name. */}
+      <nav className="tabbar" aria-label={t('nav.mainAria')}>
         {[
           { to: '/', key: 'nav.create', end: true },
           { to: '/library', key: 'nav.library', end: false },

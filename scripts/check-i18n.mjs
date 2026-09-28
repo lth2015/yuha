@@ -129,6 +129,23 @@ for (const [file, src] of files) {
 
 // --- 2. user-facing text that never reaches the dictionary
 const CJK = /[\u4e00-\u9fff\u3040-\u30ff]/;
+/*
+ * English prose in JSX text, which the CJK test alone could not see.
+ *
+ * This is a trilingual app, so a hardcoded English sentence is exactly as
+ * untranslated as a hardcoded Japanese one — it is what zh and ja users are
+ * shown. Until 2026-09-29 the check only flagged text containing CJK, reported
+ * "no new hardcoded UI strings", and missed 43: the 404 page, most of account
+ * settings, the age gate on the sign-in page. Found by an accessibility audit
+ * that noticed the 404 page said "Page not found" under a Japanese header.
+ *
+ * Limited to JSX text nodes. Quoted English strings are mostly class names,
+ * keys and URLs; the text between tags is almost always something a person
+ * reads. Two words of letters is the threshold, and anything with an `@` is
+ * data (the demo accounts listed on the dev sign-in card), not copy.
+ */
+const PROSE = /[A-Za-z]{2,}[\s,.'’]+[A-Za-z]{2,}/;
+const isEnglishProse = (text) => PROSE.test(text) && !CJK.test(text) && !text.includes('@');
 const BASELINE_FILE = join(ROOT, 'scripts/i18n-hardcoded.baseline.json');
 /**
  * Blank out comment bodies while keeping newlines, so line numbers survive.
@@ -203,7 +220,7 @@ for (const [file, src] of files) {
     }
     JSX_TEXT.lastIndex = 0;
     while ((m = JSX_TEXT.exec(line)) !== null) {
-      if (CJK.test(m[1])) at(m[1]);
+      if (CJK.test(m[1]) || isEnglishProse(m[1].trim())) at(m[1]);
     }
   });
 }

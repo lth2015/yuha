@@ -12,6 +12,7 @@ import { ErrorNotice } from '../components/common';
 import { Score } from '../components/Score';
 import { SyncedLyrics } from '../components/SyncedLyrics';
 import { scoreFromSeed } from '../lib/score';
+import { usePageTitle } from '../lib/title';
 
 interface SongDetailResponse extends TrackView {
   lyrics: string | null;
@@ -38,6 +39,8 @@ export default function SongDetail() {
   const { me } = useSession();
   const player = usePlayer();
   const [song, setSong] = useState<SongDetailResponse | null>(null);
+  // A song page is best titled by its song, not by the word "song".
+  usePageTitle(song?.title);
   const [error, setError] = useState<unknown>(null);
   const [busy, setBusy] = useState(false);
   const [copied, setCopied] = useState(false);

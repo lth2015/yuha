@@ -18,6 +18,7 @@ export function SongCard({
   queue,
   index = 0,
   onRemove,
+  disambiguator,
 }: {
   song: TrackView;
   queue: TrackView[];
@@ -25,8 +26,16 @@ export function SongCard({
   index?: number;
   /** Library-only: called after a successful delete. */
   onRemove?: (trackId: string) => void;
+  /**
+   * Set only when another song in the same list has this title. Sighted users
+   * tell such cards apart by cover and position; a screen reader's list of
+   * controls had nothing but two identical 「…を再生」 entries. Untitled songs
+   * are auto-named, so this is not a corner case.
+   */
+  disambiguator?: string;
 }) {
   const { t } = useI18n();
+  const spoken = disambiguator ? `${song.title} ${disambiguator}` : song.title;
   const player = usePlayer();
   const [busy, setBusy] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
@@ -85,7 +94,7 @@ export function SongCard({
           className="song-card__play"
           onClick={onPlay}
           disabled={!song.previewUrl}
-          aria-label={playing ? t('card.pause', { title: song.title }) : t('card.play', { title: song.title })}
+          aria-label={playing ? t('card.pause', { title: spoken }) : t('card.play', { title: spoken })}
         >
           <span className={playing ? 'icon icon--pause' : 'icon icon--play'} aria-hidden="true" />
         </button>
@@ -96,9 +105,15 @@ export function SongCard({
       </div>
 
       <div className="song-card__meta">
-        <h3 className="song-card__title" title={song.title}>
-          <Link to={`/song/${song.trackId}`}>{song.title}</Link>
-        </h3>
+        {/* h2: the library's h1 is the only heading above the grid, and this
+            was an h3 with no h2 between them (axe heading-order). The library
+            is the card's only host. */}
+        <h2 className="song-card__title" title={song.title}>
+          <Link to={`/song/${song.trackId}`}>
+            {song.title}
+            {disambiguator && <span className="sr-only"> {disambiguator}</span>}
+          </Link>
+        </h2>
         <div className="song-card__sub">
           <span className="song-card__artist">
             {song.artistName ?? t(isMine ? 'card.you' : 'card.creator')}
@@ -129,7 +144,7 @@ export function SongCard({
               onClick={() => setMenuOpen((v) => !v)}
               aria-haspopup="menu"
               aria-expanded={menuOpen}
-              aria-label={t('card.more', { title: song.title })}
+              aria-label={t('card.more', { title: spoken })}
             >
               <span className="icon icon--dots" aria-hidden="true" />
             </button>

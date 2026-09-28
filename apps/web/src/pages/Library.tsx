@@ -1,9 +1,10 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import type { TrackView } from '@yuha/contracts';
 import { apiFetch } from '../lib/api';
 import { useI18n } from '../lib/i18n';
 import { ErrorNotice } from '../components/common';
+import { formatJst } from '../lib/session';
 import { SongCard } from '../components/SongCard';
 
 
@@ -67,6 +68,14 @@ export default function Library() {
     { key: 'lib.paused', value: 'suspended' },
   ];
 
+  // Titles that appear more than once in what is on screen. Only those cards
+  // get a spoken date, so a library of distinct titles reads exactly as before.
+  const repeatedTitles = useMemo(() => {
+    const seen = new Map<string, number>();
+    for (const s of songs ?? []) seen.set(s.title, (seen.get(s.title) ?? 0) + 1);
+    return new Set([...seen].filter(([, n]) => n > 1).map(([title]) => title));
+  }, [songs]);
+
   return (
     <div className="stack">
       <div className="section-head">
@@ -128,6 +137,11 @@ export default function Library() {
                 song={song}
                 queue={songs}
                 index={i}
+                disambiguator={
+                  repeatedTitles.has(song.title)
+                    ? t('card.madeOn', { date: formatJst(song.createdAt, true) })
+                    : undefined
+                }
                 onRemove={(id) => setSongs((prev) => prev?.filter((s) => s.trackId !== id) ?? null)}
               />
             ))}

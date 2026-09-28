@@ -18,6 +18,7 @@ import Home from './pages/Home';
 import { Company, Privacy, Terms } from './pages/Legal';
 import { Tokushoho } from './pages/Tokushoho';
 import Library from './pages/Library';
+import NotFound from './pages/NotFound';
 import Pricing from './pages/Pricing';
 import Project from './pages/Project';
 import Rights from './pages/Rights';
@@ -159,15 +160,7 @@ export default function App() {
               <Route path="/legal/company" element={<Company />} />
               <Route path="/legal/tokushoho" element={<Tokushoho />} />
 
-              <Route
-                path="*"
-                element={
-                  <div className="empty">
-                    <h2>Page not found</h2>
-                    <p>Check the URL, or head back to Create.</p>
-                  </div>
-                }
-              />
+              <Route path="*" element={<NotFound />} />
             </Routes>
           </Layout>
         </PlayerProvider>

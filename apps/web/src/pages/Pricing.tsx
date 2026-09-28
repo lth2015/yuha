@@ -155,9 +155,13 @@ export default function Pricing() {
           {plans.map((p) => {
               const copy = PLAN_COPY[p.priceKey]!;
               return (
-                <article key={p.priceKey} className={`plan${copy.highlight ? ' plan--highlight' : ''}`}>
+                <article
+                  key={p.priceKey}
+                  className={`plan${copy.highlight ? ' plan--highlight' : ''}`}
+                  aria-labelledby={`plan-${p.priceKey}-name`}
+                >
                   {copy.highlight && <span className="plan__badge">{t('price.popular')}</span>}
-                  <h2>{p.displayName.split('—')[0]!.trim()}</h2>
+                  <h2 id={`plan-${p.priceKey}-name`}>{p.displayName.split('—')[0]!.trim()}</h2>
                   <p className="plan__price">
                     {formatMoney(p.amountMinor, p.currency, locale)}
                     {p.kind === 'subscription' && <span className="plan__per">{t('price.month')}</span>}
@@ -178,6 +182,17 @@ export default function Pricing() {
                   {p.available ? (
                     <button
                       type="button"
+                      id={`plan-${p.priceKey}-cta`}
+                      /*
+                       * Named by its own text *and* its plan. CREATOR and STUDIO
+                       * both read 「登録する」, so a screen reader's list of
+                       * buttons offered two identical entries on the page where
+                       * someone decides what to pay monthly. Referencing itself
+                       * first keeps the visible words at the start of the name
+                       * (WCAG 2.5.3, Label in Name), so a voice-control user who
+                       * says what they see still hits it.
+                       */
+                      aria-labelledby={`plan-${p.priceKey}-cta plan-${p.priceKey}-name`}
                       className={`btn btn--block${copy?.highlight ? ' btn--primary' : ''}`}
                       onClick={() => buy(p.priceKey)}
                       disabled={busyKey === p.priceKey}

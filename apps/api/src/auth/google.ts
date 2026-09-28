@@ -131,7 +131,11 @@ export class GoogleAuthAdapter implements AuthAdapter {
       sub,
       email,
       emailVerified: true,
-      name: typeof payload['name'] === 'string' ? payload['name'] : null,
+      // Blank is absent. A name of "" passed the typeof check, was stored as
+      // "" (the upsert's COALESCE only skips NULL), and crashed the header of
+      // every page for that account. The web side now tolerates it too; this
+      // stops it entering the database at all.
+      name: typeof payload['name'] === 'string' && payload['name'].trim() ? payload['name'].trim() : null,
       picture: typeof payload['picture'] === 'string' ? payload['picture'] : null,
     };
   }
