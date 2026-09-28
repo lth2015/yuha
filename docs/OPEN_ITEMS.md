@@ -97,8 +97,11 @@ is where the next piece of work is.
   subscribers paid and received nothing — the Invoice and Subscription field
   layout had moved and the handler discarded every subscription invoice on its
   first line. Two failure cases are still open and are listed in
-  `docs/ACCEPTANCE_PAYMENTS.md` Part B: B5 (listener stopped, paid, restarted,
-  resent) and B7 (the same charge refunded twice).
+  `docs/ACCEPTANCE_PAYMENTS.md` Part B: B7 (the same charge refunded twice).
+  B5 has now been run and found a hole that no test and no alarm could see — a
+  payment the provider settled and never told us about left the order `pending`
+  with the money gone, while `UngrantedPaidOrders` correctly read zero because
+  it counts *paid* orders. `reconcilePendingCheckouts` closes it.
 
 ---
 
@@ -108,6 +111,8 @@ is where the next piece of work is.
 | --- | --- | --- |
 | **Unintended-vocal detection** (AI-07) | Vocals are a product feature; what is unverified is the *instrumental* choice being honoured. PROJECT_TASK AI-07 asks for a check and a failure path when instrumental was requested, and the output checks cover decodability, duration, silence and integrity — none of which detects a voice. Needs a classifier plus the human review AI-07 requires. Until then "instrumental" rests on the provider's parameter, not on our verification. (This row previously read "the launch promise is instrumental-only", which contradicts `CLAUDE.md` and §5.) | Medium |
 | **CloudWatch metric publication** | `monitoring.tf` alarms on `UpstreamFailureRate`, `DailyBudgetConsumedRatio`, `WebhookBacklog`, `LedgerDiscrepancies`, `UngrantedPaidOrders`, `StaleUnknownJobs`. The worker computes all of these but does **not yet publish** them. They are set `treat_missing_data = "breaching"` so they fail loudly rather than looking healthy. | Small |
+| **An alarm on settlement-by-sweep** | `reconcilePendingCheckouts` logs at `warn` whenever it settles a checkout, because settling by sweep means a webhook was lost — the repair is the symptom, not the cure. Nothing alarms on it, and the existing set cannot: `UngrantedPaidOrders` counts *paid* orders and this case never reaches `paid` on its own, and `WebhookBacklog` counts events received and unprocessed when the whole problem is that none was received. Whoever publishes the metrics above should add this one. | Small |
+| **`UngrantedPaidOrders` counts subscriptions too** | Fixed in `a0d355d` by marking the opening order fulfilled, so the count is honest today. Worth knowing why it was ever wrong: subscriptions deliberately do not grant from the checkout event (PAY-06), so anything reading "paid but not granted" as a fault will mis-read them. Any future non-credit product will need the same care. | Done, recorded as a trap |
 | **Contrast on translucent surfaces** (UI-14) | Measured and gated, not outstanding: `scripts/check-contrast.mjs` checks 8 text tokens against `--bg`, `--surface-solid` and `--surface-soft` on every run, and all 8 clear 4.5:1 — the tightest is `--faint` at 4.56 on `--surface-soft`. What the gate cannot see is glass: a translucent surface over a moving light field has no colour in the stylesheet, so `--surface-soft`, the lightest opaque surface, stands in for it. That is a conservative substitution, not a measurement. Text placed on the `docs/UI_DESIGN.md` gradient rather than on a panel still needs measuring against the rendered lightest point. | Small |
 | **Screen reader and real-device testing** (UI-13, UI-14) | Verified at three widths in a desktop browser only. VoiceOver, TalkBack and physical mobile playback are untested. | Small |
 | **Nobody has heard the audio** | The delivered file is a real 180.000s 192kbps MP3 and Chrome decodes it to `readyState 4`, but playback itself has never been verified: in the browser pane used for acceptance the `AudioContext` advances 0.006s per 2s of wall clock, so nothing sounds there (`26e7799`). This is the only link in the core promise that no check of any kind covers, and it needs a human at a machine with audio output. | Small, and only a human can close it |

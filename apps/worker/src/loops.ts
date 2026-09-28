@@ -1,5 +1,5 @@
 import type { AppContext } from '@yuha/api';
-import { processWebhookEvent, recoverUngrantedOrders } from '@yuha/api';
+import { processWebhookEvent, recoverUngrantedOrders, reconcilePendingCheckouts } from '@yuha/api';
 import {
   claimJob,
   claimOutboxBatch,
@@ -197,6 +197,22 @@ export async function maintenanceLoop(deps: LoopDeps, intervalMs = 60_000): Prom
 
       const recovered = await recoverUngrantedOrders(ctx);
       if (recovered) log('warn', 'recovered paid orders with missing entitlements', { count: recovered });
+
+      /*
+       * Orders the provider settled and never told us about. The sweep above
+       * cannot see these — it starts from `status = 'paid'`, which an order
+       * only reaches because an event said so, and the missing thing here is
+       * the event. Ten minutes is well past a normal delivery (seconds) and
+       * well inside Stripe's own retry window, so a webhook that is merely
+       * slow is never raced.
+       *
+       * Logged at `warn` even on success: settling by sweep means a delivery
+       * was lost, and a silent repair would hide that the endpoint is broken.
+       */
+      const reconciled = await reconcilePendingCheckouts(ctx, 600);
+      if (reconciled) {
+        log('warn', 'settled paid checkouts whose webhook never arrived', { count: reconciled });
+      }
 
       const drift = await reconcileBalances();
       if (drift.length) {

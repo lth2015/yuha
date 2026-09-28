@@ -284,6 +284,36 @@ export async function setOrderStatus(
   );
 }
 
+/**
+ * Orders still `pending` whose checkout session is old enough that a webhook
+ * should have arrived by now.
+ *
+ * `listUngrantedPaidOrders` below cannot see these: it starts from
+ * `status = 'paid'`, and an order only reaches `paid` because an event told us
+ * so. When the event is the thing that went missing, the order sits at
+ * `pending` with the money already taken, and every count built on "paid but
+ * ungranted" reads zero. Found that way against the sandbox with the listener
+ * stopped.
+ *
+ * `olderThanSeconds` is a grace window, not a nicety: without it the sweep
+ * races deliveries that are merely in flight and calls Stripe for every
+ * checkout anyone has open.
+ */
+export async function listStalePendingCheckouts(
+  olderThanSeconds: number,
+  limit = 50,
+): Promise<OrderRow[]> {
+  return query<OrderRow>(
+    `SELECT ${ORDER_COLUMNS} FROM orders
+      WHERE status = 'pending'
+        AND stripe_checkout_session_id IS NOT NULL
+        AND created_at < DATE_SUB(UTC_TIMESTAMP(3), INTERVAL ? SECOND)
+      ORDER BY created_at
+      LIMIT ?`,
+    [olderThanSeconds, limit],
+  );
+}
+
 /** Orders that were charged but whose entitlement never landed — PAY-11 recovery. */
 export async function listUngrantedPaidOrders(limit = 100): Promise<OrderRow[]> {
   return query<OrderRow>(

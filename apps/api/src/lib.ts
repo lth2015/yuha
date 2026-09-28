@@ -43,4 +43,8 @@ export {
   toJst,
 } from './services/billing.js';
 
-export { processWebhookEvent, recoverUngrantedOrders } from './services/webhooks.js';
+export {
+  processWebhookEvent,
+  recoverUngrantedOrders,
+  reconcilePendingCheckouts,
+} from './services/webhooks.js';

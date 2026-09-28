@@ -8,6 +8,7 @@ import {
   grantUnits,
   findOrderBySession,
   findSubscriptionByStripeId,
+  listStalePendingCheckouts,
   listUngrantedPaidOrders,
   markEntitlementGranted,
   markOrderPaid,
@@ -586,6 +587,68 @@ async function handleDispute(ctx: AppContext, event: StripeEventLike): Promise<v
 
 function numberToDate(v: unknown): Date | null {
   return typeof v === 'number' && Number.isFinite(v) ? new Date(v * 1000) : null;
+}
+
+/**
+ * Reconciliation sweep: orders the provider settled and never told us about.
+ *
+ * `recoverUngrantedOrders` below starts from `status = 'paid'`, so it can only
+ * repair a payment we already heard about. When the *notification* is what went
+ * missing, the order stays `pending` while the money is gone, nothing counts it,
+ * and the alarm built for this case (`UngrantedPaidOrders`) reads zero because
+ * that is literally true. Reproduced against the sandbox by stopping
+ * `stripe listen` and paying: Stripe said `complete` / `paid`, we said
+ * `pending`, and every signal was green.
+ *
+ * Stripe retries for about three days, so reaching this state needs a longer
+ * outage — or an endpoint that answers 2xx and drops the event, which is a
+ * deploy bug rather than an outage. The charge has already happened in both.
+ *
+ * This deliberately does **not** re-implement settlement. It re-reads the
+ * session from the provider and hands the existing handler an event carrying
+ * only the session id: `handleCheckoutCompleted` already prefers the live
+ * object over the payload for every field it needs, so one code path settles a
+ * checkout whether the news arrived by webhook or by sweep. The idempotency
+ * that protects a redelivered webhook — order status transitions, and the
+ * business key on `entitlement_batches (user, source, source_ref)` — protects
+ * this identically.
+ *
+ * `olderThanSeconds` keeps the sweep away from deliveries that are merely in
+ * flight; the worker passes a window measured in minutes, and tests pass 0.
+ */
+export async function reconcilePendingCheckouts(
+  ctx: AppContext,
+  olderThanSeconds: number,
+  limit = 50,
+): Promise<number> {
+  const orders = await listStalePendingCheckouts(olderThanSeconds, limit);
+  let settled = 0;
+
+  for (const order of orders) {
+    const sessionId = order.stripe_checkout_session_id;
+    if (!sessionId) continue;
+
+    const live = await ctx.payments.retrieveCheckoutSession(sessionId);
+    // A provider we cannot reach is not evidence of anything. Leave the order
+    // alone and let the next sweep ask again.
+    if (!live) continue;
+
+    if (live.paymentStatus === 'paid') {
+      await handleCheckoutCompleted(ctx, {
+        id: `reconcile:${sessionId}`,
+        type: 'checkout.session.completed',
+        created: Math.floor(Date.now() / 1000),
+        data: { object: { id: sessionId } },
+      });
+      settled += 1;
+    } else if (live.status === 'expired') {
+      // The customer never paid and never will on this session. Closing it
+      // keeps the sweep's working set from growing without bound.
+      await setOrderStatus({ orderId: order.id, status: 'canceled' });
+    }
+  }
+
+  return settled;
 }
 
 /**
