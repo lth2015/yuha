@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import type { MeView } from '@yuha/contracts';
 import { apiFetch } from '../lib/api';
@@ -11,6 +11,32 @@ interface AuthConfig {
   devLogin: boolean;
   google: { enabled: boolean; configured: boolean; clientId: string | null };
 }
+
+/**
+ * Three states, not two.
+ *
+ * This used to be `AuthConfig | null`, set by
+ * `.then(setAuthConfig).catch(() => setAuthConfig(null))`, and every branch
+ * below read `authConfig?.…`. So "the API did not answer" and "the API answered,
+ * and Google is off" collapsed into the same value, and the page reported both
+ * as **"Google sign-in is not configured — set GOOGLE_CLIENT_ID, …"**. That
+ * sends someone to edit an `.env` that was already correct, while the actual
+ * fault is that nothing is listening on the API port. It cost exactly that
+ * detour on 2026-09-28.
+ *
+ * `null` also meant "not fetched yet", so a correctly configured instance
+ * showed the same "not configured" panel for the length of the request, on
+ * every load.
+ *
+ * `api.ts` already draws the distinction — it throws `NetworkError` when the
+ * browser cannot reach the API at all, separately from `ApiError` — and the
+ * blanket catch was discarding it. `ErrorNotice` renders that error with the
+ * right words and a retry, the same as everywhere else in the app.
+ */
+type ConfigState =
+  | { status: 'loading' }
+  | { status: 'ready'; config: AuthConfig }
+  | { status: 'unreachable'; error: unknown };
 
 /**
  * Sign-in.
@@ -26,7 +52,7 @@ export default function Auth() {
   const [params] = useSearchParams();
   const { runtime, signIn } = useSession();
 
-  const [authConfig, setAuthConfig] = useState<AuthConfig | null>(null);
+  const [configState, setConfigState] = useState<ConfigState>({ status: 'loading' });
   const [email, setEmail] = useState('');
   const [ageConfirmed, setAgeConfirmed] = useState(false);
   const [termsAccepted, setTermsAccepted] = useState(false);
@@ -38,9 +64,33 @@ export default function Auth() {
   const googleError = params.get('google_error');
   const canSubmit = email.includes('@') && ageConfirmed && termsAccepted && !submitting;
 
-  useEffect(() => {
-    apiFetch<AuthConfig>('/v1/auth/config').then(setAuthConfig).catch(() => setAuthConfig(null));
+  // Retry starts a second request without cancelling the first. A slow first
+  // attempt that fails after a fast retry succeeded would otherwise put the page
+  // back into "unreachable" — reporting a failure that has already been
+  // recovered from, which is the same class of wrong answer this whole change is
+  // about. Only the newest attempt may write state; the cleanup makes every
+  // in-flight attempt stale on unmount.
+  const attempt = useRef(0);
+  const loadConfig = useCallback(() => {
+    const mine = (attempt.current += 1);
+    setConfigState({ status: 'loading' });
+    apiFetch<AuthConfig>('/v1/auth/config')
+      .then((config) => {
+        if (attempt.current === mine) setConfigState({ status: 'ready', config });
+      })
+      .catch((error: unknown) => {
+        if (attempt.current === mine) setConfigState({ status: 'unreachable', error });
+      });
   }, []);
+
+  useEffect(() => {
+    loadConfig();
+    return () => {
+      attempt.current += 1;
+    };
+  }, [loadConfig]);
+
+  const config = configState.status === 'ready' ? configState.config : null;
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -83,7 +133,14 @@ export default function Auth() {
           </div>
         )}
 
-        {authConfig?.google.enabled ? (
+        {configState.status === 'unreachable' && (
+          // Whatever is wrong, it is not the operator's env file, and saying so
+          // would send them to the wrong place. ErrorNotice reads NetworkError
+          // and offers the retry.
+          <ErrorNotice error={configState.error} onRetry={loadConfig} />
+        )}
+
+        {config?.google.enabled ? (
           <a
             className="btn btn--google btn--block"
             href={`${import.meta.env['VITE_API_URL'] ?? 'http://localhost:4000'}/v1/auth/google/start`}
@@ -93,7 +150,10 @@ export default function Auth() {
             </span>
             {t('auth.google')}
           </a>
-        ) : (
+        ) : configState.status === 'ready' ? (
+          // Only once the server has actually said so. While the request is in
+          // flight there is nothing to report, and claiming a misconfiguration
+          // on every page load is how this message stopped being believed.
           <div className="alert alert--info">
             <div className="alert__title">Google sign-in is not configured</div>
             <div className="small">
@@ -102,9 +162,9 @@ export default function Auth() {
               automatically.
             </div>
           </div>
-        )}
+        ) : null}
 
-        {authConfig?.devLogin && (
+        {config?.devLogin && (
           <>
             <div className="auth-divider">
               <span>{t('auth.or')}</span>
@@ -181,7 +241,7 @@ export default function Auth() {
           </>
         )}
 
-        {authConfig?.adapter === 'cognito' && !authConfig.devLogin && (
+        {config?.adapter === 'cognito' && !config.devLogin && (
           <div className="alert alert--info">
             <div className="alert__title">Email code sign-in</div>
             <div className="small">
