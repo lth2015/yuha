@@ -1,4 +1,20 @@
-# SONARE Helm values.
+# YUHA Helm values.
+#
+# Two naming domains, and exactly one bridge between them:
+#
+#   * **AWS** is `loopscene-<environment>` — the EKS cluster, the ECR
+#     repositories, the IAM roles, the Secrets Manager entries. Renaming those
+#     forces resource recreation, so CLAUDE.md keeps them as they are.
+#   * **Inside the cluster** everything is `yuha`: the namespace, the Helm
+#     release, the ServiceAccounts, the synced Secret.
+#
+# The bridge is IRSA. An IRSA trust policy names one exact
+# `system:serviceaccount:<namespace>:<name>`, so these ServiceAccount names must
+# equal the subjects in `infra/terraform/compute.tf`. They did not until
+# 2026-09-28: the chart said `sonare-*`, `deploy/envs/*` said `yuha-*` and
+# Terraform trusted `loopscene:loopscene-*`. Nothing catches that — pods start
+# and every S3, SQS and Secrets Manager call fails with AccessDenied, which
+# reads as a permissions problem rather than a typo.
 #
 # Secrets are never set here. `envFromSecret` names a Kubernetes Secret that the
 # External Secrets Operator (or an equivalent) syncs from AWS Secrets Manager,
@@ -11,27 +27,37 @@ image:
   registry: ""
   # Images are pinned by digest, not by tag: an immutable reference is what
   # makes a rollback deterministic (§4.2 "镜像固定摘要").
+  #
+  # Repositories have no default. Terraform names them
+  # `loopscene-<environment>-{api,worker}`, which the chart cannot know, and the
+  # previous defaults (`sonare-*`) named repositories that do not exist in any
+  # account — a pull that fails at the end of a deploy rather than at render.
   api:
-    repository: sonare-api
+    repository: ""
     digest: ""
   worker:
-    repository: sonare-worker
+    repository: ""
     digest: ""
   pullPolicy: IfNotPresent
 
+# These names are load-bearing: they must match the IRSA subjects in
+# `infra/terraform/compute.tf` exactly, in the namespace the release is
+# installed into (`yuha`). Changing one without the other silently removes the
+# pods' AWS access.
 serviceAccount:
   api:
-    name: sonare-api
+    name: yuha-api
     # eks.amazonaws.com/role-arn, from the Terraform output.
     roleArn: ""
   worker:
-    name: sonare-worker
+    name: yuha-worker
     roleArn: ""
 
 # Name of the synced Kubernetes Secret holding DATABASE_URL, GOOGLE_CLIENT_SECRET,
 # GOOGLE_SESSION_SECRET, STRIPE_SECRET_KEY, STRIPE_WEBHOOK_SECRET,
-# TOKENSTARS_API_KEY and MUSIC_API_KEY.
-envFromSecret: sonare-runtime
+# TOKENSTARS_API_KEY and MUSIC_API_KEY. Created by
+# `deploy/cluster/external-secrets.yaml`; the two names must match.
+envFromSecret: yuha-runtime
 
 api:
   # §4.2: at least two replicas across two availability zones in production.
@@ -111,6 +137,11 @@ config:
     appClientId: ""
 
   storage:
+    # S3_REGION used to be rendered from `config.cognito.region`, which happened
+    # to hold the same value and so looked correct. Setting the Cognito region —
+    # or using Google sign-in and never touching that block — moved the S3
+    # region with it.
+    region: ap-northeast-1
     quarantineBucket: ""
     deliveryBucket: ""
     kmsKeyId: ""

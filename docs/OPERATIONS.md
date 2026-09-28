@@ -33,19 +33,30 @@ Never put a real key in `values.yaml`, in git, or in Terraform state.
 
 ### Release
 
+The normal path is Actions → Deploy (`.github/workflows/deploy.yml`), and
+`deploy/runbook.md` is the procedure. What follows is the same thing by hand,
+for when the workflow cannot run.
+
 ```bash
 # 1. Build and push, capturing the digest — tags are not acceptable references
-docker build -t $ECR/loopscene-api:$SHA .
-docker push $ECR/loopscene-api:$SHA
-DIGEST=$(docker inspect --format='{{index .RepoDigests 0}}' $ECR/loopscene-api:$SHA | cut -d@ -f2)
+docker build -t $ECR/loopscene-$ENV-api:$SHA .
+docker push $ECR/loopscene-$ENV-api:$SHA
+DIGEST=$(docker inspect --format='{{index .RepoDigests 0}}' $ECR/loopscene-$ENV-api:$SHA | cut -d@ -f2)
 
 # 2. Deploy. Migrations run as a pre-upgrade hook, before any new pod starts.
-helm upgrade --install loopscene infra/helm/loopscene \
-  --namespace loopscene --create-namespace \
-  --values infra/helm/loopscene/values-$ENV.yaml \
+helm upgrade --install yuha infra/helm/loopscene \
+  --namespace yuha --create-namespace \
+  --values deploy/envs/$ENV.yaml \
   --set image.api.digest=$DIGEST --set image.worker.digest=$DIGEST \
   --atomic --timeout 10m
 ```
+
+Three things in that block were wrong until 2026-09-28, and each would have
+produced a different broken deploy: the ECR repositories Terraform creates are
+`loopscene-<environment>-api`, not `loopscene-api`; the release and namespace
+are `yuha`, which is what the IRSA trust policies name and what the deploy
+workflow uses; and `infra/helm/loopscene/values-$ENV.yaml` has never existed —
+the per-environment values live in `deploy/envs/`.
 
 The chart **refuses to render** without a digest. A mutable tag would make
 "roll back to the previous release" ambiguous, which is unacceptable on a path
@@ -54,7 +65,7 @@ that moves money.
 ### Post-deploy checks
 
 ```bash
-kubectl -n loopscene get pods
+kubectl -n yuha get pods
 curl -sf https://$HOST/health
 curl -s https://$HOST/v1/runtime | jq '{mode, demo, features}'
 ```
@@ -68,7 +79,7 @@ the configuration before announcing anything.
 ## 2. Rollback
 
 ```bash
-helm rollback loopscene <REVISION> --namespace loopscene --wait
+helm rollback yuha <REVISION> --namespace yuha --wait
 ```
 
 **Before rolling back, check whether the release ran a migration.** Application

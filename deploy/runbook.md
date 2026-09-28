@@ -24,8 +24,21 @@ records that as BLOCKED_EXTERNAL, and this runbook does not pretend otherwise.
    | `DEPLOY_RUNNER_PRODUCTION` | label of a self-hosted runner inside the VPC — production only |
 
 3. **Fill `deploy/envs/<environment>.yaml`** from the Terraform outputs. Every
-   empty string there is a real value that has to be supplied; the chart fails
-   rather than rendering a half-configured release.
+   empty string there is a real value that has to be supplied.
+
+   Two layers refuse, and it matters which one you are reading. The **chart**
+   fails at `helm template` for the four values only it can know — image
+   registry, repository, digest, and `runMode`. Everything else is checked by
+   the **API at startup**, which lists every missing or contradictory setting by
+   name and exits; so those show up as a CrashLoopBackOff whose logs name the
+   fields. This step used to claim the chart caught all of it.
+
+   The names in `serviceAccount.*` and `envFromSecret` are load-bearing: the
+   IRSA trust policies in `infra/terraform/compute.tf` name
+   `yuha:yuha-api`, `yuha:yuha-worker` and `yuha:yuha-external-secrets`
+   exactly. AWS resources are `loopscene-<environment>-*`; everything inside the
+   cluster is `yuha`. A mismatch does not fail the deploy — pods start and every
+   AWS call returns AccessDenied.
 
 4. **Install the two controllers the chart and the secret sync depend on.**
    ```bash
@@ -38,7 +51,7 @@ records that as BLOCKED_EXTERNAL, and this runbook does not pretend otherwise.
      -n external-secrets --create-namespace
    ```
    Without the first, the Ingress is created and no ALB appears. Without the
-   second, `sonare-runtime` never exists and every pod starts without a
+   second, `yuha-runtime` never exists and every pod starts without a
    `DATABASE_URL`.
 
 5. **Put the real secret values in Secrets Manager.** Terraform writes the
@@ -74,9 +87,9 @@ outside it.
 
 ```bash
 kubectl rollout status deploy -n yuha -l app.kubernetes.io/instance=yuha
-kubectl get externalsecret sonare-runtime -n yuha          # SecretSynced
+kubectl get externalsecret yuha-runtime -n yuha            # SecretSynced
 kubectl run check --rm -i --restart=Never -n yuha \
-  --image=curlimages/curl:8.11.0 -- curl -fsS http://yuha-api:4000/health
+  --image=curlimages/curl:8.11.0 -- curl -fsS http://yuha-api/health
 ```
 
 A finished rollout is not evidence that the thing it rolled out works. Ask the

@@ -1,18 +1,29 @@
 # Helm values for production. Non-secret configuration only.
 #
+# **Production cannot be deployed from this file today, on purpose.** No music
+# provider agreement is signed, so `music.adapter` is `demo`, and the API
+# refuses to start in production mode with a fake music adapter. Selling
+# synthetic audio is the outcome that refusal prevents. Nothing here works
+# around it; see docs/OPEN_ITEMS.md §1.
+#
 # Every empty string below is an output of `terraform apply` in
-# infra/terraform/, which has never been run against a real account. The chart
-# fails rather than rendering a half-configured release, which is the intended
-# behaviour: a deployment that starts with a blank bucket name is worse than
-# one that refuses to start.
+# infra/terraform/, which has never been run against a real account.
+#
+# Where the refusal happens: the *chart* fails at render only for the values it
+# alone can know — registry, repository, digest, and runMode. Everything else is
+# checked by the API at startup, which lists every missing or contradictory
+# setting by name and exits. So a half-configured release renders and then
+# refuses to run, loudly and specifically, rather than serving with a blank
+# bucket name. This paragraph used to claim the chart caught all of it; it does
+# not, and knowing which layer speaks matters when you are reading logs.
 nameOverride: yuha
 runMode: production
 
 image:
   # <account>.dkr.ecr.ap-northeast-1.amazonaws.com — from the ECR outputs.
   registry: ""
-  # Terraform names these `loopscene-<environment>-{api,worker}`; the chart's
-  # own defaults still say `sonare-*` from an earlier naming round.
+  # Terraform names these `loopscene-<environment>-{api,worker}`. The chart has
+  # no default and fails at render if this is empty.
   api:
     repository: loopscene-production-api
     digest: ""   # set by the workflow, never committed
@@ -29,7 +40,7 @@ serviceAccount:
     name: yuha-worker
     roleArn: ""      # terraform output worker_role_arn
 
-envFromSecret: sonare-runtime
+envFromSecret: yuha-runtime
 
 api:
   replicaCount: 2
@@ -38,7 +49,7 @@ api:
 ingress:
   enabled: true
   className: alb
-  host: ""           # staging hostname
+  host: ""           # production hostname; ALB Ingress rejects an empty host
   certificateArn: "" # ACM certificate in ap-northeast-1
 
 config:
@@ -56,6 +67,7 @@ config:
     appClientId: ""  # terraform output cognito_app_client_id
 
   storage:
+    region: ap-northeast-1
     quarantineBucket: ""  # terraform output quarantine_bucket
     deliveryBucket: ""    # terraform output delivery_bucket
     kmsKeyId: ""          # terraform output kms_media_key_arn
@@ -75,6 +87,11 @@ config:
   music:
     # Switch to the real adapter only once an agreement is signed; until then
     # production would be selling synthetic audio.
+    #
+    # This is also why production cannot be deployed today: `runMode: production`
+    # plus `adapter: demo` is refused at startup with "production mode cannot use
+    # the demo (fake) music adapter". That refusal is correct and this file does
+    # not work around it — see the header.
     adapter: demo
     providerId: demo-local
     baseUrl: ""
@@ -87,19 +104,23 @@ config:
     requestIdField: ""
     statusField: ""
     audioUrlField: ""
-    statusMap: ""
+    statusMap: '{"pending":[],"completed":[],"failed":[],"rejected":[]}'
     idempotencyHeader: ""
     allowedAudioHosts: ""
     supportsInstrumental: "true"
     supportsCancel: "false"
     supportsWebhook: "false"
     supportsStatusQuery: "true"
-    # No signed agreement with a music provider yet, so staging runs the demo
-    # adapter and the cost figure stays flagged as modelled.
+    # No signed agreement with a music provider yet, so the demo adapter stays
+    # and the cost figure stays flagged as modelled.
     commercialDelivery: "false"
     dataRegion: ap-northeast-1
-    costMinorPerRequest: "46"
-    billFailedRequests: "false"
+    # 45 JPY and "failures are billable" are the figures docs/OPEN_ITEMS.md §4
+    # and §6 record as the deliberate, conservative assumptions. These overrides
+    # quietly said 46 and "false"; assuming failures are free understates cost,
+    # which is the direction that hurts.
+    costMinorPerRequest: "45"
+    billFailedRequests: "true"
     costIsEstimate: "true"
 
   stripe:
@@ -119,11 +140,12 @@ config:
     generationRateLimitPerHour: "60"
     exportRateLimitPerHour: "120"
 
+  # production mode refuses to start unless entityName, address and contact are
+  # all non-empty — the 特定商取引法 disclosure must not be a placeholder. These
+  # overrides used to blank out even the name the chart already knows.
   legal:
-    entityName: ""
-    representative: ""
-    address: ""
-    contact: ""
-    # 特定商取引法 requires a telephone number, and /legal/tokushoho marks this
-    # row 要法務確認 while it is empty.
-    phone: ""
+    entityName: "NetStars Co., Ltd."
+    representative: ""   # 代表者名 — 特商法 requires it; 要法務確認
+    address: "Tokyo, Japan — https://netstars.co.jp"
+    contact: ""          # production will not start while this is empty
+    phone: ""            # 特商法 requires a telephone number; 要法務確認

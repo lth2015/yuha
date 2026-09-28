@@ -133,7 +133,13 @@ module "api_irsa" {
   oidc_providers = {
     main = {
       provider_arn               = module.eks.oidc_provider_arn
-      namespace_service_accounts = ["loopscene:loopscene-api"]
+      # Must equal the ServiceAccount the chart creates, in the namespace the
+      # release is installed into. AWS resources stay `loopscene-*`; everything
+      # inside the cluster is `yuha` (see infra/helm/loopscene/values.yaml).
+      # `yuha-external-secrets` is the ServiceAccount the SecretStore in
+      # deploy/cluster/external-secrets.yaml authenticates as; it reads the same
+      # two secrets this role already allows.
+      namespace_service_accounts = ["yuha:yuha-api", "yuha:yuha-external-secrets"]
     }
   }
   tags = local.tags
@@ -149,7 +155,7 @@ module "worker_irsa" {
   oidc_providers = {
     main = {
       provider_arn               = module.eks.oidc_provider_arn
-      namespace_service_accounts = ["loopscene:loopscene-worker"]
+      namespace_service_accounts = ["yuha:yuha-worker"]
     }
   }
   tags = local.tags

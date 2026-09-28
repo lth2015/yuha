@@ -143,14 +143,14 @@ jobs:
         run: |
           set -euo pipefail
           ACCOUNT_ID="$(aws sts get-caller-identity --query Account --output text)"
-          # The chart mounts `sonare-runtime`; this is what creates it. Applied
+          # The chart mounts `yuha-runtime`; this is what creates it. Applied
           # before the release so the migration hook has a DATABASE_URL.
           sed -e "s/__NAMESPACE__/${NAMESPACE}/g" \
               -e "s/__ENVIRONMENT__/${ENVIRONMENT}/g" \
               -e "s/__ACCOUNT_ID__/${ACCOUNT_ID}/g" \
               deploy/cluster/external-secrets.yaml | kubectl apply -n "$NAMESPACE" -f -
 
-          kubectl wait --for=condition=Ready externalsecret/sonare-runtime \
+          kubectl wait --for=condition=Ready externalsecret/yuha-runtime \
             -n "$NAMESPACE" --timeout=120s
 
       - name: helm upgrade
@@ -178,7 +178,11 @@ jobs:
           # means the thing it rolled out works.
           kubectl run deploy-check-${GITHUB_RUN_ID} -n "$NAMESPACE" \
             --rm -i --restart=Never --image=curlimages/curl:8.11.0 --quiet -- \
-            curl -fsS --max-time 10 "http://${RELEASE}-api:4000/health"
+            # Port 80 is what the Service publishes; 4000 is the container
+            # port behind it. This asked for 4000 and would have failed to
+            # connect on every deploy — as the last step, after a rollout that
+            # actually succeeded.
+            curl -fsS --max-time 10 "http://${RELEASE}-api/health"
 
       - name: Report
         if: always()

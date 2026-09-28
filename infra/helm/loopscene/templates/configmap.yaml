@@ -22,7 +22,7 @@ data:
   COGNITO_APP_CLIENT_ID: {{ .Values.config.cognito.appClientId | quote }}
 
   STORAGE_ADAPTER: "s3"
-  S3_REGION: {{ .Values.config.cognito.region | quote }}
+  S3_REGION: {{ .Values.config.storage.region | quote }}
   S3_QUARANTINE_BUCKET: {{ .Values.config.storage.quarantineBucket | quote }}
   S3_DELIVERY_BUCKET: {{ .Values.config.storage.deliveryBucket | quote }}
   S3_KMS_KEY_ID: {{ .Values.config.storage.kmsKeyId | quote }}

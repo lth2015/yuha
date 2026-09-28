@@ -25,7 +25,7 @@ Everything was built and validated, and **nothing ever shipped**:
 - `ci.yml` builds the image with `push: false` — it never reached ECR.
 - No workflow had AWS credentials of any kind.
 - No `helm upgrade` existed anywhere.
-- Nothing created the `sonare-runtime` Secret the chart mounts, so a cluster
+- Nothing created the `yuha-runtime` Secret the chart mounts, so a cluster
   applying the chart today would start pods with no `DATABASE_URL`.
 
 So this folder holds the delivery path only:
@@ -45,6 +45,22 @@ The GitHub OIDC role is `infra/terraform/github_oidc.tf`, with the rest of the
 Terraform. It is an AWS resource, and a second Terraform state mirroring a
 folder name would have to be applied separately forever.
 
+## Two naming domains
+
+AWS is `loopscene-<environment>` — cluster, ECR repositories, IAM roles,
+Secrets Manager entries — because renaming those forces resource recreation
+(CLAUDE.md). Everything inside the cluster is `yuha`: namespace, Helm release,
+ServiceAccounts, the synced Secret.
+
+The bridge is IRSA, and it is exact. `infra/terraform/compute.tf` trusts
+`system:serviceaccount:yuha:yuha-api`, `…:yuha-worker` and
+`…:yuha-external-secrets`; the chart and `cluster/` must create ServiceAccounts
+with those names in that namespace. Until 2026-09-28 three names were in play —
+the chart defaulted to `sonare-*`, `envs/*` said `yuha-*`, Terraform trusted
+`loopscene:loopscene-*` — and no layer checks this. Pods would have started and
+every S3, SQS and Secrets Manager call would have returned AccessDenied, which
+reads as a permissions problem rather than a typo.
+
 ## Configuration
 
 Non-secret configuration is in the ConfigMap, rendered from the values in
@@ -55,7 +71,7 @@ readable by anything that can read the namespace and its values appear in
 | Kind | Where | Examples |
 | --- | --- | --- |
 | Non-secret | `envs/*.yaml` → ConfigMap | URLs, bucket names, feature flags, limits, legal entity block, provider endpoints |
-| Secret | AWS Secrets Manager → `sonare-runtime` Secret | `DATABASE_URL`, `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_SESSION_SECRET`, `TOKENSTARS_API_KEY`, `MUSIC_API_KEY` |
+| Secret | AWS Secrets Manager → `yuha-runtime` Secret | `DATABASE_URL`, `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_SESSION_SECRET`, `TOKENSTARS_API_KEY`, `MUSIC_API_KEY` |
 
 Terraform already creates the two Secrets Manager secrets and grants the pods'
 IRSA roles `secretsmanager:GetSecretValue`. `cluster/` closes the last gap by

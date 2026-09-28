@@ -13,12 +13,12 @@ output "cluster_endpoint" {
 }
 
 output "api_role_arn" {
-  description = "Annotate the loopscene-api service account with this."
+  description = "Annotate the yuha-api service account with this (namespace yuha)."
   value       = module.api_irsa.iam_role_arn
 }
 
 output "worker_role_arn" {
-  description = "Annotate the loopscene-worker service account with this."
+  description = "Annotate the yuha-worker service account with this (namespace yuha)."
   value       = module.worker_irsa.iam_role_arn
 }
 

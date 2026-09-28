@@ -1,18 +1,26 @@
 # Helm values for staging. Non-secret configuration only.
 #
+# The chart fails at render only for what it alone can know — registry,
+# repository, digest and runMode. Every other missing value is reported by the
+# API at startup, by name, before it exits.
+#
 # Every empty string below is an output of `terraform apply` in
 # infra/terraform/, which has never been run against a real account. The chart
 # fails rather than rendering a half-configured release, which is the intended
 # behaviour: a deployment that starts with a blank bucket name is worse than
 # one that refuses to start.
 nameOverride: yuha
-runMode: staging
+# RUN_MODE is an enum of demo | integration | production. "staging" is not a
+# member: every pod in this environment would have exited at boot with
+# `Invalid enum value`. `integration` is the mode that means "real adapters, not
+# production's guarantees", which is what this environment is.
+runMode: integration
 
 image:
   # <account>.dkr.ecr.ap-northeast-1.amazonaws.com — from the ECR outputs.
   registry: ""
-  # Terraform names these `loopscene-<environment>-{api,worker}`; the chart's
-  # own defaults still say `sonare-*` from an earlier naming round.
+  # Terraform names these `loopscene-<environment>-{api,worker}`. The chart has
+  # no default and fails at render if this is empty.
   api:
     repository: loopscene-staging-api
     digest: ""   # set by the workflow, never committed
@@ -29,7 +37,7 @@ serviceAccount:
     name: yuha-worker
     roleArn: ""      # terraform output worker_role_arn
 
-envFromSecret: sonare-runtime
+envFromSecret: yuha-runtime
 
 api:
   replicaCount: 2
@@ -38,7 +46,7 @@ api:
 ingress:
   enabled: true
   className: alb
-  host: ""           # staging hostname
+  host: ""           # staging hostname; ALB Ingress rejects an empty host
   certificateArn: "" # ACM certificate in ap-northeast-1
 
 config:
@@ -56,6 +64,7 @@ config:
     appClientId: ""  # terraform output cognito_app_client_id
 
   storage:
+    region: ap-northeast-1
     quarantineBucket: ""  # terraform output quarantine_bucket
     deliveryBucket: ""    # terraform output delivery_bucket
     kmsKeyId: ""          # terraform output kms_media_key_arn
@@ -85,7 +94,7 @@ config:
     requestIdField: ""
     statusField: ""
     audioUrlField: ""
-    statusMap: ""
+    statusMap: '{"pending":[],"completed":[],"failed":[],"rejected":[]}'
     idempotencyHeader: ""
     allowedAudioHosts: ""
     supportsInstrumental: "true"
@@ -96,8 +105,12 @@ config:
     # adapter and the cost figure stays flagged as modelled.
     commercialDelivery: "false"
     dataRegion: ap-northeast-1
-    costMinorPerRequest: "46"
-    billFailedRequests: "false"
+    # 45 JPY and "failures are billable" are the figures docs/OPEN_ITEMS.md §4
+    # and §6 record as the deliberate, conservative assumptions. These overrides
+    # quietly said 46 and "false"; assuming failures are free understates cost,
+    # which is the direction that hurts.
+    costMinorPerRequest: "45"
+    billFailedRequests: "true"
     costIsEstimate: "true"
 
   stripe:
@@ -117,11 +130,12 @@ config:
     generationRateLimitPerHour: "60"
     exportRateLimitPerHour: "120"
 
+  # production mode refuses to start unless entityName, address and contact are
+  # all non-empty — the 特定商取引法 disclosure must not be a placeholder. These
+  # overrides used to blank out even the name the chart already knows.
   legal:
-    entityName: ""
-    representative: ""
-    address: ""
-    contact: ""
-    # 特定商取引法 requires a telephone number, and /legal/tokushoho marks this
-    # row 要法務確認 while it is empty.
-    phone: ""
+    entityName: "NetStars Co., Ltd."
+    representative: ""   # 代表者名 — 特商法 requires it; 要法務確認
+    address: "Tokyo, Japan — https://netstars.co.jp"
+    contact: ""          # production will not start while this is empty
+    phone: ""            # 特商法 requires a telephone number; 要法務確認

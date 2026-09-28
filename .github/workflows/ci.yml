@@ -95,16 +95,22 @@ jobs:
       - name: Verify the demo configuration boots
         # A mode/adapter combination that cannot start is a build failure, not a
         # deploy-time surprise (§3.1).
-        run: node -e "
-          const { loadConfig } = require('./apps/api/dist/lib.js');
-          const cfg = loadConfig({
-            RUN_MODE: 'demo',
-            DATABASE_URL: 'mysql://u:p@localhost:3306/x',
-            DEV_AUTH_SECRET: 'x'.repeat(32),
-            STORAGE_SIGNING_SECRET: 'y'.repeat(32),
-          });
-          if (cfg.mode !== 'demo') process.exit(1);
-          console.log('demo configuration validates');
+        # A literal block scalar, not a plain one. Written as `run: node -e "`
+        # with the script on following lines, the `RUN_MODE: 'demo',` inside it
+        # is a mapping key to YAML, and the whole file stops parsing — which is
+        # what had happened: this workflow has been invalid YAML, and therefore
+        # has not run at all, since cc2b918.
+        run: |
+          node -e "
+            const { loadConfig } = require('./apps/api/dist/lib.js');
+            const cfg = loadConfig({
+              RUN_MODE: 'demo',
+              DATABASE_URL: 'mysql://u:p@localhost:3306/x',
+              DEV_AUTH_SECRET: 'x'.repeat(32),
+              STORAGE_SIGNING_SECRET: 'y'.repeat(32),
+            });
+            if (cfg.mode !== 'demo') process.exit(1);
+            console.log('demo configuration validates');
           "
 
   docker:
@@ -186,11 +192,18 @@ jobs:
         with:
           version: v3.16.3
       - name: Lint the chart
-        run: helm lint infra/helm/loopscene --set image.api.digest=sha256:0 --set image.worker.digest=sha256:0
+        run: |
+          helm lint infra/helm/loopscene \
+            --set image.registry=example.dkr.ecr.ap-northeast-1.amazonaws.com \
+            --set image.api.repository=loopscene-staging-api \
+            --set image.worker.repository=loopscene-staging-worker \
+            --set image.api.digest=sha256:0 --set image.worker.digest=sha256:0
       - name: Render the templates
         run: |
           helm template loopscene infra/helm/loopscene \
             --set image.registry=example.dkr.ecr.ap-northeast-1.amazonaws.com \
+            --set image.api.repository=loopscene-staging-api \
+            --set image.worker.repository=loopscene-staging-worker \
             --set image.api.digest=sha256:0000000000000000000000000000000000000000000000000000000000000000 \
             --set image.worker.digest=sha256:0000000000000000000000000000000000000000000000000000000000000000 \
             > /dev/null
@@ -214,11 +227,22 @@ jobs:
 
       - name: Reject an unpinned image reference
         # The chart must fail rather than deploy a mutable tag (§4.2).
+        #
+        # Everything EXCEPT the digest is supplied, so the failure can only be
+        # the digest guard. This used to render with no values at all and assert
+        # only that something failed, which any missing value would have
+        # satisfied — including two that the chart did not check at the time.
         run: |
           set +e
-          helm template loopscene infra/helm/loopscene > /dev/null 2>&1
+          out=$(helm template loopscene infra/helm/loopscene \
+            --set image.registry=example.dkr.ecr.ap-northeast-1.amazonaws.com \
+            --set image.api.repository=loopscene-staging-api \
+            --set image.worker.repository=loopscene-staging-worker 2>&1)
           if [ $? -eq 0 ]; then
             echo "FAIL: the chart rendered without a digest"
             exit 1
           fi
-          echo "chart correctly requires a digest-pinned image"
+          case "$out" in
+            *digest*) echo "chart correctly requires a digest-pinned image" ;;
+            *) echo "FAIL: render failed, but not on the digest:"; echo "$out"; exit 1 ;;
+          esac
