@@ -3,6 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import type { MeView } from '@yuha/contracts';
 import { apiFetch } from '../lib/api';
 import { useI18n } from '../lib/i18n';
+import { safeInternalPath } from '../lib/paths';
 import { useSession } from '../lib/session';
 import { ErrorNotice } from '../components/common';
 
@@ -34,7 +35,11 @@ export default function MfaChallenge() {
         body: { challengeToken, code },
       });
       signIn(res.token, res.user);
-      navigate(params.get('next') ?? '/library', { replace: true });
+      // Through the same guard as every other `next` in the app. This one is
+      // the most worth guarding: it runs immediately after a successful second
+      // factor, which is the moment a user is most likely to follow wherever
+      // they are sent.
+      navigate(safeInternalPath(params.get('next')) ?? '/library', { replace: true });
     } catch (err) {
       setError(err);
     } finally {
