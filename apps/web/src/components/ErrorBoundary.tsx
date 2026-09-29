@@ -48,7 +48,14 @@ interface State {
   error: Error | null;
 }
 
-export class ErrorBoundary extends Component<{ children: ReactNode }, State> {
+/**
+ * `fallback` is for the parts of the chrome that must not take the page with
+ * them. The panel below is right for a route — it fills the content area and
+ * explains itself — and wrong for a header, where it would replace the
+ * navigation with a full-width alert. A chrome region passes something small,
+ * or nothing.
+ */
+export class ErrorBoundary extends Component<{ children: ReactNode; fallback?: ReactNode }, State> {
   override state: State = { error: null };
 
   static getDerivedStateFromError(error: Error): State {
@@ -66,6 +73,7 @@ export class ErrorBoundary extends Component<{ children: ReactNode }, State> {
 
   override render() {
     if (this.state.error) {
+      if (this.props.fallback !== undefined) return this.props.fallback;
       // Dismiss, not retry: the link is already navigating away, and leaving
       // the boundary latched would show the panel again at the destination.
       return <Fallback error={this.state.error} onDismiss={() => this.setState({ error: null })} />;

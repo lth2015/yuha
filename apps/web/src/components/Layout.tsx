@@ -129,6 +129,21 @@ export function Layout({ children }: { children: ReactNode }) {
         {t('nav.skip')}
       </a>
 
+      {/*
+       * Why the header and the tab bar have no boundary of their own, while the
+       * footer and the player below do.
+       *
+       * An error boundary catches what its children render. The header and the
+       * tab bar are inline JSX in this component, so anything they compute runs
+       * during Layout's own render — before a boundary written here exists.
+       * Wrapping them looks like protection and is none: with such a wrapper in
+       * place, throwing from the header still produced a blank page, and React
+       * said why — "the above error occurred in the Layout component".
+       *
+       * The backstop is one level up, around Layout in App.tsx. Giving these two
+       * regions real isolation means extracting them into components, which is
+       * worth doing and is not this change.
+       */}
       <header className="topnav">
         <div className="topnav__inner">
           <Link to="/" className="topnav__home" aria-label={t('nav.homeAria')}>
@@ -248,7 +263,9 @@ export function Layout({ children }: { children: ReactNode }) {
         </PageTitleContext.Provider>
       </main>
 
-      <SiteFooter />
+      <ErrorBoundary key={`chrome-foot-${location.pathname}`} fallback={null}>
+        <SiteFooter />
+      </ErrorBoundary>
 
       {/* Was labelled with nav.skip, so the mobile navigation landmark was
           announced as "skip to content". Only one of this and .topnav__nav is
@@ -269,6 +286,9 @@ export function Layout({ children }: { children: ReactNode }) {
         ))}
       </nav>
 
+      {/* These two are real components, so their render happens inside the
+          boundary and it works. */}
+      <ErrorBoundary key={`chrome-player-${location.pathname}`} fallback={null}>
       <PlayerBar onExpand={openNowPlaying} />
 
       {nowPlayingOpen && (
@@ -284,6 +304,7 @@ export function Layout({ children }: { children: ReactNode }) {
           onClose={() => setNowPlayingOpen(false)}
         />
       )}
+      </ErrorBoundary>
 
       {/* Brand moment: the drifting petal only shows while music plays. */}
       {player.status === 'playing' && (

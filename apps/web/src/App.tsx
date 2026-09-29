@@ -4,6 +4,7 @@ import { Layout } from './components/Layout';
 import { Loading } from './components/common';
 import { PlayerProvider } from './lib/player';
 import { I18nProvider } from './lib/i18n';
+import { ErrorBoundary } from './components/ErrorBoundary';
 import { SessionProvider, useSession } from './lib/session';
 import Account from './pages/Account';
 import Admin from './pages/Admin';
@@ -51,6 +52,17 @@ export default function App() {
       <I18nProvider>
       <SessionProvider>
         <PlayerProvider>
+          {/* Above Layout, because a boundary only catches what its *children*
+           *  render. Every boundary in this app used to sit inside Layout's own
+           *  JSX, so anything Layout computed inline — the header's account
+           *  initial, say — threw while Layout itself was rendering, before any
+           *  of them existed. React said so plainly: "The above error occurred
+           *  in the <Layout> component", and the tree unmounted to a blank page.
+           *  Verified by throwing from the header on purpose, with the
+           *  boundaries inside: still a white screen.
+           *
+           *  Inside I18nProvider so the panel can speak the reader's language. */}
+          <ErrorBoundary>
           <Layout>
             <Routes>
               <Route path="/" element={<Home />} />
@@ -163,6 +175,7 @@ export default function App() {
               <Route path="*" element={<NotFound />} />
             </Routes>
           </Layout>
+          </ErrorBoundary>
         </PlayerProvider>
       </SessionProvider>
       </I18nProvider>
