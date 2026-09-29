@@ -1,6 +1,20 @@
 import type { ErrorCode } from '@yuha/contracts';
 
-const API_BASE = import.meta.env['VITE_API_URL'] ?? 'http://localhost:4000';
+/**
+ * Where the API is, from the browser's point of view.
+ *
+ * Empty means "same origin", which in development is the Vite proxy in
+ * `vite.config.ts` and needs no CORS at all. It used to default to
+ * `http://localhost:4000`: a cross-origin call that some browsers refuse
+ * outright, and — worse — a literal `localhost` baked into any production
+ * bundle built without `VITE_API_URL`, which is every build today.
+ *
+ * It is re-exported at the bottom of this file because the Google sign-in link
+ * is a full-page navigation rather than a fetch, so it cannot go through
+ * `apiFetch` and needs the same answer. It used to carry its own copy of this
+ * expression, complete with its own `http://localhost:4000`.
+ */
+const API_BASE = import.meta.env['VITE_API_URL'] ?? '';
 const TOKEN_KEY = 'loopscene.token';
 
 export class ApiError extends Error {

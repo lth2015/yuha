@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import type { MeView } from '@yuha/contracts';
-import { apiFetch } from '../lib/api';
+import { API_BASE, apiFetch } from '../lib/api';
 import { rich, useI18n } from '../lib/i18n';
 import { AUTH_NEXT_KEY, safeInternalPath } from '../lib/paths';
 import { useSession } from '../lib/session';
@@ -167,7 +167,7 @@ export default function Auth() {
         {config?.google.enabled ? (
           <a
             className="btn btn--google btn--block"
-            href={`${import.meta.env['VITE_API_URL'] ?? 'http://localhost:4000'}/v1/auth/google/start`}
+            href={`${API_BASE}/v1/auth/google/start`}
             onClick={() => {
               try {
                 sessionStorage.setItem(AUTH_NEXT_KEY, next);

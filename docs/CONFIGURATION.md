@@ -89,7 +89,8 @@ cp .env.example .env   # 然后按需填写下表中的值
 
 | 变量 | 说明 |
 |---|---|
-| `VITE_API_URL` | API 地址，默认 `http://localhost:4000`，部署时改为公网 API 域名 |
+| `VITE_API_URL` | API 地址。不设时走同源 `/v1`：开发环境由 `apps/web/vite.config.ts` 的代理转给 `http://localhost:4000`，部署时必须设为公网 API 域名——除非 CDN／反向代理已把 `/v1` 转给 API（当前 CloudFront 只有 S3 一个源，没有这条规则）。`vite build` 在未设置时会打印一行提醒 |
+| `VITE_DEV_API_PROXY` | 仅开发环境：上面那个代理的目标地址，默认 `http://localhost:4000`。API 换端口或跑在容器里时用 |
 
 界面语言：右上角 中 / 日 / EN 切换（记住选择）；默认跟随浏览器语言。品牌三语标语——zh「让心动，有回声。」/ ja「ときめきに、響きを。」/ en「Let a feeling echo.」
 
