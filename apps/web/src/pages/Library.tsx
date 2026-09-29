@@ -32,9 +32,6 @@ export default function Library() {
   }, [filter, q]);
 
   useEffect(() => {
-  }, []);
-
-  useEffect(() => {
     let cancelled = false;
     setSongs(null);
     load()

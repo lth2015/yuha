@@ -27,3 +27,11 @@ infra/terraform/*.tfstate
 infra/terraform/*.tfstate.*
 infra/terraform/*.tfvars
 !infra/terraform/*.tfvars.example
+
+# Local tool state, never shared: per-machine editor/agent settings, browser
+# automation scratch, and the folder Claude writes deliverables into. Each of
+# these is specific to one person's machine, so tracking them would hand the
+# next checkout somebody else's configuration.
+.claude/settings.local.json
+.playwright-mcp/
+Claude outputs/
