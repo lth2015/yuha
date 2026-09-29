@@ -20,7 +20,7 @@ beforeEach(async () => {
   await query(`DELETE FROM analytics_events WHERE name = 'client_error'`);
 });
 afterAll(async () => {
-  await h.close();
+  await h?.close();
   await teardown();
 });
 

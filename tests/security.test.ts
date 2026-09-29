@@ -18,7 +18,7 @@ beforeEach(async () => {
   await resetData();
 });
 afterAll(async () => {
-  await h.close();
+  await h?.close();
   await teardown();
 });
 
