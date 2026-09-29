@@ -17,6 +17,26 @@ export const MIGRATIONS_DIR = join(here, 'migrations');
  */
 const STATEMENT_SEPARATOR = /^\s*--\s*;;\s*$/m;
 
+/**
+ * "That object is already there."
+ *
+ * MySQL commits DDL implicitly, so a file that fails at statement 2 leaves
+ * statement 1's effect behind — and because the file never reaches the
+ * `schema_migrations` insert below, the next run replays statement 1 and
+ * collides with its own earlier work. The errno is what separates that story
+ * from a genuine clash with something made by hand, which is why the hint says
+ * "most likely" rather than asserting it.
+ */
+const ALREADY_THERE_ERRNOS = new Set([
+  1022, // ER_DUP_KEY
+  1050, // ER_TABLE_EXISTS_ERROR
+  1060, // ER_DUP_FIELDNAME
+  1061, // ER_DUP_KEYNAME
+  1091, // ER_CANT_DROP_FIELD_OR_KEY — the same story, told by a DROP statement
+  1359, // ER_TRG_ALREADY_EXISTS
+  1826, // ER_FK_DUP_NAME
+]);
+
 interface MigrationFile {
   name: string;
   sql: string;
@@ -114,9 +134,19 @@ export async function migrate(dir = MIGRATIONS_DIR): Promise<MigrateResult> {
                 { cause: err },
               );
             }
+            const errno = (err as { errno?: number }).errno;
+            const hint =
+              errno !== undefined && ALREADY_THERE_ERRNOS.has(errno)
+                ? `\n${file.name} is not recorded in schema_migrations, yet this statement ` +
+                  'collides with something that already exists. Most likely an earlier run of ' +
+                  'this same file failed partway and left the schema half-migrated. Repair it ' +
+                  'deliberately: on a dev or test database, `pnpm db:reset && pnpm db:migrate && ' +
+                  'pnpm seed`; on a database you cannot drop, undo this file\'s completed ' +
+                  'statements by hand, or record it as applied once the schema matches.'
+                : '';
             throw new Error(
               `migration ${file.name} failed at statement ${i + 1}/${file.statements.length}: ` +
-                `${(err as Error).message}\n--- statement ---\n${statement.slice(0, 400)}`,
+                `${(err as Error).message}${hint}\n--- statement ---\n${statement.slice(0, 400)}`,
               { cause: err },
             );
           }

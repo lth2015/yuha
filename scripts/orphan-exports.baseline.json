@@ -28,6 +28,5 @@
   "packages/db/src/tracks.ts#getTrackWithArtist",
   "packages/db/src/users.ts#touchProject",
   "packages/providers/src/net/fetch-audio.ts#UnsafeUrlError",
-  "tests/helpers/harness.ts#TEST_DATABASE_URL",
-  "tests/helpers/harness.ts#balanceOf"
+  "tests/helpers/harness.ts#TEST_DATABASE_URL"
 ]
