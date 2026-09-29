@@ -27,7 +27,12 @@ export function PlayerBar({ onExpand }: { onExpand?: () => void }) {
     >
       <div className="player-bar__inner">
         <Link to={`/song/${player.current.trackId}`} className="player-bar__now">
-          <CoverArt seed={player.current.coverSeed} title={player.current.title} size={48} />
+          <CoverArt
+            seed={player.current.coverSeed}
+            title={player.current.title}
+            styles={player.current.styles}
+            size={48}
+          />
           <span className="player-bar__titles">
             <span className="player-bar__title">
               {player.current.title}

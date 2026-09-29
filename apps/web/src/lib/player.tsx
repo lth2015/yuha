@@ -16,7 +16,7 @@ export type PlayerStatus = 'idle' | 'loading' | 'playing' | 'paused' | 'error';
 /** What the player bar needs to render: view fields + where it can link to. */
 export type PlayerTrack = Pick<
   TrackView,
-  'trackId' | 'title' | 'artistName' | 'coverSeed' | 'durationSeconds' | 'vocalMode'
+  'trackId' | 'title' | 'artistName' | 'coverSeed' | 'styles' | 'durationSeconds' | 'vocalMode'
 >;
 
 interface PlayerState {

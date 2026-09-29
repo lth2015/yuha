@@ -13,6 +13,7 @@ import { JOB_PHASES as PHASE_STEPS, fractionOfPhase } from '../lib/phases';
 import { Score } from '../components/Score';
 import { useSession } from '../lib/session';
 import { ErrorNotice, Loading } from '../components/common';
+import { SongCard } from '../components/SongCard';
 
 /**
  * A failed submission, shown where the creator is looking.
@@ -83,6 +84,58 @@ const STYLE_PRESETS = [
   'cinematic',
   'hyperpop',
   'house',
+];
+
+/**
+ * Four ways in, for the creator who opened this page with nothing in mind.
+ *
+ * The scenes are the four the intent schema actually knows
+ * (`night_walk | daily_log | outfit | gaming`), not four invented for the UI:
+ * a preset that describes something the model has no category for would be a
+ * promise the pipeline cannot keep.
+ *
+ * Each one fills the description, the styles, the length and the vocal mode
+ * together, because those are the four decisions that stop someone who has
+ * never made a song before — and a half-filled form is not an on-ramp.
+ */
+const PRESETS: Array<{
+  nameKey: string;
+  promptKey: string;
+  styles: string[];
+  durationSeconds: Draft['durationSeconds'];
+  instrumental: boolean;
+}> = [
+  // The keys are spelled out rather than built from a short id on purpose:
+  // `scripts/check-i18n.mjs` proves every key a file uses is defined in all
+  // three dictionaries, and it can only do that for keys it can see.
+  {
+    nameKey: 'create.presets.nightWalk.name',
+    promptKey: 'create.presets.nightWalk.prompt',
+    styles: ['lofi', 'ambient'],
+    durationSeconds: 120,
+    instrumental: true,
+  },
+  {
+    nameKey: 'create.presets.commute.name',
+    promptKey: 'create.presets.commute.prompt',
+    styles: ['acoustic', 'pop'],
+    durationSeconds: 60,
+    instrumental: false,
+  },
+  {
+    nameKey: 'create.presets.outfit.name',
+    promptKey: 'create.presets.outfit.prompt',
+    styles: ['trap', 'hyperpop'],
+    durationSeconds: 30,
+    instrumental: false,
+  },
+  {
+    nameKey: 'create.presets.gaming.name',
+    promptKey: 'create.presets.gaming.prompt',
+    styles: ['synthwave', 'dnb'],
+    durationSeconds: 120,
+    instrumental: true,
+  },
 ];
 
 const DURATIONS: Array<{ value: Draft['durationSeconds']; label: string }> = [
@@ -159,6 +212,15 @@ export default function Create() {
   const [error, setError] = useState<unknown>(null);
   const [submitting, setSubmitting] = useState(false);
   const [editSource, setEditSource] = useState<(TrackView & { lyrics: string | null }) | null>(null);
+  /**
+   * The creator's last few songs, under the composer.
+   *
+   * `null` means "not answered yet" and an empty array means "answered, and
+   * there are none" — the strip renders in neither case, so a first-time
+   * creator never sees an empty shelf and a returning one never sees it flash
+   * in. The library's own empty state is the place that speaks for zero songs.
+   */
+  const [recent, setRecent] = useState<TrackView[] | null>(null);
   const [instructions, setInstructions] = useState('');
   const idemKey = useRef<string>(newIdempotencyKey());
   const pollTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -220,6 +282,30 @@ export default function Create() {
 
   const patch = useCallback((p: Partial<Draft>) => setDraft((d) => ({ ...d, ...p })), []);
 
+  /*
+   * Anything still generating is in this list too: `/v1/tracks` orders by
+   * creation and does not filter by state, so a take that is still running
+   * appears at the front and `SongCard` renders its own progress. That is the
+   * point — the page should show that something of yours is happening, not
+   * just an empty form.
+   *
+   * A failure here is swallowed on purpose. This strip is context, not the
+   * task; an error banner about it would sit next to a working composer and
+   * claim the page is broken.
+   */
+  useEffect(() => {
+    if (editTrackId || !me) return;
+    let cancelled = false;
+    apiFetch<{ items: TrackView[] }>('/v1/tracks?limit=4')
+      .then((r) => {
+        if (!cancelled) setRecent(r.items);
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [editTrackId, me]);
+
   // ---- job polling with backoff (no request is held open waiting for audio)
   useEffect(() => {
     if (!job || ['done', 'failed'].includes(job.phase)) {
@@ -275,6 +361,22 @@ export default function Create() {
    */
   const mode: 'simple' | 'custom' =
     draft.lyrics.trim() && !draft.instrumental ? 'custom' : 'simple';
+
+  /*
+   * The on-ramp gets out of the way once the creator writes their own words.
+   *
+   * A preset replaces the description outright, which is fine over an empty
+   * box or over another preset, and destructive over something someone typed.
+   * Rather than ask "are you sure" — this file already carries a scar from
+   * silently overwriting a stored draft — the row is simply not offered once
+   * the text is the creator's own. It comes back if they clear the box.
+   */
+  const showPresets = useMemo(
+    () =>
+      draft.prompt.trim().length === 0 ||
+      PRESETS.some((preset) => draft.prompt === t(preset.promptKey)),
+    [draft.prompt, t],
+  );
 
   const canSubmit = useMemo(() => {
     if (submitting || credits < 1) return false;
@@ -579,6 +681,34 @@ export default function Create() {
       />
 
       <form className="composer panel studio__composer" onSubmit={submit} noValidate>
+        {showPresets && (
+          <div className="composer__presets">
+            <span className="composer__presets-label" id="presets-label">
+              {t('create.presets.label')}
+            </span>
+            <div className="composer__presets-row" role="group" aria-labelledby="presets-label">
+              {PRESETS.map((preset) => (
+                <button
+                  key={preset.nameKey}
+                  type="button"
+                  className={`chip chip--btn chip--preset${draft.prompt === t(preset.promptKey) ? ' is-on' : ''}`}
+                  aria-pressed={draft.prompt === t(preset.promptKey)}
+                  onClick={() =>
+                    patch({
+                      prompt: t(preset.promptKey),
+                      styles: preset.styles,
+                      durationSeconds: preset.durationSeconds,
+                      instrumental: preset.instrumental,
+                    })
+                  }
+                >
+                  {t(preset.nameKey)}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
         <label htmlFor="prompt">{t('create.prompt.simple')}</label>
         <textarea
           id="prompt"
@@ -755,6 +885,22 @@ export default function Create() {
         {outOfCreditsNote}
         <p className="composer__feedback">{t('create.guarantee')}</p>
       </form>
+
+      {recent && recent.length > 0 && (
+        <section className="studio__recent" aria-labelledby="recent-heading">
+          <div className="studio__recent-head">
+            <h2 id="recent-heading">{t('create.recent.title')}</h2>
+            <Link to="/library" className="studio__recent-all">
+              {t('create.recent.all')}
+            </Link>
+          </div>
+          <div className="studio__recent-row">
+            {recent.map((song, i) => (
+              <SongCard key={song.trackId} song={song} queue={recent} index={i} />
+            ))}
+          </div>
+        </section>
+      )}
     </div>
   );
 }

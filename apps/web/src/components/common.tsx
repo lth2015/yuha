@@ -143,6 +143,7 @@ export function AudioPlayer({
         title: label,
         artistName: null,
         coverSeed: 0,
+        styles: [],
         durationSeconds: duration,
         vocalMode: 'instrumental',
         previewUrl: url,

@@ -1454,6 +1454,78 @@ tr:last-child td { border-bottom: none; }
  * A submit failure sits in the form's own column, not the page's, so it lines
  * up with the button it belongs to rather than with the page heading.
  */
+/*
+ * The last few songs, under the composer.
+ *
+ * A row that scrolls sideways rather than a grid: this is a glance back, not
+ * the library, and a grid here would compete with the form for the page.
+ */
+.studio__recent {
+  margin-top: var(--s12);
+}
+.studio__recent-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--s4);
+  margin-bottom: var(--s4);
+}
+.studio__recent-head h2 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--muted);
+}
+.studio__recent-all {
+  font-size: 13px;
+  color: var(--link);
+}
+.studio__recent-row {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(200px, 1fr);
+  gap: var(--s4);
+  overflow-x: auto;
+  padding-bottom: var(--s2);
+  scrollbar-width: thin;
+}
+@media (max-width: 720px) {
+  .studio__recent-row {
+    grid-auto-columns: minmax(160px, 70%);
+  }
+}
+
+/*
+ * The four ways in, above the description box.
+ *
+ * Tinted with the brand orange rather than styled like the style filters
+ * below them: these are an invitation to start, not another facet to narrow
+ * by, and they disappear once the creator writes their own words.
+ */
+.composer__presets {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s2);
+  margin-bottom: var(--s4);
+}
+.composer__presets-label {
+  font-size: 12px;
+  color: var(--faint);
+}
+.composer__presets-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s2);
+}
+.chip--preset {
+  background: var(--petal-soft);
+  border-color: transparent;
+  color: var(--ink);
+}
+.chip--preset:hover {
+  border-color: var(--petal);
+}
+
 .studio__submit-error {
   margin-top: var(--s4);
 }

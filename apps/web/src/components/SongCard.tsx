@@ -87,7 +87,7 @@ export function SongCard({
       style={{ '--i': index } as React.CSSProperties}
     >
       <div className="song-card__art">
-        <CoverArt seed={song.coverSeed} title={song.title} size={300} playing={playing} />
+        <CoverArt seed={song.coverSeed} title={song.title} styles={song.styles} size={300} playing={playing} />
         {active && <Eq live={playing} className="song-card__eq" />}
         <button
           type="button"

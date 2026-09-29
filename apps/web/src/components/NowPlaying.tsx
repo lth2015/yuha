@@ -20,6 +20,7 @@ export function NowPlaying({
   title,
   artist,
   coverSeed,
+  styles,
 }: {
   lyrics: string | null;
   timings?: LyricTimings | null;
@@ -28,6 +29,7 @@ export function NowPlaying({
   title: string;
   artist: string;
   coverSeed: number;
+  styles?: readonly string[];
 }) {
   const { t } = useI18n();
   const player = usePlayer();
@@ -59,6 +61,7 @@ export function NowPlaying({
           <CoverArt
             seed={coverSeed}
             title={title}
+            styles={styles}
             size={560}
             className={`now-playing__cover${playing ? ' is-breathing' : ''}`}
           />

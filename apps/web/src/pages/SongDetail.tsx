@@ -162,6 +162,7 @@ export default function SongDetail() {
           <CoverArt
             seed={song.coverSeed}
             title={song.title}
+            styles={song.styles}
             size={560}
             className="song-spread__art"
             playing={playing}

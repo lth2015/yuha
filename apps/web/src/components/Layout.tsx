@@ -296,6 +296,7 @@ export function Layout({ children }: { children: ReactNode }) {
           title={nowPlaying?.title ?? player.current?.title ?? t('player.untitled')}
           artist={nowPlaying?.artistName ?? player.current?.artistName ?? t('player.unknownArtist')}
           coverSeed={nowPlaying?.coverSeed ?? player.current?.coverSeed ?? 1}
+          styles={nowPlaying?.styles ?? player.current?.styles}
           lyrics={nowPlaying?.lyrics ?? null}
           timings={nowPlaying?.lyricTimings ?? null}
           onDownload={
