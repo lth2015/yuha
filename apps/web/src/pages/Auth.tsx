@@ -2,7 +2,8 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import type { MeView } from '@yuha/contracts';
 import { apiFetch } from '../lib/api';
-import { useI18n } from '../lib/i18n';
+import { rich, useI18n } from '../lib/i18n';
+import { AUTH_NEXT_KEY, safeInternalPath } from '../lib/paths';
 import { useSession } from '../lib/session';
 import { ErrorNotice } from '../components/common';
 
@@ -46,6 +47,14 @@ type ConfigState =
  * the one-time code for a session. The email form is the demo/integration
  * development login and only appears when the server says it exists.
  */
+function readStoredNext(): string | null {
+  try {
+    return sessionStorage.getItem(AUTH_NEXT_KEY);
+  } catch {
+    return null;
+  }
+}
+
 export default function Auth() {
   const { t } = useI18n();
   const navigate = useNavigate();
@@ -60,8 +69,14 @@ export default function Auth() {
   const [error, setError] = useState<unknown>(null);
   const [submitting, setSubmitting] = useState(false);
 
-  const next = params.get('next') ?? '/create';
   const googleError = params.get('google_error');
+  // Returning from Google with an error drops `next` from the URL, so a retry
+  // would overwrite the stored destination with /create. Only on that return
+  // trip is the stored value trusted; a fresh visit decides for itself.
+  const next =
+    safeInternalPath(params.get('next')) ??
+    (googleError ? safeInternalPath(readStoredNext()) : null) ??
+    '/create';
   const canSubmit = email.includes('@') && ageConfirmed && termsAccepted && !submitting;
 
   // Retry starts a second request without cancelling the first. A slow first
@@ -128,8 +143,17 @@ export default function Auth() {
         <ErrorNotice error={error} />
         {googleError && (
           <div className="alert alert--error">
-            <div className="alert__title">Google sign-in did not complete</div>
-            <div className="small">{googleError.replace(/_/g, ' ')} — please try again.</div>
+            <div className="alert__title">{t('auth.googleFailed')}</div>
+            <div className="small">
+              {/* access_denied is the person pressing Cancel on Google's screen,
+                  not a fault; say so rather than print the error code at them. */}
+              {googleError === 'access_denied' ? t('auth.googleCancelled') : t('auth.googleRetry')}
+            </div>
+            {googleError !== 'access_denied' && (
+              <div className="small muted">
+                <code>{googleError}</code>
+              </div>
+            )}
           </div>
         )}
 
@@ -144,6 +168,13 @@ export default function Auth() {
           <a
             className="btn btn--google btn--block"
             href={`${import.meta.env['VITE_API_URL'] ?? 'http://localhost:4000'}/v1/auth/google/start`}
+            onClick={() => {
+              try {
+                sessionStorage.setItem(AUTH_NEXT_KEY, next);
+              } catch {
+                /* private mode: the callback falls back to /create */
+              }
+            }}
           >
             <span className="btn--google__g" aria-hidden="true">
               G
@@ -155,12 +186,10 @@ export default function Auth() {
           // flight there is nothing to report, and claiming a misconfiguration
           // on every page load is how this message stopped being believed.
           <div className="alert alert--info">
-            <div className="alert__title">Google sign-in is not configured</div>
-            <div className="small">
-              Set <code>GOOGLE_CLIENT_ID</code>, <code>GOOGLE_CLIENT_SECRET</code> and{' '}
-              <code>GOOGLE_REDIRECT_URI</code> in the API environment to enable it. The button will appear here
-              automatically.
-            </div>
+            {/* These two strings were translated in 3e5ad3c and never used:
+                this panel stayed in English beside them the whole time. */}
+            <div className="alert__title">{t('auth.googleNotConfigured')}</div>
+            <div className="small">{t('auth.googleHint')}</div>
           </div>
         ) : null}
 
@@ -171,7 +200,7 @@ export default function Auth() {
             </div>
             <form className="stack" onSubmit={submit} noValidate>
               <div>
-                <label htmlFor="email">Email</label>
+                <label htmlFor="email">{t('auth.email')}</label>
                 <input
                   id="email"
                   type="email"
@@ -193,7 +222,7 @@ export default function Auth() {
                   onChange={(e) => setAgeConfirmed(e.target.checked)}
                   required
                 />
-                <label htmlFor="age">I am 18 or older</label>
+                <label htmlFor="age">{t('auth.age')}</label>
               </div>
 
               <div className="checkbox-row">
@@ -205,14 +234,18 @@ export default function Auth() {
                   required
                 />
                 <label htmlFor="terms">
-                  I agree to the{' '}
-                  <Link to="/legal/terms" target="_blank">
-                    Terms
-                  </Link>{' '}
-                  and{' '}
-                  <Link to="/legal/privacy" target="_blank">
-                    Privacy Policy
-                  </Link>
+                  {rich(t('auth.terms'), {
+                    terms: (
+                      <Link to="/legal/terms" target="_blank">
+                        {t('auth.termsLink')}
+                      </Link>
+                    ),
+                    privacy: (
+                      <Link to="/legal/privacy" target="_blank">
+                        {t('auth.privacyLink')}
+                      </Link>
+                    ),
+                  })}
                 </label>
               </div>
 
@@ -224,17 +257,17 @@ export default function Auth() {
                   checked={marketingOptIn}
                   onChange={(e) => setMarketingOptIn(e.target.checked)}
                 />
-                <label htmlFor="marketing">Send me product news (optional)</label>
+                <label htmlFor="marketing">{t('auth.marketing')}</label>
               </div>
 
               <button type="submit" className="btn btn--block" disabled={!canSubmit}>
-                {submitting ? 'Signing in…' : 'Continue with email'}
+                {submitting ? t('auth.signingIn') : t('auth.continue')}
               </button>
             </form>
 
             {runtime?.demo && (
               <p className="small muted" style={{ margin: 0 }}>
-                Demo accounts: <code>creator@example.jp</code> · <code>empty@example.jp</code> ·{' '}
+                {t('auth.demoAccounts')} <code>creator@example.jp</code> · <code>empty@example.jp</code> ·{' '}
                 <code>admin@example.jp</code>
               </p>
             )}
@@ -243,10 +276,8 @@ export default function Auth() {
 
         {config?.adapter === 'cognito' && !config.devLogin && (
           <div className="alert alert--info">
-            <div className="alert__title">Email code sign-in</div>
-            <div className="small">
-              A verification code will be emailed to you; the challenge is hosted by Amazon Cognito.
-            </div>
+            <div className="alert__title">{t('auth.cognitoTitle')}</div>
+            <div className="small">{t('auth.cognitoBody')}</div>
           </div>
         )}
       </div>

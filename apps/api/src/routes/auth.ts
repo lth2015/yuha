@@ -384,6 +384,13 @@ export default async function authRoutes(
       ],
       removed: ['Account profile', 'Your songs and export files', 'Marketing subscription'],
       note: 'Cancellation, deletion and marketing opt-out are three different operations. Deletion runs after identity verification.',
+      // Stable codes beside the prose, in the same order. The server decides
+      // what the lists contain; the client words each item in the reader's
+      // language. Additive: the English arrays above are unchanged for anything
+      // already reading them.
+      retainedCodes: ['orders_payments', 'rights_case_evidence'],
+      removedCodes: ['profile', 'songs_exports', 'marketing'],
+      noteCode: 'three_operations',
     };
   });
 }

@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import QRCode from 'qrcode';
 import { Link } from 'react-router-dom';
 import { apiFetch } from '../lib/api';
-import { useI18n } from '../lib/i18n';
+import { rich, useI18n } from '../lib/i18n';
 import { formatJst, useSession } from '../lib/session';
 import { ErrorNotice } from '../components/common';
 
@@ -11,6 +11,10 @@ interface DeletionReceipt {
   retained: string[];
   removed: string[];
   note: string;
+  /** In step with the prose arrays; absent from an older API. */
+  retainedCodes?: string[];
+  removedCodes?: string[];
+  noteCode?: string;
 }
 
 /**
@@ -23,6 +27,18 @@ interface DeletionReceipt {
  */
 export default function Account() {
   const { t } = useI18n();
+  /*
+   * A receipt line in the reader's language when its code is known, the
+   * server's own English otherwise. The server decides what is retained and
+   * what is removed; this only decides how the line is worded. A new code the
+   * dictionary has not caught up with still shows, in English, rather than
+   * vanishing from a statement of what happens to someone's data.
+   */
+  const receiptLine = (prefix: string, code: string | undefined, fallback: string) => {
+    const key = `${prefix}.${code}`;
+    const text = code ? t(key) : key;
+    return text === key ? fallback : text;
+  };
   const { me, refreshMe } = useSession();
   const [error, setError] = useState<unknown>(null);
   const [savingMarketing, setSavingMarketing] = useState(false);
@@ -111,11 +127,7 @@ export default function Account() {
   };
 
   const requestDeletion = async () => {
-    const ok = window.confirm(
-      'This will request deletion of your account.\n\n' +
-        'It is separate from cancelling a subscription or unsubscribing from email. ' +
-        'It runs after identity verification and cannot be undone.\n\nContinue?',
-    );
+    const ok = window.confirm(t('acct.deleteConfirm'));
     if (!ok) return;
     setError(null);
     try {
@@ -129,40 +141,39 @@ export default function Account() {
 
   return (
     <div style={{ maxWidth: 640, margin: '0 auto' }} className="stack stack--loose">
-      <h1 style={{ fontSize: 26 }}>Account settings</h1>
+      <h1 style={{ fontSize: 26 }}>{t('account.settings')}</h1>
 
       <ErrorNotice error={error} />
 
       <section className="panel stack">
-        <h2 style={{ fontSize: 18, margin: 0 }}>Profile</h2>
+        <h2 style={{ fontSize: 18, margin: 0 }}>{t('acct.profile')}</h2>
         <div className="row row--between">
-          <span className="muted">Email</span>
+          <span className="muted">{t('auth.email')}</span>
           <span>{me.email}</span>
         </div>
         <div className="row row--between">
-          <span className="muted">Age confirmation</span>
-          <span>{me.ageConfirmed ? 'Confirmed (18+)' : 'Not confirmed'}</span>
+          <span className="muted">{t('acct.age')}</span>
+          <span>{me.ageConfirmed ? t('acct.ageYes') : t('acct.ageNo')}</span>
         </div>
         <div className="row row--between">
-          <span className="muted">Member since</span>
+          <span className="muted">{t('acct.since')}</span>
           <span className="small">{formatJst(me.createdAt, false)}</span>
         </div>
       </section>
 
       <section className="panel stack" aria-labelledby="mfa-heading">
         <h2 id="mfa-heading" style={{ fontSize: 18, margin: 0 }}>
-          Two-factor authentication
+          {t('mfa.title')}
         </h2>
         <p className="small muted" style={{ margin: 0 }}>
-          Add a second factor with Google Authenticator (or any authenticator app). At sign-in you'll enter a
-          6-digit code after your Google account — a stolen password alone is no longer enough.
+          {t('acct.mfaBody')}
         </p>
 
-        {mfaEnabled === null && <p className="small muted">Loading…</p>}
+        {mfaEnabled === null && <p className="small muted">{t('lib.loading')}</p>}
 
         {mfaEnabled === false && !enrollment && (
           <button type="button" className="btn btn--primary" onClick={startEnrollment} disabled={mfaBusy}>
-            {mfaBusy ? 'Preparing…' : 'Set up with Google Authenticator'}
+            {mfaBusy ? t('acct.mfaPreparing') : t('acct.mfaSetup')}
           </button>
         )}
 
@@ -171,18 +182,16 @@ export default function Account() {
             <div className="row" style={{ alignItems: 'flex-start', flexWrap: 'wrap', gap: 'var(--s3)' }}>
               <img
                 src={enrollment.qr}
-                alt="QR code for Google Authenticator"
+                alt={t('acct.qrAlt')}
                 width={190}
                 height={190}
                 style={{ borderRadius: 14, flex: 'none' }}
               />
               <div className="stack stack--tight" style={{ minWidth: 220 }}>
-                <strong>1. Scan in Google Authenticator</strong>
-                <span className="small muted">
-                  Open the app → add account → scan QR code. Or enter this key manually:
-                </span>
+                <strong>{t('acct.mfaStep1')}</strong>
+                <span className="small muted">{t('acct.mfaStep1Body')}</span>
                 <code className="mfa-key">{enrollment.secret}</code>
-                <strong>2. Enter the current 6-digit code</strong>
+                <strong>{t('acct.mfaStep2')}</strong>
               </div>
             </div>
             <div className="row">
@@ -198,7 +207,7 @@ export default function Account() {
                 style={{ maxWidth: 140, letterSpacing: '0.2em', fontSize: 18, textAlign: 'center' }}
               />
               <button type="button" className="btn btn--primary" onClick={confirmEnrollment} disabled={mfaBusy || mfaCode.length !== 6}>
-                {mfaBusy ? 'Verifying…' : 'Confirm & enable'}
+                {mfaBusy ? t('mfa.verifying') : t('acct.mfaConfirm')}
               </button>
             </div>
           </div>
@@ -206,9 +215,13 @@ export default function Account() {
 
         {recoveryCodes && (
           <div className="alert alert--info stack stack--tight">
-            <div className="alert__title">Two-factor is on — save your recovery codes now</div>
+            <div className="alert__title">{t('acct.recoveryTitle')}</div>
             <p className="small" style={{ margin: 0 }}>
-              These 8 codes are shown <strong>only once</strong>. Each works one time if you lose your phone.
+              {/* The count is the real one: "8" was written into the sentence
+                  while the list beside it came from the server. */}
+              {rich(t('acct.recoveryBody', { n: recoveryCodes.length }), {
+                once: <strong>{t('acct.recoveryOnce')}</strong>,
+              })}
             </p>
             <div className="mfa-recovery">
               {recoveryCodes.map((c) => (
@@ -220,20 +233,20 @@ export default function Account() {
 
         {mfaEnabled && (
           <div className="stack stack--tight">
-            <span className="small" style={{ color: 'var(--ok)' }}>✓ Enabled — sign-ins ask for your authenticator code.</span>
+            <span className="small" style={{ color: 'var(--ok)' }}>{t('acct.mfaOn')}</span>
             <div className="row">
               <input
                 type="text"
                 inputMode="numeric"
                 maxLength={16}
-                placeholder="code or recovery code"
+                placeholder={t('acct.disablePlaceholder')}
                 value={mfaCode}
                 onChange={(e) => setMfaCode(e.target.value.trim())}
-                aria-label="Code to disable two-factor"
+                aria-label={t('acct.disableAria')}
                 style={{ maxWidth: 220 }}
               />
               <button type="button" className="btn btn--danger-ghost" onClick={disableMfa} disabled={mfaBusy || !mfaCode}>
-                Disable two-factor
+                {t('acct.mfaDisable')}
               </button>
             </div>
           </div>
@@ -241,7 +254,7 @@ export default function Account() {
       </section>
 
       <section className="panel stack">
-        <h2 style={{ fontSize: 18, margin: 0 }}>Email notifications</h2>
+        <h2 style={{ fontSize: 18, margin: 0 }}>{t('acct.emailTitle')}</h2>
         <div className="checkbox-row">
           <input
             id="marketing"
@@ -250,58 +263,58 @@ export default function Account() {
             disabled={savingMarketing}
             onChange={(e) => void toggleMarketing(e.target.checked)}
           />
-          <label htmlFor="marketing">Send me product news and campaigns</label>
+          <label htmlFor="marketing">{t('acct.marketing')}</label>
         </div>
         <p className="small muted" style={{ margin: 0 }}>
-          Unsubscribing never affects your account. Service and transaction email still arrives.
+          {t('acct.marketingNote')}
         </p>
       </section>
 
       <section className="panel stack">
-        <h2 style={{ fontSize: 18, margin: 0 }}>Billing</h2>
+        <h2 style={{ fontSize: 18, margin: 0 }}>{t('account.billing')}</h2>
         <p className="small muted" style={{ margin: 0 }}>
-          Subscription cancellation lives on the Billing page — separate from deleting the account.
+          {t('acct.billingNote')}
         </p>
         <Link className="btn" to="/settings/billing">
-          Open billing
+          {t('pay.seeBilling')}
         </Link>
       </section>
 
       <section className="panel stack">
-        <h2 style={{ fontSize: 18, margin: 0 }}>Delete account</h2>
+        <h2 style={{ fontSize: 18, margin: 0 }}>{t('acct.deleteTitle')}</h2>
 
         {receipt ? (
           <div className="alert alert--info">
-            <div className="alert__title">Deletion request received (ticket {receipt.ticket.slice(0, 8)})</div>
+            <div className="alert__title">{t('acct.deleteReceived', { ticket: receipt.ticket.slice(0, 8) })}</div>
             <div className="small stack stack--tight" style={{ marginTop: 'var(--s1)' }}>
               <div>
-                <strong>Removed</strong>
+                <strong>{t('acct.removed')}</strong>
                 <ul style={{ margin: '4px 0', paddingLeft: '1.2em' }}>
-                  {receipt.removed.map((r) => (
-                    <li key={r}>{r}</li>
+                  {receipt.removed.map((r, i) => (
+                    <li key={r}>{receiptLine('acct.item', receipt.removedCodes?.[i], r)}</li>
                   ))}
                 </ul>
               </div>
               <div>
-                <strong>Retained where required</strong>
+                <strong>{t('acct.retained')}</strong>
                 <ul style={{ margin: '4px 0', paddingLeft: '1.2em' }}>
-                  {receipt.retained.map((r) => (
-                    <li key={r}>{r}</li>
+                  {receipt.retained.map((r, i) => (
+                    <li key={r}>{receiptLine('acct.item', receipt.retainedCodes?.[i], r)}</li>
                   ))}
                 </ul>
               </div>
-              <p style={{ margin: 0 }}>{receipt.note}</p>
+              <p style={{ margin: 0 }}>{receiptLine('acct.note', receipt.noteCode, receipt.note)}</p>
             </div>
           </div>
         ) : (
           <>
             <p className="small muted" style={{ margin: 0 }}>
-              Deletes your account, songs and exports. Statutory transaction records and open rights-case
-              evidence are retained separately, as described in the{' '}
-              <Link to="/legal/privacy">Privacy Policy</Link>.
+              {rich(t('acct.deleteBody'), {
+                privacy: <Link to="/legal/privacy">{t('auth.privacyLink')}</Link>,
+              })}
             </p>
             <button type="button" className="btn btn--danger" onClick={() => void requestDeletion()}>
-              Request account deletion
+              {t('acct.deleteRequest')}
             </button>
           </>
         )}

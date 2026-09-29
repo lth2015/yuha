@@ -652,6 +652,13 @@ describe('SEC-11: cancellation, deletion and marketing are separate actions', ()
     expect(res.json().retained.join('')).toContain('Orders, payments and refunds');
     expect(res.json().removed.join('')).toContain('Marketing subscription');
     expect(res.json().note).toContain('three different operations');
+
+    // One code per item, in step with the prose, so the account page can show
+    // each line in the reader's language without inventing the list itself.
+    const body = res.json();
+    expect(body.retainedCodes).toHaveLength(body.retained.length);
+    expect(body.removedCodes).toHaveLength(body.removed.length);
+    expect(body.noteCode).toBe('three_operations');
   });
 
   it('marketing consent defaults to off and toggles independently', async () => {

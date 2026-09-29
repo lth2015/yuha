@@ -48,7 +48,7 @@ export function pageTitleKey(path: string): string | null {
     [/^\/settings\/billing/, 'account.billing'],
     [/^\/settings\/account/, 'account.settings'],
     [/^\/admin(\/|$)/, 'account.console'],
-    [/^\/auth\/mfa/, 'title.mfa'],
+    [/^\/auth\/mfa/, 'mfa.title'],
     [/^\/auth(\/|$)/, 'nav.signin'],
     [/^\/help\/rights/, 'footer.rights'],
     [/^\/legal\/terms/, 'footer.terms'],

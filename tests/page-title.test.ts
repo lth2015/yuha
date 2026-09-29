@@ -33,7 +33,7 @@ const ROUTES: Array<[string, string | null]> = [
   ['/admin', 'account.console'],
   ['/auth', 'nav.signin'],
   ['/auth/google/callback', 'nav.signin'],
-  ['/auth/mfa', 'title.mfa'],
+  ['/auth/mfa', 'mfa.title'],
   ['/help/rights', 'footer.rights'],
   ['/legal/terms', 'footer.terms'],
   ['/legal/privacy', 'footer.privacy'],
