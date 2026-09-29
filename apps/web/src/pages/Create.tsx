@@ -14,6 +14,38 @@ import { Score } from '../components/Score';
 import { useSession } from '../lib/session';
 import { ErrorNotice, Loading } from '../components/common';
 
+/**
+ * A failed submission, shown where the creator is looking.
+ *
+ * `ErrorNotice` used to sit at the top of this page, above the score and the
+ * whole composer. On a filled-in form the submit button is a screenful or more
+ * below that, so a rejected generation looked exactly like a dead button:
+ * nothing moved anywhere near the pointer. That is not hypothetical — an
+ * expired session answered 401, the notice rendered off-screen, and the
+ * report that came back was "点击生成没有响应".
+ *
+ * `role="alert"` on the notice was already announcing this to screen readers.
+ * This is the sighted half of the same job: put it beside the button, and
+ * bring it into view for the case where the form is long enough that even
+ * "beside the button" is below the fold.
+ */
+function SubmitError({ error }: { error: unknown }) {
+  const box = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!error) return;
+    const still = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+    box.current?.scrollIntoView({ behavior: still ? 'auto' : 'smooth', block: 'center' });
+  }, [error]);
+
+  if (!error) return null;
+  return (
+    <div ref={box} className="studio__submit-error">
+      <ErrorNotice error={error} />
+    </div>
+  );
+}
+
 const DRAFT_KEY = 'sonare.draft';
 
 interface Draft {
@@ -463,7 +495,6 @@ export default function Create() {
     return (
       <div className="studio">
         {head}
-        <ErrorNotice error={error} />
         <Score
           text={instructions}
           ghost={t('create.edit.placeholder')}
@@ -501,6 +532,8 @@ export default function Create() {
             </span>
           </div>
 
+          <SubmitError error={error} />
+
           <div className="composer__row studio__submit">
             {balanceLine}
             <div className="studio__submit-actions">
@@ -535,7 +568,6 @@ export default function Create() {
   return (
     <div className="studio">
       {head}
-      <ErrorNotice error={error} />
 
       {/* Their own words, read as music, before anything else on the page. */}
       <Score
@@ -704,6 +736,8 @@ export default function Create() {
             </div>
           </div>
         </div>
+
+        <SubmitError error={error} />
 
         <div className="composer__row studio__submit">
           {balanceLine}

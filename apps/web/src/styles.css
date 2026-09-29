@@ -12,11 +12,24 @@
  * field and every decorative animation to a composed arrangement.
  */
 :root {
-  /* the room */
-  --bg: #08090d;
-  --bg-deep: #050609;
-  --surface-solid: #14161d;
-  --surface-soft: #1b1e27;
+  /*
+   * The room, one stop brighter than it was.
+   *
+   * It used to be #08090d — near-black, and on a good monitor in a dim office
+   * the page read as oppressive rather than atmospheric: the surfaces sat so
+   * close to the background that the card edges did most of the work of
+   * saying where one thing ended and the next began. These four values are
+   * lifted together so the *steps* between them stay the same size; what
+   * changes is where the whole ladder sits. It is still a dark studio, not a
+   * grey one.
+   *
+   * Raising the surfaces lowers every text ratio, so `--faint` moved with
+   * them — see the note there.
+   */
+  --bg: #12141a;
+  --bg-deep: #0c0e13;
+  --surface-solid: #1e2029;
+  --surface-soft: #262934;
 
   /* glass: translucent surfaces that live on top of the light field */
   --glass: rgba(255, 255, 255, 0.055);
@@ -43,7 +56,7 @@
    * produced a green build and an unchanged defect. Now 4.56:1 at worst,
    * measured on every surface.
    */
-  --faint: #7f8696;
+  --faint: #8b92a2;
   --line: rgba(255, 255, 255, 0.1);
   --line-strong: rgba(255, 255, 255, 0.18);
   --control-line: rgba(255, 255, 255, 0.22);
@@ -145,7 +158,7 @@ code { font-family: var(--mono); font-size: 0.86em; background: var(--surface-so
   z-index: 0;
   overflow: hidden;
   pointer-events: none;
-  background: radial-gradient(120% 90% at 50% 0%, #0d1018 0%, var(--bg) 45%, var(--bg-deep) 100%);
+  background: radial-gradient(120% 90% at 50% 0%, #1a1d26 0%, var(--bg) 45%, var(--bg-deep) 100%);
 }
 
 .lightfield__lobe {
@@ -1435,4 +1448,12 @@ tr:last-child td { border-bottom: none; }
     align-items: center;
     min-height: var(--tap);
   }
+}
+
+/*
+ * A submit failure sits in the form's own column, not the page's, so it lines
+ * up with the button it belongs to rather than with the page heading.
+ */
+.studio__submit-error {
+  margin-top: var(--s4);
 }
