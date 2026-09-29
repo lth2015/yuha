@@ -47,4 +47,5 @@ export {
   processWebhookEvent,
   recoverUngrantedOrders,
   reconcilePendingCheckouts,
+  reconcileUngrantedSubscriptions,
 } from './services/webhooks.js';

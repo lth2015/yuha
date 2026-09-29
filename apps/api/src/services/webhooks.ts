@@ -689,6 +689,128 @@ export async function reconcilePendingCheckouts(
 }
 
 /**
+ * Recovery sweep for subscriptions whose `invoice.paid` never arrived.
+ *
+ * A subscription's money and its goods are settled by two different events:
+ * `checkout.session.completed` marks the order paid and deliberately grants
+ * nothing (PAY-06 — granting in both places would double it), and `invoice.paid`
+ * hands over the period's credits. Lose the second and the subscriber has paid
+ * and received nothing, with no repair anywhere:
+ *
+ *   - `recoverUngrantedOrders` finds the order and skips it — `continue` on
+ *     `product.kind !== 'one_time'`.
+ *   - `reconcilePendingCheckouts` replays the checkout, which for a
+ *     subscription grants nothing by design.
+ *   - `subscription_period` batches are created in exactly one place in this
+ *     repository, inside `handleInvoicePaid`.
+ *
+ * So the order sat in `listUngrantedPaidOrders` forever, which is also the
+ * query behind the `UngrantedPaidOrders` alarm: it fires above zero, and with
+ * no path back it would have stayed red. `a0d355d` fixed the invoice we
+ * misread; this is the invoice that never comes, which `reconcile-pending`
+ * proved is reachable by stopping the listener.
+ *
+ * Like the checkout sweep, this does **not** re-implement settlement. It grants
+ * under the same business key the webhook would have used —
+ * `<subscriptionId>:<latestInvoiceId>` — so a delivery that turns up late finds
+ * the batch already there and changes nothing. That shared key is the whole
+ * design: a recovery path that invented its own key would be a second source of
+ * truth and would double-grant the day both arrived.
+ *
+ * The subscription row is written too. `customer.subscription.created` is lost
+ * in the same outage, and without that row `getActiveSubscription` finds
+ * nothing, so `SUBSCRIPTION_ALREADY_ACTIVE` never fires and the subscriber can
+ * buy a second subscription.
+ */
+export async function reconcileUngrantedSubscriptions(ctx: AppContext, limit = 50): Promise<number> {
+  const orders = await listUngrantedPaidOrders(limit);
+  let repaired = 0;
+
+  for (const order of orders) {
+    const product = await getProductVersion(order.price_key, order.price_version);
+    if (!product || product.kind !== 'subscription') continue;
+
+    const sessionId = order.stripe_checkout_session_id;
+    if (!sessionId) continue;
+
+    // The order does not store the subscription id — it is created by the
+    // provider when the checkout completes — so it comes from the session.
+    const session = await ctx.payments.retrieveCheckoutSession(sessionId);
+    const subscriptionId = session?.subscriptionId;
+    if (!subscriptionId) continue;
+
+    const live = await ctx.payments.retrieveSubscription(subscriptionId);
+    // A provider we cannot reach is not evidence of anything; the next sweep
+    // asks again.
+    if (!live) continue;
+    // Only a subscription that is actually running has bought a period. An
+    // `incomplete` or `past_due` one has not, and guessing here would hand out
+    // credits for money that never arrived.
+    if (live.status !== 'active' && live.status !== 'trialing') continue;
+
+    const invoiceId = live.latestInvoiceId;
+    // Without the invoice id there is no shared key, and a key of our own
+    // invention would double-grant when the real event lands.
+    if (!invoiceId) continue;
+    // A subscription batch that never expires is a different bug from one that
+    // is missing: unused units are not supposed to carry over (§11 / UI-10).
+    // Leaving it ungranted keeps it visible in the alarm, which is where an
+    // unexplained subscription belongs.
+    if (!live.currentPeriodEnd) continue;
+
+    // Counted after the transaction commits. Incrementing inside it would log a
+    // repair that a rollback then undid.
+    let granted = false;
+    await withTx(async (tx) => {
+      await upsertSubscription(
+        {
+          userId: order.user_id,
+          stripeSubscriptionId: subscriptionId,
+          stripeCustomerId: live.customerId,
+          priceKey: order.price_key,
+          priceVersion: order.price_version,
+          status: live.status as SubscriptionStatus,
+          currentPeriodStart: live.currentPeriodStart,
+          currentPeriodEnd: live.currentPeriodEnd,
+          cancelAtPeriodEnd: live.cancelAtPeriodEnd,
+          canceledAt: live.canceledAt,
+          latestInvoiceId: invoiceId,
+          // Dated at the payment, not at the sweep. `upsertSubscription` keeps
+          // the newest event, and stamping this "now" would make the real
+          // events — whose `created` is back at the payment — lose to a repair
+          // built from less information than they carry.
+          eventAt: order.paid_at ?? order.created_at,
+        },
+        tx,
+      );
+
+      const res = await grantUnits(
+        {
+          userId: order.user_id,
+          source: 'subscription_period',
+          sourceRef: `${subscriptionId}:${invoiceId}`,
+          units: product.units,
+          productKey: product.price_key,
+          priceVersion: product.version,
+          effectiveFrom: live.currentPeriodStart ?? order.paid_at ?? new Date(),
+          expiresAt: live.currentPeriodEnd,
+          reason: `subscription_recovery:${invoiceId}`,
+        },
+        tx,
+      );
+
+      // Marked fulfilled whether or not this call created the batch: if it was
+      // already there, the order is satisfied and only the record was missing.
+      await markEntitlementGranted(order.id, tx);
+      granted = res.created;
+    });
+    if (granted) repaired += 1;
+  }
+
+  return repaired;
+}
+
+/**
  * Recovery sweep (PAY-11): orders that were charged but whose entitlement never
  * landed — a crash between the payment and the grant. Re-runs the grant, which
  * is idempotent, so this is safe to run repeatedly.

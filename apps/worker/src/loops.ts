@@ -1,5 +1,10 @@
 import type { AppContext } from '@yuha/api';
-import { processWebhookEvent, recoverUngrantedOrders, reconcilePendingCheckouts } from '@yuha/api';
+import {
+  processWebhookEvent,
+  recoverUngrantedOrders,
+  reconcilePendingCheckouts,
+  reconcileUngrantedSubscriptions,
+} from '@yuha/api';
 import {
   claimJob,
   claimOutboxBatch,
@@ -212,6 +217,21 @@ export async function maintenanceLoop(deps: LoopDeps, intervalMs = 60_000): Prom
       const reconciled = await reconcilePendingCheckouts(ctx, 600);
       if (reconciled) {
         log('warn', 'settled paid checkouts whose webhook never arrived', { count: reconciled });
+      }
+
+      /*
+       * Subscribers settled by the sweep above, or by a checkout webhook, still
+       * have nothing: their credits come from `invoice.paid`, and the sweep
+       * above cannot grant them (PAY-06). Neither could anything else — the
+       * PAY-11 sweep skips every product that is not one_time — so a lost
+       * invoice meant a subscriber paid monthly and received nothing, forever.
+       *
+       * `warn` for the same reason as above: reaching this means a delivery was
+       * lost, and repairing it quietly would hide that.
+       */
+      const subscriptions = await reconcileUngrantedSubscriptions(ctx);
+      if (subscriptions) {
+        log('warn', 'granted subscription periods whose invoice never arrived', { count: subscriptions });
       }
 
       const drift = await reconcileBalances();
