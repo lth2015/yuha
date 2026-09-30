@@ -148,8 +148,14 @@ export async function getTrack(id: string, tx?: PoolConnection): Promise<TrackRo
 }
 
 /**
- * A public, deliverable song — the only track an anonymous reader may fetch.
- * Ownership checks for private tracks stay on `getTrackForUser` (SEC-01).
+ * A public, deliverable song — the only track a reader who does not own it may
+ * fetch. Ownership checks for private tracks stay on `getTrackForUser`
+ * (SEC-01).
+ *
+ * "Anonymous" would be wrong here: `GET /v1/tracks/:id` requires a bearer
+ * token, so the reader this serves is a signed-in account that is not the
+ * owner. The one route that answers with no token at all is `GET /v1/explore`,
+ * and it is built on `listPublicTracks` above, under the same two conditions.
  */
 export async function getPublicTrack(id: string): Promise<TrackWithArtist | undefined> {
   const row = await queryOne<TrackWithArtist>(
@@ -159,6 +165,31 @@ export async function getPublicTrack(id: string): Promise<TrackWithArtist | unde
     [id],
   );
   return row ? normaliseRow(row) : undefined;
+}
+
+/**
+ * The showcase strip on the landing page.
+ *
+ * A public feed was removed in b63d66b as a product decision, and its ranked
+ * listing went with it in 91be961 because it sorted by a like counter that no
+ * longer exists. This is deliberately not that: no ranking, no trending, no
+ * counter — the newest published songs, capped, in the order they were made.
+ * Anything that sorts by engagement needs a reason to exist and a reader, and
+ * neither is back.
+ *
+ * `visibility = 'public'` and `state = 'deliverable'` are the same two
+ * conditions `getPublicTrack` applies, so a song reachable here is exactly a
+ * song reachable by its own link.
+ */
+export async function listPublicTracks(limit: number): Promise<TrackWithArtist[]> {
+  const rows = await query<TrackWithArtist>(
+    `${TRACK_SELECT}
+      WHERE t.visibility = 'public' AND t.state = 'deliverable' AND t.deleted_at IS NULL
+      ORDER BY t.created_at DESC
+      LIMIT ?`,
+    [limit],
+  );
+  return rows.map(normaliseRow);
 }
 
 /** Owner-facing read that also carries the artist columns for detail views. */

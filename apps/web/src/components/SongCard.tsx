@@ -4,14 +4,23 @@ import type { TrackView } from '@yuha/contracts';
 import { apiFetch } from '../lib/api';
 import { useI18n } from '../lib/i18n';
 import { formatTime, usePlayer } from '../lib/player';
+import { useSession } from '../lib/session';
 import { CoverArt } from './CoverArt';
 import { Eq } from './Eq';
 
 /**
- * One song card, used by Explore, the Library grid and the Home highlights.
+ * One song card, used by the showcase, the Library grid and the create page's
+ * recent strip.
  *
- * The play button plays through the shared queue (the feed the card came from
- * becomes the upcoming queue), and the heart optimistically toggles against
+ * The play button plays through the shared queue: the list the card came from
+ * becomes the upcoming queue.
+ *
+ * The card is rendered to three different readers — the owner, a signed-in
+ * stranger, and, since the showcase went back on the landing page, somebody
+ * with no account at all — so what it offers is decided from the song and the
+ * session rather than assumed. Playing is for everyone; the account menu is
+ * for someone who has an account; downloading the master is for whoever owns
+ * the song or has bought a licence for it.
  */
 export function SongCard({
   song,
@@ -40,7 +49,25 @@ export function SongCard({
   const [busy, setBusy] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
 
-  const isMine = song.artistId === '' ? false : !!song.artistId; // set by parent context if known
+  const { me } = useSession();
+  /*
+   * This read `song.artistId === '' ? false : !!song.artistId`, with a comment
+   * saying the parent set it "if known". No parent ever did, and `artistId` is
+   * a uuid on every view, so it was `true` for every card ever rendered —
+   * including other people's songs, where it would have labelled the artist
+   * 「你」 the moment `artistName` came back null. It never bit because the
+   * seeded artists all have display names. Ask the session instead.
+   */
+  const isMine = !!me && song.artistId === me.userId;
+  /*
+   * The same rule `Layout` applies to the Now Playing download: the master is
+   * for the person who made the song or the person who licensed it. The card
+   * used to offer it to anyone holding the card, which was invisible while
+   * every list was the owner's own — and became a free download of a
+   * full-quality master, to a reader with no account, the moment the showcase
+   * appeared on the landing page.
+   */
+  const canDownload = isMine || song.licensedByMe === true;
   const active = player.activeId === song.trackId;
   const playing = active && player.status === 'playing';
 
@@ -101,7 +128,11 @@ export function SongCard({
         {song.state !== 'deliverable' && (
           <span className="song-card__badge">{song.state === 'processing' ? t('card.generating') : song.state}</span>
         )}
-        {song.visibility === 'public' && <span className="song-card__public" >{t('card.onMarket')}</span>}
+        {/* "Your link is on" is something to tell an owner; on the showcase
+            every card is public, so it would be noise on all of them. */}
+        {isMine && song.visibility === 'public' && (
+          <span className="song-card__public">{t('card.onMarket')}</span>
+        )}
       </div>
 
       <div className="song-card__meta">
@@ -136,7 +167,7 @@ export function SongCard({
 
       <div className="song-card__actions">
 
-        {(onRemove || song.state === 'deliverable') && (
+        {me && (onRemove || song.state === 'deliverable') && (
           <div className="menu">
             <button
               type="button"
@@ -153,15 +184,17 @@ export function SongCard({
                 <Link role="menuitem" to={`/song/${song.trackId}`} onClick={() => setMenuOpen(false)}>
                   {t('card.open')}
                 </Link>
-                <a
-                  role="menuitem"
-                  href={song.previewUrl ?? '#'}
-                  download
-                  aria-disabled={!song.previewUrl}
-                  onClick={(e) => !song.previewUrl && e.preventDefault()}
-                >
-                  {t('card.download')}
-                </a>
+                {canDownload && (
+                  <a
+                    role="menuitem"
+                    href={song.previewUrl ?? '#'}
+                    download
+                    aria-disabled={!song.previewUrl}
+                    onClick={(e) => !song.previewUrl && e.preventDefault()}
+                  >
+                    {t('card.download')}
+                  </a>
+                )}
                 {onRemove && (
                   <>
                     <button

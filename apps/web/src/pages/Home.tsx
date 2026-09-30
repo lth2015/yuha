@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import type { JobView } from '@yuha/contracts';
+import type { JobView, TrackView } from '@yuha/contracts';
 import { apiFetch, newIdempotencyKey } from '../lib/api';
 import { useI18n } from '../lib/i18n';
 import { useSession } from '../lib/session';
 import { Score } from '../components/Score';
+import { SongCard } from '../components/SongCard';
 import { JOB_PHASES, fractionOfPhase, phaseKey } from '../lib/phases';
 
 const DRAFT_KEY = 'yuha.home-draft';
@@ -28,6 +29,27 @@ const SIMPLE_DURATION_SECONDS = 120;
 export default function Home() {
   const { t } = useI18n();
   const { me, entitlements, refreshEntitlements } = useSession();
+  /**
+   * Published songs, so the landing page can be heard before anyone signs up.
+   *
+   * `null` until answered and `[]` when there are none; neither renders, so a
+   * fresh install never shows an empty shelf and a visitor never sees it flash
+   * in. A failure is swallowed: this strip is an invitation, not the task, and
+   * an error banner under a working composer would claim the page is broken.
+   */
+  const [showcase, setShowcase] = useState<TrackView[] | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    apiFetch<{ items: TrackView[] }>('/v1/explore')
+      .then((r) => {
+        if (!cancelled) setShowcase(r.items);
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, []);
   const navigate = useNavigate();
   /**
    * Hydrated lazily rather than in an effect.
@@ -348,6 +370,20 @@ export default function Home() {
         </div>
 
       </section>
+
+      {showcase && showcase.length > 0 && (
+        <section className="showcase" aria-labelledby="showcase-heading">
+          <div className="showcase__head">
+            <h2 id="showcase-heading">{t('home.showcase.title')}</h2>
+            <p className="showcase__sub">{t('home.showcase.sub')}</p>
+          </div>
+          <div className="showcase__row">
+            {showcase.map((song, i) => (
+              <SongCard key={song.trackId} song={song} queue={showcase} index={i} />
+            ))}
+          </div>
+        </section>
+      )}
     </div>
   );
 }

@@ -64,6 +64,92 @@ async function deliverSong(user: TestUser, key: string, visibility: 'private' | 
   throw new Error('song did not reach DELIVERED');
 }
 
+/*
+ * The showcase is the one route that answers without a token, so what it does
+ * NOT list matters as much as what it does. A ranked feed was removed from
+ * this product once; this is the narrow replacement, and these tests are what
+ * keep it narrow.
+ */
+describe('GET /v1/explore: the showcase', () => {
+  it('lists published songs to a reader with no account at all', async () => {
+    const owner = await h.createUser({ credits: 5 });
+    const trackId = await deliverSong(owner, 'showcase-pub', 'public');
+
+    const res = await h.app.inject({ method: 'GET', url: '/v1/explore' });
+
+    expect(res.statusCode).toBe(200);
+    const ids = res.json().items.map((t: { trackId: string }) => t.trackId);
+    expect(ids).toContain(trackId);
+  });
+
+  it('never lists a private song (SEC-01)', async () => {
+    const owner = await h.createUser({ credits: 5 });
+    const publicId = await deliverSong(owner, 'showcase-mix-pub', 'public');
+    const privateId = await deliverSong(owner, 'showcase-mix-priv', 'private');
+
+    const ids = (await h.app.inject({ method: 'GET', url: '/v1/explore' }))
+      .json()
+      .items.map((t: { trackId: string }) => t.trackId);
+
+    expect(ids).toContain(publicId);
+    expect(ids).not.toContain(privateId);
+  });
+
+  it('drops a song the moment its owner unpublishes it', async () => {
+    const owner = await h.createUser({ credits: 5 });
+    const trackId = await deliverSong(owner, 'showcase-revoke', 'public');
+
+    await h.app.inject({
+      method: 'POST',
+      url: `/v1/tracks/${trackId}/visibility`,
+      headers: owner.authHeader,
+      payload: { visibility: 'private' } as never,
+    });
+
+    const ids = (await h.app.inject({ method: 'GET', url: '/v1/explore' }))
+      .json()
+      .items.map((t: { trackId: string }) => t.trackId);
+    expect(ids).not.toContain(trackId);
+  });
+
+  it('hands out a playable preview url, so the landing page can be heard', async () => {
+    const owner = await h.createUser({ credits: 5 });
+    await deliverSong(owner, 'showcase-preview', 'public');
+
+    const item = (await h.app.inject({ method: 'GET', url: '/v1/explore' })).json().items[0];
+    expect(item.previewUrl).toEqual(expect.any(String));
+    expect(item.previewUrl.length).toBeGreaterThan(0);
+  });
+
+  /*
+   * `licensedByMe` answers "has this reader bought a licence". On this route
+   * there is no reader, so the honest value is null — "not known" — and not
+   * false, which would be an answer about somebody who does not exist.
+   */
+  it('answers null, not false, for the viewer-specific fields', async () => {
+    const owner = await h.createUser({ credits: 5 });
+    await deliverSong(owner, 'showcase-null', 'public');
+
+    const item = (await h.app.inject({ method: 'GET', url: '/v1/explore' })).json().items[0];
+    expect(item.licensedByMe).toBeNull();
+  });
+
+  /*
+   * The feed that was deleted ranked by a like counter, and `playCount` is
+   * deliberately absent from every track view: a number that cannot reach the
+   * browser cannot be rendered back onto a page by a later change. This route
+   * must not be the one that reintroduces it.
+   */
+  it('exposes no engagement counter', async () => {
+    const owner = await h.createUser({ credits: 5 });
+    await deliverSong(owner, 'showcase-nocount', 'public');
+
+    const item = (await h.app.inject({ method: 'GET', url: '/v1/explore' })).json().items[0];
+    expect(item).not.toHaveProperty('playCount');
+    expect(item).not.toHaveProperty('likeCount');
+  });
+});
+
 describe('song visibility', () => {
   it('a private song is invisible on /v1/tracks/:id even with the exact id (SEC-01)', async () => {
     const owner = await h.createUser({ credits: 5 });

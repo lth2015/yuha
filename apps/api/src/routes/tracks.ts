@@ -93,7 +93,16 @@ export default async function trackRoutes(app: FastifyInstance, opts: { ctx: App
 
   /**
    * GET /v1/tracks/:id — owner detail with exports, or a published song read
-   * anonymously (same view shape as Explore so one card component renders both).
+   * by any signed-in account (same view shape as the showcase, so one card
+   * component renders both).
+   *
+   * "Published" means the song is listed on the showcase and its link opens
+   * for anyone with an account — not for a logged-out visitor. This comment
+   * used to say "read anonymously", which the `requireAuth` on the very next
+   * line has always contradicted: a shared link has never opened without an
+   * account, so the sentence described an intention rather than the route.
+   * Kept as it is, deliberately; `GET /v1/explore` is where someone with no
+   * account can hear something.
    */
   app.get('/v1/tracks/:id', { preHandler: app.requireAuth }, async (req) => {
     const { id } = req.params as { id: string };

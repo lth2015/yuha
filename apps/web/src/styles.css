@@ -1455,6 +1455,48 @@ tr:last-child td { border-bottom: none; }
  * up with the button it belongs to rather than with the page heading.
  */
 /*
+ * The showcase under the hero.
+ *
+ * Same horizontal shelf as the create page's recent strip, one size up: this
+ * one is the first thing a visitor with no account can actually play, so it
+ * gets room rather than being tucked under a form.
+ */
+.showcase {
+  margin: var(--s16) 0 var(--s12);
+}
+.showcase__head {
+  margin-bottom: var(--s6);
+}
+.showcase__head h2 {
+  margin: 0 0 var(--s1);
+  font-size: 22px;
+  font-weight: 600;
+}
+.showcase__sub {
+  margin: 0;
+  font-size: 14px;
+  color: var(--muted);
+}
+.showcase__row {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(240px, 1fr);
+  gap: var(--s6);
+  overflow-x: auto;
+  padding-bottom: var(--s3);
+  scrollbar-width: thin;
+}
+@media (max-width: 720px) {
+  .showcase {
+    margin-top: var(--s12);
+  }
+  .showcase__row {
+    grid-auto-columns: minmax(170px, 72%);
+    gap: var(--s4);
+  }
+}
+
+/*
  * The last few songs, under the composer.
  *
  * A row that scrolls sideways rather than a grid: this is a glance back, not
