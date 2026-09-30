@@ -13,6 +13,21 @@ import { isIP } from 'node:net';
  *   - redirects are refused outright, so an allow-listed host cannot bounce us
  *     somewhere else;
  *   - hard byte cap and wall-clock timeout.
+ *
+ * `allowInsecureSelfHosted` relaxes the first and third of those, and nothing
+ * else, for the case of a model server we run ourselves on the same network —
+ * a GPU box on a desk, reachable only as `http://192.168.x.x:8000`, which the
+ * https rule and the private-address rule both refuse. The allow-list is what
+ * still does the work: the operator has to name that host, so this does not
+ * open the fetcher to arbitrary addresses, only to the ones already named.
+ *
+ * What it costs, stated rather than glossed: with it on, an allow-listed
+ * *public* hostname whose DNS has been poisoned to a private address would
+ * also be fetched, because the check is off for every allow-listed host and
+ * not only for the self-hosted one. That is why `loadConfig` refuses the flag
+ * outright in production mode, the same way it refuses the dev auth adapter
+ * and the demo music provider — this is a development affordance and is not
+ * permitted to reach a deployed environment.
  */
 export class UnsafeUrlError extends Error {
   readonly reason: string;
@@ -58,6 +73,13 @@ export interface FetchAudioOptions {
   maxBytes: number;
   timeoutMs: number;
   allowedContentTypes?: string[];
+  /**
+   * Permit plain http and private addresses for allow-listed hosts.
+   *
+   * Off unless an operator sets it, and refused in production by `loadConfig`.
+   * See the note at the top of this file for exactly what it gives up.
+   */
+  allowInsecureSelfHosted?: boolean;
 }
 
 export async function assertSafeUrl(rawUrl: string, opts: FetchAudioOptions): Promise<URL> {
@@ -67,8 +89,14 @@ export async function assertSafeUrl(rawUrl: string, opts: FetchAudioOptions): Pr
   } catch {
     throw new UnsafeUrlError('malformed_url', 'audio url is not a valid URL');
   }
-  if (url.protocol !== 'https:') {
-    throw new UnsafeUrlError('not_https', 'audio url must use https');
+  const selfHosted = opts.allowInsecureSelfHosted === true;
+  if (url.protocol !== 'https:' && !(selfHosted && url.protocol === 'http:')) {
+    throw new UnsafeUrlError(
+      'not_https',
+      selfHosted
+        ? 'audio url must use http or https'
+        : 'audio url must use https',
+    );
   }
   const host = url.hostname.toLowerCase();
   const allowed = opts.allowedHosts.some((h) => {
@@ -83,9 +111,11 @@ export async function assertSafeUrl(rawUrl: string, opts: FetchAudioOptions): Pr
   if (!addresses.length) {
     throw new UnsafeUrlError('dns_failure', `could not resolve ${host}`);
   }
-  for (const a of addresses) {
-    if (!isPublicAddress(a.address)) {
-      throw new UnsafeUrlError('private_address', `${host} resolves to a non-public address`);
+  if (!selfHosted) {
+    for (const a of addresses) {
+      if (!isPublicAddress(a.address)) {
+        throw new UnsafeUrlError('private_address', `${host} resolves to a non-public address`);
+      }
     }
   }
   return url;

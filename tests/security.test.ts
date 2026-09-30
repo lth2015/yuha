@@ -204,6 +204,53 @@ describe('SEC-05: SSRF guard on provider audio', () => {
       assertSafeUrl('https://localhost/a.mp3', { ...opts, allowedHosts: ['localhost'] }),
     ).rejects.toThrow(/non-public/);
   });
+
+  /*
+   * The escape hatch for a model server on our own network — a GPU box whose
+   * only address is `http://192.168.x.x:8000`, which the two rules above
+   * refuse twice over. What matters is that it lifts those two rules and
+   * nothing else: the allow-list is the check that keeps doing the work, and a
+   * host nobody named is still refused with the flag on.
+   */
+  describe('self-hosted escape hatch', () => {
+    const selfHosted = {
+      ...opts,
+      allowedHosts: ['192.168.10.42'],
+      allowInsecureSelfHosted: true,
+    };
+
+    it('accepts http on a private address when the host is allow-listed', async () => {
+      const url = await assertSafeUrl('http://192.168.10.42:8000/out.mp3', selfHosted);
+      expect(url.hostname).toBe('192.168.10.42');
+      expect(url.protocol).toBe('http:');
+    });
+
+    it('still refuses a host nobody put on the allow-list', async () => {
+      await expect(
+        assertSafeUrl('http://192.168.10.99:8000/out.mp3', selfHosted),
+      ).rejects.toThrow(/allow-list/);
+      // Including the metadata endpoint, which is the whole reason the
+      // private-address rule exists.
+      await expect(
+        assertSafeUrl('http://169.254.169.254/latest/meta-data/', selfHosted),
+      ).rejects.toThrow(/allow-list/);
+    });
+
+    it('still refuses a protocol that is neither http nor https', async () => {
+      await expect(
+        assertSafeUrl('file:///etc/passwd', selfHosted),
+      ).rejects.toThrow(/http/);
+    });
+
+    it('changes nothing while the flag is off', async () => {
+      await expect(
+        assertSafeUrl('http://192.168.10.42:8000/out.mp3', {
+          ...selfHosted,
+          allowInsecureSelfHosted: false,
+        }),
+      ).rejects.toThrow(/https/);
+    });
+  });
 });
 
 describe('SEC-07: input rules are narrow and contestable', () => {
@@ -513,6 +560,14 @@ describe('SEC-03 / §3.1: run-mode boundaries are enforced at start-up', () => {
   it('production refuses the fake music adapter', () => {
     expect(() => loadConfig({ ...base, RUN_MODE: 'production', MUSIC_ADAPTER: 'demo' } as never))
       .toThrow(/demo \(fake\) music adapter/);
+  });
+
+  it('production refuses the self-hosted audio escape hatch', () => {
+    // It turns off the https and private-address checks on provider audio
+    // URLs, which is a development affordance and nothing else.
+    expect(() =>
+      loadConfig({ ...base, RUN_MODE: 'production', MUSIC_ALLOW_INSECURE_SELF_HOSTED: 'true' } as never),
+    ).toThrow(/MUSIC_ALLOW_INSECURE_SELF_HOSTED/);
   });
 
   it('production refuses simulated payments', () => {

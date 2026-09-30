@@ -81,6 +81,7 @@ cp .env.example .env   # 然后按需填写下表中的值
 - `STRIPE_SECRET_KEY` 必须是 `sk_live_…`
 - `STORAGE_ADAPTER=s3` / `QUEUE_ADAPTER=sqs`（桶与队列由 Terraform 输出）
 - `MUSIC_COMMERCIAL_DELIVERY=true` **仅在签署供应商协议后**开启
+- `MUSIC_ALLOW_INSECURE_SELF_HOSTED=true` 只用于自托管模型服务器（局域网 GPU 机器，地址形如 `http://192.168.x.x:8000`）。它关掉的是音频抓取的 https 检查和私有地址检查，且只对已经写进 `MUSIC_ALLOWED_AUDIO_HOSTS` 的 host 生效。`loadConfig` 在 `RUN_MODE=production` 下直接拒绝这个开关
 - `LEGAL_ENTITY_NAME / ADDRESS / CONTACT`（真实事业主体信息，NetStars 由配置提供）
 
 ---

@@ -409,6 +409,8 @@ async function processAudio(
         allowedHosts: hosts,
         maxBytes,
         timeoutMs: ctx.config.MUSIC_TIMEOUT_MS,
+        // Only ever true outside production — loadConfig refuses it there.
+        allowInsecureSelfHosted: ctx.config.MUSIC_ALLOW_INSECURE_SELF_HOSTED,
       });
     }
   } catch (err) {

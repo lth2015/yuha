@@ -97,6 +97,16 @@ const envSchema = z.object({
   MUSIC_COST_IS_ESTIMATE: bool(true),
   MUSIC_TIMEOUT_MS: int(60_000),
   MUSIC_MAX_AUDIO_BYTES: int(25 * 1024 * 1024),
+  /**
+   * Fetch audio from a model server we run ourselves on the local network.
+   *
+   * Such a server is reachable only as `http://192.168.x.x:8000`, which the
+   * SSRF guard refuses twice over — not https, and a private address. This
+   * lifts exactly those two checks for hosts already on
+   * `MUSIC_ALLOWED_AUDIO_HOSTS`; see the note in providers/net/fetch-audio.ts
+   * for what that gives up. Refused outright in production below.
+   */
+  MUSIC_ALLOW_INSECURE_SELF_HOSTED: bool(false),
   DEMO_FIXTURES_DIR: z.string().optional(),
   DEMO_LATENCY_MS: int(1500),
 
@@ -265,6 +275,12 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
       problems.push('production mode requires the TokenStars text adapter (AI-01)');
     }
     if (e.DEV_AUTH_SECRET) problems.push('DEV_AUTH_SECRET must not be set in production');
+    if (e.MUSIC_ALLOW_INSECURE_SELF_HOSTED) {
+      problems.push(
+        'MUSIC_ALLOW_INSECURE_SELF_HOSTED must not be set in production: it turns off the https ' +
+          'and private-address checks on provider audio URLs (SEC-05)',
+      );
+    }
     if (!e.LEGAL_ENTITY_NAME || !e.LEGAL_ENTITY_ADDRESS || !e.LEGAL_ENTITY_CONTACT) {
       // SEC-13: placeholder disclosure is fine for a demo, never for real selling.
       problems.push(
