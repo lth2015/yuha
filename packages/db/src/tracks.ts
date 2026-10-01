@@ -168,6 +168,40 @@ export async function getPublicTrack(id: string): Promise<TrackWithArtist | unde
 }
 
 /**
+ * The song behind somebody else's paid licence.
+ *
+ * A licence holder's only route to their audio went through `getPublicTrack`,
+ * which requires `visibility = 'public'` AND `state = 'deliverable'` AND
+ * `deleted_at IS NULL`. So one call to `PUT /v1/tracks/:id/visibility` by the
+ * seller — documented as "unpublishing revokes the shared link immediately",
+ * with no licence check — made every later download by the buyer answer
+ * `NOT_FOUND`. Permanent, unilateral, no notice and no refund. `DELETE
+ * /v1/tracks/:id` did the same via `state = 'deleted'`.
+ *
+ * This resolves by id instead. Visibility is the seller's decision about their
+ * own shop front and is none of the buyer's business either way; `deleted` is
+ * allowed because the other two places that touch a licensed song already
+ * promise exactly this — `listExpiredTrackAssets` excludes licensed tracks
+ * from the retention sweep, and `executeAccountDeletion` holds them back with
+ * `reason: 'licensed_by_others'`, both so the purchase keeps working. The audio
+ * is deliberately still there; this is what reaches it.
+ *
+ * `suspended` is NOT allowed through here. A rights case pausing a track is the
+ * one state where withholding the download is the point (SEC-10), and the
+ * caller checks it — which is why the state is returned rather than filtered.
+ *
+ * Callers must establish the licence first: this applies no access control of
+ * its own, exactly like `getTrack`.
+ */
+export async function getLicensedTrack(id: string): Promise<TrackWithArtist | undefined> {
+  const row = await queryOne<TrackWithArtist>(
+    `${TRACK_SELECT} WHERE t.id = ? AND t.state IN ('deliverable', 'suspended', 'deleted')`,
+    [id],
+  );
+  return row ? normaliseRow(row) : undefined;
+}
+
+/**
  * The showcase strip on the landing page.
  *
  * A public feed was removed in b63d66b as a product decision, and its ranked
@@ -366,22 +400,37 @@ export async function insertAsset(
     ],
     tx,
   );
+  // Read back by the full key, owner included. Without the owner this
+  // returned the first buyer's row for a second buyer's insert, which is the
+  // same mismatch migration 0009 fixes in the index: the stored object has
+  // always been per user, so the row it describes must be too.
   return (await queryOne<AssetRow>(
     `SELECT ${ASSET_COLUMNS} FROM asset_versions
-      WHERE track_id = ? AND kind = ? AND params_hash = ?`,
-    [params.trackId, params.kind, params.paramsHash],
+      WHERE track_id = ? AND owner_id = ? AND kind = ? AND params_hash = ?`,
+    [params.trackId, params.ownerId, params.kind, params.paramsHash],
     tx,
   ))!;
 }
 
+/**
+ * An existing asset for the same track, kind and clip parameters.
+ *
+ * `ownerId` is required because the stored object's key is built from the
+ * user id (`exportKey(userId, ...)`). Without it, a second buyer asking for
+ * the same 30s clip of the same song was handed back the *first* buyer's
+ * asset row: `createExport` answered with an `exportId` whose `owner_id` was
+ * somebody else, so the buyer's own `issueDownloadUrl` then failed the
+ * `a.owner_id = ?` check in `getAssetForUser` and the paid download was
+ * unreachable. Each owner gets their own row over their own object.
+ */
 export async function findAsset(
-  params: { trackId: string; kind: AssetKind; paramsHash: string },
+  params: { trackId: string; ownerId: string; kind: AssetKind; paramsHash: string },
   tx?: PoolConnection,
 ): Promise<AssetRow | undefined> {
   return queryOne<AssetRow>(
     `SELECT ${ASSET_COLUMNS} FROM asset_versions
-      WHERE track_id = ? AND kind = ? AND params_hash = ?`,
-    [params.trackId, params.kind, params.paramsHash],
+      WHERE track_id = ? AND owner_id = ? AND kind = ? AND params_hash = ?`,
+    [params.trackId, params.ownerId, params.kind, params.paramsHash],
     tx,
   );
 }

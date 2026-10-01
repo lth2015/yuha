@@ -188,6 +188,140 @@ describe('market licensing', () => {
     expect(Number(after[0]!.n)).toBe(Number(before[0]!.n));
   });
 
+  /** Buys a licence for `trackId` and returns the buyer's export id. */
+  async function licenceAndExport(buyer: TestUser, trackId: string, key: string): Promise<string> {
+    const checkout = await h.app.inject({
+      method: 'POST',
+      url: `/v1/market/tracks/${trackId}/license`,
+      headers: { ...buyer.authHeader, 'idempotency-key': key },
+    });
+    expect(checkout.statusCode).toBe(202);
+    await payOrder(checkout.json().checkoutUrl, buyer);
+    const exported = await h.app.inject({
+      method: 'POST',
+      url: `/v1/tracks/${trackId}/exports`,
+      headers: buyer.authHeader,
+      payload: { clipStartSeconds: 0, clipDurationSeconds: 60, fadeOut: false } as never,
+    });
+    expect(exported.statusCode).toBe(200);
+    return exported.json().exportId as string;
+  }
+
+  /*
+   * The buyer's route to their audio went through `getPublicTrack`, which
+   * requires `visibility = 'public'`. So the seller could destroy a paid
+   * licence with one call to the visibility endpoint — the one documented as
+   * "unpublishing revokes the shared link immediately", which is true of the
+   * link and must not be true of a purchase.
+   */
+  it('a paid licence survives the seller unpublishing the song', async () => {
+    const creator = await h.createUser({ credits: 2 });
+    const buyer = await h.createUser();
+    const { trackId } = await deliverSong(creator, 'market-unpublish', true);
+    const exportId = await licenceAndExport(buyer, trackId, 'market-key-0010');
+
+    const unpublished = await h.app.inject({
+      method: 'POST',
+      url: `/v1/tracks/${trackId}/visibility`,
+      headers: creator.authHeader,
+      payload: { visibility: 'private' } as never,
+    });
+    expect(unpublished.statusCode).toBe(200);
+
+    // Still exportable, and the earlier download link still re-issues.
+    const again = await h.app.inject({
+      method: 'POST',
+      url: `/v1/tracks/${trackId}/exports`,
+      headers: buyer.authHeader,
+      payload: { clipStartSeconds: 0, clipDurationSeconds: 30, fadeOut: false } as never,
+    });
+    expect(again.statusCode, 'unpublishing revoked a paid licence').toBe(200);
+    const reissued = await h.app.inject({
+      method: 'POST',
+      url: `/v1/exports/${exportId}/download-url`,
+      headers: buyer.authHeader,
+    });
+    expect(reissued.statusCode).toBe(200);
+  });
+
+  /*
+   * The retention sweep and account erasure both hold a licensed song's audio
+   * back on purpose — `listExpiredTrackAssets` excludes it,
+   * `executeAccountDeletion` reports `licensed_by_others` — so the bytes are
+   * there. Nothing could reach them.
+   */
+  it('a paid licence survives the seller deleting the song', async () => {
+    const creator = await h.createUser({ credits: 2 });
+    const buyer = await h.createUser();
+    const { trackId } = await deliverSong(creator, 'market-deleted', true);
+    await licenceAndExport(buyer, trackId, 'market-key-0011');
+
+    const removed = await h.app.inject({
+      method: 'DELETE',
+      url: `/v1/tracks/${trackId}`,
+      headers: creator.authHeader,
+    });
+    expect([200, 204]).toContain(removed.statusCode);
+
+    const again = await h.app.inject({
+      method: 'POST',
+      url: `/v1/tracks/${trackId}/exports`,
+      headers: buyer.authHeader,
+      payload: { clipStartSeconds: 0, clipDurationSeconds: 30, fadeOut: false } as never,
+    });
+    expect(again.statusCode, 'deleting revoked a paid licence').toBe(200);
+  });
+
+  /*
+   * `DOWNLOAD_URL_TTL_SECONDS` is minutes, so re-issuing is the normal case,
+   * not an edge one. `issueDownloadUrl` resolved the track with
+   * `getTrackForUser`, which matches on `owner_id` — always undefined for a
+   * buyer — and then reported a rights review that did not exist.
+   */
+  it("re-issues a buyer's download link, and does not blame a rights review", async () => {
+    const creator = await h.createUser({ credits: 2 });
+    const buyer = await h.createUser();
+    const { trackId } = await deliverSong(creator, 'market-reissue', true);
+    const exportId = await licenceAndExport(buyer, trackId, 'market-key-0012');
+
+    const again = await h.app.inject({
+      method: 'POST',
+      url: `/v1/exports/${exportId}/download-url`,
+      headers: buyer.authHeader,
+    });
+    expect(again.statusCode, again.body).toBe(200);
+    expect(again.json().url).toMatch(/^https?:\/\//);
+  });
+
+  /*
+   * The stored object's key is built from the user id, so two buyers asking
+   * for the same clip must not share one asset row: `createExport` answered
+   * the second buyer with the first buyer's `exportId`, whose `owner_id` then
+   * failed `getAssetForUser` and left the paid download unreachable.
+   */
+  it('gives each buyer their own export row for the same clip', async () => {
+    const creator = await h.createUser({ credits: 2 });
+    const first = await h.createUser();
+    const second = await h.createUser();
+    const { trackId } = await deliverSong(creator, 'market-shared-clip', true);
+
+    const a = await licenceAndExport(first, trackId, 'market-key-0013');
+    const b = await licenceAndExport(second, trackId, 'market-key-0014');
+    expect(b).not.toBe(a);
+
+    for (const [buyer, id] of [
+      [first, a],
+      [second, b],
+    ] as const) {
+      const res = await h.app.inject({
+        method: 'POST',
+        url: `/v1/exports/${id}/download-url`,
+        headers: buyer.authHeader,
+      });
+      expect(res.statusCode, res.body).toBe(200);
+    }
+  });
+
   it('creators cannot license their own song; private songs are not licensable', async () => {
     const creator = await h.createUser({ credits: 2 });
     const other = await h.createUser();

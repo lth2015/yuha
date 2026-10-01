@@ -3,9 +3,9 @@ import { AppError, type CreateExportRequest, type ExportView } from '@yuha/contr
 import {
   findAsset,
   getAssetForUser,
+  getLicensedTrack,
   getLicenseSnapshot,
   getMasterAsset,
-  getPublicTrack,
   getTrackForUser,
   hasLicense,
   insertAsset,
@@ -50,9 +50,18 @@ export async function createExport(
   let track: TrackRow | undefined = await getTrackForUser(params.trackId, params.userId);
   let viaLicense = false;
   if (!track && (await hasLicense(params.trackId, params.userId))) {
-    const publicTrack = await getPublicTrack(params.trackId);
-    if (publicTrack) {
-      track = publicTrack;
+    /*
+     * `getLicensedTrack`, not `getPublicTrack`. The public read requires
+     * `visibility = 'public'` and `state = 'deliverable'`, so the seller
+     * unpublishing or deleting the song silently destroyed every buyer's paid
+     * licence — one call, no notice, no refund. Visibility is the seller's
+     * decision about their shop front and none of the buyer's business; the
+     * retention sweep and account erasure already keep a licensed song's audio
+     * on purpose, so this is what reaches it. `suspended` still blocks, below.
+     */
+    const licensed = await getLicensedTrack(params.trackId);
+    if (licensed) {
+      track = licensed;
       viaLicense = true;
     }
   }
@@ -61,7 +70,9 @@ export async function createExport(
     // SEC-10: while a rights case is open, no new download link is issued.
     throw new AppError('TRACK_SUSPENDED', 'this track is paused pending a rights review');
   }
-  if (track.state !== 'deliverable') {
+  // A licence holder may still reach a song its creator has since deleted —
+  // that is the whole reason the audio is held back from the retention sweep.
+  if (track.state !== 'deliverable' && !(viaLicense && track.state === 'deleted')) {
     throw new AppError('TRACK_NOT_DELIVERABLE', `track is ${track.state}`);
   }
 
@@ -102,7 +113,12 @@ export async function createExport(
   }
 
   const hash = paramsHash(req);
-  const existing = await findAsset({ trackId: track.id, kind: 'export', paramsHash: hash });
+  const existing = await findAsset({
+    trackId: track.id,
+    ownerId: params.userId,
+    kind: 'export',
+    paramsHash: hash,
+  });
   if (existing) {
     const signed = await ctx.storage.signedUrl({
       zone: 'delivery',
@@ -199,8 +215,21 @@ export async function issueDownloadUrl(
   const asset = await getAssetForUser(params.assetId, params.userId);
   if (!asset) throw new AppError('NOT_FOUND', 'asset not found');
 
-  const track = await getTrackForUser(asset.track_id, params.userId);
-  if (!track || track.state === 'suspended') {
+  /*
+   * The owner's read first, then the licence holder's.
+   *
+   * This was `getTrackForUser` alone, which matches on `owner_id` — so for a
+   * buyer it always returned undefined and every re-issue answered "this
+   * track is paused pending a rights review". `DOWNLOAD_URL_TTL_SECONDS` is
+   * minutes, so a buyer's paid download worked exactly once and then reported
+   * a rights review that did not exist.
+   */
+  let track = await getTrackForUser(asset.track_id, params.userId);
+  if (!track && (await hasLicense(asset.track_id, params.userId))) {
+    track = await getLicensedTrack(asset.track_id);
+  }
+  if (!track) throw new AppError('NOT_FOUND', 'track not found');
+  if (track.state === 'suspended') {
     throw new AppError('TRACK_SUSPENDED', 'this track is paused pending a rights review');
   }
 
