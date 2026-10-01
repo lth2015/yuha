@@ -118,7 +118,7 @@ const zh: Dict = {
   'player.play': '播放', 'player.pause': '暂停', 'player.prev': '上一首', 'player.next': '下一首',
   'player.buffering': '缓冲中…', 'player.error': '播放失败', 'player.queue': '播放队列',
   'player.expand': '打开正在播放', 'player.nowPlaying': '正在播放', 'player.paused': '已暂停',
-  'player.close': '关闭', 'player.stop': '停止播放并关闭播放条',
+  'player.close': '关闭', 'player.collapse': '收起', 'player.stop': '停止播放并关闭播放条',
 
   'market.trending': '热度', 'market.new': '最新',
   'market.all': '全部', 'market.instrumental': '纯音乐', 'market.vocals': '有人声',
@@ -713,7 +713,7 @@ const ja: Dict = {
   'player.play': '再生', 'player.pause': '一時停止', 'player.prev': '前へ', 'player.next': '次へ',
   'player.buffering': 'バッファ中…', 'player.error': '再生できません', 'player.queue': '再生キュー',
   'player.expand': '再生画面を開く', 'player.nowPlaying': '再生中', 'player.paused': '一時停止中',
-  'player.close': '閉じる', 'player.stop': '再生を止めてプレーヤーを閉じる',
+  'player.close': '閉じる', 'player.collapse': '閉じる', 'player.stop': '再生を止めてプレーヤーを閉じる',
 
   'market.trending': '人気', 'market.new': '新着',
   'market.all': 'すべて', 'market.instrumental': 'インスト', 'market.vocals': 'ボーカル入り',
@@ -1304,7 +1304,7 @@ const en: Dict = {
   'player.play': 'Play', 'player.pause': 'Pause', 'player.prev': 'Previous', 'player.next': 'Next',
   'player.buffering': 'buffering…', 'player.error': 'playback error', 'player.queue': 'queue',
   'player.expand': 'Open now playing', 'player.nowPlaying': 'Now playing', 'player.paused': 'Paused',
-  'player.close': 'Close', 'player.stop': 'Stop and close the player',
+  'player.close': 'Close', 'player.collapse': 'Close', 'player.stop': 'Stop and close the player',
 
   'market.trending': 'Trending', 'market.new': 'Newest',
   'market.all': 'All', 'market.instrumental': 'Instrumental', 'market.vocals': 'With vocals',

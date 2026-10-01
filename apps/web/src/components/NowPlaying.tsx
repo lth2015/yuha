@@ -64,8 +64,12 @@ export function NowPlaying({
       </div>
 
       <header className="now-playing__top">
-        <button type="button" className="btn-icon" onClick={close} aria-label={t('player.close')}>
-          <span className="icon icon--next is-flipped" aria-hidden="true" />
+        {/* A labelled control, not a bare rotated arrow: people looked for a
+            way out of this view and did not read the arrow as one. Esc and
+            the browser's Back button close it too. */}
+        <button type="button" className="now-playing__collapse" onClick={close}>
+          <span className="icon icon--collapse" aria-hidden="true" />
+          {t('player.collapse')}
         </button>
         <div className="now-playing__now">
           <Eq live={playing} /> {playing ? t('player.nowPlaying') : t('player.paused')}

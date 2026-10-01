@@ -91,14 +91,27 @@ export function Layout({ children }: { children: ReactNode }) {
       key === null ? `YUHA — ${t('footer.slogan')}` : `${titleOverride ?? t(key)} — YUHA`;
   }, [location.pathname, lang, t, titleOverride]);
 
+  /*
+   * Now Playing is a full-screen view, so people reach for the browser's Back
+   * button (or the phone's back gesture) to leave it. That used to leave the
+   * page entirely. Opening it now pushes a history entry; Back pops it and
+   * closes the view, and closing it any other way (Esc, the collapse button)
+   * goes back through that same entry so history stays balanced.
+   */
   useEffect(() => {
     if (!nowPlayingOpen) return;
-    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && setNowPlayingOpen(false);
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
+    const onPop = () => setNowPlayingOpen(false);
+    window.addEventListener('popstate', onPop);
+    return () => window.removeEventListener('popstate', onPop);
   }, [nowPlayingOpen]);
 
+  const closeNowPlaying = useCallback(() => {
+    if ((window.history.state as { yuhaNowPlaying?: boolean } | null)?.yuhaNowPlaying) window.history.back();
+    else setNowPlayingOpen(false);
+  }, []);
+
   const openNowPlaying = useCallback(() => {
+    window.history.pushState({ ...(window.history.state ?? {}), yuhaNowPlaying: true }, '');
     setNowPlayingOpen(true);
     const id = player.current?.trackId;
     if (!id) return;
@@ -304,7 +317,7 @@ export function Layout({ children }: { children: ReactNode }) {
           onDownload={
             nowPlaying && (me?.userId === nowPlaying.artistId || nowPlaying.licensedByMe) ? download : undefined
           }
-          onClose={() => setNowPlayingOpen(false)}
+          onClose={closeNowPlaying}
         />
       )}
       </ErrorBoundary>

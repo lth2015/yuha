@@ -271,8 +271,6 @@ export default function Home() {
           </h1>
           <p className="hero__intro">{t('hero.intro')}</p>
 
-          <Score text={prompt} ghost={t('composer.placeholder')} className="hero__score" height={180} />
-
           <div className="composer panel">
             <label htmlFor="home-prompt">{t('composer.label')}</label>
             <textarea
@@ -367,6 +365,11 @@ export default function Home() {
                     : t('composer.vocalsHint'))}
             </p>
           </div>
+
+          {/* The score echoes what is typed above it. It used to sit between the
+              headline and the composer, and at 180px it was what pushed the
+              composer below the fold (and under the player bar) on a laptop. */}
+          <Score text={prompt} ghost={t('composer.placeholder')} className="hero__score" height={150} />
         </div>
 
       </section>
