@@ -1,4 +1,5 @@
 import type { SubscriptionStatus } from '@yuha/contracts';
+import type { OrderRow } from '@yuha/db';
 import {
   finishWebhookEvent,
   getActiveProduct,
@@ -180,7 +181,7 @@ async function handleCheckoutCompleted(ctx: AppContext, event: StripeEventLike):
   }
 
   await withTx(async (tx) => {
-    const { order: updated } = await markOrderPaid(
+    const { order: updated, changed } = await markOrderPaid(
       {
         orderId: order.id,
         paymentIntentId: live?.paymentIntentId ?? (session['payment_intent'] as string | null),
@@ -189,7 +190,20 @@ async function handleCheckoutCompleted(ctx: AppContext, event: StripeEventLike):
       },
       tx,
     );
-    if (!updated) return;
+    /*
+     * `markOrderPaid` documents itself as the idempotency point — "returns
+     * `changed: false` if it was already paid, so a duplicated
+     * `checkout.session.completed` grants nothing extra" — and the guard here
+     * read `order`, which is a plain re-read and therefore always truthy. The
+     * stated protection did not exist; what saved it was that every grant
+     * below is independently idempotent on its own business key.
+     *
+     * It is not purely cosmetic. Before `markOrderPaid` accepted `canceled`,
+     * an async-payment checkout whose session expired first was granted on an
+     * order still reading `canceled` with `paid_at` null and no receipt — the
+     * goods delivered against a record saying the sale never happened.
+     */
+    if (!updated || !changed) return;
 
     const product = await getProductVersion(updated.price_key, updated.price_version, tx);
     if (!product) throw new Error(`unknown product version ${updated.price_key}@${updated.price_version}`);
@@ -303,13 +317,49 @@ async function handleInvoicePaid(ctx: AppContext, event: StripeEventLike): Promi
    * dates are the floor: on a first invoice `period_start === period_end`, so
    * a batch dated from them expires the instant it is granted.
    */
+  const line = invoiceLinePeriod(invoice);
   const periodStart =
-    live?.currentPeriodStart ?? sub?.current_period_start ?? numberToDate(invoice['period_start']);
+    live?.currentPeriodStart ??
+    sub?.current_period_start ??
+    line.start ??
+    numberToDate(invoice['period_start']);
   const invoiceEnd = numberToDate(invoice['period_end']);
-  const periodEnd =
+  /*
+   * A fifth source, and the reason there is one.
+   *
+   * `expiresAt: null` means *never expires* to `grantUnits`, and
+   * `expireBatches` only touches rows where `expires_at IS NOT NULL`. So when
+   * all of the sources above were absent this granted a permanent batch:
+   * pay for one month, cancel, keep the credits for good — against §11 / UI-10
+   * and against the comment below that claims this code enforces it. All of
+   * them can be absent at once, and the shape tests in
+   * `tests/stripe-invoice-shape.test.ts` are exactly that case:
+   * `retrieveSubscription` swallows every provider error and returns null,
+   * `customer.subscription.created` may not have been processed yet, and on a
+   * first invoice `period_start === period_end`.
+   *
+   * Refusing to grant is the wrong repair — that is the bug those tests were
+   * written for, where a paid subscription delivered nothing. So the grant
+   * happens, with an end that is inferred rather than unbounded: every plan in
+   * the catalogue is monthly, and a batch that lives a few days too long is a
+   * bounded error where a batch that never expires is not. The next invoice
+   * grants the next period under its own key regardless, so the inference
+   * never compounds. It is flagged, because an operator should be able to see
+   * that a period was guessed.
+   *
+   * An annual plan would be mis-served by this — recorded in docs/OPEN_ITEMS.md
+   * rather than guessed at from the price key's spelling.
+   */
+  const INFERRED_PERIOD_DAYS = 31;
+  const authoritativeEnd =
     live?.currentPeriodEnd ??
     sub?.current_period_end ??
+    line.end ??
     (invoiceEnd && periodStart && invoiceEnd.getTime() > periodStart.getTime() ? invoiceEnd : null);
+  const effectiveStart = periodStart ?? new Date();
+  const periodEnd =
+    authoritativeEnd ?? new Date(effectiveStart.getTime() + INFERRED_PERIOD_DAYS * 86400_000);
+  const periodInferred = authoritativeEnd === null;
   const invoiceId = String(invoice['id'] ?? '');
 
   const priceKey = sub?.price_key ?? invoiceMeta(invoice, 'price_key') ?? 'creator_monthly';
@@ -348,9 +398,11 @@ async function handleInvoicePaid(ctx: AppContext, event: StripeEventLike): Promi
         units: product.units,
         productKey: product.price_key,
         priceVersion: product.version,
-        effectiveFrom: periodStart ?? new Date(),
+        effectiveFrom: effectiveStart,
         expiresAt: periodEnd,
-        reason: `subscription_invoice_paid:${invoiceId}`,
+        reason: periodInferred
+          ? `subscription_invoice_paid:${invoiceId}:inferred_period`
+          : `subscription_invoice_paid:${invoiceId}`,
       },
       tx,
     );
@@ -394,7 +446,14 @@ async function handleInvoicePaid(ctx: AppContext, event: StripeEventLike): Promi
       {
         name: 'subscription_period_granted',
         userRef: userId,
-        props: { invoice_id: invoiceId },
+        props: {
+          invoice_id: invoiceId,
+          // True means no source knew when this period ends and the expiry
+          // below is a 31-day inference. Worth looking at: it means the
+          // subscription lookup failed or arrived out of order.
+          period_inferred: periodInferred,
+          expires_at: periodEnd.toISOString(),
+        },
         priceVersion: product.version,
         runMode: ctx.config.mode,
         isInternal: ctx.config.isDemo,
@@ -410,8 +469,13 @@ async function handleInvoicePaid(ctx: AppContext, event: StripeEventLike): Promi
  */
 async function handleInvoiceFailed(ctx: AppContext, event: StripeEventLike): Promise<void> {
   const invoice = event.data.object;
-  const subscriptionId = invoice['subscription'];
-  if (typeof subscriptionId !== 'string') return;
+  // Not `invoice['subscription']`: on 2026-08-26.dahlia that field is gone and
+  // the id is under `parent.subscription_details`. This is the same read whose
+  // failure is recorded above `invoiceSubscription`, left in place here — so
+  // every `invoice.payment_failed` returned on this line and a subscriber whose
+  // card had stopped working still read `active` in GET /v1/entitlements.
+  const subscriptionId = invoiceSubscription(invoice);
+  if (!subscriptionId) return;
   const sub = await findSubscriptionByStripeId(subscriptionId);
   if (!sub) return;
 
@@ -496,8 +560,45 @@ async function handleRefund(ctx: AppContext, event: StripeEventLike): Promise<vo
   const obj = event.data.object;
   const chargeId = String(obj['charge'] ?? obj['id'] ?? '');
   const paymentIntent = obj['payment_intent'];
-  const amount = Number(obj['amount_refunded'] ?? obj['amount'] ?? 0);
   if (!chargeId) return;
+
+  /*
+   * `charge.refunded` and `refund.created` do not mean the same thing by
+   * `amount`, and both were being read through one `?? `.
+   *
+   * On a Charge, `amount_refunded` is the **cumulative** total ever refunded.
+   * On a Refund, `amount` is **that one refund**. Both arrive for the same
+   * money, and the old code took whichever landed, recorded it under
+   * `obj['id'] ?? chargeId` — `re_…` for one event and `ch_…` for the other,
+   * two distinct values against a UNIQUE (kind, stripe_object_id) — and so
+   * wrote the same refund to `payments` twice while settling the revocation
+   * against a number that might be one refund or the running total.
+   *
+   * Two ¥490 refunds on a ¥980 DROP: the second `refund.created` says 490,
+   * `target = floor(5 × 490 / 980) = 2`, two units already revoked, so
+   * nothing more is taken — the customer has every yen back and keeps three
+   * of five credits, and GET /v1/orders/:id/payments shows the refund twice.
+   *
+   * So: one `payments` row per Stripe Refund object, keyed by the refund id
+   * whichever event carries it, and the cumulative figure read back from
+   * those rows rather than from the event. A Charge event whose `refunds`
+   * are not expanded cannot be enumerated, so the difference it reports is
+   * recorded under a key derived from the charge and that total — stable, so
+   * a redelivery is still a no-op.
+   */
+  const fromRefundObject = event.type.startsWith('refund.');
+  const chargeCumulative = Math.abs(Number(obj['amount_refunded'] ?? 0)) || 0;
+  const enumerated: Array<{ id: string; amount: number }> = [];
+  if (fromRefundObject) {
+    const id = String(obj['id'] ?? '');
+    if (id) enumerated.push({ id, amount: Math.abs(Number(obj['amount'] ?? 0)) });
+  } else {
+    const list = (obj['refunds'] as { data?: Array<Record<string, unknown>> } | undefined)?.data;
+    for (const r of list ?? []) {
+      const id = String(r['id'] ?? '');
+      if (id) enumerated.push({ id, amount: Math.abs(Number(r['amount'] ?? 0)) });
+    }
+  }
 
   const orders = await query<{ id: string; user_id: string; amount_minor: number }>(
     `SELECT id, user_id, amount_minor FROM orders
@@ -509,20 +610,58 @@ async function handleRefund(ctx: AppContext, event: StripeEventLike): Promise<vo
   if (!order) return;
 
   await withTx(async (tx) => {
-    const { inserted } = await recordPayment(
-      {
-        orderId: order.id,
-        userId: order.user_id,
-        kind: 'refund',
-        stripeObjectId: String(obj['id'] ?? chargeId),
-        amountMinor: -Math.abs(amount),
-        status: 'succeeded',
-        occurredAt: new Date(event.created * 1000),
-      },
-      tx,
-    );
-    // Refunds are idempotent by the refund object id.
-    if (!inserted) return;
+    const occurredAt = new Date(event.created * 1000);
+    let wroteSomething = false;
+    for (const r of enumerated) {
+      const { inserted } = await recordPayment(
+        {
+          orderId: order.id,
+          userId: order.user_id,
+          kind: 'refund',
+          stripeObjectId: r.id,
+          amountMinor: -r.amount,
+          status: 'succeeded',
+          occurredAt,
+        },
+        tx,
+      );
+      wroteSomething = wroteSomething || inserted;
+    }
+
+    const recordedSoFar = async (): Promise<number> => {
+      const row = await queryOne<{ refunded: number }>(
+        `SELECT COALESCE(-SUM(amount_minor), 0) AS refunded FROM payments
+          WHERE order_id = ? AND kind = 'refund' AND status = 'succeeded'`,
+        [order.id],
+        tx,
+      );
+      return Number(row?.refunded ?? 0);
+    };
+
+    let recorded = await recordedSoFar();
+    if (chargeCumulative > recorded) {
+      // A refund whose own event we never saw, or a Charge payload with the
+      // refund list collapsed to ids. The charge's cumulative figure is
+      // authoritative, so the shortfall is recorded under a key built from it.
+      const { inserted } = await recordPayment(
+        {
+          orderId: order.id,
+          userId: order.user_id,
+          kind: 'refund',
+          stripeObjectId: `${chargeId}:cumulative:${chargeCumulative}`,
+          amountMinor: -(chargeCumulative - recorded),
+          status: 'succeeded',
+          occurredAt,
+        },
+        tx,
+      );
+      wroteSomething = wroteSomething || inserted;
+      recorded = await recordedSoFar();
+    }
+
+    // Nothing new: a redelivery of an event already settled.
+    if (!wroteSomething) return;
+    const amount = Math.max(recorded, chargeCumulative);
 
     const batches = await query<{ id: string; granted_units: number }>(
       `SELECT id, granted_units FROM entitlement_batches
@@ -594,8 +733,8 @@ async function handleRefund(ctx: AppContext, event: StripeEventLike): Promise<vo
     await setOrderStatus(
       {
         orderId: order.id,
-        status: Math.abs(amount) >= order.amount_minor ? 'refunded' : 'partially_refunded',
-        refundedAmountMinor: Math.abs(amount),
+        status: amount >= order.amount_minor ? 'refunded' : 'partially_refunded',
+        refundedAmountMinor: amount,
       },
       tx,
     );
@@ -611,7 +750,7 @@ async function handleDispute(ctx: AppContext, event: StripeEventLike): Promise<v
   );
   const order = orders[0];
   if (!order) return;
-  await recordPayment({
+  const { inserted } = await recordPayment({
     orderId: order.id,
     userId: order.user_id,
     kind: 'dispute',
@@ -620,6 +759,42 @@ async function handleDispute(ctx: AppContext, event: StripeEventLike): Promise<v
     status: String(obj['status'] ?? 'needs_response'),
     occurredAt: new Date(event.created * 1000),
   });
+
+  /*
+   * Every other handler in this file emits an event; this one wrote a row and
+   * said nothing, so a chargeback — money reversed, credits kept, and unlike a
+   * refund no entitlement touched anywhere — was the one money movement with
+   * no operator signal at all. Whether a disputed period should be clawed back
+   * is a decision for a person, which is exactly why a person has to be told.
+   */
+  if (inserted) {
+    await trackEvent({
+      name: 'payment_disputed',
+      userRef: order.user_id,
+      props: {
+        order_id: order.id,
+        dispute_status: String(obj['status'] ?? 'needs_response'),
+        amount_minor: Number(obj['amount'] ?? 0),
+        reason: String(obj['reason'] ?? 'unknown'),
+      },
+      runMode: ctx.config.mode,
+      isInternal: ctx.config.isDemo,
+    });
+  }
+}
+
+/**
+ * The service period from the invoice's own line item.
+ *
+ * On a subscription invoice this is the real period — unlike the invoice-level
+ * `period_start`/`period_end`, which are degenerate on a first invoice. It is
+ * read before falling back to an inference because it costs nothing and is
+ * authoritative when present.
+ */
+function invoiceLinePeriod(invoice: Record<string, unknown>): { start: Date | null; end: Date | null } {
+  const first = (invoice['lines'] as { data?: Array<Record<string, unknown>> } | undefined)?.data?.[0];
+  const period = first?.['period'] as Record<string, unknown> | undefined;
+  return { start: numberToDate(period?.['start']), end: numberToDate(period?.['end']) };
 }
 
 function numberToDate(v: unknown): Date | null {
@@ -665,23 +840,44 @@ export async function reconcilePendingCheckouts(
     const sessionId = order.stripe_checkout_session_id;
     if (!sessionId) continue;
 
-    const live = await ctx.payments.retrieveCheckoutSession(sessionId);
-    // A provider we cannot reach is not evidence of anything. Leave the order
-    // alone and let the next sweep ask again.
-    if (!live) continue;
+    /*
+     * One order's failure must not end the sweep.
+     *
+     * `handleCheckoutCompleted` throws on an amount or currency mismatch, by
+     * design — it refuses to settle a charge that disagrees with the
+     * catalogue. Without this try that throw propagated out of the loop and
+     * out of `maintenanceLoop`'s single try, and because the query is
+     * `ORDER BY created_at` the same oldest order was picked first every
+     * minute: one poison order stopped the checkout sweep, the subscription
+     * sweep, the retention sweep and the ledger reconciliation, for good.
+     */
+    try {
+      const live = await ctx.payments.retrieveCheckoutSession(sessionId);
+      // A provider we cannot reach is not evidence of anything. Leave the order
+      // alone and let the next sweep ask again.
+      if (!live) continue;
 
-    if (live.paymentStatus === 'paid') {
-      await handleCheckoutCompleted(ctx, {
-        id: `reconcile:${sessionId}`,
-        type: 'checkout.session.completed',
-        created: Math.floor(Date.now() / 1000),
-        data: { object: { id: sessionId } },
+      if (live.paymentStatus === 'paid') {
+        await handleCheckoutCompleted(ctx, {
+          id: `reconcile:${sessionId}`,
+          type: 'checkout.session.completed',
+          created: Math.floor(Date.now() / 1000),
+          data: { object: { id: sessionId } },
+        });
+        settled += 1;
+      } else if (live.status === 'expired') {
+        // The customer never paid and never will on this session. Closing it
+        // keeps the sweep's working set from growing without bound.
+        await setOrderStatus({ orderId: order.id, status: 'canceled' });
+      }
+    } catch (err) {
+      await trackEvent({
+        name: 'reconcile_checkout_failed',
+        userRef: order.user_id,
+        props: { order_id: order.id, session_id: sessionId, error: (err as Error).message },
+        runMode: ctx.config.mode,
+        isInternal: ctx.config.isDemo,
       });
-      settled += 1;
-    } else if (live.status === 'expired') {
-      // The customer never paid and never will on this session. Closing it
-      // keeps the sweep's working set from growing without bound.
-      await setOrderStatus({ orderId: order.id, status: 'canceled' });
     }
   }
 
@@ -727,36 +923,57 @@ export async function reconcileUngrantedSubscriptions(ctx: AppContext, limit = 5
   let repaired = 0;
 
   for (const order of orders) {
+    // Per order, for the reason given in `reconcilePendingCheckouts`: this
+    // sweep is the only repair for a lost `invoice.paid`, so one order that
+    // throws must not stop it reaching the others.
+    try {
+      repaired += await reconcileOneSubscription(ctx, order);
+    } catch (err) {
+      await trackEvent({
+        name: 'reconcile_subscription_failed',
+        userRef: order.user_id,
+        props: { order_id: order.id, error: (err as Error).message },
+        runMode: ctx.config.mode,
+        isInternal: ctx.config.isDemo,
+      });
+    }
+  }
+
+  return repaired;
+}
+
+async function reconcileOneSubscription(ctx: AppContext, order: OrderRow): Promise<number> {
+  {
     const product = await getProductVersion(order.price_key, order.price_version);
-    if (!product || product.kind !== 'subscription') continue;
+    if (!product || product.kind !== 'subscription') return 0;
 
     const sessionId = order.stripe_checkout_session_id;
-    if (!sessionId) continue;
+    if (!sessionId) return 0;
 
     // The order does not store the subscription id — it is created by the
     // provider when the checkout completes — so it comes from the session.
     const session = await ctx.payments.retrieveCheckoutSession(sessionId);
     const subscriptionId = session?.subscriptionId;
-    if (!subscriptionId) continue;
+    if (!subscriptionId) return 0;
 
     const live = await ctx.payments.retrieveSubscription(subscriptionId);
     // A provider we cannot reach is not evidence of anything; the next sweep
     // asks again.
-    if (!live) continue;
+    if (!live) return 0;
     // Only a subscription that is actually running has bought a period. An
     // `incomplete` or `past_due` one has not, and guessing here would hand out
     // credits for money that never arrived.
-    if (live.status !== 'active' && live.status !== 'trialing') continue;
+    if (live.status !== 'active' && live.status !== 'trialing') return 0;
 
     const invoiceId = live.latestInvoiceId;
     // Without the invoice id there is no shared key, and a key of our own
     // invention would double-grant when the real event lands.
-    if (!invoiceId) continue;
+    if (!invoiceId) return 0;
     // A subscription batch that never expires is a different bug from one that
     // is missing: unused units are not supposed to carry over (§11 / UI-10).
     // Leaving it ungranted keeps it visible in the alarm, which is where an
     // unexplained subscription belongs.
-    if (!live.currentPeriodEnd) continue;
+    if (!live.currentPeriodEnd) return 0;
 
     // Counted after the transaction commits. Incrementing inside it would log a
     // repair that a rollback then undid.
@@ -804,10 +1021,8 @@ export async function reconcileUngrantedSubscriptions(ctx: AppContext, limit = 5
       await markEntitlementGranted(order.id, tx);
       granted = res.created;
     });
-    if (granted) repaired += 1;
+    return granted ? 1 : 0;
   }
-
-  return repaired;
 }
 
 /**

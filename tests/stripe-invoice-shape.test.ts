@@ -231,4 +231,47 @@ describe('Stripe invoice/subscription shape (2026-08-26.dahlia)', () => {
     // A month away, not the same instant the invoice was cut.
     expect(batch.expires_at.getTime()).toBeGreaterThan((PERIOD_START + 20 * 86400) * 1000);
   });
+
+  /*
+   * The case the three tests above walk straight through without looking at it.
+   *
+   * They assert the grant happens when nothing knows the period — no stored
+   * subscription, no live one, a degenerate invoice period — and it did. With
+   * `expires_at` NULL, which `grantUnits` and `getBalance` both read as *never
+   * expires*: pay ¥1,980 once, cancel, keep the credits for good. §11 / UI-10
+   * says unused units do not carry over, and `reconcileUngrantedSubscriptions`
+   * refuses to grant for exactly this reason while this path did it silently.
+   *
+   * Every assertion above still passes either way, which is what let it sit
+   * here. This is the one that does not.
+   */
+  it('never grants a period that has no end, even when no source knows the period', async () => {
+    const user: TestUser = await h.createUser();
+
+    await recordWebhookEvent({
+      provider: 'stripe',
+      eventId: 'evt_shape_no_period',
+      eventType: 'invoice.paid',
+      signatureVerified: true,
+      payload: invoicePaid({ userId: user.id, orderId: 'ord_np', invoiceId: 'in_shape_5' }),
+    });
+    expect(await drainWebhooks()).toBe(1);
+
+    // The credits arrive — refusing the grant would be the other bug.
+    expect((await balanceOf(user.id)).available).toBe(planUnits);
+
+    const rows = await withTx(async (tx) =>
+      tx.query(
+        `SELECT expires_at FROM entitlement_batches WHERE user_id = ? AND source = 'subscription_period'`,
+        [user.id],
+      ),
+    );
+    const batch = (rows as unknown as [Array<{ expires_at: Date | null }>])[0][0];
+    expect(batch, 'no subscription_period batch was created').toBeTruthy();
+    expect(batch!.expires_at, 'a subscription batch that never expires').not.toBeNull();
+    // Bounded, and bounded to about a billing period rather than to anything.
+    const start = PERIOD_START * 1000;
+    expect(batch!.expires_at!.getTime()).toBeGreaterThan(start + 20 * 86400_000);
+    expect(batch!.expires_at!.getTime()).toBeLessThan(start + 40 * 86400_000);
+  });
 });

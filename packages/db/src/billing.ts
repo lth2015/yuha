@@ -230,6 +230,15 @@ export async function attachCheckoutSession(
 /**
  * Marks an order paid. Idempotent: returns `changed: false` if it was already
  * paid, so a duplicated `checkout.session.completed` grants nothing extra.
+ * Callers must read `changed`, not `order` — `order` is a plain re-read and is
+ * always truthy for an order that exists.
+ *
+ * `canceled` is accepted alongside `pending` and `failed`. An async payment
+ * (konbini, bank transfer) can succeed after its checkout session expired and
+ * `checkout.session.expired` canceled the order, and then the money has
+ * genuinely arrived: refusing the transition left the goods granted against an
+ * order reading `canceled` with `paid_at` null. A `paid` or `refunded` order is
+ * still never touched.
  */
 export async function markOrderPaid(
   params: {
@@ -247,7 +256,7 @@ export async function markOrderPaid(
                        receipt_url = COALESCE(?, receipt_url),
                        stripe_customer_id = COALESCE(?, stripe_customer_id),
                        updated_at = UTC_TIMESTAMP(3)
-      WHERE id = ? AND status IN ('pending', 'failed')`,
+      WHERE id = ? AND status IN ('pending', 'failed', 'canceled')`,
     [
       params.paymentIntentId ?? null,
       params.receiptUrl ?? null,

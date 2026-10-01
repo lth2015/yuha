@@ -42,6 +42,36 @@ export async function createLicenseCheckout(
   if (!user.age_confirmed_at) throw new AppError('AGE_NOT_CONFIRMED', 'age confirmation is required before purchase');
 
   const existing = await findOrderByIdempotencyKey(params.userId, params.idempotencyKey);
+  /*
+   * An idempotency key is scoped to (user, key) by `orders_idempotency_uk` and
+   * nothing checked that the order it replays is for the thing being bought.
+   * So a key first used for a DROP pack, reused later on a different purchase,
+   * resumed that *same order row*: the Stripe session was built for the new
+   * product while `orders.price_key` still named the old one, and
+   * `handleCheckoutCompleted` resolves what to hand over from the order. Money
+   * taken for one thing, the other thing delivered — and the amount-mismatch
+   * guard cannot catch the pairing that matters, because `drop_5` and
+   * `market_license` are both 980 jpy in the seeded catalogue.
+   *
+   * Stripe's own 24-hour idempotency window hides this while it lasts; after
+   * that the key is free again.
+   *
+   * The track matters here as much as the product does: the licence granted on
+   * payment comes from `orders.metadata.track_id`, so a key reused across two
+   * songs would licence the first one for the second one's money.
+   */
+  if (
+    existing &&
+    (existing.price_key !== product.price_key ||
+      existing.price_version !== product.version ||
+      existing.metadata['track_id'] !== track.id)
+  ) {
+    throw new AppError(
+      'IDEMPOTENCY_KEY_REUSED',
+      'this idempotency key already belongs to a different order',
+      { existingPriceKey: existing.price_key, requestedPriceKey: product.price_key },
+    );
+  }
   if (existing?.status === 'paid') throw new AppError('CONFLICT', 'this order has already been paid');
 
   const order =

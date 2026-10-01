@@ -78,7 +78,7 @@ async function deleteDaysAgo(trackId: string, days: number): Promise<void> {
 describe('track retention sweep', () => {
   it('removes the audio of a song deleted longer ago than the window', async () => {
     const user = await h.createUser({ credits: 5 });
-    const trackId = await deliverSong(user, 'ret-old');
+    const trackId = await deliverSong(user, 'ret-old-song');
     const key = await keyOf(trackId);
     await deleteDaysAgo(trackId, 91);
 
@@ -133,7 +133,7 @@ describe('track retention sweep', () => {
     const order = await insertOrder({
       userId: buyer.id,
       priceKey: 'market_license',
-      priceVersion: 2,
+      priceVersion: 1,
       kind: 'one_time',
       amountMinor: 980,
       currency: 'jpy',
@@ -151,7 +151,7 @@ describe('track retention sweep', () => {
 
   it('does nothing at all when retention is switched off', async () => {
     const user = await h.createUser({ credits: 5 });
-    const trackId = await deliverSong(user, 'ret-off');
+    const trackId = await deliverSong(user, 'ret-switched-off');
     const key = await keyOf(trackId);
     await deleteDaysAgo(trackId, 400);
 

@@ -209,65 +209,107 @@ export async function webhookLoop(deps: LoopDeps): Promise<void> {
  */
 export async function maintenanceLoop(deps: LoopDeps, intervalMs = 60_000): Promise<void> {
   const { ctx, log } = deps;
-  while (!deps.stopped()) {
+
+  /*
+   * One try per sweep, not one try around all of them.
+   *
+   * These eight ran inside a single `try` in sequence, so a throw anywhere
+   * skipped everything after it — and skipped it again every minute, because
+   * the input that threw was still there on the next pass. The reachable
+   * version of that is not hypothetical: `reconcilePendingCheckouts` calls
+   * `handleCheckoutCompleted`, which throws by design when a charge disagrees
+   * with the catalogue, and its query is `ORDER BY created_at`, so one order
+   * at the front of the queue silenced the subscription recovery sweep, the
+   * retention sweep and the ledger reconciliation for good. Nothing would
+   * have said so either: the catch logged `maintenance loop error` without
+   * naming the step, and the three alarms that depend on those sweeps read
+   * the only thing they could, which is zero.
+   */
+  const step = async (name: string, run: () => Promise<void>): Promise<void> => {
     try {
+      await run();
+    } catch (err) {
+      log('error', 'maintenance step failed', { step: name, err: (err as Error).message });
+    }
+  };
+
+  while (!deps.stopped()) {
+    await step('expire-batches', async () => {
       const expired = await expireBatches();
       if (expired) log('info', 'expired entitlement batches', { count: expired });
+    });
 
+    await step('stale-unknown-jobs', async () => {
       const stale = await listStaleUnknownJobs(ctx.config.JOB_VERIFY_DEADLINE_SECONDS);
       for (const job of stale) {
-        await failStaleUnknownJob(ctx, job, log);
+        // Per job as well: one job whose compensation fails must not leave the
+        // rest of the batch stuck in UNKNOWN until someone notices.
+        try {
+          await failStaleUnknownJob(ctx, job, log);
+        } catch (err) {
+          log('error', 'could not time out stale job', { jobId: job.id, err: (err as Error).message });
+        }
       }
+    });
 
+    await step('recover-ungranted-orders', async () => {
       const recovered = await recoverUngrantedOrders(ctx);
       if (recovered) log('warn', 'recovered paid orders with missing entitlements', { count: recovered });
+    });
 
-      /*
-       * Orders the provider settled and never told us about. The sweep above
-       * cannot see these — it starts from `status = 'paid'`, which an order
-       * only reaches because an event said so, and the missing thing here is
-       * the event. Ten minutes is well past a normal delivery (seconds) and
-       * well inside Stripe's own retry window, so a webhook that is merely
-       * slow is never raced.
-       *
-       * Logged at `warn` even on success: settling by sweep means a delivery
-       * was lost, and a silent repair would hide that the endpoint is broken.
-       */
+    /*
+     * Orders the provider settled and never told us about. The sweep above
+     * cannot see these — it starts from `status = 'paid'`, which an order
+     * only reaches because an event said so, and the missing thing here is
+     * the event. Ten minutes is well past a normal delivery (seconds) and
+     * well inside Stripe's own retry window, so a webhook that is merely
+     * slow is never raced.
+     *
+     * Logged at `warn` even on success: settling by sweep means a delivery
+     * was lost, and a silent repair would hide that the endpoint is broken.
+     */
+    await step('reconcile-pending-checkouts', async () => {
       const reconciled = await reconcilePendingCheckouts(ctx, 600);
       if (reconciled) {
         log('warn', 'settled paid checkouts whose webhook never arrived', { count: reconciled });
       }
+    });
 
-      /*
-       * Subscribers settled by the sweep above, or by a checkout webhook, still
-       * have nothing: their credits come from `invoice.paid`, and the sweep
-       * above cannot grant them (PAY-06). Neither could anything else — the
-       * PAY-11 sweep skips every product that is not one_time — so a lost
-       * invoice meant a subscriber paid monthly and received nothing, forever.
-       *
-       * `warn` for the same reason as above: reaching this means a delivery was
-       * lost, and repairing it quietly would hide that.
-       */
+    /*
+     * Subscribers settled by the sweep above, or by a checkout webhook, still
+     * have nothing: their credits come from `invoice.paid`, and the sweep
+     * above cannot grant them (PAY-06). Neither could anything else — the
+     * PAY-11 sweep skips every product that is not one_time — so a lost
+     * invoice meant a subscriber paid monthly and received nothing, forever.
+     *
+     * `warn` for the same reason as above: reaching this means a delivery was
+     * lost, and repairing it quietly would hide that.
+     */
+    await step('reconcile-ungranted-subscriptions', async () => {
       const subscriptions = await reconcileUngrantedSubscriptions(ctx);
       if (subscriptions) {
         log('warn', 'granted subscription periods whose invoice never arrived', { count: subscriptions });
       }
+    });
 
-      /*
-       * Audio of songs their owners deleted more than TRACK_RETENTION_DAYS ago.
-       *
-       * `info`, not `warn`: unlike the two sweeps above, reaching this is not
-       * the symptom of anything. It is the retention promise being kept on
-       * schedule, and a warning would teach whoever reads these logs to ignore
-       * the word.
-       */
+    /*
+     * Audio of songs their owners deleted more than TRACK_RETENTION_DAYS ago.
+     *
+     * `info`, not `warn`: unlike the two sweeps above, reaching this is not
+     * the symptom of anything. It is the retention promise being kept on
+     * schedule, and a warning would teach whoever reads these logs to ignore
+     * the word.
+     */
+    await step('retention-sweep', async () => {
       const purged = await sweepExpiredTrackAudio(ctx, {
         log: { error: (obj, msg) => log('error', msg, obj as Record<string, unknown>) },
       });
       if (purged.removed || purged.failed) {
         log('info', 'removed audio past the retention window', purged as unknown as Record<string, unknown>);
       }
+    });
 
+    await step('reconcile-balances', async () => {
       const drift = await reconcileBalances();
       if (drift.length) {
         // Never auto-corrected: a discrepancy is a bug to investigate, and
@@ -277,9 +319,8 @@ export async function maintenanceLoop(deps: LoopDeps, intervalMs = 60_000): Prom
           batches: drift.slice(0, 5).map((d) => d.batch_id),
         });
       }
-    } catch (err) {
-      log('error', 'maintenance loop error', { err: (err as Error).message });
-    }
+    });
+
     await sleep(intervalMs);
   }
 }

@@ -80,6 +80,27 @@ export async function createCheckout(
   // Replaying the same key returns the same order — a double-clicked buy button
   // cannot create two orders or two Stripe sessions.
   const existing = await findOrderByIdempotencyKey(params.userId, params.idempotencyKey);
+  /*
+   * An idempotency key is scoped to (user, key) by `orders_idempotency_uk` and
+   * nothing checked that the order it replays is for the thing being bought.
+   * So a key first used for a DROP pack, reused later on a different purchase,
+   * resumed that *same order row*: the Stripe session was built for the new
+   * product while `orders.price_key` still named the old one, and
+   * `handleCheckoutCompleted` resolves what to hand over from the order. Money
+   * taken for one thing, the other thing delivered — and the amount-mismatch
+   * guard cannot catch the pairing that matters, because `drop_5` and
+   * `market_license` are both 980 jpy in the seeded catalogue.
+   *
+   * Stripe's own 24-hour idempotency window hides this while it lasts; after
+   * that the key is free again.
+   */
+  if (existing && (existing.price_key !== product.price_key || existing.price_version !== product.version)) {
+    throw new AppError(
+      'IDEMPOTENCY_KEY_REUSED',
+      'this idempotency key already belongs to an order for a different product',
+      { existingPriceKey: existing.price_key, requestedPriceKey: product.price_key },
+    );
+  }
   if (existing) {
     if (existing.stripe_checkout_session_id) {
       const session = await ctx.payments.retrieveCheckoutSession(existing.stripe_checkout_session_id);

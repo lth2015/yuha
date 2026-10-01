@@ -182,7 +182,9 @@ describe('executing deletion', () => {
     expect(after!.deleted_at).not.toBeNull();
     expect(after!.email).not.toBe(user.email);
     expect(after!.display_name).toBeNull();
-    expect(after!.marketing_opt_in).toBe(0);
+    // TINYINT(1) comes back as a real boolean — createPool's typeCast does
+    // that deliberately, and `UserRow.marketing_opt_in` is typed `boolean`.
+    expect(after!.marketing_opt_in).toBe(false);
   });
 
   /*
@@ -225,7 +227,7 @@ describe('executing deletion', () => {
     const order = await insertOrder({
       userId: buyer.id,
       priceKey: 'market_license',
-      priceVersion: 2,
+      priceVersion: 1,
       kind: 'one_time',
       amountMinor: 980,
       currency: 'jpy',

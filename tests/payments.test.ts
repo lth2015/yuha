@@ -97,6 +97,32 @@ describe('checkout', () => {
     expect(Number(rows[0]!.n)).toBe(1);
   });
 
+  /*
+   * `orders_idempotency_uk` is (user_id, key) and nothing checked that the
+   * order being replayed is for the thing being bought. A key first used for
+   * a DROP pack and reused on another purchase resumed that same row: the
+   * Stripe session was built for the new product while `orders.price_key`
+   * still named the old one, and `handleCheckoutCompleted` decides what to
+   * hand over from the order. Money taken for one thing, the other delivered.
+   *
+   * The amount-mismatch guard cannot catch the pairing that matters: in the
+   * shipped catalogue `drop_5` and `market_license` are both 980 jpy.
+   */
+  it('refuses an idempotency key that already belongs to a different product', async () => {
+    const user = await h.createUser();
+    const first = await checkout(user, 'drop_5', 'crossed-key-1');
+    expect(first.statusCode).toBe(200);
+
+    const second = await checkout(user, 'premier_monthly', 'crossed-key-1');
+    expect(second.statusCode).toBe(409);
+    expect(second.json().error.code).toBe('IDEMPOTENCY_KEY_REUSED');
+
+    // And nothing was written for the refused purchase.
+    const rows = await query<{ n: number }>(`SELECT COUNT(*) AS n FROM orders WHERE user_id = ?`, [user.id]);
+    expect(Number(rows[0]!.n)).toBe(1);
+    expect((await getOrder(first.json().orderId))!.price_key).toBe('drop_5');
+  });
+
   it('PAY-12: card details never reach us — checkout is a hosted redirect', async () => {
     const user = await h.createUser();
     const res = await checkout(user, 'drop_5', 'checkout-key-4');
@@ -314,6 +340,26 @@ describe('subscription', () => {
     );
   }
 
+  async function seedSubscriptionAs(user: TestUser, stripeSubscriptionId: string) {
+    await withTx(async (tx) =>
+      upsertSubscription(
+        {
+          userId: user.id,
+          stripeSubscriptionId,
+          stripeCustomerId: 'cus_test_1',
+          priceKey: 'pro_monthly',
+          priceVersion: 1,
+          status: 'active',
+          currentPeriodStart: new Date(Date.now() - 86400_000),
+          currentPeriodEnd: new Date(Date.now() + 25 * 86400_000),
+          cancelAtPeriodEnd: false,
+          eventAt: new Date(Date.now() - 86400_000),
+        },
+        tx,
+      ),
+    );
+  }
+
   it('a second subscription is refused, and no order is created for it', async () => {
     const user = await h.createUser();
     await seedSubscription(user, new Date(Date.now() + 30 * 86400_000));
@@ -470,6 +516,67 @@ describe('subscription', () => {
 
     // Still 4 credits: a payment problem does not confiscate what was paid for.
     expect(await getBalance(user.id)).toEqual(before);
+  });
+
+  /*
+   * PAY-07's own test above never sent the event — it wrote the subscription
+   * row by hand — so the handler was unexercised, and it read
+   * `invoice['subscription']`, a field that does not exist on API version
+   * 2026-08-26.dahlia. The comment above `invoiceSubscription` records that
+   * same read having already silently discarded every subscription invoice
+   * once. Here it meant every `invoice.payment_failed` returned on its first
+   * line: a subscriber whose card had stopped working still read `active`.
+   */
+  it('PAY-07: a failed renewal is recognised in the shape Stripe actually sends', async () => {
+    const user = await h.createUser();
+    const res = await checkout(user, 'pro_monthly', 'failed-renewal-1');
+    const sessionId = sessionIdOf(res.json().checkoutUrl);
+    await settle(sessionId, 'paid', user);
+    await drainWebhooks();
+
+    /*
+     * The id has to be one the provider can resolve: `handleInvoiceFailed`
+     * re-reads the live subscription and returns if it cannot, so a
+     * hand-written `sub_test_0001` would make this pass for the wrong reason.
+     * The simulator mints one per subscription session.
+     */
+    const simSubId = (await sim.retrieveCheckoutSession(sessionId))!.subscriptionId!;
+    expect(simSubId).toMatch(/^sub_/);
+    await seedSubscriptionAs(user, simSubId);
+
+    await recordWebhookEvent({
+      provider: 'stripe',
+      eventId: 'evt_renewal_failed_1',
+      eventType: 'invoice.payment_failed',
+      signatureVerified: true,
+      payload: {
+        id: 'evt_renewal_failed_1',
+        type: 'invoice.payment_failed',
+        created: Math.floor(Date.now() / 1000),
+        data: {
+          object: {
+            id: 'in_failed_1',
+            object: 'invoice',
+            status: 'open',
+            paid: false,
+            // No top-level `subscription`: this is the whole point.
+            parent: {
+              type: 'subscription_details',
+              subscription_details: {
+                subscription: simSubId,
+                metadata: { user_id: user.id, price_key: 'pro_monthly' },
+              },
+            },
+          },
+        },
+      },
+    });
+    expect(await drainWebhooks()).toBe(1);
+
+    const events = await query<{ n: number }>(
+      `SELECT COUNT(*) AS n FROM analytics_events WHERE name = 'subscription_payment_failed'`,
+    );
+    expect(Number(events[0]!.n), 'the failed renewal was never recognised').toBe(1);
   });
 
   it('PAY-08: cancelling sets period-end cancellation and is idempotent', async () => {
