@@ -115,7 +115,14 @@ export function NowPlaying({
               <circle cx="80" cy="40" r="16" fill="url(#tonearm-metal)" stroke="rgb(32 34 31 / 20%)" />
               <path d="M80 40 L80 230 Q80 262 58 284" fill="none" stroke="url(#tonearm-metal)" strokeWidth="7" strokeLinecap="round" />
               <path d="M80 40 L80 230 Q80 262 58 284" fill="none" stroke="rgb(32 34 31 / 18%)" strokeWidth="1" />
-              <rect x="40" y="276" width="30" height="34" rx="5" transform="rotate(38 55 293)" fill="#2b2e29" />
+              {/* Headshell in brushed metal with a petal cartridge, so it stays
+                  visible against the black record it rests on. */}
+              <g transform="rotate(38 55 293)">
+                <path d="M70 282 L82 274" stroke="url(#tonearm-metal)" strokeWidth="3" strokeLinecap="round" />
+                <rect x="40" y="276" width="30" height="34" rx="5" fill="url(#tonearm-metal)" stroke="rgb(32 34 31 / 35%)" />
+                <rect x="44" y="296" width="22" height="11" rx="2.5" fill="#F46B45" stroke="rgb(32 34 31 / 25%)" />
+                <rect x="53" y="307" width="4" height="4" rx="1" fill="#20221f" />
+              </g>
             </svg>
           </div>
         </div>
