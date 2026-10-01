@@ -1,7 +1,6 @@
 [
   "apps/web/src/App.tsx#Please contact an administrator.",
   "apps/web/src/App.tsx#You do not have access to this screen",
-  "apps/web/src/components/SyncedLyrics.tsx#Instrumental — no lyrics to show.",
   "apps/web/src/components/common.tsx#No playable audio yet",
   "apps/web/src/pages/Checkout.tsx#「請求」ページからいつでもオンラインで停止できます。電話は不要です。停止後も当期の終了まで利用で",
   "apps/web/src/pages/Checkout.tsx#お支払い確認後ただちに回数が反映されます",

@@ -194,3 +194,28 @@ describe('truncation', () => {
     expect(budget).toBeGreaterThan(2000);
   });
 });
+
+describe('vocals without lyrics', () => {
+  /*
+   * The simple composer promises "选择人声时，歌词会根据描述自动写好". The
+   * intent schema only ever echoed the creator's lyrics, so a simple-mode
+   * vocal song reached the music model with no lyrics at all — and a model
+   * with nothing to sing produces an instrumental.
+   */
+  it('asks the model to write original lyrics for a simple-mode vocal song', async () => {
+    const calls = stub(completion(JSON.stringify({ ...INTENT, lyrics: '[verse]\n夜の道' })));
+    const res = await provider().extractIntent(request({ mode: 'simple', instrumental: false, durationSeconds: 120 }));
+    const user = JSON.parse((calls[0]!.body['messages'] as Array<{ content: string }>)[1]!.content);
+    expect(user.write_lyrics).toBe(true);
+    expect((calls[0]!.body['max_tokens'] as number)).toBeGreaterThan(900);
+    expect(res.status === 'ok' && res.intent.lyrics).toBe('[verse]\n夜の道');
+  });
+
+  it('does not ask for lyrics on an instrumental, or when the creator wrote their own', async () => {
+    const calls = stub(completion(JSON.stringify({ ...INTENT, vocalMode: 'instrumental' })));
+    await provider().extractIntent(request({ instrumental: true }));
+    await provider().extractIntent(request({ mode: 'custom', lyrics: 'my own words' }));
+    const flags = calls.map((c) => JSON.parse((c.body['messages'] as Array<{ content: string }>)[1]!.content).write_lyrics);
+    expect(flags).toEqual([false, false]);
+  });
+});

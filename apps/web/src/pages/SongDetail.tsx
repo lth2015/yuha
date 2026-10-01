@@ -307,17 +307,15 @@ export default function SongDetail() {
         </section>
       )}
 
-      <section className="song-page__license panel" aria-labelledby="license-heading">
-        <h2 id="license-heading">{t('song.usage')}</h2>
-        <p className="small muted" style={{ margin: 0 }}>
-          {t('song.usageBody')}{' '}
-          {isOwner && (
-            <Link to={`/tracks/${song.trackId}/license`} className="linklike">
-              {t('song.usageFull')}
-            </Link>
-          )}
+      {/* The terms record stays one click away for the owner, but as a quiet
+          footnote: a full panel for it read as a warning stuck to every song. */}
+      {isOwner && (
+        <p className="song-page__terms">
+          <Link to={`/tracks/${song.trackId}/license`} className="quiet-link">
+            {t('song.usage')} ↗
+          </Link>
         </p>
-      </section>
+      )}
     </div>
   );
 }

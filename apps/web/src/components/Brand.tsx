@@ -1,8 +1,8 @@
 /**
  * YUHA brand components.
  *
- * The masters in /public/brand are the source of truth — the nav lockup uses
- * the delivered yuha-logo.svg verbatim so the kerning is exactly as designed.
+ * The masters in /public/brand are the source of truth — BrandLogo inlines
+ * the delivered yuha-logo.svg paths so the kerning is exactly as designed.
  * PetalMark renders the two master faces with dimensionality (gradient,
  * sheen, ground shadow); the shadow sits OUTSIDE the rotating group so the
  * petal can tilt while its shadow stays on the ground.
@@ -66,13 +66,41 @@ export function PetalMark({
 }
 
 /** Nav lockup: the delivered master lockup, verbatim. */
+/**
+ * The nav/footer lockup, inlined from /public/brand/yuha-logo.svg (same paths,
+ * same kerning). Inline rather than <img> for two reasons: the master's wordmark
+ * is hard-coded ink #20221F, which disappears on the dark studio, and an <img>
+ * is one more request that can fail (it rendered as a broken image in the
+ * footer). Here the petal keeps the brand orange and the wordmark takes
+ * `currentColor`, i.e. the theme's --ink, so it reads on any surface.
+ */
 export function BrandLogo({ width = 132, className }: { width?: number; className?: string }) {
   return (
-    <img
-      src="/brand/yuha-logo.svg"
-      alt="YUHA"
+    <svg
+      viewBox="0 0 328 100"
+      width={width}
+      height={(width * 100) / 328}
+      role="img"
+      aria-label="YUHA"
       className={`brand-lockup${className ? ` ${className}` : ''}`}
-      style={{ width, height: 'auto' }}
-    />
+    >
+      <g fill="#F46B45">
+        <path d={PETAL_PATHS[0]} />
+        <path d={PETAL_PATHS[1]} />
+      </g>
+      <g
+        transform="translate(115 12)"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth={10}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      >
+        <path d="M7 18L21 49C23 54 27 54 29 49L43 18M29 49L19 72" />
+        <path d="M64 18V39C64 58 93 58 93 39V18" />
+        <path d="M116 1V52M116 34C116 13 146 13 146 34V52" />
+        <path d="M202 35C202 12 171 12 171 35C171 59 202 59 202 35ZM202 19V52" />
+      </g>
+    </svg>
   );
 }

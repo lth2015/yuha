@@ -42,19 +42,18 @@ function seedOf(seed: number): () => number {
 }
 
 /**
- * Deep fields, not the pastel squares the light build used — a bright sleeve
- * on a near-black page reads as a hole punched in the canvas, and it would
- * drown the score drawn on top of it. Each family is three stops: the lit
- * corner, the body, and the near-black edge that lets the sleeve sit on the
- * page instead of on top of it.
+ * Saturated sleeves: a lit corner, a body in the family colour, and a deep
+ * edge. On the warm-white page these read as album art — colour you want to
+ * press — while the deep edge still gives the white score marks drawn on top
+ * enough ground to hold.
  */
 const FAMILIES = {
-  ember: ['#3a1d17', '#140d12', '#0b0a10'],
-  violet: ['#221a3d', '#130f1f', '#0a0a10'],
-  teal: ['#10262c', '#0e141c', '#08090f'],
-  magenta: ['#2e1a2c', '#150f18', '#0a090e'],
-  crimson: ['#3a1620', '#170d12', '#0b090e'],
-  indigo: ['#161f3e', '#0f1220', '#08090f'],
+  ember: ['#FFB38A', '#F46B45', '#7E2A17'],
+  violet: ['#CDBDFF', '#7B66E0', '#2B2069'],
+  teal: ['#A6EADF', '#2FA59A', '#0E4643'],
+  magenta: ['#FFB6DC', '#D9468F', '#57163B'],
+  crimson: ['#FFA3A3', '#D23B4E', '#56111E'],
+  indigo: ['#AFC6FF', '#4A6BD8', '#15285F'],
 } as const;
 
 type Family = keyof typeof FAMILIES;

@@ -24,7 +24,9 @@ const TEXT_TOKENS = {
   '--danger': 4.5,
   '--ok': 4.5,
   '--warning': 4.5,
-  '--petal': 4.5,
+  // `--petal` is not a text token on the light canvas: #f46b45 is ~2.7:1 on
+  // warm white, so orange *text* uses `--link` (#a33f22) per the brand spec
+  // (§3). The petal stays for fills, marks and borders only.
 };
 
 /**

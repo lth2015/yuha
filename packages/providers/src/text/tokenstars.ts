@@ -76,7 +76,11 @@ const SYSTEM_PROMPT = [
   ' "vocalMode":"instrumental|with_vocals",',
   ' "styles":["lofi","chill", ...] (1-6 short style tags),',
   ' "brief":"short English production brief, max 400 chars, mood/instrumentation only",',
-  ' "lyrics":<the request lyrics when vocalMode is with_vocals, else null>,',
+  ' "lyrics":<when vocalMode is with_vocals: the request user_lyrics verbatim if given;',
+  '   if write_lyrics is true, ORIGINAL singable lyrics in the language of user_text,',
+  '   sized to durationSeconds (about one short line per 4-5 seconds), sectioned with',
+  '   [verse] / [chorus] / [bridge] tags on their own lines, no title, no quotes from',
+  '   existing songs. null when vocalMode is instrumental>,',
   ' "title":<short evocative title, max 120 chars, or null when the creator named it>}',
 ].join('\n');
 
@@ -269,6 +273,7 @@ export class TokenStarsTextProvider implements TextProvider {
   }
 
   async extractIntent(req: IntentRequest): Promise<IntentResult> {
+    const writeLyrics = !req.instrumental && !(req.mode === 'custom' && req.lyrics);
     const userMessage = JSON.stringify({
       mode: req.mode,
       scene: req.scene,
@@ -280,9 +285,15 @@ export class TokenStarsTextProvider implements TextProvider {
       // Fenced explicitly as untrusted data.
       user_text: req.prompt,
       user_lyrics: req.mode === 'custom' ? req.lyrics : null,
+      // A vocal song with nothing to sing comes out instrumental, and the
+      // simple composer promises the lyrics are written from the description.
+      write_lyrics: writeLyrics,
     });
 
-    const maxTokens = this.budgetFor(req.mode === 'custom' ? req.lyrics : null);
+    const maxTokens =
+      this.budgetFor(req.mode === 'custom' ? req.lyrics : null) +
+      // ~1 short line per 4-5s; CJK runs near one token per character.
+      (writeLyrics ? Math.ceil(req.durationSeconds / 4.5) * 24 + 200 : 0);
 
     let res;
     try {

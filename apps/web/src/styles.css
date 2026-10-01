@@ -1,77 +1,60 @@
 /*
- * YUHA design system — the dark studio.
+ * YUHA design system — the warm-white canvas.
  *
- * The room is near-black and a slow coloured light field moves behind
- * everything (components/LightField). Every glass surface refracts that
- * field, which is the whole reason the material reads as material: blurring
- * a flat canvas returns the same flat canvas, so glass over the old cream
- * page was doing no visual work at all.
+ * Back to the brand package (yuha/YUHA_Brand_UI_Acceptance.md §3): a warm
+ * white room, white surfaces lifted by a soft shadow, ink for text and the
+ * primary action, the petal as the accent. Two dark builds were tried and
+ * both read as heavy ("过暗，压抑", then "暗沉、不灵动"); the colour now lives
+ * in the work — the sleeves, the score, the petal — not in the walls.
  *
- * Motion animates transform/opacity only, on shared duration and easing
- * tokens so the whole product keeps one rhythm. reduced-motion stills the
- * field and every decorative animation to a composed arrangement.
+ * A slow pastel light field still drifts behind everything (components/
+ * LightField) so the page breathes; it is faint enough to stay a mood, not a
+ * pattern. Motion animates transform/opacity only, on shared duration and
+ * easing tokens; reduced-motion stills it.
  */
 :root {
-  /*
-   * The room, one stop brighter than it was.
-   *
-   * It used to be #08090d — near-black, and on a good monitor in a dim office
-   * the page read as oppressive rather than atmospheric: the surfaces sat so
-   * close to the background that the card edges did most of the work of
-   * saying where one thing ended and the next began. These four values are
-   * lifted together so the *steps* between them stay the same size; what
-   * changes is where the whole ladder sits. It is still a dark studio, not a
-   * grey one.
-   *
-   * Raising the surfaces lowers every text ratio, so `--faint` moved with
-   * them — see the note there.
-   */
-  --bg: #12141a;
-  --bg-deep: #0c0e13;
-  --surface-solid: #1e2029;
-  --surface-soft: #262934;
+  /* the room — brand tokens (yuha-tokens.css) */
+  --bg: #f6f5f0;
+  --bg-deep: #efede6;
+  --surface-solid: #ffffff;
+  --surface-soft: #eceee7;
 
-  /* glass: translucent surfaces that live on top of the light field */
-  --glass: rgba(255, 255, 255, 0.055);
-  --glass-strong: rgba(255, 255, 255, 0.085);
-  --glass-edge: rgba(255, 255, 255, 0.14);
-  --glass-spec: rgba(255, 255, 255, 0.5);
-  --glass-blur: 28px;
-  --glass-sat: 180%;
+  /* surfaces: near-opaque white over the light field */
+  --glass: rgba(255, 255, 255, 0.78);
+  --glass-strong: rgba(255, 255, 255, 0.92);
+  --glass-edge: rgba(32, 34, 31, 0.08);
+  --glass-spec: rgba(255, 255, 255, 0.95);
+  --glass-blur: 24px;
+  --glass-sat: 140%;
   /* `--surface` stays the name the components already use. */
   --surface: var(--glass);
 
-  /* ink — measured against --bg by scripts/check-contrast.mjs, which fails
-     the build below 4.5:1 rather than writing the number down and shipping. */
-  --ink: #f4f5f7;
-  --muted: #9aa0ae;
-  /*
-   * Every use of this is 11-13px — small text, so the 3:1 large-text
-   * allowance does not apply, and it has now failed twice.
-   *
-   * #6f7585 was 4.32:1 against the page, shipped with a comment in this file
-   * recording that it failed. #7d8494 cleared the page at 5.31:1 — but
-   * `--faint` is used *inside panels*, and a panel sits on --surface-soft,
-   * where it was still 4.44:1. The gate only measured the page, so raising it
-   * produced a green build and an unchanged defect. Now 4.56:1 at worst,
-   * measured on every surface.
-   */
-  --faint: #8b92a2;
-  --line: rgba(255, 255, 255, 0.1);
-  --line-strong: rgba(255, 255, 255, 0.18);
-  --control-line: rgba(255, 255, 255, 0.22);
+  /* ink — measured by scripts/check-contrast.mjs (4.5:1 floor) */
+  --ink: #20221f;
+  --muted: #61665d;
+  /* 11-13px text, used inside panels too — must clear 4.5:1 on --surface-soft */
+  --faint: #5f645b;
+  --line: rgba(32, 34, 31, 0.1);
+  --line-strong: rgba(32, 34, 31, 0.18);
+  --control-line: #7b8177;
 
-  /* brand — the petal survives the move to dark, brightened to hold 7.7:1 */
-  --petal: #ff7a4d;
-  --petal-deep: #e8572b;
-  --petal-soft: rgba(255, 122, 77, 0.16);
-  --violet: #8b7cff;
-  --cyan: #3ad6e6;
-  --link: #ff9a75;
-  --focus: #9b8dff;
-  --ok: #3dd68c;
-  --warning: #f5b33c;
-  --danger: #ff6b6b;
+  /* brand */
+  --petal: #f46b45;
+  --petal-deep: #d9532e;
+  --petal-soft: #ffe4d8;
+  --lavender: #e8e3f5;
+  --sage: #e1e7d9;
+  --violet: #6b5bd6;
+  --cyan: #2a98a8;
+  --link: #a33f22;
+  --focus: #5748b9;
+  --ok: #28704b;
+  --warning: #855619;
+  --danger: #b33131;
+
+  /* score drawing on the page (covers override these) */
+  --score-neutral: 32, 34, 31;
+  --score-glow: source-over;
 
   --r-control: 14px;
   --r-card: 24px;
@@ -86,10 +69,10 @@
   --s16: 64px;
   --tap: 44px;
 
-  /* On dark, elevation reads through light on the edge, not shadow beneath. */
-  --shadow-raised: 0 12px 40px rgb(0 0 0 / 45%);
-  --shadow-card: 0 4px 18px rgb(0 0 0 / 35%);
-  --shadow-pop: 0 28px 70px rgb(0 0 0 / 60%);
+  /* On light, elevation is a soft warm shadow (brand: 0 8px 32px ink/6%). */
+  --shadow-raised: 0 8px 32px rgb(32 34 31 / 6%);
+  --shadow-card: 0 2px 10px rgb(32 34 31 / 5%);
+  --shadow-pop: 0 24px 64px rgb(32 34 31 / 14%);
 
   --t-press: 120ms;
   --t-ui: 200ms;
@@ -108,7 +91,7 @@
     'Noto Sans CJK SC', sans-serif;
   --mono: ui-monospace, 'SFMono-Regular', Menlo, monospace;
 
-  color-scheme: dark;
+  color-scheme: light;
 }
 
 * {
@@ -158,14 +141,14 @@ code { font-family: var(--mono); font-size: 0.86em; background: var(--surface-so
   z-index: 0;
   overflow: hidden;
   pointer-events: none;
-  background: radial-gradient(120% 90% at 50% 0%, #1a1d26 0%, var(--bg) 45%, var(--bg-deep) 100%);
+  background: radial-gradient(120% 90% at 50% 0%, #fbfaf6 0%, var(--bg) 50%, var(--bg-deep) 100%);
 }
 
 .lightfield__lobe {
   position: absolute;
   border-radius: 50%;
   /* Painting the blur into the gradient itself costs far less than filter. */
-  opacity: calc(0.5 + var(--energy, 0) * 0.42);
+  opacity: calc(0.75 + var(--energy, 0) * 0.25);
   transition: opacity var(--t-panel) var(--ease-out);
   will-change: transform;
 }
@@ -175,7 +158,7 @@ code { font-family: var(--mono); font-size: 0.86em; background: var(--surface-so
   height: 62vmax;
   top: -18vmax;
   left: -10vmax;
-  background: radial-gradient(circle, rgb(255 122 77 / 34%) 0%, rgb(255 122 77 / 10%) 38%, transparent 66%);
+  background: radial-gradient(circle, rgb(255 168 133 / 34%) 0%, rgb(255 168 133 / 12%) 38%, transparent 66%);
   animation: lobe-a 34s var(--ease-ui) infinite;
 }
 
@@ -184,7 +167,7 @@ code { font-family: var(--mono); font-size: 0.86em; background: var(--surface-so
   height: 70vmax;
   top: 8vmax;
   right: -22vmax;
-  background: radial-gradient(circle, rgb(139 124 255 / 30%) 0%, rgb(139 124 255 / 9%) 40%, transparent 68%);
+  background: radial-gradient(circle, rgb(178 160 240 / 30%) 0%, rgb(178 160 240 / 10%) 40%, transparent 68%);
   animation: lobe-b 44s var(--ease-ui) infinite;
 }
 
@@ -193,7 +176,7 @@ code { font-family: var(--mono); font-size: 0.86em; background: var(--surface-so
   height: 52vmax;
   bottom: -20vmax;
   left: 24vmax;
-  background: radial-gradient(circle, rgb(58 214 230 / 20%) 0%, rgb(58 214 230 / 6%) 42%, transparent 70%);
+  background: radial-gradient(circle, rgb(168 206 170 / 32%) 0%, rgb(168 206 170 / 10%) 42%, transparent 70%);
   animation: lobe-c 38s var(--ease-ui) infinite;
 }
 
@@ -225,8 +208,11 @@ code { font-family: var(--mono); font-size: 0.86em; background: var(--surface-so
 .lightfield__grain {
   position: absolute;
   inset: -50%;
-  opacity: 0.4;
-  mix-blend-mode: overlay;
+  /* Not a texture (brand §3.2 forbids one): at this strength the grain is
+     invisible and only dithers the pastel lobes, which band into visible
+     rings on 8-bit panels without it. */
+  opacity: 0.08;
+  mix-blend-mode: soft-light;
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='160' height='160' filter='url(%23n)' opacity='0.55'/%3E%3C/svg%3E");
 }
 
@@ -256,8 +242,8 @@ code { font-family: var(--mono); font-size: 0.86em; background: var(--surface-so
     rgb(255 255 255 / 2%) 38%,
     rgb(255 255 255 / 0%) 100%
   );
-  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-sat)) brightness(1.08);
-  backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-sat)) brightness(1.08);
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-sat));
+  backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-sat));
   border: 1px solid var(--glass-edge);
   box-shadow:
     inset 0 1px 0 var(--glass-spec),
@@ -301,8 +287,7 @@ code { font-family: var(--mono); font-size: 0.86em; background: var(--surface-so
   border-color: var(--line-strong);
 }
 
-/* Raising a surface brightens its edge — on dark, light on the rim is what
-   elevation looks like, not a darker shadow beneath. */
+/* Raising a surface: whiter face, firmer edge, deeper soft shadow. */
 .glass--raised {
   background-color: var(--glass-strong);
   border-color: var(--line-strong);
@@ -357,7 +342,9 @@ code { font-family: var(--mono); font-size: 0.86em; background: var(--surface-so
 }
 .topnav__account { margin-left: auto; display: flex; align-items: center; gap: 14px; }
 
-.brand-lockup { display: block; height: auto; }
+.brand-lockup { display: block; height: auto; color: var(--ink); }
+/* Cover sleeves are deep: the score inside them draws white with additive light. */
+.cover-art { --score-neutral: 255, 255, 255; --score-glow: lighter; --score-mono: 1; }
 
 /* The petal floats: shadow on the ground, svg tilts above it. */
 .petal-mark { position: relative; display: inline-block; }
@@ -377,8 +364,10 @@ code { font-family: var(--mono); font-size: 0.86em; background: var(--surface-so
   width: 100%;
   max-width: 1248px;
   margin: 0 auto;
-  padding: 0 24px var(--s16);
+  /* Breathing room under the sticky nav; the home hero brings its own. */
+  padding: var(--s12) 24px var(--s16);
 }
+.content > .hero:first-child { padding-top: clamp(8px, 3vw, 40px); }
 .content > * { animation: view-enter var(--t-enter) var(--ease-out) both; }
 .content > *:nth-child(2) { animation-delay: 40ms; }
 .content > *:nth-child(3) { animation-delay: 80ms; }
@@ -440,8 +429,8 @@ code { font-family: var(--mono); font-size: 0.86em; background: var(--surface-so
 .btn:hover { border-color: var(--ink); }
 .btn:active { transform: scale(0.98); }
 .btn:disabled { opacity: 0.45; cursor: default; transform: none; }
-.btn--primary { background: var(--petal); border-color: var(--petal); color: #1b0a03; font-weight: 600; }
-.btn--primary:hover:not(:disabled) { background: #ff8d66; border-color: #ff8d66; }
+.btn--primary { background: var(--ink); border-color: var(--ink); color: #fff; font-weight: 600; }
+.btn--primary:hover:not(:disabled) { background: #3a3d37; border-color: #3a3d37; }
 .btn--primary:disabled { background: var(--surface-soft); border-color: var(--surface-soft); color: var(--muted); }
 .btn--ghost { background: transparent; }
 .btn--secondary { background: transparent; }
@@ -461,7 +450,7 @@ code { font-family: var(--mono); font-size: 0.86em; background: var(--surface-so
 .btn-icon:active { transform: scale(0.96); }
 .btn-icon:disabled { opacity: 0.35; cursor: default; }
 .btn-icon--main { width: 48px; height: 48px; background: var(--petal); color: #1b0a03; }
-.btn-icon--main:hover { background: #ff8d66; }
+.btn-icon--main:hover { background: #ff8259; }
 
 .icon {
   display: inline-block; width: 18px; height: 18px; flex: none;
@@ -516,8 +505,8 @@ code { font-family: var(--mono); font-size: 0.86em; background: var(--surface-so
   background-image: linear-gradient(
     100deg,
     transparent 20%,
-    rgb(255 255 255 / 7%) 42%,
-    rgb(255 255 255 / 7%) 58%,
+    rgb(255 255 255 / 70%) 42%,
+    rgb(255 255 255 / 70%) 58%,
     transparent 80%
   );
   background-size: 260% 100%;
@@ -581,9 +570,9 @@ input[type='range'] { width: 100%; accent-color: var(--ink); min-height: var(--t
 .seg--wide { display: flex; }
 .seg__btn { min-height: 38px; padding: 6px 18px; border: none; border-radius: 11px; background: transparent; color: var(--muted); font: inherit; font-weight: 500; cursor: pointer; flex: 1; white-space: nowrap; }
 .seg__btn.is-active {
-  background: rgb(255 255 255 / 12%);
+  background: var(--surface-solid);
   color: var(--ink);
-  box-shadow: inset 0 1px 0 rgb(255 255 255 / 22%), var(--shadow-card);
+  box-shadow: 0 1px 2px rgb(32 34 31 / 10%), var(--shadow-card);
 }
 .seg__btn:hover:not(.is-active) { color: var(--ink); }
 
@@ -710,7 +699,9 @@ tr:last-child td { border-bottom: none; }
 .cover-art__index {
   position: absolute; left: 14px; top: 12px;
   font-size: 11px; font-weight: 600; letter-spacing: 0.08em;
-  color: var(--faint);
+  /* sits on the sleeve, not the page */
+  color: rgb(255 255 255 / 88%);
+  text-shadow: 0 1px 2px rgb(0 0 0 / 18%);
 }
 .cover-art.is-playing { box-shadow: 0 0 0 2px var(--petal), var(--shadow-card); }
 
@@ -743,12 +734,12 @@ tr:last-child td { border-bottom: none; }
   position: absolute; right: 12px; bottom: 12px;
   width: 48px; height: 48px; border-radius: 50%;
   border: 1px solid var(--glass-edge);
-  background: rgb(10 11 15 / 55%);
+  background: rgb(255 255 255 / 82%);
   -webkit-backdrop-filter: blur(16px) saturate(var(--glass-sat));
   backdrop-filter: blur(16px) saturate(var(--glass-sat));
   color: var(--ink);
   display: grid; place-items: center; cursor: pointer;
-  box-shadow: inset 0 1px 0 rgb(255 255 255 / 30%), var(--shadow-pop);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 60%), var(--shadow-pop);
   opacity: 0; transform: translateY(6px);
   transition: opacity var(--t-ui) var(--ease-ui), transform var(--t-ui) var(--ease-ui);
 }
@@ -765,13 +756,13 @@ tr:last-child td { border-bottom: none; }
 }
 .song-card__badge {
   left: 12px; color: var(--warning);
-  background: rgb(10 11 15 / 62%);
+  background: rgb(255 255 255 / 85%);
   border: 1px solid color-mix(in srgb, var(--warning) 34%, transparent);
   -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px);
 }
 .song-card__public {
   right: 12px; color: var(--ink);
-  background: rgb(10 11 15 / 62%);
+  background: rgb(255 255 255 / 85%);
   border: 1px solid var(--glass-edge);
   -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px);
 }
@@ -851,7 +842,7 @@ tr:last-child td { border-bottom: none; }
 .chart__row.is-active { background: var(--surface); border-color: color-mix(in srgb, var(--petal) 40%, transparent); }
 .chart__row--skeleton { height: 72px; }
 .chart__rank { font-size: 20px; font-weight: 600; text-align: center; color: var(--muted); letter-spacing: -0.02em; }
-.chart__rank--1 { color: var(--petal); }
+.chart__rank--1 { color: var(--link); }
 .chart__rank--2 { color: var(--muted); }
 .chart__rank--3 { color: var(--warning); }
 .chart__play { position: relative; width: 56px; height: 56px; border-radius: 14px; overflow: hidden; padding: 0; border: none; cursor: pointer; background: var(--surface-soft); }
@@ -887,10 +878,10 @@ tr:last-child td { border-bottom: none; }
   min-height: 48px; padding: 0 22px;
   border-radius: 999px; border: none; cursor: pointer;
   background: var(--petal); color: #1b0a03; font: inherit; font-size: 14px; font-weight: 600;
-  box-shadow: 0 12px 34px rgb(255 122 77 / 34%), var(--shadow-card);
+  box-shadow: 0 12px 30px rgb(244 107 69 / 30%), var(--shadow-card);
   transition: transform var(--t-press) var(--ease-ui), background-color var(--t-ui) var(--ease-ui);
 }
-.song-spread__play:hover { background: #ff8d66; }
+.song-spread__play:hover { background: #ff8259; }
 .song-spread__play:active { transform: scale(0.98); }
 .song-spread__play:disabled { background: var(--surface-soft); color: var(--muted); box-shadow: none; cursor: default; }
 .song-spread__eyebrow { margin-bottom: var(--s3); }
@@ -901,7 +892,7 @@ tr:last-child td { border-bottom: none; }
   overflow-wrap: anywhere;
 }
 .song-spread__meta { color: var(--muted); font-size: 15px; margin: 0 0 var(--s6); }
-.song-spread__actions { display: flex; align-items: center; gap: var(--s4) var(--s6); flex-wrap: wrap; margin: 0 0 var(--s4); }
+.song-spread__actions { display: flex; align-items: center; gap: var(--s3); flex-wrap: wrap; margin: 0 0 var(--s4); }
 .song-spread__note { font-size: 12px; color: var(--muted); margin: 0 0 var(--s2); }
 .song-spread__player { display: flex; flex-direction: column; align-items: stretch; gap: 6px; margin-top: var(--s6); }
 .song-spread__time { font-size: 12px; color: var(--muted); white-space: nowrap; }
@@ -911,18 +902,44 @@ tr:last-child td { border-bottom: none; }
    stretches the canvas vertically and throws away the height prop. */
 .song-spread__score { width: 100%; min-width: 0; flex: none; }
 
-/* quiet text controls */
+/* the terms record, as a footnote under the song */
+.song-page__terms { margin: var(--s8) 0 0; font-size: 13px; }
+.quiet-link { color: var(--muted); text-decoration: none; }
+.quiet-link:hover { color: var(--ink); text-decoration: underline; text-underline-offset: 4px; }
+
+/* song actions
+ *
+ * These used to be underlined text. An underline under every item read as
+ * "this one is selected" rather than "you can press this", so they are real
+ * secondary buttons now, the same family as .btn--sm: one shape, one height,
+ * a control-line border (brand: necessary control edges hold 3:1). Delete is
+ * a quieter danger outline pushed to the end of the row, away from the
+ * everyday actions.
+ */
 .text-action {
-  background: none; border: none; padding: 0; cursor: pointer;
-  font: inherit; font-size: 14px; font-weight: 500; color: var(--ink);
-  border-bottom: 1px solid color-mix(in srgb, var(--ink) 25%, transparent);
-  padding-bottom: 3px; min-height: var(--tap);
-  transition: border-color var(--t-ui) var(--ease-ui), color var(--t-ui) var(--ease-ui);
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+  min-height: var(--tap); padding: 0 16px;
+  border-radius: var(--r-control);
+  border: 1px solid var(--control-line);
+  background: var(--surface-solid);
+  color: var(--ink);
+  font: inherit; font-size: 14px; font-weight: 500; line-height: 1.2;
+  white-space: nowrap; cursor: pointer;
+  box-shadow: var(--shadow-card);
+  transition: transform var(--t-press) var(--ease-ui), border-color var(--t-ui) var(--ease-ui),
+    background-color var(--t-ui) var(--ease-ui), box-shadow var(--t-ui) var(--ease-ui);
 }
-.text-action:hover { border-color: var(--ink); }
+.text-action:hover:not(:disabled) { border-color: var(--ink); box-shadow: var(--shadow-raised); transform: translateY(-1px); }
+.text-action:active:not(:disabled) { transform: scale(0.98); }
 .text-action:disabled { opacity: 0.45; cursor: default; }
-.text-action.is-danger { color: var(--danger); border-color: color-mix(in srgb, var(--danger) 30%, transparent); }
-.text-action.is-strong { color: var(--petal-deep); border-color: color-mix(in srgb, var(--petal-deep) 45%, transparent); }
+.text-action.is-danger {
+  margin-left: auto;
+  color: var(--danger); background: transparent; box-shadow: none;
+  border-color: color-mix(in srgb, var(--danger) 45%, transparent);
+}
+.text-action.is-danger:hover:not(:disabled) { border-color: var(--danger); background: color-mix(in srgb, var(--danger) 6%, transparent); box-shadow: none; }
+.text-action.is-strong { background: var(--ink); border-color: var(--ink); color: #fff; }
+.text-action.is-strong:hover:not(:disabled) { background: #3a3d37; border-color: #3a3d37; }
 
 @media (max-width: 900px) {
   .song-spread { grid-template-columns: minmax(0, 1fr); }
@@ -930,7 +947,7 @@ tr:last-child td { border-bottom: none; }
 }
 
 /* synced lyrics */
-.lyrics-sync { max-height: 420px; overflow-y: auto; padding: var(--s6) 4px; -webkit-mask-image: linear-gradient(to bottom, transparent, #000 12%, #000 86%, transparent); mask-image: linear-gradient(to bottom, transparent, #000 12%, #000 86%, transparent); scrollbar-width: none; }
+.lyrics-sync { position: relative; max-height: 420px; overflow-y: auto; padding: var(--s6) 4px; -webkit-mask-image: linear-gradient(to bottom, transparent, #000 12%, #000 86%, transparent); mask-image: linear-gradient(to bottom, transparent, #000 12%, #000 86%, transparent); scrollbar-width: none; }
 .lyrics-sync::-webkit-scrollbar { display: none; }
 .lyrics-sync__pill { display: inline-flex; align-items: center; gap: 6px; margin-bottom: var(--s4); padding: 4px 12px; border-radius: 999px; font-size: 11px; font-weight: 600; letter-spacing: 0.1em; color: var(--muted); border: 1px solid var(--line); background: var(--surface-soft); }
 .lyrics-sync__pill.is-aligned { color: var(--petal-deep); border-color: color-mix(in srgb, var(--petal) 40%, transparent); }
@@ -939,35 +956,136 @@ tr:last-child td { border-bottom: none; }
 .lyrics-sync__line:hover { opacity: 0.8; }
 .lyrics-sync__line.is-past { opacity: 0.35; }
 .lyrics-sync__line.is-active { opacity: 1; color: var(--ink); transform: scale(1.02); }
-.lyrics-sync__fill { position: absolute; inset: 0; color: var(--petal-deep); clip-path: inset(0 calc(100% - var(--fill, 0%)) 0 0); transition: clip-path 0.18s linear; pointer-events: none; white-space: nowrap; overflow: hidden; }
+.lyrics-sync__fill { position: absolute; inset: 0; padding: inherit; text-align: inherit; color: var(--petal-deep); clip-path: inset(0 calc(100% - var(--fill, 0%)) 0 0); transition: clip-path 0.18s linear; pointer-events: none; white-space: nowrap; overflow: hidden; }
 .lyrics-sync--compact .lyrics-sync__line { font-size: 16px; }
 
 /* now playing (light glass sheet) */
-.now-playing { position: fixed; inset: 0; z-index: 120; display: flex; flex-direction: column; animation: np-in var(--t-panel) var(--ease-ui) both; background: color-mix(in srgb, var(--bg) 78%, transparent); -webkit-backdrop-filter: blur(28px) saturate(1.4); backdrop-filter: blur(28px) saturate(1.4); }
+/* ---------------------------------------------------------------- now playing
+ * Lyrics left, a turning record right, transport docked along the bottom.
+ */
+.now-playing {
+  position: fixed; inset: 0; z-index: 120;
+  display: grid; grid-template-rows: auto minmax(0, 1fr) auto;
+  overflow: hidden;
+  background: var(--bg);
+  border: none; box-shadow: none; border-radius: 0;
+  -webkit-backdrop-filter: none; backdrop-filter: none;
+  animation: np-in var(--t-panel) var(--ease-ui) both;
+}
 .now-playing.is-closing { animation: np-out 160ms var(--ease-ui) both; }
 @keyframes np-in { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: translateY(0); } }
 @keyframes np-out { to { opacity: 0; transform: translateY(8px); } }
-.now-playing__scrim { position: absolute; inset: 0; }
-.now-playing__top { position: relative; display: flex; align-items: center; gap: var(--s4); padding: var(--s4) var(--s6); }
+
+/* the sleeve's colour, blurred, as the light in the room */
+.now-playing__halo { position: absolute; inset: 0; pointer-events: none; overflow: hidden; }
+.now-playing__halo-art {
+  position: absolute; top: -10%; right: -12%;
+  width: 70vmax !important; max-width: none !important;
+  border-radius: 50%; filter: blur(90px) saturate(1.2); opacity: 0.32;
+}
+.now-playing__halo-art .cover-art__score, .now-playing__halo-art .cover-art__index { display: none; }
+
+.now-playing__top { position: relative; z-index: 2; display: flex; align-items: center; gap: var(--s4); padding: var(--s4) var(--s6); }
 .now-playing__top .btn-icon .icon { transform: rotate(90deg); }
 .now-playing__now { display: inline-flex; align-items: center; gap: 9px; font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.18em; color: var(--muted); }
-.now-playing__top-spacer { width: 44px; }
-.now-playing__body { position: relative; flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr); gap: var(--s8); align-items: center; max-width: 1200px; width: 100%; margin: 0 auto; padding: 0 var(--s8) var(--s8); }
-.now-playing__cover-wrap { display: flex; flex-direction: column; align-items: center; gap: var(--s4); }
-.now-playing__cover { width: min(46vh, 420px); border-radius: var(--r-card); box-shadow: var(--shadow-pop); }
-.now-playing__title { margin: 0; font-size: clamp(22px, 2.4vw, 32px); text-align: center; }
-.now-playing__artist { margin: 0; color: var(--muted); text-align: center; }
-.now-playing__transport { display: flex; align-items: center; gap: 10px; }
-.now-playing__seek { width: min(100%, 380px); }
-.now-playing__seek::-webkit-slider-runnable-track { height: 5px; border-radius: 999px; background: linear-gradient(to right, var(--ink) var(--progress, 0%), var(--line) var(--progress, 0%)); }
-.now-playing__seek::-moz-range-track { height: 5px; border-radius: 999px; background: var(--line); }
-.now-playing__seek::-moz-range-progress { height: 5px; border-radius: 999px; background: var(--ink); }
-.now-playing__seek::-webkit-slider-thumb { appearance: none; width: 14px; height: 14px; margin-top: -4.5px; border-radius: 50%; background: var(--ink); }
-.now-playing__actions { display: flex; gap: 10px; }
-.now-playing__lyrics { min-height: 0; max-height: 70vh; display: flex; flex-direction: column; justify-content: center; }
-.now-playing__lyrics .lyrics-sync { max-height: 60vh; }
-.now-playing__lyrics .lyrics-sync__line { font-size: clamp(20px, 2vw, 30px); }
-@media (max-width: 900px) { .now-playing__body { grid-template-columns: 1fr; align-items: start; overflow-y: auto; } .now-playing__cover { width: min(52vw, 260px); } }
+
+.now-playing__stage {
+  position: relative; z-index: 1; min-height: 0;
+  display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  align-items: center; gap: var(--s8);
+  padding: 0 0 0 clamp(24px, 8vw, 140px);
+}
+.now-playing__words { min-height: 0; display: flex; flex-direction: column; max-height: 100%; }
+.now-playing__title { margin: 0; font-size: clamp(26px, 2.6vw, 38px); line-height: 1.25; letter-spacing: -0.02em; }
+.now-playing__artist { margin: 6px 0 var(--s6); color: var(--muted); font-size: 16px; }
+.now-playing__no-lyrics { margin: var(--s8) 0 0; font-size: clamp(20px, 2vw, 28px); color: var(--muted); }
+
+/* lyrics, karaoke-sized */
+.now-playing__lyrics { min-height: 0; }
+.now-playing__lyrics .lyrics-sync {
+  max-height: min(56vh, 560px); padding: 18vh 0;
+  -webkit-mask-image: linear-gradient(to bottom, transparent, #000 22%, #000 78%, transparent);
+  mask-image: linear-gradient(to bottom, transparent, #000 22%, #000 78%, transparent);
+}
+.now-playing__lyrics .lyrics-sync__pill { display: none; }
+.now-playing__lyrics .lyrics-sync__marker { display: none; }
+.now-playing__lyrics .lyrics-sync__line { font-size: clamp(22px, 2.3vw, 34px); font-weight: 600; padding: 12px 0; letter-spacing: 0.01em; }
+.now-playing__lyrics .lyrics-sync__line.is-active { transform: none; }
+.now-playing__lyrics .lyrics-sync__fill { color: var(--petal-deep); }
+/* sung lines go back to grey, as in a karaoke screen */
+.now-playing__lyrics .lyrics-sync__line.is-past .lyrics-sync__fill { opacity: 0; }
+
+/* the record: grooves, a sheen that stays still while the disc turns, the sleeve as label */
+.now-playing__deck { position: relative; height: 100%; min-height: 0; display: flex; align-items: center; justify-content: flex-end; }
+.vinyl {
+  position: relative; flex: none;
+  width: min(80vh, 50vw); aspect-ratio: 1; margin-right: max(-12vw, -180px);
+  border-radius: 50%;
+  background:
+    radial-gradient(circle at 50% 50%, transparent 0 31%, rgb(255 255 255 / 6%) 31.4%, transparent 32%),
+    repeating-radial-gradient(circle at 50% 50%, #1b1d1a 0 1.5px, #262924 1.5px 3px),
+    #1f211e;
+  box-shadow: 0 30px 80px rgb(32 34 31 / 28%), 0 0 0 1px rgb(32 34 31 / 20%);
+  animation: vinyl-spin 14s linear infinite;
+  animation-play-state: paused;
+}
+.vinyl.is-spinning { animation-play-state: running; }
+@keyframes vinyl-spin { to { transform: rotate(360deg); } }
+/* light raking across the surface: on the static wrapper, so it does not spin */
+.now-playing__deck::after {
+  content: ''; position: absolute; pointer-events: none;
+  width: min(80vh, 50vw); aspect-ratio: 1; right: max(-12vw, -180px); border-radius: 50%;
+  background: conic-gradient(from 210deg, transparent 0 8%, rgb(255 255 255 / 10%) 14%, transparent 22%, transparent 58%, rgb(255 255 255 / 8%) 64%, transparent 72%);
+}
+.vinyl__grooves { position: absolute; inset: 4%; border-radius: 50%; border: 1px solid rgb(255 255 255 / 5%); }
+.vinyl__label {
+  position: absolute; inset: 30%; border-radius: 50%; overflow: hidden;
+  box-shadow: 0 0 0 6px #121411, inset 0 0 0 1px rgb(255 255 255 / 12%);
+}
+.vinyl__art { width: 100% !important; max-width: none !important; height: 100%; border-radius: 50%; display: block; }
+.vinyl__art .cover-art__index { display: none; }
+.vinyl__spindle {
+  position: absolute; left: 50%; top: 50%; width: 3.2%; aspect-ratio: 1; transform: translate(-50%, -50%);
+  border-radius: 50%; background: var(--bg); box-shadow: inset 0 1px 2px rgb(0 0 0 / 35%);
+}
+
+/* the dock */
+.now-playing__dock {
+  position: relative; z-index: 2;
+  display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr) minmax(0, 1fr);
+  align-items: center; gap: var(--s6);
+  padding: var(--s4) clamp(20px, 4vw, 48px) calc(var(--s4) + env(safe-area-inset-bottom, 0px));
+  border-top: 1px solid var(--line);
+  background: color-mix(in srgb, var(--surface-solid) 80%, transparent);
+  -webkit-backdrop-filter: blur(20px); backdrop-filter: blur(20px);
+}
+.now-playing__dock-meta { display: flex; flex-direction: column; min-width: 0; }
+.now-playing__dock-meta strong, .now-playing__dock-meta span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.now-playing__dock-meta strong { font-size: 14px; font-weight: 600; }
+.now-playing__dock-meta span { font-size: 12px; color: var(--muted); }
+.now-playing__dock-center { display: flex; flex-direction: column; align-items: center; gap: 6px; min-width: 0; }
+.now-playing__transport { display: flex; align-items: center; gap: 14px; }
+.now-playing__timeline { display: flex; align-items: center; gap: 12px; width: 100%; font-size: 12px; color: var(--muted); }
+.now-playing__seek { flex: 1; min-width: 0; }
+.now-playing__seek::-webkit-slider-runnable-track { height: 4px; border-radius: 999px; background: linear-gradient(to right, var(--ink) var(--progress, 0%), var(--line-strong) var(--progress, 0%)); }
+.now-playing__seek::-moz-range-track { height: 4px; border-radius: 999px; background: var(--line-strong); }
+.now-playing__seek::-moz-range-progress { height: 4px; border-radius: 999px; background: var(--ink); }
+.now-playing__seek::-webkit-slider-thumb { appearance: none; width: 14px; height: 14px; margin-top: -5px; border-radius: 50%; background: var(--ink); }
+.now-playing__dock-actions { display: flex; justify-content: flex-end; gap: 10px; }
+
+@media (prefers-reduced-motion: reduce) {
+  .vinyl, .vinyl.is-spinning { animation: none; }
+}
+@media (max-width: 900px) {
+  .now-playing__stage { grid-template-columns: 1fr; grid-template-rows: auto minmax(0, 1fr); padding: 0 20px; gap: var(--s4); }
+  .now-playing__deck { order: -1; justify-content: center; height: auto; }
+  .vinyl, .now-playing__deck::after { width: min(58vw, 34vh); margin-right: 0; right: auto; }
+  .now-playing__title, .now-playing__artist, .now-playing__no-lyrics { text-align: center; }
+  .now-playing__lyrics .lyrics-sync { max-height: 38vh; padding: 10vh 0; text-align: center; }
+  .now-playing__lyrics .lyrics-sync__line { font-size: 20px; text-align: center; transform-origin: center; }
+  .now-playing__dock { grid-template-columns: 1fr; gap: var(--s2); }
+  .now-playing__dock-meta, .now-playing__dock-actions { display: none; }
+}
 
 /* ------------------------------------------------- statutory disclosure */
 /* A row the page is still owed by counsel, marked so it cannot be mistaken
@@ -1048,7 +1166,7 @@ tr:last-child td { border-bottom: none; }
 }
 .studio__more-toggle[aria-expanded='true'] .studio__more-caret { transform: rotate(225deg) translate(-1px, -1px); }
 .studio__more-badge {
-  font-size: 11px; font-weight: 600; color: var(--petal);
+  font-size: 11px; font-weight: 600; color: var(--link);
   padding: 2px 8px; border-radius: 999px; background: var(--petal-soft);
 }
 /* `.stack` sets display:flex at author origin, which outranks the UA rule for
@@ -1069,7 +1187,7 @@ tr:last-child td { border-bottom: none; }
 
 .studio__edit { display: flex; gap: 14px; align-items: flex-start; margin-bottom: var(--s4); padding: var(--s4) var(--s4); border-radius: var(--r-control); border: 1px solid color-mix(in srgb, var(--petal) 30%, transparent); background: var(--petal-soft); }
 .studio__edit strong { display: block; margin-bottom: 2px; }
-.studio__edit-icon { width: 34px; height: 34px; flex: none; display: grid; place-items: center; border-radius: 10px; background: var(--petal-soft); color: var(--petal); font-size: 16px; }
+.studio__edit-icon { width: 34px; height: 34px; flex: none; display: grid; place-items: center; border-radius: 10px; background: var(--petal-soft); color: var(--link); font-size: 16px; }
 
 /* ---------------------------------------------------------------- pricing */
 .pricing__head { text-align: center; max-width: 640px; margin: 0 auto var(--s8); }
@@ -1138,6 +1256,15 @@ tr:last-child td { border-bottom: none; }
 }
 
 .credit-pill { display: inline-flex; align-items: center; gap: 8px; min-height: 38px; padding: 0 16px; border-radius: 999px; border: 1px solid var(--line); background: var(--surface); color: var(--ink); font-weight: 500; }
+/* Japanese/Chinese labels break between characters; the pill must stay one line. */
+.credit-pill { white-space: nowrap; flex: none; }
+.account__credits { display: none; }
+/* At phone widths logo + language + credits + avatar do not fit on one row:
+   the pill moves into the account menu instead of pushing the avatar off. */
+@media (max-width: 480px) {
+  .topnav__account .credit-pill { display: none; }
+  .account__credits { display: block; }
+}
 .credit-pill:hover { border-color: var(--ink); }
 
 /* mobile tab bar */
@@ -1171,6 +1298,8 @@ tr:last-child td { border-bottom: none; }
     z-index: 70; grid-template-columns: repeat(3, 1fr);
     border-top: 1px solid var(--glass-edge);
     min-height: 60px;
+    /* opaque enough that scrolled content does not read through the labels */
+    background-color: var(--glass-strong);
   }
   .player-bar { bottom: 60px; }
   .player-bar__inner { grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr); }
@@ -1179,7 +1308,7 @@ tr:last-child td { border-bottom: none; }
   .tabbar__link.is-active { color: var(--ink); }
 }
 @media (max-width: 767px) {
-  .content { padding: 0 20px var(--s12); }
+  .content { padding: var(--s6) 20px var(--s12); }
   .hero { display: block; padding: 28px 0 40px; }
   .hero__title { font-size: 40px; line-height: 1.2; margin-bottom: 16px; }
   .hero__intro { font-size: 14px; margin-bottom: var(--s6); max-width: 320px; }
@@ -1322,7 +1451,7 @@ tr:last-child td { border-bottom: none; }
   align-items: center;
   transition: color var(--t-ui) var(--ease-ui);
 }
-.composer__advanced:hover { color: var(--petal); }
+.composer__advanced:hover { color: var(--link); }
 
 @media (max-width: 767px) {
   /* Below 768 these are thumb targets, not pointer targets. */

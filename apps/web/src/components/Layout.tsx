@@ -211,6 +211,8 @@ export function Layout({ children }: { children: ReactNode }) {
                     <div className="account__who">
                       <strong>{me.displayName?.trim() || t('card.creator')}</strong>
                       <span className="small">{me.email}</span>
+                      {/* The nav pill is hidden on narrow phones; the count lives here too. */}
+                      <span className="small account__credits">{t('nav.credits', { n: credits })}</span>
                     </div>
                     <Link role="menuitem" to="/library" onClick={() => setMenuOpen(false)}>
                       {t('account.mySongs')}

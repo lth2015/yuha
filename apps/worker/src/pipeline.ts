@@ -17,7 +17,7 @@ import {
   withTx,
   type JobRow,
 } from '@yuha/db';
-import { fetchAudio, HttpMusicProvider, redactPrompt, type MusicAudioRef } from '@yuha/providers';
+import { checkPrompt, fetchAudio, HttpMusicProvider, redactPrompt, type MusicAudioRef } from '@yuha/providers';
 
 export interface PipelineDeps {
   ctx: AppContext;
@@ -177,11 +177,20 @@ async function submitJob(deps: PipelineDeps, job: JobRow): Promise<void> {
   // reaches the music provider without passing our own schema. The creator's
   // own choices (duration, vocal mode, title) are re-imposed here rather than
   // trusted from the model.
+  // Lyrics the model wrote (simple mode, vocals on) are the model's text, not
+  // the creator's: they pass the same screen the creator's own lyrics pass at
+  // the API. A refusal drops them rather than failing the job — the song is
+  // still sung, the music service falls back to a wordless vocal line.
+  let resolvedLyrics = input.instrumental === false ? (input.lyrics ?? intentResult.intent.lyrics ?? null) : null;
+  if (resolvedLyrics && !input.lyrics && !checkPrompt(resolvedLyrics).allowed) {
+    log('warn', 'model-written lyrics failed screening; dropped', { jobId: job.id });
+    resolvedLyrics = null;
+  }
   const parsed = musicIntent.safeParse({
     ...intentResult.intent,
     durationSeconds: input.durationSeconds,
     vocalMode: input.instrumental === false ? 'with_vocals' : 'instrumental',
-    lyrics: input.instrumental === false ? (input.lyrics ?? intentResult.intent.lyrics ?? null) : null,
+    lyrics: resolvedLyrics,
     title: input.title ?? intentResult.intent.title ?? null,
   });
   if (!parsed.success) {

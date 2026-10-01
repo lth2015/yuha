@@ -49,7 +49,7 @@ export function SyncedLyrics({
   }, [active]);
 
   if (!lines.length) {
-    return <p className="muted small">Instrumental — no lyrics to show.</p>;
+    return <p className="muted small">{t('lyrics.instrumental')}</p>;
   }
 
   return (

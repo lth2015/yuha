@@ -123,6 +123,25 @@ export function Score({
     let raf = 0;
     let w = 0;
     let h = 0;
+    /*
+     * Neutral ink and glow mode come from CSS, not from here: the same score
+     * is drawn on the light page (ink marks, normal blending) and inside a
+     * deep cover sleeve (white marks, additive light). `--score-neutral` is an
+     * "r, g, b" triple; `--score-glow` is a canvas composite operation.
+     */
+    let neutral = '32, 34, 31';
+    let glowOp: GlobalCompositeOperation = 'source-over';
+    // On a coloured sleeve the petal→violet notes vanish into same-hue
+    // fields; `--score-mono: 1` draws them in the neutral ink instead.
+    let mono = false;
+    let neutralRgb = [32, 34, 31];
+    const readTone = () => {
+      const cs = getComputedStyle(canvas);
+      mono = cs.getPropertyValue('--score-mono').trim() === '1';
+      neutral = cs.getPropertyValue('--score-neutral').trim() || neutral;
+      glowOp = (cs.getPropertyValue('--score-glow').trim() || glowOp) as GlobalCompositeOperation;
+      neutralRgb = neutral.split(',').map((v) => Number(v.trim()));
+    };
 
     const resize = () => {
       const dpr = Math.min(window.devicePixelRatio || 1, 2);
@@ -132,6 +151,7 @@ export function Score({
       canvas.width = Math.round(w * dpr);
       canvas.height = Math.round(h * dpr);
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      readTone();
       dirty.current = true;
     };
     resize();
@@ -167,7 +187,7 @@ export function Score({
       const mirror = (h - baseline) * 0.82;
 
       // The staff line: always present, so silence still has a shape.
-      ctx.strokeStyle = 'rgba(255,255,255,0.09)';
+      ctx.strokeStyle = `rgba(${neutral}, 0.12)`;
       ctx.lineWidth = 1;
       ctx.beginPath();
       ctx.moveTo(0, baseline + 0.5);
@@ -176,7 +196,7 @@ export function Score({
 
       if (notes.length === 0) {
         // Resting state: a few faint ticks — the room before anything is said.
-        ctx.fillStyle = 'rgba(255,255,255,0.13)';
+        ctx.fillStyle = `rgba(${neutral}, 0.18)`;
         for (let i = 0; i < 9; i += 1) {
           const x = (w / 10) * (i + 1);
           ctx.fillRect(x, baseline - 5, 1, 10);
@@ -207,9 +227,9 @@ export function Score({
         // in RGB. Interpolating the *hue* instead would travel through green,
         // which is not a brand colour and reads as a bug.
         const t = n.pitch;
-        const r = Math.round(255 + (139 - 255) * t);
-        const g = Math.round(122 + (124 - 122) * t);
-        const b = Math.round(77 + (255 - 77) * t);
+        const r = mono ? neutralRgb[0]! : Math.round(255 + (139 - 255) * t);
+        const g = mono ? neutralRgb[1]! : Math.round(122 + (124 - 122) * t);
+        const b = mono ? neutralRgb[2]! : Math.round(77 + (255 - 77) * t);
         // Past the recording cut a note is present but not yet real. Past
         // the playhead it is real but not yet reached — a softer difference.
         const written = cut === undefined || n.x <= cut;
@@ -247,7 +267,7 @@ export function Score({
       // Phrase feet: one short mark under the first note of each word, so the
       // score shows how the sentence breaks, not only how it sounds.
       let lastPhrase = -1;
-      ctx.fillStyle = 'rgba(255,255,255,0.22)';
+      ctx.fillStyle = `rgba(${neutral}, 0.26)`;
       for (const n of notes) {
         if (n.rest || n.phrase === lastPhrase) continue;
         lastPhrase = n.phrase;
@@ -265,7 +285,7 @@ export function Score({
         glow.addColorStop(0.45, `rgba(255, 210, 190, ${peak * 0.32})`);
         glow.addColorStop(1, 'rgba(255,255,255,0)');
         ctx.save();
-        ctx.globalCompositeOperation = 'lighter';
+        ctx.globalCompositeOperation = glowOp;
         ctx.fillStyle = glow;
         ctx.fillRect(headX - reach, baseline - reach, reach * 2, reach);
         ctx.restore();
