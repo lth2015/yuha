@@ -42,6 +42,8 @@ const envSchema = z.object({
   AUTH_ADAPTER: z.enum(['dev', 'google', 'cognito']).optional(),
   /** Signing secret for the local dev session token. Never valid in production. */
   DEV_AUTH_SECRET: z.string().optional(),
+  /** Restricts the dev sign-in; see auth/allowlist.ts. Empty = unrestricted. */
+  DEV_LOGIN_ALLOWLIST: z.string().optional(),
   COGNITO_REGION: z.string().optional(),
   COGNITO_USER_POOL_ID: z.string().optional(),
   COGNITO_APP_CLIENT_ID: z.string().optional(),

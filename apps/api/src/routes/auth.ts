@@ -30,6 +30,7 @@ import {
   sessionIssuerFor,
   verifyMfaChallenge,
 } from '../services/mfa.js';
+import { devLoginAllowed, parseDevLoginAllowlist } from '../auth/allowlist.js';
 
 const devLoginSchema = z.object({
   email: z.string().email(),
@@ -139,6 +140,7 @@ export default async function authRoutes(
    * which `loadConfig` forbids in production (SEC-03). It still issues a real
    * signed bearer token so the client-side auth path is genuinely exercised.
    */
+  const allowlist = parseDevLoginAllowlist(ctx.config.DEV_LOGIN_ALLOWLIST);
   if (adapter instanceof DevAuthAdapter) {
     const dev = adapter;
     app.post('/v1/auth/dev-login', async (req) => {
@@ -146,6 +148,13 @@ export default async function authRoutes(
         throw new AppError('FORBIDDEN', 'development login does not exist in production');
       }
       const body = devLoginSchema.parse(req.body);
+      // Before anything is written: a refused address must not leave a user
+      // row, a trial grant or a signup event behind.
+      if (!devLoginAllowed(body.email, allowlist)) {
+        throw new AppError('EMAIL_NOT_ALLOWED', 'this address may not use the development sign-in', {
+          domains: allowlist.domains,
+        });
+      }
       const externalId = `dev-${Buffer.from(body.email.toLowerCase()).toString('hex').slice(0, 24)}`;
       const user = await upsertUser({
         authProvider: 'dev',
@@ -281,6 +290,10 @@ export default async function authRoutes(
     return {
       adapter: ctx.config.adapters.auth,
       devLogin: adapter instanceof DevAuthAdapter,
+      // Domains only: listing the exact addresses would hand out the very
+      // accounts the list is there to fence off.
+      devLoginRestricted: allowlist.restricted,
+      devLoginDomains: allowlist.domains,
       google: {
         enabled: !!google,
         // Present but unusable (e.g. missing client id) is surfaced so the UI

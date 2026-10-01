@@ -9,6 +9,7 @@
 export { loadConfig, baseFeatures, ConfigError, type AppConfig, type FeatureFlags } from './config.js';
 export { createContext, type AppContext } from './context.js';
 export { buildServer } from './server.js';
+export { parseDevLoginAllowlist, devLoginAllowed, type DevLoginAllowlist } from './auth/allowlist.js';
 export { createAuthAdapter, DevAuthAdapter, CognitoAuthAdapter, type AuthAdapter } from './auth/index.js';
 
 export {

@@ -10,6 +10,9 @@ import { ErrorNotice } from '../components/common';
 interface AuthConfig {
   adapter: string;
   devLogin: boolean;
+  /** The dev sign-in only admits listed addresses (DEV_LOGIN_ALLOWLIST). */
+  devLoginRestricted?: boolean;
+  devLoginDomains?: string[];
   google: { enabled: boolean; configured: boolean; clientId: string | null };
 }
 
@@ -208,9 +211,17 @@ export default function Auth() {
                   inputMode="email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  placeholder="you@example.com"
+                  placeholder={config.devLoginDomains?.length ? `you@${config.devLoginDomains[0]}` : 'you@example.com'}
                   required
+                  aria-describedby={config.devLoginRestricted ? 'email-allow' : undefined}
                 />
+                {config.devLoginRestricted && (
+                  <p id="email-allow" className="small muted" style={{ margin: '6px 0 0' }}>
+                    {config.devLoginDomains?.length
+                      ? t('auth.allowDomains', { domains: config.devLoginDomains.map((d) => `@${d}`).join(' / ') })
+                      : t('auth.allowListed')}
+                  </p>
+                )}
               </div>
 
               {/* Age and terms are separate confirmations, both required. */}
@@ -265,7 +276,9 @@ export default function Auth() {
               </button>
             </form>
 
-            {runtime?.demo && (
+            {/* The seeded demo accounts are advertised only while anyone may
+                sign in; behind an allowlist they are exactly who must not. */}
+            {runtime?.demo && !config.devLoginRestricted && (
               <p className="small muted" style={{ margin: 0 }}>
                 {t('auth.demoAccounts')} <code>creator@example.jp</code> · <code>empty@example.jp</code> ·{' '}
                 <code>admin@example.jp</code>
