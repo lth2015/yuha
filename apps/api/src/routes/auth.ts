@@ -231,7 +231,29 @@ export default async function authRoutes(
 
       const identity = await google.exchangeCode({ code: query.code, codeVerifier: state.verifier });
       const user = await google.toUser(identity);
-      await confirmAgeAndTerms({ userId: user.id, marketingOptIn: false });
+      /*
+       * This used to call `confirmAgeAndTerms` here, which asserted on the
+       * user's behalf that they were 18 and had accepted the terms — without
+       * ever asking. Dev login puts the two checkboxes on screen, but dev
+       * login is forbidden in production (SEC-03), so in production Google is
+       * the only door and nobody ever affirmed anything. `POST /v1/me/consent`
+       * exists, documented "UI-02: age and terms confirmation", and had no
+       * caller in the web app at all; `Account.tsx` rendered
+       * `me.ageConfirmed ? ageYes : ageNo`, a question that could only ever
+       * answer yes. Meanwhile the Terms and the Privacy Policy both say in
+       * print that generation and purchase require being 18 or older.
+       *
+       * Nothing is written here now. `requireAgeConfirmed` already blocks
+       * generation and purchase until the user answers, and the web app asks
+       * on the first screen after sign-in.
+       *
+       * It was also silently revoking marketing consent on *every* sign-in:
+       * `marketing_opt_in = ?` is unconditional in that UPDATE — only the two
+       * timestamps are COALESCE-protected — and this passed `false` each
+       * time, so a user who turned the toggle on in settings lost it the next
+       * time they signed in with Google. Against the Privacy Policy's own
+       * "which you may withdraw at any time", which cuts both ways.
+       */
       await grantTrialIfEligible(ctx, user.id);
       await trackEvent({
         name: 'signup_completed',

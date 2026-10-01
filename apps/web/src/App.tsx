@@ -2,6 +2,7 @@ import type { ReactNode } from 'react';
 import { BrowserRouter, Navigate, Route, Routes, useLocation } from 'react-router-dom';
 import { Layout } from './components/Layout';
 import { Loading } from './components/common';
+import { ConsentGate } from './components/ConsentGate';
 import { PlayerProvider } from './lib/player';
 import { I18nProvider } from './lib/i18n';
 import { ErrorBoundary } from './components/ErrorBoundary';
@@ -64,6 +65,9 @@ export default function App() {
            *  Inside I18nProvider so the panel can speak the reader's language. */}
           <ErrorBoundary>
           <Layout>
+            {/* Above the routes, so it is the first thing on whatever screen
+                the visitor lands on after signing in. */}
+            <ConsentGate />
             <Routes>
               <Route path="/" element={<Home />} />
               <Route path="/auth" element={<Auth />} />

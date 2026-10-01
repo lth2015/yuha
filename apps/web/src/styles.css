@@ -749,6 +749,21 @@ tr:last-child td { border-bottom: none; }
 }
 .state-note { font-size: 14px; color: var(--danger); margin-bottom: var(--s4); }
 
+/* The 18+ / terms affirmation. Warm rather than alarming — it is a question,
+   not an error — but it has to read as the first thing on the page. */
+.consent {
+  border: 1px solid color-mix(in srgb, var(--petal) 45%, transparent);
+  border-radius: var(--r-card);
+  background-color: var(--surface-solid);
+  background-image: radial-gradient(90% 120% at 100% 0%, var(--petal-soft) 0%, transparent 58%);
+  box-shadow: var(--shadow-card);
+  padding: var(--s6);
+  margin-bottom: var(--s6);
+  display: flex; flex-direction: column; gap: var(--s3);
+}
+.consent__title { margin: 0; font-size: 18px; }
+.consent__body { margin: 0; color: var(--muted); max-width: 60ch; }
+
 /* ---------------------------------------------------------------- covers + masonry */
 .cover-art {
   position: relative; display: block; border-radius: var(--r-card); overflow: hidden;

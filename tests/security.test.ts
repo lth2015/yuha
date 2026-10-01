@@ -7,7 +7,13 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { ConfigError, loadConfig } from '@yuha/api';
-import { getLicenseSnapshot, getTrack, query, setLicenseStatus } from '@yuha/db';
+import {
+  confirmAgeAndTerms,
+  getLicenseSnapshot,
+  getTrack,
+  query,
+  setLicenseStatus,
+} from '@yuha/db';
 import { LocalStorageAdapter, assertSafeUrl, checkPrompt, isPublicAddress } from '@yuha/providers';
 import { runJobStep } from '@yuha/worker/pipeline';
 import { createHarness, resetData, teardown, type Harness, type TestUser } from './helpers/harness.js';
@@ -794,5 +800,108 @@ describe('SEC-11: cancellation, deletion and marketing are separate actions', ()
     // Turning marketing on does not touch entitlements or account state.
     const after = await h.app.inject({ method: 'GET', url: '/v1/me', headers: user.authHeader });
     expect(after.json().ageConfirmed).toBe(true);
+  });
+
+  /*
+   * The Google callback used to call `confirmAgeAndTerms` on the user's
+   * behalf, and that UPDATE wrote `marketing_opt_in = ?` unconditionally —
+   * only the two timestamps were COALESCE-protected — with `false` passed on
+   * every single sign-in. So a user who turned the toggle on in settings had
+   * it silently cleared the next time they signed in, against the Privacy
+   * Policy's own "which you may withdraw at any time".
+   *
+   * The parameter is optional now: a caller with no answer from the user does
+   * not get to invent one.
+   */
+  it('a later age confirmation does not clear a marketing choice', async () => {
+    const user = await h.createUser();
+    const opted = await h.app.inject({
+      method: 'POST',
+      url: '/v1/me/marketing',
+      headers: user.authHeader,
+      payload: { optIn: true } as never,
+    });
+    expect(opted.json().marketingOptIn).toBe(true);
+
+    await confirmAgeAndTerms({ userId: user.id });
+
+    const after = await h.app.inject({ method: 'GET', url: '/v1/me', headers: user.authHeader });
+    expect(after.json().marketingOptIn, 'a consent write cleared the marketing choice').toBe(true);
+    expect(after.json().ageConfirmed).toBe(true);
+  });
+});
+
+/*
+ * UI-02. The Terms and the Privacy Policy both say in print that generating
+ * and buying require being 18 or older, and `requireAgeConfirmed` enforces it.
+ * What nobody did was ask: the Google callback recorded the affirmation
+ * itself, dev login is forbidden in production (SEC-03) so Google is the only
+ * door there, and `POST /v1/me/consent` — whose own docstring is "UI-02: age
+ * and terms confirmation" — had no caller anywhere in the web app. The age row
+ * on the account page could only ever read "confirmed".
+ */
+describe('UI-02: the 18+ affirmation is asked, not assumed', () => {
+  async function unconfirmed() {
+    const user = await h.createUser({ credits: 2 });
+    await query(
+      `UPDATE users SET age_confirmed_at = NULL, terms_accepted_at = NULL WHERE id = ?`,
+      [user.id],
+    );
+    return user;
+  }
+
+  it('blocks generation until the user answers, then allows it', async () => {
+    const user = await unconfirmed();
+    const body = {
+      mode: 'simple',
+      prompt: 'a quiet walk home',
+      styles: ['chill'],
+      instrumental: true,
+      durationSeconds: 30,
+    };
+
+    const blocked = await h.app.inject({
+      method: 'POST',
+      url: '/v1/generations',
+      headers: { ...user.authHeader, 'idempotency-key': 'consent-gate-1' },
+      payload: body as never,
+    });
+    expect(blocked.statusCode).toBe(403);
+    expect(blocked.json().error.code).toBe('AGE_NOT_CONFIRMED');
+
+    const consent = await h.app.inject({
+      method: 'POST',
+      url: '/v1/me/consent',
+      headers: user.authHeader,
+      payload: { ageConfirmed: true, termsAccepted: true, marketingOptIn: false } as never,
+    });
+    expect(consent.statusCode, consent.body).toBe(200);
+
+    const allowed = await h.app.inject({
+      method: 'POST',
+      url: '/v1/generations',
+      headers: { ...user.authHeader, 'idempotency-key': 'consent-gate-2' },
+      payload: body as never,
+    });
+    expect(allowed.statusCode, allowed.body).toBe(202);
+  });
+
+  it('will not take a declined answer as a confirmation', async () => {
+    const user = await unconfirmed();
+    for (const payload of [
+      { ageConfirmed: false, termsAccepted: true },
+      { ageConfirmed: true, termsAccepted: false },
+      {},
+    ]) {
+      const res = await h.app.inject({
+        method: 'POST',
+        url: '/v1/me/consent',
+        headers: user.authHeader,
+        payload: payload as never,
+      });
+      expect(res.statusCode, JSON.stringify(payload)).toBe(400);
+    }
+    const me = await h.app.inject({ method: 'GET', url: '/v1/me', headers: user.authHeader });
+    expect(me.json().ageConfirmed).toBe(false);
   });
 });

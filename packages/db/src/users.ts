@@ -76,18 +76,28 @@ export async function upsertUser(
   return (await findByExternalId(params.authProvider, params.externalId, tx))!;
 }
 
+/**
+ * Records that the user affirmed their age and accepted the terms.
+ *
+ * `marketingOptIn` is optional, and omitting it leaves the column alone. It
+ * used to be required and written unconditionally while only the two
+ * timestamps were COALESCE-protected, so any caller that did not have a real
+ * answer from the user had to invent one — and the Google callback invented
+ * `false`, on every sign-in, quietly undoing whatever the user had chosen in
+ * settings. A caller with no answer should now say so by not passing one.
+ */
 export async function confirmAgeAndTerms(
-  params: { userId: string; marketingOptIn: boolean },
+  params: { userId: string; marketingOptIn?: boolean },
   tx?: PoolConnection,
 ): Promise<UserRow | undefined> {
   await execute(
     `UPDATE users SET
        age_confirmed_at = COALESCE(age_confirmed_at, UTC_TIMESTAMP(3)),
        terms_accepted_at = COALESCE(terms_accepted_at, UTC_TIMESTAMP(3)),
-       marketing_opt_in = ?,
+       marketing_opt_in = COALESCE(?, marketing_opt_in),
        updated_at = UTC_TIMESTAMP(3)
      WHERE id = ?`,
-    [params.marketingOptIn ? 1 : 0, params.userId],
+    [params.marketingOptIn === undefined ? null : params.marketingOptIn ? 1 : 0, params.userId],
     tx,
   );
   return getUser(params.userId, tx);
