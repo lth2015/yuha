@@ -26,6 +26,10 @@ service; `04_yuha_provider_check.mjs` checks that wiring end to end.
 Switches in `~/yuha-spark/.env` on the DGX (then `docker compose up -d music`):
 `ENGINE=v1|v15`, `TAG_STYLE=v1|v2`, `VOCAL_TAKES=1|2`, `MAX_QUEUE` (30).
 
+The bench's dense/sparse lyric configs map to the app's
+`LYRIC_SECONDS_PER_LINE` (default 4.5 = dense; ~6.5 = sparse), set in the
+repo `.env` and shipped by `deploy_yuha.sh`.
+
 ## YUHA app (`app/`)
 
 ```bash

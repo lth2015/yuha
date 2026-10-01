@@ -68,6 +68,12 @@ const envSchema = z.object({
   TOKENSTARS_STRUCTURED_OUTPUTS: bool(false),
   TOKENSTARS_TIMEOUT_MS: int(20_000),
   TOKENSTARS_COST_MINOR_PER_REQUEST: int(1),
+  /** Written lyrics: about one short line per this many seconds (2-10, default 4.5). */
+  LYRIC_SECONDS_PER_LINE: z
+    .string()
+    .optional()
+    .transform((v) => (v === undefined || v === '' ? 4.5 : Number(v)))
+    .pipe(z.number().min(2).max(10)),
 
   // --- music provider -----------------------------------------------------
   /** 'glm' = the GLM preset over the generic HTTP adapter (music/glm.ts). */

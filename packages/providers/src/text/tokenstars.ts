@@ -54,9 +54,25 @@ export interface TokenStarsConfig {
   timeoutMs?: number;
   /** Modelled JPY cost per request until real usage-based pricing is confirmed. */
   estimatedCostMinorPerRequest?: number;
+  /**
+   * How sparse written lyrics are: about one short line per this many seconds
+   * (default 4.5). A knob so the DGX vocal bench (dense vs sparse lyrics) can
+   * be acted on without a code change.
+   */
+  lyricSecondsPerLine?: number;
 }
 
-const SYSTEM_PROMPT = [
+/**
+ * "4-5" for 4.5, "6" for 6: the prompt has always said "one short line per 4-5
+ * seconds", and the default must keep producing that exact sentence.
+ */
+function lineSpan(seconds: number): string {
+  const lo = Math.floor(seconds);
+  const hi = Math.ceil(seconds);
+  return lo === hi ? String(lo) : `${lo}-${hi}`;
+}
+
+const systemPrompt = (secondsPerLine: number) => [
   'You turn a music creator\'s description into structured parameters for song generation.',
   '',
   'Rules:',
@@ -78,7 +94,7 @@ const SYSTEM_PROMPT = [
   ' "brief":"short English production brief, max 400 chars, mood/instrumentation only",',
   ' "lyrics":<when vocalMode is with_vocals: the request user_lyrics verbatim if given;',
   '   if write_lyrics is true, ORIGINAL singable lyrics in the language of user_text,',
-  '   sized to durationSeconds (about one short line per 4-5 seconds), sectioned with',
+  `   sized to durationSeconds (about one short line per ${lineSpan(secondsPerLine)} seconds), sectioned with`,
   '   [verse] / [chorus] / [bridge] tags on their own lines, no title, no quotes from',
   '   existing songs. null when vocalMode is instrumental>,',
   ' "title":<short evocative title, max 120 chars, or null when the creator named it>}',
@@ -100,6 +116,7 @@ export class TokenStarsTextProvider implements TextProvider {
       structuredOutputs: cfg.structuredOutputs ?? false,
       timeoutMs: cfg.timeoutMs ?? 20_000,
       estimatedCostMinorPerRequest: cfg.estimatedCostMinorPerRequest ?? 1,
+      lyricSecondsPerLine: Math.min(10, Math.max(2, cfg.lyricSecondsPerLine ?? 4.5)),
       ...(cfg.requestIdHeader ? { requestIdHeader: cfg.requestIdHeader } : {}),
     };
   }
@@ -292,14 +309,16 @@ export class TokenStarsTextProvider implements TextProvider {
 
     const maxTokens =
       this.budgetFor(req.mode === 'custom' ? req.lyrics : null) +
-      // ~1 short line per 4-5s; CJK runs near one token per character.
-      (writeLyrics ? Math.ceil(req.durationSeconds / 4.5) * 24 + 200 : 0);
+      // ~1 short line per N seconds; CJK runs near one token per character.
+      // Never budgeted sparser than the 4.5s default: max_tokens is only a
+      // ceiling, and a model that writes denser than asked must not truncate.
+      (writeLyrics ? Math.ceil(req.durationSeconds / Math.min(4.5, this.cfg.lyricSecondsPerLine)) * 24 + 200 : 0);
 
     let res;
     try {
       res = await this.call(
         [
-          { role: 'system', content: SYSTEM_PROMPT },
+          { role: 'system', content: systemPrompt(this.cfg.lyricSecondsPerLine) },
           { role: 'user', content: userMessage },
         ],
         { maxTokens },
@@ -383,7 +402,7 @@ export class TokenStarsTextProvider implements TextProvider {
     try {
       repair = await this.call(
         [
-          { role: 'system', content: SYSTEM_PROMPT },
+          { role: 'system', content: systemPrompt(this.cfg.lyricSecondsPerLine) },
           { role: 'user', content: userMessage },
           { role: 'assistant', content },
           {

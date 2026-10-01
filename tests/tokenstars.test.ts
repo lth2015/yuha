@@ -211,6 +211,28 @@ describe('vocals without lyrics', () => {
     expect(res.status === 'ok' && res.intent.lyrics).toBe('[verse]\n夜の道');
   });
 
+  it('sizes written lyrics by LYRIC_SECONDS_PER_LINE, keeping the old sentence by default', async () => {
+    const reply = completion(JSON.stringify({ ...INTENT, lyrics: '[verse]\n夜の道' }));
+    const system = (c: { body: Record<string, unknown> }) =>
+      (c.body['messages'] as Array<{ content: string }>)[0]!.content;
+
+    let calls = stub(reply);
+    await provider().extractIntent(request());
+    expect(system(calls[0]!)).toContain('about one short line per 4-5 seconds');
+    const defaultBudget = calls[0]!.body['max_tokens'] as number;
+
+    calls = stub(reply);
+    await provider({ lyricSecondsPerLine: 6.5 }).extractIntent(request());
+    expect(system(calls[0]!)).toContain('about one short line per 6-7 seconds');
+    // Sparser is a request, not a guarantee; the ceiling never shrinks below the default's.
+    expect(calls[0]!.body['max_tokens']).toBe(defaultBudget);
+
+    calls = stub(reply);
+    await provider({ lyricSecondsPerLine: 3 }).extractIntent(request());
+    expect(system(calls[0]!)).toContain('about one short line per 3 seconds');
+    expect(calls[0]!.body['max_tokens'] as number).toBeGreaterThan(defaultBudget);
+  });
+
   it('does not ask for lyrics on an instrumental, or when the creator wrote their own', async () => {
     const calls = stub(completion(JSON.stringify({ ...INTENT, vocalMode: 'instrumental' })));
     await provider().extractIntent(request({ instrumental: true }));

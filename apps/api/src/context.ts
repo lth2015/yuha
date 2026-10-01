@@ -155,6 +155,7 @@ function buildText(cfg: AppConfig): TextProvider {
     structuredOutputs: cfg.TOKENSTARS_STRUCTURED_OUTPUTS,
     timeoutMs: cfg.TOKENSTARS_TIMEOUT_MS,
     estimatedCostMinorPerRequest: cfg.TOKENSTARS_COST_MINOR_PER_REQUEST,
+    lyricSecondsPerLine: cfg.LYRIC_SECONDS_PER_LINE,
   });
 }
 
