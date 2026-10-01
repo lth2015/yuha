@@ -4,6 +4,7 @@ import {
   recoverUngrantedOrders,
   reconcilePendingCheckouts,
   reconcileUngrantedSubscriptions,
+  sweepExpiredTrackAudio,
 } from '@yuha/api';
 import {
   claimJob,
@@ -232,6 +233,21 @@ export async function maintenanceLoop(deps: LoopDeps, intervalMs = 60_000): Prom
       const subscriptions = await reconcileUngrantedSubscriptions(ctx);
       if (subscriptions) {
         log('warn', 'granted subscription periods whose invoice never arrived', { count: subscriptions });
+      }
+
+      /*
+       * Audio of songs their owners deleted more than TRACK_RETENTION_DAYS ago.
+       *
+       * `info`, not `warn`: unlike the two sweeps above, reaching this is not
+       * the symptom of anything. It is the retention promise being kept on
+       * schedule, and a warning would teach whoever reads these logs to ignore
+       * the word.
+       */
+      const purged = await sweepExpiredTrackAudio(ctx, {
+        log: { error: (obj, msg) => log('error', msg, obj as Record<string, unknown>) },
+      });
+      if (purged.removed || purged.failed) {
+        log('info', 'removed audio past the retention window', purged as unknown as Record<string, unknown>);
       }
 
       const drift = await reconcileBalances();

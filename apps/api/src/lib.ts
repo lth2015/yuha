@@ -50,3 +50,6 @@ export {
   reconcilePendingCheckouts,
   reconcileUngrantedSubscriptions,
 } from './services/webhooks.js';
+
+export { sweepExpiredTrackAudio, type RetentionSweepResult } from './services/retention.js';
+export { executeAccountDeletion, type DeletionOutcome } from './services/deletion.js';

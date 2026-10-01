@@ -197,6 +197,17 @@ const envSchema = z.object({
   JOB_DELAY_WARNING_SECONDS: int(180),
   JOB_VERIFY_DEADLINE_SECONDS: int(900),
   AUDIO_DURATION_TOLERANCE_MS: int(750),
+  /**
+   * How long a song the owner deleted stays recoverable before its audio is
+   * really removed.
+   *
+   * A soft delete has always kept the file — that is what makes deleting the
+   * wrong song survivable — and nothing ever came back for it, so every song
+   * anyone ever deleted is still stored. 90 days is the product's answer to
+   * "how long is a mistake fixable", decided rather than inherited; 0 disables
+   * the sweep for an operator who wants to keep everything.
+   */
+  TRACK_RETENTION_DAYS: int(90),
   AUDIO_MIN_MEAN_VOLUME_DB: z
     .string()
     .optional()

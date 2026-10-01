@@ -420,3 +420,48 @@ export async function listAssets(trackId: string, tx?: PoolConnection): Promise<
     tx,
   );
 }
+
+export interface ExpiredTrackAsset {
+  track_id: string;
+  asset_id: string;
+  storage_key: string;
+}
+
+/**
+ * Audio belonging to tracks the owner deleted long enough ago.
+ *
+ * A soft delete takes the song out of the library and leaves the file in
+ * place, which is what makes "I deleted the wrong one" recoverable. Nothing
+ * ever came back for those files, so every song anyone ever deleted is still
+ * stored — the retention promise had no expiry and the storage had no floor.
+ *
+ * The two holds are the same ones account deletion applies, and for the same
+ * reasons: evidence in an open rights case is not ours to discard, and a song
+ * somebody else licensed has a buyer who paid to keep downloading it. A hold
+ * here is permanent only while it lasts; the row is simply not returned until
+ * the case closes.
+ */
+export async function listExpiredTrackAssets(params: {
+  olderThanDays: number;
+  limit: number;
+}): Promise<ExpiredTrackAsset[]> {
+  return query<ExpiredTrackAsset>(
+    `SELECT t.id AS track_id, a.id AS asset_id, a.storage_key
+       FROM tracks t
+       JOIN asset_versions a ON a.track_id = t.id
+      WHERE t.deleted_at IS NOT NULL
+        AND t.deleted_at < DATE_SUB(UTC_TIMESTAMP(3), INTERVAL ? DAY)
+        AND NOT EXISTS (SELECT 1 FROM rights_cases rc
+                         WHERE rc.track_id = t.id
+                           AND rc.status IN ('received','under_review','suspended'))
+        AND NOT EXISTS (SELECT 1 FROM track_licenses tl WHERE tl.track_id = t.id)
+      ORDER BY t.deleted_at
+      LIMIT ?`,
+    [params.olderThanDays, params.limit],
+  );
+}
+
+/** Drops the asset row once its object is gone. */
+export async function forgetAsset(assetId: string): Promise<void> {
+  await execute(`DELETE FROM asset_versions WHERE id = ?`, [assetId]);
+}
