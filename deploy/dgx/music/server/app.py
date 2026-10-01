@@ -45,6 +45,19 @@ CHECKPOINT_DIR = os.environ.get("ACE_CHECKPOINT_DIR", "/root/.cache/ace-step/che
 MAX_QUEUE = int(os.environ.get("MAX_QUEUE", "8"))
 INFER_STEPS = int(os.environ.get("ACE_INFER_STEPS", "60"))
 MP3_BITRATE = os.environ.get("MP3_BITRATE", "192k")
+# Mastering, applied to the delivered mp3. Off by setting MASTER_POLISH=off, so
+# a bad sounding change can be reverted without a redeploy of this code.
+MASTER_POLISH = os.environ.get("MASTER_POLISH", "on").lower() != "off"
+MASTER_LUFS = float(os.environ.get("MASTER_LUFS", "-14"))     # streaming-era target
+MASTER_TP = float(os.environ.get("MASTER_TP", "-1.5"))        # true-peak ceiling, dBTP
+MASTER_LRA = float(os.environ.get("MASTER_LRA", "11"))        # loudness range
+FADE_IN_MS = int(os.environ.get("FADE_IN_MS", "30"))          # kills the click on the first sample
+FADE_OUT_MS = int(os.environ.get("FADE_OUT_MS", "1500"))      # an ending, instead of a cut
+# Below this, the render is near-silent and must stay that way: the app's own
+# output check (`silent_or_near_silent`) is what catches an empty generation,
+# and normalising one up to -14 LUFS would hide it behind a wall of amplified
+# noise. See the note on _master().
+MASTER_SILENCE_FLOOR_DB = float(os.environ.get("MASTER_SILENCE_FLOOR_DB", "-45"))
 MIN_DUR, MAX_DUR = 10, 240
 WHISPER_MODEL = os.environ.get("WHISPER_MODEL", "turbo")
 ALIGN_MIN_COVERAGE = float(os.environ.get("ALIGN_MIN_COVERAGE", "0.15"))
@@ -421,6 +434,90 @@ def render(req: dict, out_dir: Path, *, seed: Optional[int] = None, tag_style: O
     return cands[-1]
 
 
+def _probe_seconds(path: Path) -> float:
+    out = subprocess.run(
+        ["ffprobe", "-v", "error", "-show_entries", "format=duration",
+         "-of", "default=nw=1:nk=1", str(path)],
+        capture_output=True, text=True, check=True,
+    ).stdout.strip()
+    return float(out)
+
+
+def _mean_volume_db(path: Path) -> Optional[float]:
+    """Mean volume in dBFS, or None when ffmpeg does not report it."""
+    proc = subprocess.run(
+        ["ffmpeg", "-hide_banner", "-nostats", "-i", str(path),
+         "-af", "volumedetect", "-f", "null", "-"],
+        capture_output=True, text=True,
+    )
+    m = re.search(r"mean_volume:\s*(-?\d+(?:\.\d+)?) dB", proc.stderr)
+    return float(m.group(1)) if m else None
+
+
+def _master(src: Path, dst: Path, *, want_seconds: float) -> dict:
+    """
+    Encode the delivered mp3, with the polish the app's own exports already get.
+
+    The export path in the main repo
+    (`packages/providers/src/audio/ffmpeg.ts`) runs
+    `loudnorm=I=-14:TP=-1.5:LRA=11` and a fade before encoding, so a 30-second
+    clip someone downloads is levelled and ends cleanly. The master — the thing
+    everyone actually listens to — was a bare `libmp3lame` transcode of
+    whatever ACE-Step produced. Two songs in a row therefore arrive at two
+    different volumes, and a diffusion render tends to start and stop mid-air,
+    which is the "unpolished" the trial group hears first.
+
+    Three deliberate limits:
+
+      - **Duration is not touched.** Trimming leading or trailing silence would
+        be the obvious third improvement, and it would break the product: the
+        worker rejects a delivery whose length differs from the request by more
+        than `AUDIO_DURATION_TOLERANCE_MS` (750ms) with
+        `duration_out_of_tolerance`, refunding the credit. The output is pinned
+        to the source length instead; trimming needs that contract changed
+        first, deliberately, not as a side effect of mastering.
+      - **A near-silent render is left alone.** `loudnorm` would happily lift an
+        empty generation to -14 LUFS, and the check that exists to catch
+        exactly that (`silent_or_near_silent`, on mean volume) would then pass.
+        A failed render must keep looking like one.
+      - **Single-pass `loudnorm`.** Two-pass is more accurate and doubles the
+        ffmpeg work on a box that is already the bottleneck. The error is a
+        fraction of a dB, well under what anyone hears across two songs.
+    """
+    applied: dict = {"polish": False}
+    filters: list[str] = []
+
+    if MASTER_POLISH:
+        mean_db = _mean_volume_db(src)
+        applied["mean_volume_db"] = mean_db
+        if mean_db is not None and mean_db < MASTER_SILENCE_FLOOR_DB:
+            applied["skipped"] = "near_silent"
+            log.warning("master: %s is near-silent (%.1f dB), leaving it unnormalised",
+                        src.name, mean_db)
+        else:
+            filters.append(f"loudnorm=I={MASTER_LUFS}:TP={MASTER_TP}:LRA={MASTER_LRA}")
+            if FADE_IN_MS > 0:
+                filters.append(f"afade=t=in:st=0:d={FADE_IN_MS / 1000:.3f}")
+            if FADE_OUT_MS > 0:
+                start = max(0.0, want_seconds - FADE_OUT_MS / 1000)
+                filters.append(f"afade=t=out:st={start:.3f}:d={FADE_OUT_MS / 1000:.3f}")
+            applied.update(polish=True, lufs=MASTER_LUFS, tp=MASTER_TP,
+                           fade_in_ms=FADE_IN_MS, fade_out_ms=FADE_OUT_MS)
+
+    args = ["ffmpeg", "-y", "-loglevel", "error", "-i", str(src)]
+    if filters:
+        args += ["-af", ",".join(filters)]
+    # `-t` bounds the filtered stream so `loudnorm` cannot decide the length.
+    # It does not make the file exact: libmp3lame adds its own encoder delay and
+    # frame padding, measured here at +42.4ms on a 12.000s source — and the same
+    # +42.4ms comes out of today's bare transcode, so this is the format, not
+    # this chain. The worker tolerates 750ms.
+    args += ["-t", f"{want_seconds:.3f}", "-codec:a", "libmp3lame",
+             "-b:a", MP3_BITRATE, "-ar", "44100", str(dst)]
+    subprocess.run(args, check=True)
+    return applied
+
+
 def intelligibility(path: Path, lyrics: str) -> float:
     """Share of the lyric characters Whisper heard, in order (0..1)."""
     from align import align_lines
@@ -453,18 +550,11 @@ def run_generation(job: dict) -> None:
         job["intelligibility"] = round(scored[0][0], 3)
 
     mp3_path = AUDIO_DIR / f"{job['id']}.mp3"
-    subprocess.run(
-        ["ffmpeg", "-y", "-loglevel", "error", "-i", str(produced),
-         "-codec:a", "libmp3lame", "-b:a", MP3_BITRATE, str(mp3_path)],
-        check=True,
-    )
+    # The render's own length, not the requested one: ACE-Step is close but not
+    # exact, and pinning to the request would cut or pad every song by its error.
+    job["master"] = _master(produced, mp3_path, want_seconds=_probe_seconds(produced))
     shutil.rmtree(work, ignore_errors=True)
-    dur = subprocess.run(
-        ["ffprobe", "-v", "error", "-show_entries", "format=duration",
-         "-of", "default=nw=1:nk=1", str(mp3_path)],
-        capture_output=True, text=True, check=True,
-    ).stdout.strip()
-    job["audio_seconds"] = round(float(dur), 2)
+    job["audio_seconds"] = round(_probe_seconds(mp3_path), 2)
     job["audio_bytes"] = mp3_path.stat().st_size
 
 
