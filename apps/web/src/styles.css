@@ -68,6 +68,11 @@
   --s12: 48px;
   --s16: 64px;
   --tap: 44px;
+  /* One value for "this control is off". It was 0.35/0.38/0.4/0.45/0.5
+     across seven rules, so the same state read five ways. Disabled
+     controls are outside the WCAG contrast requirement, which is why
+     check-contrast.mjs allowlists this token rather than measuring it. */
+  --o-disabled: 0.45;
 
   /* On light, elevation is a soft warm shadow (brand: 0 8px 32px ink/6%). */
   --shadow-raised: 0 8px 32px rgb(32 34 31 / 6%);
@@ -439,7 +444,7 @@ html:has(.player-bar) { scroll-padding-bottom: 100px; }
 }
 .btn:hover { border-color: var(--ink); }
 .btn:active { transform: scale(0.98); }
-.btn:disabled { opacity: 0.45; cursor: default; transform: none; }
+.btn:disabled { opacity: var(--o-disabled); cursor: default; transform: none; }
 .btn--primary { background: var(--ink); border-color: var(--ink); color: #fff; font-weight: 600; }
 .btn--primary:hover:not(:disabled) { background: #3a3d37; border-color: #3a3d37; }
 .btn--primary:disabled { background: var(--surface-soft); border-color: var(--surface-soft); color: var(--muted); }
@@ -459,7 +464,7 @@ html:has(.player-bar) { scroll-padding-bottom: 100px; }
 }
 .btn-icon:hover:not(:disabled) { background: var(--surface-soft); }
 .btn-icon:active { transform: scale(0.96); }
-.btn-icon:disabled { opacity: 0.35; cursor: default; }
+.btn-icon:disabled { opacity: var(--o-disabled); cursor: default; }
 .btn-icon--main { width: 48px; height: 48px; background: var(--petal); color: #1b0a03; }
 .btn-icon--main:hover { background: #ff8259; }
 
@@ -489,6 +494,20 @@ html:has(.player-bar) { scroll-padding-bottom: 100px; }
    background-image and takes the sheen layer with it. */
 .panel { background-color: var(--glass); border-radius: var(--r-card); padding: var(--s6); }
 .panel--tight { padding: var(--s4); }
+
+/* `.card` and `.grid` were referenced 20 times by Admin and Project and
+   defined nowhere, so the whole operations console rendered as unstyled
+   run-together text and every tile's `style={{ gap: 4 }}` was inert for
+   want of a `display: flex` to apply it to. A card is a panel at tile
+   scale: same material, smaller padding, a hairline so a grid of them
+   reads as separate figures rather than one block of numbers. */
+.card {
+  display: flex; flex-direction: column; gap: var(--s2);
+  background-color: var(--glass); border: 1px solid var(--line);
+  border-radius: var(--r-control); padding: var(--s4);
+  transition: border-color var(--t-ui) var(--ease-ui);
+}
+.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: var(--s4); }
 .stack { display: flex; flex-direction: column; gap: var(--s4); }
 .stack--tight { gap: var(--s2); }
 .stack--loose { gap: var(--s8); }
@@ -502,7 +521,23 @@ html:has(.player-bar) { scroll-padding-bottom: 100px; }
 .section-head__more { font-size: 14px; font-weight: 500; color: var(--muted); }
 .section-head__more:hover { color: var(--link); }
 
-.empty { border: 1px dashed var(--control-line); border-radius: var(--r-card); padding: var(--s12) var(--s4); text-align: center; color: var(--muted); display: flex; flex-direction: column; align-items: center; gap: var(--s4); }
+/* Five screens end here when there is nothing yet — the library, search with
+   no match, a project, the plan grid, 404 — and it was a flat grey column
+   inside a dashed grey rectangle 48px tall, which is the largest colourless
+   area in the app. The heading also carried `var(--text)`, a property that is
+   not in :root, so it fell through to this rule's own --muted and was
+   indistinguishable from the sentence under it. */
+.empty {
+  border: 1px solid color-mix(in srgb, var(--petal) 28%, var(--line));
+  border-radius: var(--r-card);
+  padding: var(--s12) var(--s4);
+  text-align: center; color: var(--muted);
+  display: flex; flex-direction: column; align-items: center; gap: var(--s4);
+  background-color: var(--surface-soft);
+  background-image: radial-gradient(120% 90% at 50% -20%, var(--petal-soft) 0%, transparent 62%);
+}
+.empty :is(h1, h2, h3) { margin: 0; font-size: 20px; color: var(--ink); }
+.empty p { margin: 0; max-width: 46ch; }
 .load-more { display: flex; justify-content: center; margin-top: var(--s6); }
 
 .alert { border-radius: var(--r-control); border: 1px solid var(--line); padding: 14px 16px; margin: 0 0 var(--s4); background-color: var(--glass); }
@@ -554,7 +589,7 @@ textarea { resize: vertical; line-height: 1.7; }
 input:focus-visible, textarea:focus-visible, select:focus-visible, .btn:focus-visible, .btn-icon:focus-visible, .chip:focus-visible, .seg__btn:focus-visible, .song-card__play:focus-visible, .account__btn:focus-visible, .topnav__link:focus-visible {
   outline: 2px solid var(--focus); outline-offset: 3px;
 }
-input:disabled { opacity: 0.5; }
+input:disabled { opacity: var(--o-disabled); }
 .field-count { text-align: right; font-size: 12px; color: var(--muted); margin-top: 4px; }
 .checkbox-row { display: flex; align-items: flex-start; gap: 10px; margin: var(--s2) 0; }
 .checkbox-row input[type='checkbox'] { width: 20px; height: 20px; margin-top: 3px; accent-color: var(--ink); flex: none; }
@@ -574,10 +609,28 @@ input[type='range'] { width: 100%; accent-color: var(--ink); min-height: var(--t
 /* A disabled chip (the 7th style tag) kept the enabled border, the hover
    lift and cursor:pointer, so the only sign the limit had been reached was
    that clicking did nothing. */
-.chip--btn:disabled { opacity: 0.38; cursor: default; border-color: var(--line); }
+.chip--btn:disabled { opacity: var(--o-disabled); cursor: default; border-color: var(--line); }
 .chip--btn:disabled:hover { border-color: var(--line); }
 .chip--btn:disabled:active { transform: none; }
 .chip--btn.is-on, .chip--mood[aria-pressed='true'] { background: var(--ink); color: var(--bg); border-color: var(--ink); }
+
+/* `<Badge>` is rendered on Checkout, Export, Project, Billing and Admin —
+   subscription status, licence status, track state, order status, the run
+   mode — and `.badge` was never written, so every one of them came out as
+   plain inline text. The tones are the ones the components actually ask
+   for; a badge with no tone is neutral, not invisible. */
+.badge {
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 3px 10px; border-radius: 999px;
+  border: 1px solid var(--line-strong);
+  background-color: var(--surface-soft);
+  font-size: 12px; font-weight: 500; line-height: 1.5;
+  color: var(--muted); white-space: nowrap;
+}
+.badge--ok { color: var(--ok); border-color: color-mix(in srgb, var(--ok) 45%, transparent); background-color: color-mix(in srgb, var(--ok) 10%, var(--surface-solid)); }
+.badge--warn { color: var(--warning); border-color: color-mix(in srgb, var(--warning) 45%, transparent); background-color: color-mix(in srgb, var(--warning) 10%, var(--surface-solid)); }
+.badge--danger { color: var(--danger); border-color: color-mix(in srgb, var(--danger) 45%, transparent); background-color: color-mix(in srgb, var(--danger) 10%, var(--surface-solid)); }
+.badge--accent { color: var(--link); border-color: color-mix(in srgb, var(--petal) 55%, transparent); background-color: var(--petal-soft); }
 
 .seg { display: inline-flex; padding: 3px; gap: 2px; border-radius: var(--r-control); background: var(--surface-soft); border: 1px solid var(--line); }
 .seg--wide { display: flex; }
@@ -715,8 +768,21 @@ tr:last-child td { border-bottom: none; }
   position: absolute; left: 14px; top: 12px;
   font-size: 11px; font-weight: 600; letter-spacing: 0.08em;
   /* sits on the sleeve, not the page */
-  color: rgb(255 255 255 / 88%);
-  text-shadow: 0 1px 2px rgb(0 0 0 / 18%);
+  color: rgb(255 255 255 / 92%);
+  /*
+   * CoverArt places the gradient's light stop at a seeded random point in
+   * x 14-86%, y 8-92% (CoverArt.tsx). The index is pinned near (4%, 4%), so
+   * depending only on the seed this white sat on anything from the deep edge
+   * (about 8:1) to the lit centre of `ember` or `teal` (about 1.3:1). The
+   * stylesheet cannot see that and neither can check-contrast.mjs, which
+   * reads tokens and not canvas. A scrim makes the ground the index sits on
+   * a property of this rule instead of a property of the seed.
+   */
+  padding: 2px 7px; border-radius: 999px;
+  background-color: rgb(16 16 14 / 42%);
+  -webkit-backdrop-filter: blur(6px);
+  backdrop-filter: blur(6px);
+  text-shadow: none;
 }
 .cover-art.is-playing { box-shadow: 0 0 0 2px var(--petal), var(--shadow-card); }
 
@@ -760,7 +826,7 @@ tr:last-child td { border-bottom: none; }
 }
 .song-card:hover .song-card__play, .song-card[data-active] .song-card__play, .song-card__play:focus-visible { opacity: 1; transform: translateY(0); }
 .song-card__play:active { transform: scale(0.96); }
-.song-card__play:disabled { opacity: 0.4; cursor: default; }
+.song-card__play:disabled { opacity: var(--o-disabled); cursor: default; }
 @media (hover: hover) {
   .song-card__art { transition: transform var(--t-ui) var(--ease-ui); }
   .song-card:hover .song-card__art { transform: translateY(-3px); }
@@ -840,6 +906,8 @@ tr:last-child td { border-bottom: none; }
 .player-bar__close:active { transform: translateY(-50%) scale(0.96); }
 .player-bar__close .icon { width: 16px; height: 16px; }
 .player-bar__hint { font-size: 12px; color: var(--muted); }
+/* Playback failure rendered in the same grey as the queue hint. */
+.player-bar__hint--err { color: var(--danger); font-weight: 500; }
 .player-bar__queue { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: var(--muted); }
 
 /* legacy per-page player */
@@ -952,7 +1020,7 @@ tr:last-child td { border-bottom: none; }
 }
 .text-action:hover:not(:disabled) { border-color: var(--ink); box-shadow: var(--shadow-raised); transform: translateY(-1px); }
 .text-action:active:not(:disabled) { transform: scale(0.98); }
-.text-action:disabled { opacity: 0.45; cursor: default; }
+.text-action:disabled { opacity: var(--o-disabled); cursor: default; }
 .text-action.is-danger {
   margin-left: auto;
   color: var(--danger); background: transparent; box-shadow: none;
@@ -971,13 +1039,23 @@ tr:last-child td { border-bottom: none; }
 .lyrics-sync { position: relative; max-height: 420px; overflow-y: auto; padding: var(--s6) 4px; -webkit-mask-image: linear-gradient(to bottom, transparent, #000 12%, #000 86%, transparent); mask-image: linear-gradient(to bottom, transparent, #000 12%, #000 86%, transparent); scrollbar-width: none; }
 .lyrics-sync::-webkit-scrollbar { display: none; }
 .lyrics-sync__pill { display: inline-flex; align-items: center; gap: 6px; margin-bottom: var(--s4); padding: 4px 12px; border-radius: 999px; font-size: 11px; font-weight: 600; letter-spacing: 0.1em; color: var(--muted); border: 1px solid var(--line); background: var(--surface-soft); }
-.lyrics-sync__pill.is-aligned { color: var(--petal-deep); border-color: color-mix(in srgb, var(--petal) 40%, transparent); }
+.lyrics-sync__pill.is-aligned { color: var(--link); border-color: color-mix(in srgb, var(--petal) 40%, transparent); }
 .lyrics-sync__marker { display: block; margin: var(--s4) 0 4px; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.16em; color: var(--muted); }
-.lyrics-sync__line { position: relative; display: block; width: 100%; text-align: left; border: none; background: none; padding: 6px 0; font: inherit; font-size: clamp(17px, 1.6vw, 22px); font-weight: 500; color: var(--muted); opacity: 0.55; cursor: pointer; transition: opacity 0.3s var(--ease-out), transform 0.3s var(--ease-out), color 0.3s var(--ease-out); transform-origin: left center; }
-.lyrics-sync__line:hover { opacity: 0.8; }
-.lyrics-sync__line.is-past { opacity: 0.35; }
+/* These four rules carried --muted at 0.55 and 0.35, i.e. 2.25:1 and
+   1.63:1 — the lyrics of the song, on the song page, below the 4.5:1 floor
+   the gate reports --muted passing at 5.03:1. opacity was the whole gap:
+   the gate read the token and not the fade. The hierarchy is the same one,
+   rebuilt out of colour, weight and scale instead, with the fade kept
+   where it is not carrying text — the container's mask. */
+.lyrics-sync__line { position: relative; display: block; width: 100%; text-align: left; border: none; background: none; padding: 6px 0; font: inherit; font-size: clamp(17px, 1.6vw, 22px); font-weight: 500; color: var(--ink); opacity: 0.66; cursor: pointer; transition: opacity 0.3s var(--ease-out), transform 0.3s var(--ease-out), color 0.3s var(--ease-out); transform-origin: left center; }
+.lyrics-sync__line:hover { color: var(--ink); opacity: 0.85; }
+/* Sung lines settle to grey, as on a karaoke screen — a colour change,
+   not a fade, so they stay readable after the song moves on. */
+.lyrics-sync__line.is-past { color: var(--muted); opacity: 1; }
 .lyrics-sync__line.is-active { opacity: 1; color: var(--ink); transform: scale(1.02); }
-.lyrics-sync__fill { position: absolute; inset: 0; padding: inherit; text-align: inherit; color: var(--petal-deep); clip-path: inset(0 calc(100% - var(--fill, 0%)) 0 0); transition: clip-path 0.18s linear; pointer-events: none; white-space: nowrap; overflow: hidden; }
+/* Brand §3, and the note in check-contrast.mjs: orange *text* is --link.
+   --petal-deep is 3.43:1 on --surface-soft, under the floor for 17px. */
+.lyrics-sync__fill { position: absolute; inset: 0; padding: inherit; text-align: inherit; color: var(--link); clip-path: inset(0 calc(100% - var(--fill, 0%)) 0 0); transition: clip-path 0.18s linear; pointer-events: none; white-space: nowrap; overflow: hidden; }
 .lyrics-sync--compact .lyrics-sync__line { font-size: 16px; }
 
 /* now playing (light glass sheet) */
@@ -1044,13 +1122,18 @@ tr:last-child td { border-bottom: none; }
 .now-playing__lyrics .lyrics-sync__marker { display: none; }
 .now-playing__lyrics .lyrics-sync__line {
   font-size: clamp(22px, 2.2vw, 32px); font-weight: 600; padding: 12px 0; letter-spacing: 0.01em;
-  color: var(--ink); opacity: 0.28; filter: blur(0.4px);
+  /* 0.28 was 1.78:1: not a quiet line, an invisible one. 22px/600 is
+     WCAG large text, which is what earns the lower floor here. */
+  --contrast-floor: 3;
+  color: var(--ink); opacity: 0.62; filter: blur(0.4px);
   transition: opacity 0.4s var(--ease-out), transform 0.4s var(--ease-out), filter 0.4s var(--ease-out);
 }
-.now-playing__lyrics .lyrics-sync__line.is-past { opacity: 0.22; }
+.now-playing__lyrics .lyrics-sync__line.is-past { --contrast-floor: 3; color: var(--ink); opacity: 0.5; }
 .now-playing__lyrics .lyrics-sync__line.is-active { opacity: 1; filter: none; transform: scale(1.06); }
 .now-playing__lyrics .lyrics-sync__fill {
-  background: linear-gradient(90deg, var(--petal) 0%, var(--petal-deep) 100%);
+  /* --petal is 2.7:1 on warm white; the sweep now runs between the two
+     warm tokens that clear the large-text floor. */
+  background: linear-gradient(90deg, var(--petal-deep) 0%, var(--link) 100%);
   -webkit-background-clip: text; background-clip: text; color: transparent;
 }
 /* sung lines go back to grey, as in a karaoke screen */
@@ -1253,7 +1336,7 @@ tr:last-child td { border-bottom: none; }
    as a sheet you write on, not a box. The folded fields are ordinary
    fields, so they take the form styling back. */
 .studio__more-panel textarea { border: 1px solid var(--line); background: var(--surface); padding: 10px 14px; }
-.studio__more-panel textarea:disabled { opacity: 0.5; }
+.studio__more-panel textarea:disabled { opacity: var(--o-disabled); }
 .studio__more-panel .composer__meta { margin-top: 4px; }
 
 .studio__submit { margin-top: var(--s6); align-items: center; }
@@ -1487,6 +1570,14 @@ tr:last-child td { border-bottom: none; }
 .hero__copy > :nth-child(3) { animation-delay: 160ms; }
 .hero__copy > :nth-child(4) { animation-delay: 220ms; }
 .hero > .art-panel { animation-delay: 140ms; }
+
+/* `style={{ '--i': index }}` in SongCard had no reader. Keys are stable
+   across a refetch, so this runs on mount only, not on every poll. */
+.grid--songs > .song-card,
+.masonry > .song-card {
+  animation: rise var(--t-panel) var(--ease-spring) both;
+  animation-delay: min(calc(var(--i, 0) * 40ms), 280ms);
+}
 
 /* Pressing glass pushes it into the field. */
 .btn, .chip--btn, .song-card {

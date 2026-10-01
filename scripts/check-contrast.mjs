@@ -106,4 +106,127 @@ if (failures.length) {
   console.log('\nRaise the token, or if it is only ever used at >=18.66px, move it out of TEXT_TOKENS and say where.');
   process.exit(1);
 }
-console.log(`\n✓ ${rows.length} text tokens clear WCAG AA on every surface they sit on`);
+/*
+ * Second pass: the fade.
+ *
+ * The first pass reports `--muted` at 5.03:1 and is telling the truth about
+ * the token. It was not telling the truth about the screen, because six rules
+ * then multiplied those tokens by an `opacity` between 0.22 and 0.55 — and the
+ * lyrics of a song, on the song page, rendered at 2.25:1 under a green build.
+ * Rule 10 again, one layer down: the gate written to stop a contrast failure
+ * could not see the property that was causing one.
+ *
+ * A block is checked when it sets `opacity` strictly between 0 and 1. It must
+ * then also set `color: var(--token)` in the same block, so the fade can be
+ * measured without resolving the cascade — refusing to guess is the point.
+ * A block carrying large text may lower its floor to WCAG's 3:1 by declaring
+ * `--contrast-floor: 3`, which is an inert custom property chosen over a
+ * comment so that the exception is parsed rather than taken on trust.
+ */
+const DECORATIVE = [
+  // Not text: light-field lobes, the two grain layers, the blurred halo, the
+  // drifting petal, the vinyl sheen. Nothing in these carries a glyph.
+  '.lightfield__lobe',
+  '.lightfield__grain',
+  '.app__grain',
+  '.now-playing::after',
+  '.now-playing__halo-art',
+  '.app__drift-petal',
+  '.vinyl__sheen',
+];
+
+/** Comments out, so a prose comment above a rule is never read as a selector. */
+const bare = src.replace(/\/\*[\s\S]*?\*\//g, '');
+
+const fades = [];
+{
+  const re = /([^{}]+)\{([^{}]*)\}/g;
+  let m;
+  while ((m = re.exec(bare))) {
+    const selector = m[1].trim().split('\n').map((l) => l.trim()).join(' ');
+    const body = m[2];
+    // Keyframe steps, not rules.
+    if (/^(from|to)$/.test(selector) || /^[\d%.,\s]+$/.test(selector)) continue;
+    if (selector.startsWith('@') || selector.startsWith(':root')) continue;
+    const raw = /(?:^|;|\s)opacity:\s*([^;}]+)/.exec(body);
+    if (!raw) continue;
+    const literal = raw[1].trim();
+    if (literal.startsWith('var(')) {
+      // `opacity: var(--o-disabled)` is the one indirection allowed, because a
+      // disabled control is outside the WCAG contrast requirement. Any other
+      // variable would walk straight past this check.
+      if (!literal.includes('--o-disabled')) {
+        failures.push(
+          `${selector} sets \`opacity: ${literal}\`. This gate measures literal ` +
+            `opacities; name the value here, or use --o-disabled if the rule is a ` +
+            `disabled state.`,
+        );
+      }
+      continue;
+    }
+    const alpha = Number(literal);
+    if (!Number.isFinite(alpha)) continue;
+    // 0 is hidden, 1 is opaque: neither is a fade.
+    if (!(alpha > 0 && alpha < 1)) continue;
+    if (DECORATIVE.some((d) => selector.includes(d))) continue;
+    const col = /color:\s*var\((--[a-z-]+)\)/.exec(body);
+    const floor = /--contrast-floor:\s*([0-9.]+)/.exec(body);
+    fades.push({
+      selector,
+      alpha,
+      token: col ? col[1] : null,
+      floor: floor ? Number(floor[1]) : 4.5,
+    });
+  }
+}
+
+const over = (fg, bg, a) => rgb(fg).map((c, i) => c * a + rgb(bg)[i] * (1 - a));
+const ratioRaw = (a, b) => {
+  const [x, y] = [luminance(a), luminance(b)];
+  const [hi, lo] = x > y ? [x, y] : [y, x];
+  return (hi + 0.05) / (lo + 0.05);
+};
+
+if (fades.length) {
+  console.log('\nfaded text (colour x opacity, worst surface):');
+  for (const f of fades) {
+    const short = f.selector.length > 48 ? `${f.selector.slice(0, 45)}...` : f.selector;
+    if (!f.token) {
+      failures.push(
+        `${f.selector} sets opacity ${f.alpha} without a \`color\` in the same block, ` +
+          `so the rendered contrast cannot be measured. Declare the colour here, or ` +
+          `list the selector in DECORATIVE with the reason it carries no text.`,
+      );
+      console.log(`  ${short.padEnd(50)} opacity ${f.alpha}  — colour inherited, unmeasurable`);
+      continue;
+    }
+    const value = readToken(f.token);
+    if (!value) {
+      failures.push(`${f.selector} fades ${f.token}, which is not in :root`);
+      continue;
+    }
+    const worst = surfaces
+      .map(([name, bg]) => [name, ratioRaw(over(value, bg, f.alpha), rgb(bg))])
+      .reduce((a, b) => (a[1] <= b[1] ? a : b));
+    console.log(
+      `  ${short.padEnd(50)} ${f.token} @ ${f.alpha}  ${worst[1].toFixed(2)}  (min ${f.floor})`,
+    );
+    if (worst[1] < f.floor) {
+      failures.push(
+        `${f.selector} renders ${f.token} at ${worst[1].toFixed(2)}:1 on ${worst[0]} ` +
+          `(opacity ${f.alpha}), below ${f.floor}:1`,
+      );
+    }
+  }
+}
+
+if (failures.length) {
+  console.log(`\n${failures.length} failure(s):\n`);
+  for (const f of failures) console.log(`  ${f}`);
+  process.exit(1);
+}
+
+console.log(
+  `\n✓ ${rows.length} text tokens and ${fades.length} faded rules clear their floor ` +
+    `on every surface they sit on`,
+);

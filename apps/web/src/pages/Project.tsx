@@ -132,7 +132,7 @@ export default function Project() {
               <article
                 key={track.trackId}
                 className="card"
-                style={isSelected ? { borderColor: 'var(--accent)' } : undefined}
+                style={isSelected ? { borderColor: 'var(--petal)' } : undefined}
               >
                 <div className="row row--between">
                   <strong>{track.title}</strong>

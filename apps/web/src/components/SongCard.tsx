@@ -2,6 +2,7 @@ import { useCallback, useState } from 'react';
 import { Link } from 'react-router-dom';
 import type { TrackView } from '@yuha/contracts';
 import { apiFetch } from '../lib/api';
+import { TRACK_STATE_KEY } from '../lib/messages';
 import { useI18n } from '../lib/i18n';
 import { formatTime, usePlayer } from '../lib/player';
 import { useSession } from '../lib/session';
@@ -137,7 +138,9 @@ export function SongCard({
           <span className={playing ? 'icon icon--pause' : 'icon icon--play'} aria-hidden="true" />
         </button>
         {song.state !== 'deliverable' && (
-          <span className="song-card__badge">{song.state === 'processing' ? t('card.generating') : song.state}</span>
+          <span className="song-card__badge">
+            {song.state === 'processing' ? t('card.generating') : t(TRACK_STATE_KEY(song.state))}
+          </span>
         )}
         {/* "Your link is on" is something to tell an owner; on the showcase
             every card is public, so it would be noise on all of them. */}

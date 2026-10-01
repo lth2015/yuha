@@ -82,7 +82,7 @@ export function EmptyState({
 }) {
   return (
     <div className="empty">
-      <h3 style={{ color: 'var(--text)' }}>{title}</h3>
+      <h3>{title}</h3>
       <p>{description}</p>
       {action}
     </div>
@@ -192,31 +192,3 @@ export function AudioPlayer({
   );
 }
 
-/**
- * UI-04: coarse stages with an honest time range. There is deliberately no
- * percentage — we do not know how far along the upstream is, and inventing a
- * number would be a lie the user could act on.
- */
-const STAGE_ORDER = ['validating', 'queued', 'generating', 'processing', 'verifying'] as const;
-
-export function StageIndicator({ phase, delayed }: { phase: string; delayed: boolean }) {
-  const { t } = useI18n();
-  const index = STAGE_ORDER.indexOf(phase as (typeof STAGE_ORDER)[number]);
-  return (
-    <div className="stack stack--tight">
-      <div className="stages" role="img" aria-label={t('common.progressAria', { phase })}>
-        {STAGE_ORDER.map((s, i) => (
-          <div
-            key={s}
-            className={`stage ${i < index ? 'stage--done' : i === index ? 'stage--active' : ''}`}
-          />
-        ))}
-      </div>
-      <p className="small muted" style={{ margin: 0 }}>
-        {delayed
-          ? t('common.slowJob')
-          : t('common.normalJob')}
-      </p>
-    </div>
-  );
-}

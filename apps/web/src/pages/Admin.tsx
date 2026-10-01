@@ -76,7 +76,7 @@ function Metric({ label, m, percent = true }: { label: string; m: Measured; perc
       <span className="small muted">{label}</span>
       {m.value === null ? (
         <>
-          <strong style={{ color: 'var(--text-muted)' }}>{t('admin.notComputable')}</strong>
+          <strong style={{ color: 'var(--muted)' }}>{t('admin.notComputable')}</strong>
           <span className="small muted">{m.unavailableReason}</span>
         </>
       ) : (
@@ -252,7 +252,7 @@ export default function Admin() {
           </div>
           <div className="card" style={{ gap: 4 }}>
             <span className="small muted">{t('admin.cost.modelled')}</span>
-            <strong className="num" style={{ fontSize: 24, color: 'var(--text-muted)' }}>
+            <strong className="num" style={{ fontSize: 24, color: 'var(--muted)' }}>
               {formatMoney(overview.cost.estimatedCostMinor, overview.cost.currency)}
             </strong>
             {/* §11.2: modelled cost is never added to the invoiced figure. */}

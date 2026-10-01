@@ -65,7 +65,7 @@ export default function Account() {
       const qr = await QRCode.toDataURL(res.otpauthUri, {
         margin: 1,
         width: 220,
-        color: { dark: '#101115', light: '#ffffff' },
+        color: { dark: '#20221f', light: '#ffffff' },
       });
       setEnrollment({ ...res, qr });
       setRecoveryCodes(null);
