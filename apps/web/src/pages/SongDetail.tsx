@@ -10,6 +10,7 @@ import { useSession } from '../lib/session';
 import { CoverArt } from '../components/CoverArt';
 import { ErrorNotice } from '../components/common';
 import { Score } from '../components/Score';
+import { ShareMenu } from '../components/ShareMenu';
 import { SyncedLyrics } from '../components/SyncedLyrics';
 import { scoreFromSeed } from '../lib/score';
 import { usePageTitle } from '../lib/title';
@@ -43,7 +44,6 @@ export default function SongDetail() {
   usePageTitle(song?.title);
   const [error, setError] = useState<unknown>(null);
   const [busy, setBusy] = useState(false);
-  const [copied, setCopied] = useState(false);
   const [licenseProduct, setLicenseProduct] = useState<ProductView | null>(null);
   const [licensing, setLicensing] = useState(false);
   // `player.currentTime` re-renders this several times a second while the song
@@ -144,16 +144,6 @@ export default function SongDetail() {
     }
   };
 
-  const share = async () => {
-    try {
-      await navigator.clipboard.writeText(`${window.location.origin}/song/${song.trackId}`);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    } catch {
-      /* clipboard unavailable */
-    }
-  };
-
   return (
     <div className="song-page">
       <div className="song-spread">
@@ -197,9 +187,7 @@ export default function SongDetail() {
 
           <div className="song-spread__actions" aria-label={t('song.actions.aria')}>
             {song.visibility === 'public' && (
-              <button type="button" className="text-action" onClick={share}>
-                {copied ? t('song.copied') : t('song.share')}
-              </button>
+              <ShareMenu url={`${window.location.origin}/song/${song.trackId}`} title={song.title} />
             )}
             {isOwner && (
               <>

@@ -1744,3 +1744,37 @@ tr:last-child td { border-bottom: none; }
 .studio__submit-error {
   margin-top: var(--s4);
 }
+
+/* share menu
+ *
+ * Share used to be a silent clipboard write that failed on the http intranet
+ * deployment. It is a small popover now: the link (always works), the social
+ * intents for the reader's language, and the device share sheet if present.
+ */
+.share { position: relative; display: inline-flex; }
+.share__menu {
+  position: absolute; z-index: 30; top: calc(100% + 8px); left: 0;
+  width: min(360px, calc(100vw - 32px));
+  padding: var(--s3); border-radius: var(--r-control);
+  background: var(--surface-solid); border: 1px solid var(--control-line);
+  box-shadow: var(--shadow-raised);
+  display: grid; gap: var(--s3);
+}
+.share__link { display: flex; gap: 8px; }
+.share__url {
+  flex: 1; min-width: 0; min-height: var(--tap); padding: 0 10px;
+  border-radius: var(--r-control); border: 1px solid var(--control-line);
+  background: transparent; color: var(--ink); font: inherit; font-size: 13px;
+}
+.share__copy, .share__target {
+  display: inline-flex; align-items: center; justify-content: center;
+  min-height: var(--tap); padding: 0 14px; border-radius: var(--r-control);
+  border: 1px solid var(--control-line); background: var(--surface-solid);
+  color: var(--ink); font: inherit; font-size: 14px; font-weight: 500;
+  text-decoration: none; white-space: nowrap; cursor: pointer;
+}
+.share__copy { background: var(--ink); border-color: var(--ink); color: #fff; }
+.share__copy:hover { background: #3a3d37; }
+.share__target:hover { border-color: var(--ink); }
+.share__targets { display: grid; grid-template-columns: repeat(auto-fit, minmax(72px, 1fr)); gap: 8px; }
+.share__note { margin: 0; font-size: 13px; line-height: 1.5; color: var(--muted); }
