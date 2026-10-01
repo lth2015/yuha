@@ -3,10 +3,13 @@ import { z } from 'zod';
 import { AppError } from '@yuha/contracts';
 import {
   compensateUnits,
+  getAccountDeletion,
   getRightsCase,
+  listAccountDeletions,
   listAuditLogs,
   listRightsCases,
   listSettings,
+  markAccountDeletionVerified,
   query,
   reconcileBalances,
   reporting,
@@ -18,6 +21,7 @@ import {
   writeAuditLog,
 } from '@yuha/db';
 import type { AppContext } from '../context.js';
+import { executeAccountDeletion } from '../services/deletion.js';
 
 /**
  * Operations console API (UI-15).
@@ -257,6 +261,104 @@ export default async function adminRoutes(app: FastifyInstance, opts: { ctx: App
         ? '差異は自動修正しません。原因を特定し、補償フローで訂正してください。'
         : null,
     };
+  });
+
+  // --------------------------------------------------- account deletion (SEC-11)
+
+  /**
+   * The deletion queue. Staff can see what is waiting and what happened.
+   *
+   * Until there was a table to list, "what deletion requests are outstanding"
+   * had no answer: the request wrote one `analytics_events` row and nothing
+   * else, so the only way to find a pending erasure was to know it existed.
+   */
+  app.get('/v1/admin/deletions', { preHandler: staff }, async (req) => {
+    const q = z
+      .object({
+        status: z.enum(['requested', 'verified', 'executed', 'failed', 'cancelled']).optional(),
+        limit: z.coerce.number().max(200).default(50),
+      })
+      .parse(req.query);
+    const items = await listAccountDeletions(q);
+    return {
+      items: items.map((d) => ({
+        id: d.id,
+        ticket: d.ticket,
+        status: d.status,
+        requestedAt: d.requested_at.toISOString(),
+        verifiedAt: d.verified_at?.toISOString() ?? null,
+        executedAt: d.executed_at?.toISOString() ?? null,
+        outcome: d.outcome,
+        failure: d.failure,
+      })),
+    };
+  });
+
+  /**
+   * A human states that the person asking owns the account.
+   *
+   * Separate from executing it, and `adminOnly`, because this is the step that
+   * turns a sentence into an irreversible erasure. "Delete my account" arriving
+   * on a stolen session must not be self-executing, which is also what the
+   * request endpoint has always told users ("Deletion runs after identity
+   * verification") — this is the first code that makes that sentence true.
+   */
+  app.post('/v1/admin/deletions/:id/verify', { preHandler: adminOnly }, async (req) => {
+    const { id } = req.params as { id: string };
+    const body = reasoned.parse(req.body);
+
+    const before = await getAccountDeletion(id);
+    if (!before) throw new AppError('NOT_FOUND', 'deletion request not found');
+    if (!(await markAccountDeletionVerified({ id, verifiedBy: req.user!.id }))) {
+      throw new AppError('CONFLICT', `deletion request is ${before.status}, not awaiting verification`);
+    }
+
+    await writeAuditLog({
+      actorId: req.user!.id,
+      actorRole: req.user!.role,
+      action: 'account_deletion.verified',
+      subjectType: 'account_deletion',
+      subjectId: id,
+      reason: body.reason,
+      before: { status: before.status },
+      after: { status: 'verified' },
+    });
+
+    return { id, status: 'verified' };
+  });
+
+  /**
+   * Carry it out.
+   *
+   * Synchronous, and deliberately not a background sweep: an erasure is rare,
+   * irreversible and worth an operator watching it finish. The response is the
+   * outcome — what went, and what the three holds kept — rather than an
+   * acknowledgement that something was scheduled.
+   */
+  app.post('/v1/admin/deletions/:id/execute', { preHandler: adminOnly }, async (req) => {
+    const { id } = req.params as { id: string };
+    const body = reasoned.parse(req.body);
+
+    const deletion = await getAccountDeletion(id);
+    if (!deletion) throw new AppError('NOT_FOUND', 'deletion request not found');
+    if (deletion.status !== 'verified') {
+      throw new AppError('CONFLICT', `deletion request is ${deletion.status}, not verified`);
+    }
+
+    const outcome = await executeAccountDeletion(ctx, deletion, req.log);
+
+    await writeAuditLog({
+      actorId: req.user!.id,
+      actorRole: req.user!.role,
+      action: 'account_deletion.executed',
+      subjectType: 'account_deletion',
+      subjectId: id,
+      reason: body.reason,
+      before: { status: 'verified' },
+      after: { status: 'executed', ...outcome },
+    });
+
+    return { id, status: 'executed', outcome };
   });
 
   app.get('/v1/admin/audit-logs', { preHandler: staff }, async (req) => {

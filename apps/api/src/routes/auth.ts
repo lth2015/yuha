@@ -9,6 +9,7 @@ import {
   getBalance,
   getUser,
   issueAuthCode,
+  openAccountDeletion,
   setMarketingOptIn,
   trackEvent,
   upsertUser,
@@ -378,30 +379,61 @@ export default async function authRoutes(
    */
   app.post('/v1/me/deletion-request', { preHandler: app.requireAuth }, async (req) => {
     const body = z.object({ reason: z.string().max(1000).optional() }).parse(req.body ?? {});
-    const ticket = randomUUID();
-    await trackEvent({
-      name: 'account_deletion_requested',
-      userRef: req.user!.id,
-      props: { ticket, has_reason: !!body.reason },
-      runMode: ctx.config.mode,
-      isInternal: ctx.config.isDemo,
+
+    /*
+     * The ticket used to be a `randomUUID()` handed to the user and written
+     * into one `analytics_events` row. That table is an append-only
+     * measurement log: nothing could move the request through states, and an
+     * operator could not list what was waiting. The promise was recorded and
+     * the work was not. It is a row now.
+     *
+     * Asking twice returns the first ticket rather than opening a second
+     * erasure of the same account — which is also what somebody who lost the
+     * email wants.
+     */
+    const { row, created } = await openAccountDeletion({
+      userId: req.user!.id,
+      reason: body.reason ?? null,
     });
+
+    if (created) {
+      await trackEvent({
+        name: 'account_deletion_requested',
+        userRef: req.user!.id,
+        props: { ticket: row.ticket, has_reason: !!body.reason },
+        runMode: ctx.config.mode,
+        isInternal: ctx.config.isDemo,
+      });
+    }
+
     return {
-      ticket,
+      ticket: row.ticket,
       status: 'received',
       // Retention scope and periods are configured and disclosed separately in
       // the privacy page; they are not decided here.
       retained: [
         'Orders, payments and refunds: statutory retention period',
         'Songs and evidence under an open rights case: until the investigation closes',
+        // Added when the erasure was actually built. A buyer paid for the right
+        // to download that song; removing it on the author's request takes away
+        // something a third party owns. The code has always had to keep these —
+        // this list simply did not say so, and a promise to remove "your songs"
+        // that quietly keeps some of them is discovered by the person it
+        // surprises.
+        'Songs other people have licensed: kept so their purchase keeps working',
       ],
       removed: ['Account profile', 'Your songs and export files', 'Marketing subscription'],
+      // Stored audio is removed on request; on S3 the bytes leave with the
+      // bucket's 30-day noncurrent-version expiry rather than that same day.
+      // Stated because `storage/s3.ts` makes it true and silence would read as
+      // "immediately".
+      audioErasureDays: 30,
       note: 'Cancellation, deletion and marketing opt-out are three different operations. Deletion runs after identity verification.',
       // Stable codes beside the prose, in the same order. The server decides
       // what the lists contain; the client words each item in the reader's
       // language. Additive: the English arrays above are unchanged for anything
       // already reading them.
-      retainedCodes: ['orders_payments', 'rights_case_evidence'],
+      retainedCodes: ['orders_payments', 'rights_case_evidence', 'licensed_by_others'],
       removedCodes: ['profile', 'songs_exports', 'marketing'],
       noteCode: 'three_operations',
     };

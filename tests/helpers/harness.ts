@@ -211,6 +211,9 @@ const BUSINESS_TABLES = [
   'audit_logs',
   'analytics_events',
   'runtime_settings',
+  // Before users: it has a foreign key to them, both as the subject and as the
+  // operator who verified it.
+  'account_deletions',
   'users',
 ];
 

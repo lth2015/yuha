@@ -11,3 +11,4 @@ export * as reporting from './reporting.js';
 export * from './auth_codes.js';
 export * from './market.js';
 export * from './mfa.js';
+export * from './deletions.js';

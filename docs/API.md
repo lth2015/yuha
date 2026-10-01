@@ -283,7 +283,23 @@ never from a token claim.
 | `POST /v1/admin/rights-cases/:id/resolve` | **admin** | Dismiss / uphold / restore |
 | `GET /v1/admin/settings` · `PUT /v1/admin/settings/:key` | **admin** | Runtime switches |
 | `GET /v1/admin/reconciliation` | support | Ledger discrepancies |
+| `GET /v1/admin/deletions` | support | Account deletion queue (SEC-11) |
+| `POST /v1/admin/deletions/:id/verify` | **admin** | Confirm the requester owns the account |
+| `POST /v1/admin/deletions/:id/execute` | **admin** | Carry out the erasure |
 | `GET /v1/admin/audit-logs` | support | Audit trail |
+
+Deletion is two steps on purpose. Verification is a human stating that the
+person asking owns the account, and only a verified request can be executed:
+"delete my account" arriving on a stolen session must not be self-executing.
+Execution is synchronous and answers with what it did — songs erased, objects
+removed, and the ones it would not touch. It keeps three things: orders and
+payments for the statutory period (which is why the user row is anonymised
+rather than deleted), songs under an open rights case, and songs other people
+have licensed, because a buyer paid for the right to download those.
+
+On S3 the delivery bucket is versioned, so removing an object makes it a
+noncurrent version; the bucket's lifecycle rule expires those after 30 days.
+The request response states that as `audioErasureDays`.
 
 Every mutation requires a `reason` of at least 5 characters, written to
 `audit_logs` with actor, timestamp and before/after state. The column is
