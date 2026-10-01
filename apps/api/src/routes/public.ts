@@ -33,6 +33,7 @@ export default async function publicRoutes(app: FastifyInstance, opts: { ctx: Ap
     const info: RuntimeInfo = {
       mode: ctx.config.mode,
       demo: ctx.config.isDemo,
+      syntheticAudio: ctx.config.adapters.music === 'demo',
       features: {
         subscriptionsEnabled: features.subscriptionsEnabled,
         freeTrialEnabled: features.freeTrialEnabled,

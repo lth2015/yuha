@@ -97,7 +97,7 @@ export function SongCard({
   };
 
   const remove = async () => {
-    if (!window.confirm(`删除 “${song.title}”? This cannot be undone.`)) return;
+    if (!window.confirm(t('song.confirmDelete', { title: song.title }))) return;
     setBusy(true);
     try {
       await apiFetch(`/v1/tracks/${song.trackId}`, { method: 'DELETE' });

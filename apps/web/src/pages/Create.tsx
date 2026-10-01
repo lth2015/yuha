@@ -529,7 +529,7 @@ export default function Create() {
         <p className="small muted" style={{ marginTop: 'var(--s6)' }}>
           {job.jobId.slice(0, 8)} · {job.durationSeconds}s ·{' '}
           {job.instrumental ? t('create.vocals.instrumental') : t('composer.vocals')}
-          {runtime?.demo ? ` · ${t('create.job.demoAudio')}` : ''}
+          {runtime?.syntheticAudio ? ` · ${t('create.job.demoAudio')}` : ''}
         </p>
       </div>
     );

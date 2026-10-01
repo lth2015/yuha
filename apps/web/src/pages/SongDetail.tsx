@@ -37,7 +37,7 @@ export default function SongDetail() {
   const { t, lang } = useI18n();
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { me } = useSession();
+  const { me, runtime } = useSession();
   const player = usePlayer();
   const [song, setSong] = useState<SongDetailResponse | null>(null);
   // A song page is best titled by its song, not by the word "song".
@@ -265,7 +265,7 @@ export default function SongDetail() {
           {song.licenseCount > 0 && (
             <p className="song-spread__note">{t('song.licensesSold', { n: song.licenseCount })}</p>
           )}
-          {song.demo && <p className="song-spread__note">{t('song.demo')}</p>}
+          {runtime?.syntheticAudio && <p className="song-spread__note">{t('song.demo')}</p>}
 
           <div className="song-spread__player">
             <span className="song-spread__time num">

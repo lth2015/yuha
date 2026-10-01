@@ -23,6 +23,13 @@ export type MeView = z.infer<typeof meView>;
 export const runtimeInfo = z.object({
   mode: RunMode,
   demo: z.boolean(),
+  /**
+   * True only when songs come from the built-in synthetic generator. Demo run
+   * mode and synthetic audio used to be read as one thing, so a demo-mode
+   * deployment wired to a real model (the DGX intranet build) labelled every
+   * real song 「音频为合成示例」.
+   */
+  syntheticAudio: z.boolean(),
   features: z.object({
     subscriptionsEnabled: z.boolean(),
     freeTrialEnabled: z.boolean(),
