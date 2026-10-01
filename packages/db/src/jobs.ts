@@ -1,5 +1,5 @@
 import type { PoolConnection } from 'mysql2/promise';
-import { canTransition, type JobState } from '@yuha/contracts';
+import { canTransition, UPSTREAM_ENGAGED_STATES, type JobState } from '@yuha/contracts';
 import { execute, newId, query, queryOne, toJson } from './pool.js';
 
 export interface JobRow {
@@ -410,6 +410,34 @@ export async function listOpenJobs(userId: string, limit = 20): Promise<JobRow[]
       ORDER BY created_at DESC
       LIMIT ?`,
     [userId, limit],
+  );
+}
+
+/**
+ * Jobs the provider accepted and never finished.
+ *
+ * `UPSTREAM_ENGAGED_STATES` has been in the contracts package with no caller
+ * since it was written; this is the sweep it was for. Anchored on
+ * `submitted_at`, which is when the provider took the request — `updated_at`
+ * would not do, because a successful poll that answers `pending` writes
+ * nothing, so a job genuinely progressing and a job abandoned upstream look
+ * identical from the row's timestamps.
+ *
+ * UNKNOWN is included as a backstop even though `listStaleUnknownJobs` covers
+ * it on a shorter deadline: that query requires `verify_started_at IS NOT
+ * NULL`, and a job that reached UNKNOWN without it would otherwise be swept
+ * by nothing at all.
+ */
+export async function listStaleUpstreamJobs(olderThanSeconds: number): Promise<JobRow[]> {
+  const placeholders = UPSTREAM_ENGAGED_STATES.map(() => '?').join(',');
+  return query<JobRow>(
+    `SELECT ${JOB_COLUMNS} FROM generation_jobs
+      WHERE state IN (${placeholders})
+        AND submitted_at IS NOT NULL
+        AND submitted_at < DATE_SUB(UTC_TIMESTAMP(3), INTERVAL ? SECOND)
+      ORDER BY submitted_at
+      LIMIT 100`,
+    [...UPSTREAM_ENGAGED_STATES, olderThanSeconds],
   );
 }
 

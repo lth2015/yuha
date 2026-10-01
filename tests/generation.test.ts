@@ -12,11 +12,13 @@ import {
   getBalance,
   getJob,
   listAssets,
+  listStaleUpstreamJobs,
   query,
   withTx,
   type JobRow,
 } from '@yuha/db';
 import { runJobStep } from '@yuha/worker/pipeline';
+import { failAbandonedJob } from '@yuha/worker/reconcile';
 import { createHarness, ledgerFor, resetData, teardown, type Harness, type TestUser } from './helpers/harness.js';
 
 let h: Harness;
@@ -435,5 +437,94 @@ describe('capability honesty (AI-05)', () => {
     // this line exists to catch — a 30s fixture delivered against a 120s
     // request, which is exactly what it caught the first time it ever ran.
     expect(Math.abs(track[0]!.duration_ms - 120_000)).toBeLessThanOrEqual(250);
+  });
+
+  /*
+   * A job the provider accepted and never finished used to be permanent.
+   *
+   * `pollJob` returns on `pending` without touching the row, SUBMITTED has no
+   * transition to CANCELLED so `cancelGeneration` answers
+   * `already_submitted_to_provider`, and the only sweeper covered UNKNOWN. So
+   * the reservation was held for good — and since `assertConcurrencyLimit`
+   * counts every non-terminal job against MAX_CONCURRENT_JOBS_PER_USER, which
+   * is 2, two of them ended that account's ability to generate anything at
+   * all, with no path back for the user or for an operator.
+   *
+   * `UPSTREAM_ENGAGED_STATES` had been sitting in the contracts package with
+   * no caller since it was written. This is the sweep it was for.
+   */
+  describe('jobs abandoned upstream', () => {
+    /** Strands a job in SUBMITTED, submitted `ageSeconds` ago. */
+    async function strand(user: TestUser, key: string, ageSeconds: number): Promise<string> {
+      const { jobId } = (await post(user, defaultBody, key)).json();
+      await runJobStep({ ctx: h.ctx, owner: 'w-strand', log }, jobId);
+      await query(
+        `UPDATE generation_jobs
+            SET state = 'SUBMITTED',
+                submitted_at = DATE_SUB(UTC_TIMESTAMP(3), INTERVAL ? SECOND),
+                lease_owner = NULL, lease_expires_at = NULL
+          WHERE id = ?`,
+        [ageSeconds, jobId],
+      );
+      return jobId;
+    }
+
+    it('frees the credit and the concurrency slot once the deadline passes', async () => {
+      const user = await h.createUser({ credits: 3 });
+      const jobId = await strand(user, 'key-abandoned-1', 7200);
+      expect((await getBalance(user.id)).reserved).toBe(1);
+
+      const stale = await listStaleUpstreamJobs(h.ctx.config.JOB_UPSTREAM_DEADLINE_SECONDS);
+      expect(stale.map((j) => j.id)).toContain(jobId);
+      for (const job of stale) await failAbandonedJob(h.ctx, job, log);
+
+      const after = await getJob(jobId);
+      expect(after!.state).toBe('FAILED');
+      expect(after!.error_code).toBe('upstream_abandoned');
+      // Whole again: the release is what `expireBatches` needs to see too, and
+      // it skips any batch still holding a reservation.
+      expect(await getBalance(user.id)).toMatchObject({ reserved: 0, consumed: 0 });
+      expect((await getBalance(user.id)).available).toBe(3);
+    });
+
+    it('does not touch a job that is merely slow', async () => {
+      const user = await h.createUser({ credits: 3 });
+      const jobId = await strand(user, 'key-abandoned-2', 60);
+
+      const stale = await listStaleUpstreamJobs(h.ctx.config.JOB_UPSTREAM_DEADLINE_SECONDS);
+      expect(stale.map((j) => j.id)).not.toContain(jobId);
+      expect((await getJob(jobId))!.state).toBe('SUBMITTED');
+      expect((await getBalance(user.id)).reserved).toBe(1);
+    });
+
+    /*
+     * The lockout, end to end. Two stranded jobs is the whole cap, so this is
+     * the exact state an account reached and could not leave.
+     */
+    it('lets the account generate again after being locked out by the whole cap', async () => {
+      /*
+       * The cap comes from the config rather than a literal. In production it
+       * is 2, so two abandoned jobs were the whole lockout; the harness raises
+       * it to 10 so the other tests are not fighting it, and the claim here —
+       * that filling the cap with abandoned jobs is a dead end only this sweep
+       * can clear — holds at either number.
+       */
+      const cap = h.ctx.config.MAX_CONCURRENT_JOBS_PER_USER;
+      const user = await h.createUser({ credits: cap + 2 });
+      for (let i = 0; i < cap; i += 1) {
+        await strand(user, `key-abandoned-cap-${i}`, 7200);
+      }
+
+      const blocked = await post(user, defaultBody, 'key-abandoned-blocked');
+      expect(blocked.statusCode, blocked.body).toBe(429);
+      expect(blocked.json().error.code).toBe('RATE_LIMITED');
+
+      for (const job of await listStaleUpstreamJobs(h.ctx.config.JOB_UPSTREAM_DEADLINE_SECONDS)) {
+        await failAbandonedJob(h.ctx, job, log);
+      }
+
+      const allowed = await post(user, defaultBody, 'key-abandoned-allowed');
+      expect(allowed.statusCode, allowed.body).toBe(202);
+    });
   });
 });

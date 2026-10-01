@@ -196,6 +196,24 @@ const envSchema = z.object({
   JOB_LEASE_SECONDS: int(90),
   JOB_DELAY_WARNING_SECONDS: int(180),
   JOB_VERIFY_DEADLINE_SECONDS: int(900),
+  /*
+   * How long a job may sit in a state where the provider has accepted it —
+   * SUBMITTED or PROCESSING — before it is failed and the credit released.
+   *
+   * There was no such deadline. The only sweeper covers UNKNOWN, `pollJob`
+   * returns on `pending` without touching the row, and SUBMITTED has no
+   * transition to CANCELLED, so a provider that accepted a job and then lost
+   * it left the reservation held and the job non-terminal for good. With
+   * MAX_CONCURRENT_JOBS_PER_USER at 2, two of those end the account's ability
+   * to generate anything, ever, with no path back for the user or an
+   * operator — and `expireBatches` skips a batch with `reserved_units > 0`,
+   * so the rest of the pack never expires either.
+   *
+   * An hour is well past any real generation (minutes, for up to four minutes
+   * of audio) so a slow-but-working job is never raced, and it bounds the
+   * lockout at an hour instead of forever.
+   */
+  JOB_UPSTREAM_DEADLINE_SECONDS: int(3600),
   AUDIO_DURATION_TOLERANCE_MS: int(750),
   /**
    * How long a song the owner deleted stays recoverable before its audio is

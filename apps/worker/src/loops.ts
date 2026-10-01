@@ -13,13 +13,14 @@ import {
   claimWebhookEvents,
   expireBatches,
   listStaleUnknownJobs,
+  listStaleUpstreamJobs,
   markDispatchFailed,
   markDispatched,
   reconcileBalances,
   withTx,
 } from '@yuha/db';
 import { runJobStep, type PipelineDeps } from './pipeline.js';
-import { failStaleUnknownJob } from './reconcile.js';
+import { failAbandonedJob, failStaleUnknownJob } from './reconcile.js';
 
 export interface LoopDeps extends PipelineDeps {
   stopped: () => boolean;
@@ -249,6 +250,30 @@ export async function maintenanceLoop(deps: LoopDeps, intervalMs = 60_000): Prom
         } catch (err) {
           log('error', 'could not time out stale job', { jobId: job.id, err: (err as Error).message });
         }
+      }
+    });
+
+    /*
+     * Jobs the provider accepted and never finished. Separate from the sweep
+     * above because it is a different deadline measured from a different
+     * column: that one starts at `verify_started_at`, this one at
+     * `submitted_at`. Until this existed, two of these ended an account's
+     * ability to generate for good — see JOB_UPSTREAM_DEADLINE_SECONDS.
+     */
+    await step('abandoned-upstream-jobs', async () => {
+      const abandoned = await listStaleUpstreamJobs(ctx.config.JOB_UPSTREAM_DEADLINE_SECONDS);
+      for (const job of abandoned) {
+        try {
+          await failAbandonedJob(ctx, job, log);
+        } catch (err) {
+          log('error', 'could not time out abandoned job', {
+            jobId: job.id,
+            err: (err as Error).message,
+          });
+        }
+      }
+      if (abandoned.length) {
+        log('warn', 'released credits for jobs abandoned upstream', { count: abandoned.length });
       }
     });
 

@@ -13,6 +13,10 @@
     "./loops": {
       "types": "./dist/loops.d.ts",
       "default": "./dist/loops.js"
+    },
+    "./reconcile": {
+      "types": "./dist/reconcile.d.ts",
+      "default": "./dist/reconcile.js"
     }
   },
   "scripts": {
