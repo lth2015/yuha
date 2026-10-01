@@ -2,6 +2,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 import type { ReactNode } from 'react';
 import type { TrackView } from '@yuha/contracts';
 import { attachBeat as attachBeatSafe, wakeBeat } from './beat';
+import { creditHeard, hasHeardEnough, type Heard } from './listening';
 
 /**
  * A single shared <audio> element with a queue.
@@ -47,6 +48,8 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const listeners = useRef(new Set<(id: string) => void>());
   const reported = useRef(new Set<string>());
+  /** Seconds of this song really heard; the rule is in lib/listening.ts. */
+  const heard = useRef<Heard>({ id: null, seconds: 0, last: 0 });
   const queueRef = useRef<PlayerTrack[]>([]);
   const [current, setCurrent] = useState<PlayerTrack | null>(null);
   const [queue, setQueue] = useState<PlayerTrack[]>([]);
@@ -71,6 +74,9 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     audio.src = track.previewUrl;
     audio.dataset['trackId'] = track.trackId;
     audio.currentTime = 0;
+    // Replaying the same song starts its ten seconds over; `reported` is what
+    // keeps the event itself to once per page load.
+    heard.current = { id: track.trackId, seconds: 0, last: 0 };
     setCurrent(track);
     setState({ activeId: track.trackId, status: 'loading', currentTime: 0, duration: 0 });
     // The analyser graph carries the audio (createMediaElementSource
@@ -128,9 +134,12 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
 
     const onTime = () => {
       setState((s) => ({ ...s, currentTime: audio.currentTime }));
-      // The activation metric counts real listening, not a click on play.
+
       const id = audio.dataset['trackId'];
-      if (id && audio.currentTime >= 10 && !reported.current.has(id)) {
+      if (!id) return;
+      heard.current = creditHeard(heard.current, id, audio.currentTime);
+
+      if (hasHeardEnough(heard.current) && !reported.current.has(id)) {
         reported.current.add(id);
         for (const l of listeners.current) l(id);
       }

@@ -17,7 +17,7 @@ beforeAll(async () => {
 });
 beforeEach(async () => {
   await resetData();
-  await query(`DELETE FROM analytics_events WHERE name = 'client_error'`);
+  await query(`DELETE FROM analytics_events WHERE name IN ('client_error', 'preview_10s')`);
 });
 afterAll(async () => {
   await h?.close();
@@ -93,5 +93,80 @@ describe('client crash reporting', () => {
     const props = (await storedEvents())[0]!.props as Record<string, unknown>;
     expect(props.component).toBeNull();
     expect(props.lang).toBeNull();
+  });
+});
+
+/**
+ * Ten seconds heard.
+ *
+ * `reporting.ts` has queried `analytics_events` for `preview_10s` since the
+ * activation metric was written, and `player.tsx` has detected the moment for
+ * just as long. Nothing joined them, so the metric asked a question the
+ * database could never answer. These tests hold the join together.
+ */
+describe('POST /v1/previews', () => {
+  const previews = () =>
+    query<{ props: unknown; user_ref: string | null }>(
+      `SELECT props, user_ref FROM analytics_events WHERE name = 'preview_10s'`,
+    );
+
+  const trackId = '11111111-2222-4333-8444-555555555555';
+
+  it('records who listened when the listener is signed in', async () => {
+    const user = await h.createUser();
+    const res = await h.app.inject({
+      method: 'POST',
+      url: '/v1/previews',
+      headers: user.authHeader,
+      payload: { trackId } as never,
+    });
+
+    expect(res.statusCode).toBe(202);
+    const rows = await previews();
+    expect(rows).toHaveLength(1);
+    expect(rows[0]!.user_ref).toBe(user.id);
+    expect(rows[0]!.props).toMatchObject({ track_id: trackId });
+  });
+
+  /*
+   * The showcase plays to people with no account. Their listening is still
+   * worth counting, and a null user_ref is the honest record of "somebody, we
+   * do not know who" — the activation query asks what a registered user did in
+   * their first day, so it simply will not see these, which is correct.
+   */
+  it('records a listener with no account, without inventing one', async () => {
+    const res = await h.app.inject({ method: 'POST', url: '/v1/previews', payload: { trackId } as never });
+
+    expect(res.statusCode).toBe(202);
+    const rows = await previews();
+    expect(rows).toHaveLength(1);
+    expect(rows[0]!.user_ref).toBeNull();
+  });
+
+  it('refuses anything that is not a track id', async () => {
+    for (const payload of [{}, { trackId: '' }, { trackId: 'not-a-uuid' }]) {
+      const res = await h.app.inject({ method: 'POST', url: '/v1/previews', payload: payload as never });
+      expect(res.statusCode).toBe(400);
+    }
+    expect(await previews()).toHaveLength(0);
+  });
+
+  /*
+   * The body carries one id and nothing else. A listening event is the easiest
+   * place in the product to start collecting more than the question needs —
+   * position, dwell, device — so the shape is pinned here rather than left to
+   * whoever edits the schema next.
+   */
+  it('stores the track id and nothing else about the listener', async () => {
+    const user = await h.createUser();
+    await h.app.inject({
+      method: 'POST',
+      url: '/v1/previews',
+      headers: user.authHeader,
+      payload: { trackId, positionSeconds: 42, userAgent: 'spy' } as never,
+    });
+
+    const props = (await previews())[0]!.props as Record<string, unknown>;
+    expect(Object.keys(props)).toEqual(['track_id']);
   });
 });

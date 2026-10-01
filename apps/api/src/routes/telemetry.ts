@@ -1,5 +1,5 @@
 import type { FastifyInstance } from 'fastify';
-import { clientErrorReport } from '@yuha/contracts';
+import { clientErrorReport, previewReport } from '@yuha/contracts';
 import { trackEvent } from '@yuha/db';
 import type { AppContext } from '../context.js';
 
@@ -61,6 +61,49 @@ export default async function telemetryRoutes(app: FastifyInstance, opts: { ctx:
 
       // 202 and an empty body: the browser is mid-crash and has nothing useful
       // to do with a response. Recording must never become a second failure.
+      return reply.status(202).send();
+    },
+  );
+
+  /**
+   * POST /v1/previews — ten seconds of a song were actually heard.
+   *
+   * `reporting.ts` has queried `analytics_events` for `preview_10s` since the
+   * activation metric was written, and `player.tsx` has detected the moment
+   * for just as long. Nothing ever joined the two, so day-one activation has
+   * been reporting as not computable while the data to compute it went
+   * nowhere. This is the join.
+   *
+   * `optionalAuth`, not `requireAuth`: the showcase on the landing page plays
+   * to people with no account, and a visitor who listens to a whole song is
+   * worth counting even though the activation query — which asks what a
+   * *registered* user did in their first 24 hours — will not count them. A
+   * null `user_ref` is the honest record of "somebody, we do not know who".
+   */
+  app.post(
+    '/v1/previews',
+    {
+      preHandler: app.optionalAuth,
+      config: {
+        // One per song per page load on the client. This is the floor under a
+        // client that has lost its mind, per IP, and is generous enough that a
+        // person listening through a playlist never meets it.
+        rateLimit: { max: 120, timeWindow: '5 minutes' },
+      },
+    },
+    async (req, reply) => {
+      const body = previewReport.parse(req.body);
+
+      await trackEvent({
+        name: 'preview_10s',
+        userRef: req.user?.id ?? null,
+        props: { track_id: body.trackId },
+        runMode: ctx.config.mode,
+        isInternal: ctx.config.isDemo,
+      }).catch((err) => {
+        req.log.error({ err }, 'could not record a preview_10s event');
+      });
+
       return reply.status(202).send();
     },
   );

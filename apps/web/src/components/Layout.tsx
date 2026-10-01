@@ -121,6 +121,26 @@ export function Layout({ children }: { children: ReactNode }) {
   }, [player.current?.trackId]);
 
 
+  /*
+   * Report ten seconds heard.
+   *
+   * The player has detected this moment since it was written and exposed
+   * `onTenSeconds` for somebody to listen; nobody ever did, so the activation
+   * metric queried an event that was never written. Subscribed here rather
+   * than inside the provider so the player stays a player and does not learn
+   * about the API.
+   *
+   * Failures are swallowed: a telemetry write must never interrupt playback,
+   * and the person listening has no use for the news that counting failed.
+   */
+  useEffect(
+    () =>
+      player.onTenSeconds((trackId) => {
+        void apiFetch('/v1/previews', { method: 'POST', body: { trackId } }).catch(() => undefined);
+      }),
+    [player],
+  );
+
   const download = useCallback(async () => {
     if (!nowPlaying) return;
     try {

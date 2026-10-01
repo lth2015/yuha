@@ -110,3 +110,20 @@ export const clientErrorReport = z.object({
   lang: z.string().trim().max(8).nullable().default(null),
 });
 export type ClientErrorReport = z.infer<typeof clientErrorReport>;
+
+/**
+ * "Somebody actually listened to this song."
+ *
+ * Reported once per song per page load, after ten seconds of audio has really
+ * been heard — the activation metric in `reporting.ts` reads
+ * `analytics_events` for `preview_10s`, and it is the difference between
+ * knowing a song was generated and knowing it was worth hearing.
+ *
+ * The body is one id. No position, no dwell time, nothing about the listener:
+ * the question this answers is yes/no, and anything more would be data we
+ * collected because we could.
+ */
+export const previewReport = z.object({
+  trackId: z.string().uuid(),
+});
+export type PreviewReport = z.infer<typeof previewReport>;
