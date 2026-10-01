@@ -40,3 +40,7 @@ Claude outputs/
 deploy/dgx/music/bench_out/
 deploy/dgx/music/build.log
 deploy/dgx/music/data/
+
+# Python bytecode from the DGX service scripts
+__pycache__/
+*.pyc
