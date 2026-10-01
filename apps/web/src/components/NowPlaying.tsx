@@ -91,13 +91,32 @@ export function NowPlaying({
           )}
         </section>
 
-        <div className="now-playing__deck" aria-hidden="true">
-          <div className={`vinyl${playing ? ' is-spinning' : ''}`}>
-            <div className="vinyl__grooves" />
-            <div className="vinyl__label">
-              <CoverArt seed={coverSeed} title={title} styles={styles} className="vinyl__art" />
+        <div className={`now-playing__deck${playing ? ' is-playing' : ''}`} aria-hidden="true">
+          <div className="deck__platter">
+            <div className={`vinyl${playing ? ' is-spinning' : ''}`}>
+              <div className="vinyl__grooves" />
+              <div className="vinyl__label">
+                <CoverArt seed={coverSeed} title={title} styles={styles} className="vinyl__art" />
+              </div>
+              <div className="vinyl__spindle" />
             </div>
-            <div className="vinyl__spindle" />
+            {/* Light on the record does not turn with it. */}
+            <div className="vinyl__sheen" />
+            {/* The arm swings onto the record while it plays and parks when it stops. */}
+            <svg className="tonearm" viewBox="0 0 120 320">
+              <defs>
+                <linearGradient id="tonearm-metal" x1="0" x2="1">
+                  <stop offset="0" stopColor="#d9dbd5" />
+                  <stop offset="0.5" stopColor="#ffffff" />
+                  <stop offset="1" stopColor="#b9bcb4" />
+                </linearGradient>
+              </defs>
+              <circle cx="80" cy="40" r="30" fill="#ecebe5" stroke="rgb(32 34 31 / 14%)" />
+              <circle cx="80" cy="40" r="16" fill="url(#tonearm-metal)" stroke="rgb(32 34 31 / 20%)" />
+              <path d="M80 40 L80 230 Q80 262 58 284" fill="none" stroke="url(#tonearm-metal)" strokeWidth="7" strokeLinecap="round" />
+              <path d="M80 40 L80 230 Q80 262 58 284" fill="none" stroke="rgb(32 34 31 / 18%)" strokeWidth="1" />
+              <rect x="40" y="276" width="30" height="34" rx="5" transform="rotate(38 55 293)" fill="#2b2e29" />
+            </svg>
           </div>
         </div>
       </div>

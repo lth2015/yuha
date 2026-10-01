@@ -133,9 +133,12 @@ function buildAlignment(cfg: AppConfig): AlignmentProvider {
       ...(cfg.ALIGNMENT_WORD_END_FIELD ? { wordEndField: cfg.ALIGNMENT_WORD_END_FIELD } : {}),
       ...(cfg.ALIGNMENT_SECTION_FIELD ? { sectionField: cfg.ALIGNMENT_SECTION_FIELD } : {}),
       timeoutMs: cfg.ALIGNMENT_TIMEOUT_MS,
-      // Demo-mode audio has no upstream URL to hand the aligner; a real
-      // deployment resolves the provider's own audio link.
-      audioUrlResolver: () => null,
+      // The aligner needs the rendered audio. A provider that keeps its
+      // renders (the self-hosted Spark service) names it by request id.
+      audioUrlResolver: ({ providerRequestId }) =>
+        cfg.ALIGNMENT_AUDIO_URL_TEMPLATE
+          ? cfg.ALIGNMENT_AUDIO_URL_TEMPLATE.replace('{id}', encodeURIComponent(providerRequestId))
+          : null,
     });
   }
   return new EstimatedAlignmentProvider();

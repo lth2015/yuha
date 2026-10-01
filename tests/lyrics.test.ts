@@ -67,3 +67,31 @@ describe('activeLineIndex / lineProgress', () => {
     expect(lineProgress(lines, i, lines[i]!.end)).toBeCloseTo(1);
   });
 });
+
+describe('lineProgress with aligned words', () => {
+  /*
+   * An aligned line carries per-character timing. A singer holds some
+   * syllables and rushes others, so the fill has to follow the characters,
+   * not slide linearly across the line's span.
+   */
+  const line = {
+    section: 'verse',
+    text: 'あいうえ',
+    start: 10,
+    end: 20,
+    words: [
+      { w: 'あ', start: 10, end: 11 },
+      { w: 'い', start: 11, end: 12 },
+      { w: 'う', start: 12, end: 18 }, // held
+      { w: 'え', start: 18, end: 20 },
+    ],
+  };
+  it('fills by sung characters, not by elapsed time', () => {
+    expect(lineProgress([line], 0, 12)).toBeCloseTo(0.5); // two of four sung
+    expect(lineProgress([line], 0, 15)).toBeCloseTo(0.625); // halfway through the held one
+    expect(lineProgress([line], 0, 20)).toBeCloseTo(1);
+  });
+  it('falls back to time when the line has no words', () => {
+    expect(lineProgress([{ ...line, words: undefined }], 0, 15)).toBeCloseTo(0.5);
+  });
+});

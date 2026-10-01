@@ -14,6 +14,8 @@ export interface LyricLine {
   /** Seconds from song start. */
   start: number;
   end: number;
+  /** Per-word (CJK: per-character) timing, when an aligner heard the vocal. */
+  words?: Array<{ w: string; start: number; end: number }>;
 }
 
 const SECTION_RE = /^\s*[[(](?:verse|chorus|bridge|intro|outro|pre-?chorus|hook|refrain|interlude|instrumental)[^)\]]*[)\]]\s*$/i;
@@ -84,6 +86,19 @@ export function activeLineIndex(lines: LyricLine[], seconds: number): number {
 export function lineProgress(lines: LyricLine[], index: number, seconds: number): number {
   const line = lines[index];
   if (!line) return 0;
+  // Aligned: fill by sung characters, weighting each word by its length, so a
+  // held syllable holds the fill and a rushed phrase races it.
+  if (line.words?.length) {
+    const total = line.words.reduce((n, w) => n + Math.max(1, [...w.w].length), 0);
+    let done = 0;
+    for (const w of line.words) {
+      const len = Math.max(1, [...w.w].length);
+      if (seconds >= w.end) done += len;
+      else if (seconds > w.start) done += (len * (seconds - w.start)) / Math.max(0.001, w.end - w.start);
+      else break;
+    }
+    return Math.min(1, Math.max(0, done / total));
+  }
   const span = Math.max(0.001, line.end - line.start);
   return Math.min(1, Math.max(0, (seconds - line.start) / span));
 }

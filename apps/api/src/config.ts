@@ -163,6 +163,13 @@ const envSchema = z.object({
   ALIGNMENT_WORD_END_FIELD: z.string().optional(),
   ALIGNMENT_SECTION_FIELD: z.string().optional(),
   ALIGNMENT_TIMEOUT_MS: int(60_000),
+  /**
+   * Where the aligner can find a song's audio, with `{id}` standing for the
+   * music provider's request id — e.g. http://10.5.0.7:8583/v1/audio/{id}.mp3
+   * for a self-hosted model that keeps its renders. Unset, the http aligner
+   * has no audio to work from and every song keeps the estimated timeline.
+   */
+  ALIGNMENT_AUDIO_URL_TEMPLATE: z.string().optional(),
 
   // --- Market monetization -------------------------------------------------
   STRIPE_PRICE_ID_MARKET_LICENSE: z.string().optional(),
