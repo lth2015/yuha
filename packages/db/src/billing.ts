@@ -60,7 +60,50 @@ export async function listActiveProducts(): Promise<ProductRow[]> {
   );
 }
 
+/**
+ * Writes a catalogue version, refusing to change what a version means.
+ *
+ * `amount_minor`, `currency`, `units` and `validity_days` are deliberately
+ * not in the UPDATE list: a version is the frozen commercial terms an order
+ * was placed against. `stripe_price_id` *is* updated, though, and that is the
+ * hole — Stripe Prices are immutable, so raising a price means pointing at a
+ * new Price object, and re-running the seed with the same version number left
+ * `product_catalog` saying 980 beside a Stripe Price of 1280.
+ *
+ * Every checkout for that key then charged the new amount and
+ * `handleCheckoutCompleted` threw on the amount-mismatch guard — *before* its
+ * transaction, so `markOrderPaid` never ran: the order stayed `pending` with
+ * the money taken and nothing granted, for every buyer, until somebody
+ * noticed. The guard is right to refuse; the catalogue should not have been
+ * able to disagree with the provider in the first place.
+ *
+ * So this now refuses rather than silently repointing. Changing what a
+ * customer is charged means a new version, which is what versions are for.
+ */
 export async function upsertProduct(p: ProductRow, tx?: PoolConnection): Promise<void> {
+  const existing = await queryOne<ProductRow>(
+    `SELECT ${PRODUCT_COLUMNS} FROM product_catalog WHERE price_key = ? AND version = ?`,
+    [p.price_key, p.version],
+    tx,
+  );
+  if (existing) {
+    const changed: string[] = [];
+    if (Number(existing.amount_minor) !== Number(p.amount_minor)) {
+      changed.push(`amount_minor ${existing.amount_minor} -> ${p.amount_minor}`);
+    }
+    if (existing.currency !== p.currency) changed.push(`currency ${existing.currency} -> ${p.currency}`);
+    if (Number(existing.units) !== Number(p.units)) changed.push(`units ${existing.units} -> ${p.units}`);
+    if ((existing.validity_days ?? null) !== (p.validity_days ?? null)) {
+      changed.push(`validity_days ${existing.validity_days} -> ${p.validity_days}`);
+    }
+    if (changed.length) {
+      throw new Error(
+        `${p.price_key} version ${p.version} already exists with different commercial terms ` +
+          `(${changed.join('; ')}). A version is what an order was placed against, so it cannot ` +
+          `be redefined — add the next version instead.`,
+      );
+    }
+  }
   await execute(
     `INSERT INTO product_catalog
        (price_key, version, kind, display_name, amount_minor, currency, tax_included,

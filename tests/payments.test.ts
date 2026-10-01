@@ -11,11 +11,13 @@ import { processWebhookEvent } from '@yuha/api';
 import {
   claimWebhookEvents,
   findSubscriptionByStripeId,
+  getActiveProduct,
   getBalance,
   getOrder,
   grantUnits,
   query,
   recordWebhookEvent,
+  upsertProduct,
   upsertSubscription,
   withTx,
 } from '@yuha/db';
@@ -79,6 +81,44 @@ describe('checkout', () => {
     expect(order!.currency).toBe('usd');
     expect(order!.price_version).toBe(2);
     expect(order!.status).toBe('pending');
+  });
+
+  /*
+   * A catalogue version is the frozen commercial terms an order was placed
+   * against, and `upsertProduct` deliberately leaves `amount_minor`,
+   * `currency`, `units` and `validity_days` out of its UPDATE list. But it
+   * *does* update `stripe_price_id`, and Stripe Prices are immutable — so
+   * raising a price means pointing at a new Price object, and re-running the
+   * seed with the same version number left the catalogue saying 980 beside a
+   * Stripe Price of 1280.
+   *
+   * Every checkout for that key then charged the new amount and
+   * `handleCheckoutCompleted` threw on the amount-mismatch guard *before* its
+   * transaction, so `markOrderPaid` never ran: money taken, order left
+   * `pending`, nothing granted, for every buyer. Refusing here is what stops
+   * the catalogue being able to disagree with the provider at all.
+   */
+  it('refuses to redefine the commercial terms of an existing version', async () => {
+    const current = (await getActiveProduct('drop_5'))!;
+    await expect(
+      upsertProduct({
+        ...current,
+        amount_minor: current.amount_minor + 300,
+        stripe_price_id: 'price_test_drop5_raised',
+      }),
+    ).rejects.toThrow(/different commercial terms/);
+
+    // And the catalogue is untouched, so a checkout still agrees with Stripe.
+    const after = (await getActiveProduct('drop_5'))!;
+    expect(after.amount_minor).toBe(current.amount_minor);
+    expect(after.stripe_price_id).toBe(current.stripe_price_id);
+  });
+
+  it('still accepts an unchanged re-seed, so running the seed twice is safe', async () => {
+    const current = (await getActiveProduct('drop_5'))!;
+    await expect(upsertProduct({ ...current, display_name: 'Starter Pack — renamed' })).resolves
+      .toBeUndefined();
+    expect((await getActiveProduct('drop_5'))!.amount_minor).toBe(current.amount_minor);
   });
 
   it('an unknown price key is rejected', async () => {
