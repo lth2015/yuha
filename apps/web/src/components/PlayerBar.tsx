@@ -113,6 +113,14 @@ export function PlayerBar({ onExpand }: { onExpand?: () => void }) {
             </button>
           )}
         </div>
+
+        {/* Once a song had been played there was no way to put the bar away:
+            pausing left it parked over the bottom of every page. Closing
+            stops playback and clears the queue; playing anything brings it
+            back. */}
+        <button type="button" className="btn-icon player-bar__close" onClick={player.stop} aria-label={t('player.stop')} title={t('player.stop')}>
+          <span className="icon icon--close" aria-hidden="true" />
+        </button>
       </div>
     </footer>
   );

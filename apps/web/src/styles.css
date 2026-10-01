@@ -469,6 +469,7 @@ code { font-family: var(--mono); font-size: 0.86em; background: var(--surface-so
 .icon--expand { --icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M4 4h7v2H6.4l4.3 4.3-1.4 1.4L5 7.4V11H3V4zm16 16h-7v-2h4.6l-4.3-4.3 1.4-1.4 4.3 4.3V13h2v7z'/%3E%3C/svg%3E"); }
 .icon--edit { --icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M3 17.2V21h3.8L17.9 9.9l-3.8-3.8zM20.7 7.1a1 1 0 0 0 0-1.4l-2.4-2.4a1 1 0 0 0-1.4 0l-1.9 1.9 3.8 3.8z'/%3E%3C/svg%3E"); }
 .icon--check { --icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M9.6 16.6 5 12l-1.4 1.4 6 6 12-12L20.2 6z'/%3E%3C/svg%3E"); }
+.icon--close { --icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M6.4 5 12 10.6 17.6 5 19 6.4 13.4 12l5.6 5.6-1.4 1.4-5.6-5.6L6.4 19 5 17.6l5.6-5.6L5 6.4z'/%3E%3C/svg%3E"); }
 .icon--create { --icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M11 5h2v6h6v2h-6v6h-2v-6H5v-2h6z'/%3E%3C/svg%3E"); }
 
 /* ---------------------------------------------------------------- surfaces */
@@ -801,7 +802,7 @@ tr:last-child td { border-bottom: none; }
 
 /* ---------------------------------------------------------------- player bar */
 .player-bar { position: fixed; left: 0; right: 0; bottom: 0; z-index: 80; border-top: 1px solid var(--glass-edge); padding-bottom: env(safe-area-inset-bottom, 0px); }
-.player-bar__inner { max-width: 1248px; margin: 0 auto; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 2fr) minmax(0, 1fr); align-items: center; gap: var(--s4); min-height: 84px; padding: 10px 24px; }
+.player-bar__inner { position: relative; max-width: 1248px; margin: 0 auto; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 2fr) minmax(0, 1fr); align-items: center; gap: var(--s4); min-height: 84px; padding: 10px 64px 10px 24px; }
 .player-bar__now { display: flex; align-items: center; gap: 12px; min-width: 0; border-radius: 12px; }
 .player-bar__now .cover-art { width: 48px; height: 48px; border-radius: 12px; flex: none; }
 .player-bar__titles { display: flex; flex-direction: column; min-width: 0; }
@@ -818,6 +819,12 @@ tr:last-child td { border-bottom: none; }
 .player-bar__seek::-webkit-slider-thumb { appearance: none; width: 14px; height: 14px; margin-top: -4.5px; border-radius: 50%; background: var(--ink); }
 .player-bar__seek::-moz-range-thumb { width: 14px; height: 14px; border: none; border-radius: 50%; background: var(--ink); }
 .player-bar__right { display: flex; justify-content: flex-end; align-items: center; gap: var(--s2); }
+/* Close sits at the bar's far edge, outside the three-column grid, so it
+   stays reachable at every width (the right column is hidden on phones). */
+.player-bar__close { position: absolute; top: 50%; right: 12px; transform: translateY(-50%); width: 36px; height: 36px; color: var(--muted); }
+.player-bar__close:hover:not(:disabled) { color: var(--ink); }
+.player-bar__close:active { transform: translateY(-50%) scale(0.96); }
+.player-bar__close .icon { width: 16px; height: 16px; }
 .player-bar__hint { font-size: 12px; color: var(--muted); }
 .player-bar__queue { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: var(--muted); }
 
@@ -1348,6 +1355,9 @@ tr:last-child td { border-bottom: none; }
   .player-bar { bottom: 60px; }
   .player-bar__inner { grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr); }
   .player-bar__right { display: none; }
+  .player-bar__close { top: 8px; right: 8px; transform: none; }
+  .player-bar__close:active { transform: scale(0.96); }
+  .player-bar__inner { padding-right: 48px; }
   .tabbar__link { display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 60px; color: var(--muted); font-size: 12px; font-weight: 500; }
   .tabbar__link.is-active { color: var(--ink); }
 }
@@ -1653,7 +1663,10 @@ tr:last-child td { border-bottom: none; }
 .showcase__row {
   display: grid;
   grid-auto-flow: column;
-  grid-auto-columns: minmax(240px, 1fr);
+  /* Capped at the cover's own maximum (CoverArt size 300): with 1fr a lone
+     song stretched the card across the page while its cover stayed 300px,
+     leaving the play button and badges floating at the far right. */
+  grid-auto-columns: minmax(240px, 300px);
   gap: var(--s6);
   overflow-x: auto;
   padding-bottom: var(--s3);
@@ -1698,7 +1711,7 @@ tr:last-child td { border-bottom: none; }
 .studio__recent-row {
   display: grid;
   grid-auto-flow: column;
-  grid-auto-columns: minmax(200px, 1fr);
+  grid-auto-columns: minmax(200px, 260px);
   gap: var(--s4);
   overflow-x: auto;
   padding-bottom: var(--s2);
