@@ -1,5 +1,5 @@
 import { createHash, createHmac, timingSafeEqual } from 'node:crypto';
-import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, unlink, writeFile } from 'node:fs/promises';
 import { dirname, join, resolve, sep } from 'node:path';
 import type { PutResult, SignedUrl, StorageAdapter, StorageZone } from './types.js';
 
@@ -58,6 +58,17 @@ export class LocalStorageAdapter implements StorageAdapter {
 
   async get(zone: StorageZone, key: string): Promise<Buffer> {
     return readFile(this.path(zone, key));
+  }
+
+  async remove(zone: StorageZone, key: string): Promise<void> {
+    try {
+      await unlink(this.path(zone, key));
+    } catch (err) {
+      // Already gone is the outcome the caller asked for. Anything else — a
+      // permission problem, a read-only mount — is a real failure and must
+      // reach whoever is running the deletion, not be swallowed as success.
+      if ((err as NodeJS.ErrnoException).code !== 'ENOENT') throw err;
+    }
   }
 
   async signedUrl(params: {

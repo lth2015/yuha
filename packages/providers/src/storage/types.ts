@@ -29,6 +29,16 @@ export interface StorageAdapter {
     metadata?: Record<string, string>;
   }): Promise<PutResult>;
   get(zone: StorageZone, key: string): Promise<Buffer>;
+  /**
+   * Erase one object. Succeeds when the object is already gone.
+   *
+   * This existed nowhere until account deletion needed it, which meant the
+   * product promised to remove someone's songs and export files and had no
+   * code that could. Idempotent on purpose: a deletion sweep that has to be
+   * re-run must not fail on the objects it already removed, and "absent" is
+   * the state the caller wanted either way.
+   */
+  remove(zone: StorageZone, key: string): Promise<void>;
   /** Short-lived, unguessable download URL. Re-issued on every read. */
   signedUrl(params: {
     zone: StorageZone;

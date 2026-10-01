@@ -2,6 +2,9 @@
  * Security and rights handling: SEC-01 … SEC-11, plus the mode boundaries
  * from §3.1 and the SSRF guard from SEC-05.
  */
+import { randomUUID } from 'node:crypto';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { ConfigError, loadConfig } from '@yuha/api';
 import { getLicenseSnapshot, getTrack, query, setLicenseStatus } from '@yuha/db';
@@ -176,6 +179,61 @@ describe('SEC-04: download authorisation', () => {
     // Owner id plus a hash suffix — not simply "<trackId>.mp3".
     expect(rows[0]!.storage_key).toContain(owner.id);
     expect(rows[0]!.storage_key).not.toBe(`${trackId}.mp3`);
+  });
+});
+
+/*
+ * The product has promised since SEC-11 was written that account deletion
+ * removes "your songs and export files". Until this method existed, nothing in
+ * the codebase could remove a stored object at all: the storage adapter had
+ * put, get and signedUrl, and that was the whole interface. These cases cover
+ * the local adapter; S3 is a different implementation and passing here is not
+ * evidence that it was verified, which is the same caveat the adapter itself
+ * carries.
+ */
+describe('SEC-11: stored objects can actually be removed', () => {
+  const storage = () =>
+    new LocalStorageAdapter({
+      root: join(tmpdir(), `yuha-remove-${randomUUID()}`),
+      downloadBaseUrl: 'http://localhost:4000/v1/files',
+      signingSecret: 'test-signing-0123456789abcdef0123456789abcd',
+    });
+
+  it('removes an object, and the object is then unreadable', async () => {
+    const s = storage();
+    await s.put({ zone: 'delivery', key: 'u/1/a.mp3', body: Buffer.from('audio'), contentType: 'audio/mpeg' });
+    expect((await s.get('delivery', 'u/1/a.mp3')).toString()).toBe('audio');
+
+    await s.remove('delivery', 'u/1/a.mp3');
+
+    await expect(s.get('delivery', 'u/1/a.mp3')).rejects.toThrow();
+  });
+
+  it('is idempotent, so a re-run of a deletion sweep does not fail', async () => {
+    const s = storage();
+    await s.put({ zone: 'delivery', key: 'u/1/b.mp3', body: Buffer.from('x'), contentType: 'audio/mpeg' });
+    await s.remove('delivery', 'u/1/b.mp3');
+    await expect(s.remove('delivery', 'u/1/b.mp3')).resolves.toBeUndefined();
+    await expect(s.remove('delivery', 'never/existed.mp3')).resolves.toBeUndefined();
+  });
+
+  it('refuses a key that climbs out of its zone', async () => {
+    // The same guard `put` and `get` use. A deletion that could be pointed at
+    // an arbitrary path is a worse hole than one that cannot delete at all.
+    const s = storage();
+    await expect(s.remove('delivery', '../../etc/passwd')).rejects.toThrow(/traversal/);
+    await expect(s.remove('delivery', '/etc/passwd')).rejects.toThrow(/traversal/);
+  });
+
+  it('removes from one zone without touching the same key in the other', async () => {
+    const s = storage();
+    await s.put({ zone: 'delivery', key: 'same.mp3', body: Buffer.from('d'), contentType: 'audio/mpeg' });
+    await s.put({ zone: 'quarantine', key: 'same.mp3', body: Buffer.from('q'), contentType: 'audio/mpeg' });
+
+    await s.remove('delivery', 'same.mp3');
+
+    await expect(s.get('delivery', 'same.mp3')).rejects.toThrow();
+    expect((await s.get('quarantine', 'same.mp3')).toString()).toBe('q');
   });
 });
 

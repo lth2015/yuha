@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { GetObjectCommand, PutObjectCommand, S3Client } from '@aws-sdk/client-s3';
+import { DeleteObjectCommand, GetObjectCommand, PutObjectCommand, S3Client } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import type { PutResult, SignedUrl, StorageAdapter, StorageZone } from './types.js';
 
@@ -60,6 +60,28 @@ export class S3StorageAdapter implements StorageAdapter {
     const bytes = await res.Body?.transformToByteArray();
     if (!bytes) throw new Error(`empty object body for s3://${this.buckets[zone]}/${key}`);
     return Buffer.from(bytes);
+  }
+
+  /**
+   * S3 answers 204 whether or not the object was there, so this is idempotent
+   * without a prior HEAD — what the caller wants, and one fewer request.
+   *
+   * **Erasure here is not immediate, and whoever quotes a deletion promise
+   * needs to know it.** The delivery bucket has versioning enabled
+   * (`infra/terraform/data.tf`, `aws_s3_bucket_versioning.delivery`), so this
+   * call writes a delete marker and the object becomes a noncurrent version
+   * rather than disappearing. The lifecycle rule `clean-up-old-versions` on
+   * the same bucket expires noncurrent versions after 30 days, so the bytes do
+   * go — on day 30, not on the day somebody asked.
+   *
+   * Deleting every version by id instead would make it immediate and would
+   * also hand any caller the power to erase history on a bucket that is
+   * versioned precisely so mistakes can be undone. That trade belongs to
+   * whoever writes the retention policy, not to this method, so it stays as it
+   * is and the delay is written down here and in the deletion flow.
+   */
+  async remove(zone: StorageZone, key: string): Promise<void> {
+    await this.client.send(new DeleteObjectCommand({ Bucket: this.buckets[zone], Key: key }));
   }
 
   async signedUrl(params: {
