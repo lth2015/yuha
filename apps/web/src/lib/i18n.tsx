@@ -138,6 +138,7 @@ const zh: Dict = {
 
   'auth.welcome': '来到 YUHA',
   'auth.sub': '写下心情，做成音乐。用 Google 账号继续。',
+  'auth.subEmail': '写下心情，做成音乐。用邮箱登录即可开始。',
   'auth.google': '使用 Google 继续',
   'auth.googleNotConfigured': 'Google 登录尚未配置',
   'auth.googleHint': '在 API 环境变量中设置 GOOGLE_CLIENT_ID、GOOGLE_CLIENT_SECRET 和 GOOGLE_REDIRECT_URI 后，按钮会自动出现。',
@@ -733,6 +734,7 @@ const ja: Dict = {
 
   'auth.welcome': 'YUHA へようこそ',
   'auth.sub': '気持ちを書いて、音楽に。Google アカウントで続ける。',
+  'auth.subEmail': '気持ちを書いて、音楽に。メールアドレスでログインして始めましょう。',
   'auth.google': 'Google で続ける',
   'auth.googleNotConfigured': 'Google ログインは未設定です',
   'auth.googleHint': 'API の環境変数 GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET / GOOGLE_REDIRECT_URI を設定すると、ボタンが自動で表示されます。',
@@ -1324,6 +1326,7 @@ const en: Dict = {
 
   'auth.welcome': 'Welcome to YUHA',
   'auth.sub': 'Write a feeling, make it music. Continue with Google.',
+  'auth.subEmail': 'Write a feeling, make it music. Sign in with your email to start.',
   'auth.google': 'Continue with Google',
   'auth.googleNotConfigured': 'Google sign-in is not configured',
   'auth.googleHint': 'Set GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET and GOOGLE_REDIRECT_URI in the API environment — the button appears automatically.',

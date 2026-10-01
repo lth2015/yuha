@@ -1371,7 +1371,7 @@ tr:last-child td { border-bottom: none; }
   .tabbar {
     display: grid; position: fixed; left: 0; right: 0;
     bottom: 0; padding-bottom: env(safe-area-inset-bottom, 0px);
-    z-index: 70; grid-template-columns: repeat(3, 1fr);
+    z-index: 70; grid-auto-flow: column; grid-auto-columns: 1fr;
     border-top: 1px solid var(--glass-edge);
     min-height: 60px;
     /* opaque enough that scrolled content does not read through the labels */
@@ -1841,4 +1841,22 @@ tr:last-child td { border-bottom: none; }
   .player-bar__seek::-webkit-slider-thumb { width: 10px; height: 10px; margin-top: -3.5px; }
   .player-bar__seek::-moz-range-track, .player-bar__seek::-moz-range-progress { height: 3px; border-radius: 0; }
   .player-bar__close { right: 8px; }
+}
+
+/*
+ * From a heuristic pass over every page at 1440x780 and 390x760:
+ * - the tab bar had a 3-column grid for 2 tabs, leaving a dead third;
+ *   it now takes as many equal columns as it has tabs (rule above).
+ * - footer links were 20px tall, under the 24px minimum target (WCAG 2.5.8);
+ * - the consent checkboxes were 20px with the label as the only big target;
+ *   the whole row is a 44px target now;
+ * - on a phone the create page opened with a 148px decorative score above the
+ *   form, pushing the description field to the bottom of the screen.
+ */
+.site-foot__links a { display: inline-flex; align-items: center; min-height: 32px; }
+.checkbox-row { min-height: 44px; align-items: center; margin: 0; }
+.checkbox-row label { margin: 0; cursor: pointer; }
+.checkbox-row input[type='checkbox'] { width: 22px; height: 22px; flex: none; }
+@media (max-width: 767px) {
+  .studio__score { display: none; }
 }

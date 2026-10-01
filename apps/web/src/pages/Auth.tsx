@@ -141,7 +141,9 @@ export default function Auth() {
     <div className="auth-page">
       <div className="auth-card panel">
         <h1 className="auth-card__title">{t('auth.welcome')}</h1>
-        <p className="auth-card__sub">{t('auth.sub')}</p>
+        {/* "Continue with Google" only when Google is actually offered; on the
+            intranet build the only door is the email sign-in below. */}
+        <p className="auth-card__sub">{t(config?.google.enabled === false ? 'auth.subEmail' : 'auth.sub')}</p>
 
         <ErrorNotice error={error} />
         {googleError && (
@@ -184,7 +186,10 @@ export default function Auth() {
             </span>
             {t('auth.google')}
           </a>
-        ) : configState.status === 'ready' ? (
+        ) : configState.status === 'ready' && !configState.config.devLogin ? (
+          // Operator-facing (it names env vars), so it only shows when there
+          // is no way to sign in at all. With the dev sign-in below it, every
+          // colleague on the intranet build was told to edit an API .env.
           // Only once the server has actually said so. While the request is in
           // flight there is nothing to report, and claiming a misconfiguration
           // on every page load is how this message stopped being believed.
@@ -198,9 +203,11 @@ export default function Auth() {
 
         {config?.devLogin && (
           <>
-            <div className="auth-divider">
-              <span>{t('auth.or')}</span>
-            </div>
+            {config.google.enabled && (
+              <div className="auth-divider">
+                <span>{t('auth.or')}</span>
+              </div>
+            )}
             <form className="stack" onSubmit={submit} noValidate>
               <div>
                 <label htmlFor="email">{t('auth.email')}</label>
