@@ -2,17 +2,19 @@
 
 What is unfinished, what is blocked, and on whom. `PROJECT_TASK.md` §13.
 
-Every claim below was checked against the code on **2026-09-29**, because six
-of them had come to say the opposite of what the repository does. Anything that
+Every claim below was checked against the code on **2026-10-01**. Anything that
 cannot be checked from inside this repository — anything needing AWS
 credentials, or a payment completed by hand — says so, rather than carrying an
 older answer forward as if it still held.
 
-That first pass was 2026-09-28. The re-check a day later found three rows
-already stale, which is the honest rate of decay for a file like this: one of
-them was stale in the commit that wrote it, describing a state the same commit
-had fixed, and two were made wrong by a change whose author did not come back
-here. Re-check it whenever behaviour moves, not on a schedule.
+The decay rate is the point of this note. First pass 2026-09-28; the re-check a
+day later found three rows already stale, one of them stale in the commit that
+wrote it. This pass, two days on, found **six more**: the dark-studio contrast
+numbers (the canvas went back to warm white), the hardcoded-string count, three
+rows that are now done, and — the one that matters — a whole section premised
+on renting a music model from a vendor, written while the model was being moved
+onto a machine in the office. Re-check it whenever behaviour moves, not on a
+schedule, and count the rows rather than trusting the previous count.
 
 Two kinds of entry:
 
@@ -22,25 +24,47 @@ Two kinds of entry:
 
 ---
 
-## 1. Blocked on a signed music-provider agreement
+## 1. The music model: no longer a signed agreement, now a self-hosted one
 
-The single largest dependency. Nothing about real music generation has been
-verified, and the platform is built so that this cannot be accidentally
-forgotten: `MUSIC_COMMERCIAL_DELIVERY=true` is **rejected at start-up** while
-the demo adapter is in use.
+**This section's premise changed on 2026-10-01 and the rows below are kept
+rather than deleted, because what they asked is still worth answering — the
+answers now come from a different place.**
+
+The product no longer rents a music model. ACE-Step runs on the company's own
+DGX Spark (`deploy/dgx/`), `MUSIC_ADAPTER=http` points at it, and the audio
+seven or eight people have been listening to this week came out of it. The row
+that said "the correct engineering state is demo audio" described a build that
+no longer exists.
+
+That removes the commercial questions a vendor contract would have decided —
+per-call pricing, revenue share, benchmarking permission, whether we may
+operate a paid consumer service on somebody's API. It does not remove the
+rights questions; it moves them onto us, and adds one that is now the single
+largest unknown:
+
+**Nobody has read ACE-Step's model card.** Apache 2.0 covers the weights. What
+the model was trained on, and what claim anyone can make over its output, is a
+separate question that the licence does not answer — and the answer decides
+whether YUHA can keep telling users 「你生成的歌曲归你」. Suno and Udio settled
+with the major labels in late 2025 and the industry moved to licensed training
+data; a self-hosted model does not exempt anyone from that. Owner: legal, with
+the model card as the document to read.
+
+The start-up guard still holds and is still worth having:
+`MUSIC_COMMERCIAL_DELIVERY=true` is **rejected while the demo adapter is in
+use** (`config.ts:409`). It is not a guard against shipping on an unexamined
+licence, which is a different thing and currently has none.
 
 | Item | State | Owner | Unblocks |
 | --- | --- | --- | --- |
-| Enterprise API agreement | Not obtained | Business + legal | AI-01, AI-04, AI-08, PAY-03 |
-| Whether we may operate a paid consumer service on the API | Unknown | Legal | Everything commercial |
-| Delivering MP3/WAV to end users; storing and re-downloading | Unknown | Legal | UI-06, UI-07, SEC-09 |
-| Per-download fees or revenue share | Unknown | Business | Unit economics |
-| Downstream user rights: personal SNS video, monetisation, global visibility | Unknown | Legal | UI-09, the licence record contents |
-| Whether rights **survive** cancellation | Unknown | Legal | PAY-10, our terms §7 |
-| Real pricing: per call, per download, minimum commitment, failure billing | Unknown | Business | AI-06, all cost reporting |
-| Model version pinning, concurrency, idempotency, cancel, webhook support | Unknown | Engineering + supplier | AI-04, AI-05, the http adapter config |
-| Data processing region and sub-processors | Unknown | Legal | SEC-12, the privacy page |
-| Benchmarking / evaluation permission | Not obtained | Business | Any quality claim at all |
+| **ACE-Step's training data and output-rights claim** | **Unread.** Apache 2.0 is the weights' licence and answers neither | Legal | UI-09, the licence record, 「你生成的歌曲归你」 |
+| Delivering MP3/WAV to end users; storing and re-downloading | Ours to decide now that we host it; still unwritten | Legal | UI-06, UI-07, SEC-09 |
+| Downstream user rights: personal SNS video, monetisation, global visibility | Ours to decide; follows the row above | Legal | UI-09, the licence record contents |
+| Whether rights **survive** cancellation | Ours to decide | Legal | PAY-10, our terms §7 |
+| Data processing region and sub-processors | **Answered by self-hosting**: generation happens on a machine in the office, and the deployed `.env` already sets `MUSIC_DATA_REGION=self-hosted-lan-jp` — `unconfirmed` is only the schema's default. What is left is the privacy page saying it in words a reader understands | Engineering | SEC-12, the privacy page |
+| Unit economics | No longer a vendor's price list. Electricity and one GPU, against ¥196 a song on the DROP pack — but the per-song cost on this hardware has not been measured | Engineering | AI-06, all cost reporting |
+| Enterprise API agreement, per-call pricing, revenue share, benchmarking permission | **Moot while self-hosted.** Kept as the shape of what a vendor deal would have to settle, if one is ever signed | — | — |
+| Model version pinning, concurrency, idempotency, cancel | Ours: `ENGINE`, `V15_MODEL`, `MAX_QUEUE` and `VOCAL_TAKES` in `deploy/dgx/music`. Pinning is a deploy discipline nobody has written down | Engineering | AI-04, AI-05 |
 
 Two contract findings already on record and unresolved:
 
@@ -54,9 +78,10 @@ Two contract findings already on record and unresolved:
 - **ElevenLabs** — self-serve API access is explicitly **not** a resale right;
   enterprise authorisation plus possible co-branding would be required.
 
-Until one of these (or another provider) is signed, the correct engineering
-state is exactly what ships today: demo audio, commercial delivery off, and
-licence records that say so.
+What ships today: real audio from a model we host, commercial delivery still
+off, and licence records that say what provider and contract version produced
+each song. Turning `MUSIC_COMMERCIAL_DELIVERY` on is a decision that needs the
+model card read first, not a configuration change.
 
 ---
 
@@ -120,16 +145,16 @@ is where the next piece of work is.
 | **CloudWatch metric publication** | `monitoring.tf` alarms on `UpstreamFailureRate`, `DailyBudgetConsumedRatio`, `WebhookBacklog`, `LedgerDiscrepancies`, `UngrantedPaidOrders`, `StaleUnknownJobs`. The worker computes all of these but does **not yet publish** them. They are set `treat_missing_data = "breaching"` so they fail loudly rather than looking healthy. | Small |
 | **An alarm on settlement-by-sweep** | Two sweeps now repair a lost delivery, and both log at `warn` on success, because a repair is the symptom and not the cure: `reconcilePendingCheckouts` settles a checkout nobody told us about, and `reconcileUngrantedSubscriptions` (`fd51f39`) grants a subscription period whose `invoice.paid` never came. Nothing alarms on either, and the existing set cannot: `UngrantedPaidOrders` counts *paid* orders, which the checkout case never reaches on its own, and `WebhookBacklog` counts events received and unprocessed when the whole problem is that none was received. Whoever publishes the metrics above should add one that counts repairs. | Small |
 | **`UngrantedPaidOrders` counts subscriptions too** | Fixed in two steps, and the second is the one worth remembering. `a0d355d` marked the opening order fulfilled once the invoice granted, which made the count honest **while the invoice arrives**. When it does not, the order stays paid and ungranted and, until `fd51f39`, nothing could repair it — `recoverUngrantedOrders` skips every product that is not `one_time` — so the count would have risen and never fallen. Why it was wrong at all: subscriptions deliberately do not grant from the checkout event (PAY-06), so anything reading "paid but not granted" as a fault will mis-read them. Any future non-credit product needs the same care in both places: the grant, and the repair. | Done, recorded as a trap |
-| **Contrast on translucent surfaces** (UI-14) | Measured and gated, not outstanding: `scripts/check-contrast.mjs` checks 8 text tokens against `--bg`, `--surface-solid` and `--surface-soft` on every run, and all 8 clear 4.5:1 — the tightest is `--faint` at 4.56 on `--surface-soft`. What the gate cannot see is glass: a translucent surface over a moving light field has no colour in the stylesheet, so `--surface-soft`, the lightest opaque surface, stands in for it. That is a conservative substitution, not a measurement. Text placed on the `docs/UI_DESIGN.md` gradient rather than on a panel still needs measuring against the rendered lightest point. | Small |
+| **Contrast on translucent surfaces** (UI-14) | Measured and gated, not outstanding: `scripts/check-contrast.mjs` checks **7** text tokens against `--bg`, `--surface-solid` and `--surface-soft` on every run, and all 7 clear 4.5:1 — the tightest is `--muted` at 5.03 on `--surface-soft`. The canvas went back to warm white in `4f62bf1`, so the dark-studio numbers this row used to carry (8 tokens, `--faint` at 4.56) describe a palette that no longer exists; `--petal` left the measured set when it stopped being used as body text. What the gate still cannot see is glass: a translucent surface over a moving light field has no colour in the stylesheet, so the lightest opaque surface stands in for it. That is a conservative substitution, not a measurement. Text placed on the `docs/UI_DESIGN.md` gradient rather than on a panel still needs measuring against the rendered lightest point. | Small |
 | **Screen reader and real-device testing** (UI-13, UI-14) | Verified at three widths in a desktop browser only. VoiceOver, TalkBack and physical mobile playback are untested. | Small |
-| **Nobody has heard the audio** | The delivered file is a real 180.000s 192kbps MP3 and Chrome decodes it to `readyState 4`, but playback itself has never been verified: in the browser pane used for acceptance the `AudioContext` advances 0.006s per 2s of wall clock, so nothing sounds there (`26e7799`). This is the only link in the core promise that no check of any kind covers, and it needs a human at a machine with audio output. | Small, and only a human can close it |
+| ~~**Nobody has heard the audio**~~ | **Closed 2026-10-01.** Seven or eight colleagues have the internal build and have been generating and listening to real songs on it, and so has the owner. This row existed because the acceptance browser's `AudioContext` advanced 0.006s per 2s of wall clock (`26e7799`), so no automated check could ever close it — only a human with speakers, which is what happened. | Done |
 | **OpenAI-style OpenAPI document** | `docs/API.md` is complete and accurate but hand-written. §10 accepts "OpenAPI or equivalent"; a generated document from the zod schemas would stay in sync automatically. | Medium |
-| **17 hardcoded English strings remain** | `scripts/check-i18n.mjs` only recognised hardcoded text containing CJK, so English written straight into JSX was invisible to it while it reported "no new hardcoded UI strings". Extending it on 2026-09-29 found 43. Five were fixed on the spot rather than baselined — the 404 page, which was English under a Japanese header — and 38 were recorded as debt; `97025da` then translated 21 more: Account 13, Auth 5 (including the age gate, 「I am 18 or older」), GoogleCallback 3. **Left: Legal 13, App 2** (admin access denied), SyncedLyrics 1, common 1. `Legal.tsx` should not be translated by engineering: the page is marked as a draft pending legal review, and an unreviewed translation of a legal draft reads as an official one. The baseline holds 36 because the other 19 are the pre-existing Japanese in `Checkout.tsx` — a Chinese reader meets Japanese there, which is the same fault wearing a different language. This row said 38, with a breakdown naming the three files that same commit had already fixed: it was stale before it was written. | Small, except Legal |
-| **Account deletion execution** (SEC-11) | The request is recorded with a correct retention statement, but no job actually deletes the account and its audio after identity confirmation. | Medium |
-| **Track retention sweep** | Soft-deleted tracks keep their S3 objects; nothing removes them on a schedule. | Small |
-| **Analytics `preview_10s` event** | The player detects 10 seconds of real listening and the activation metric queries it, but the client does not yet POST it. Day-1 activation will therefore report as not computable. | Small |
+| **16 hardcoded English strings remain** | `scripts/check-i18n.mjs` only recognised hardcoded text containing CJK, so English written straight into JSX was invisible to it while it reported "no new hardcoded UI strings". Extending it on 2026-09-29 found 43; five were fixed on the spot and 38 baselined, `97025da` translated 21, and SyncedLyrics' one has gone since. The baseline now holds **35**: Legal 13, App 2 (admin access denied) and common 1 are the English that remains, and the other 19 are the pre-existing Japanese in `Checkout.tsx` — a Chinese reader meets Japanese there, which is the same fault wearing a different language. `Legal.tsx` should not be translated by engineering: the page is marked as a draft pending legal review, and an unreviewed translation of a legal draft reads as an official one. Counted from the baseline file rather than from this row's own history, which has been wrong twice. | Small, except Legal |
+| ~~**Account deletion execution**~~ (SEC-11) | **Closed 2026-10-01** (`c7e7c9a`, `a14bd15`). A request is a row that can be worked (`account_deletions`), an admin verifies identity and only then can execute, and the erasure removes the stored objects — which first needed `StorageAdapter.remove`, because nothing in the codebase could delete a stored object at all. Three holds: open rights case, orders and payments (hence anonymise rather than delete the user row), and songs other people have licensed. That last one was a promise the response did not make and now does. **Not yet exercised against S3**: on a versioned bucket a delete leaves a noncurrent version that the lifecycle rule expires after 30 days, which the response states as `audioErasureDays`. | Done, unverified on S3 |
+| **Track retention sweep** | Soft-deleted tracks keep their S3 objects; nothing removes them on a schedule. No longer blocked on a missing primitive — `StorageAdapter.remove` exists as of `c7e7c9a` — so what is left is the sweep itself and the decision about how long a soft-deleted track is recoverable before its audio goes. | Small |
+| ~~**Analytics `preview_10s` event**~~ | **Closed 2026-10-01** (`a473b06`). The player had detected the moment since it was written and exposed `onTenSeconds`; nothing subscribed, so the activation query read an event that was never written. `Layout` subscribes and posts to `POST /v1/previews`. The detection was also wrong: `audio.currentTime >= 10` counted a drag of the scrubber as a listen, and it now accumulates played time. | Done |
 | **Subscription renewal and dunning** | The first period is now proven end to end against Stripe (`a0d355d`): purchase, grant, the duplicate-subscription guard firing for the first time outside a unit test, and cancellation agreeing with Stripe on both the flag and the period end. What has still never happened is a **second** period — a renewal invoice, and `invoice.payment_failed` on a card that stops working. Both are a month away in real time; forcing them needs a test clock. | Small, with a test clock |
-| **Load testing** | §12.3 targets (P95 <1s create, <120s generation, ≥95% success) cannot be meaningfully measured against a synthesised fixture that returns instantly. | Blocked on a real provider |
+| **Load testing** | §12.3 targets (P95 <1s create, <120s generation, ≥95% success) could not be measured against a fixture that returns instantly. That changed when ACE-Step went onto the company's DGX Spark (`MUSIC_ADAPTER=http`): generation now takes real time on real hardware, and the box is a desktop machine shared by every tester, so queueing behaviour under even a handful of concurrent requests is both measurable and worth measuring. `deploy/dgx/music/02_acceptance.py` already records `rtf` per run and is the place to start. | No longer blocked |
 
 ---
 
