@@ -75,8 +75,8 @@ export default function SongDetail() {
     return (
       <div className="stack">
         <ErrorNotice error={error} />
-        <Link to="/library" className="btn">
-          {t('song.backMarket')}
+        <Link to={me ? '/library' : '/'} className="btn">
+          {t(me ? 'song.backMarket' : 'song.backHome')}
         </Link>
       </div>
     );
@@ -219,7 +219,15 @@ export default function SongDetail() {
                 </button>
               </>
             )}
-            {!isOwner && song.visibility === 'public' && song.state === 'deliverable' && (
+            {/* A reader with no account (a shared link) can listen; buying a
+                licence needs an account, so say that instead of showing a
+                dead, disabled button. */}
+            {!me && song.visibility === 'public' && song.state === 'deliverable' && (
+              <Link className="text-action is-strong" to={`/auth?next=${encodeURIComponent(`/song/${song.trackId}`)}`}>
+                {t('song.signInToLicense')}
+              </Link>
+            )}
+            {me && !isOwner && song.visibility === 'public' && song.state === 'deliverable' && (
               song.licensedByMe ? (
                 <button type="button" className="text-action" onClick={download} disabled={busy}>
                   {t('song.downloadLicensed')}

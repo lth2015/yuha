@@ -159,8 +159,51 @@ describe('song visibility', () => {
     const asStranger = await h.app.inject({ method: 'GET', url: `/v1/tracks/${trackId}`, headers: stranger.authHeader });
     expect(asStranger.statusCode).toBe(404);
 
+    // Anonymous reads are allowed on this route now (a shared link must open),
+    // so a private song answers 404 here too — never 401, which would confirm
+    // that something exists behind the id.
     const anonymous = await h.app.inject({ method: 'GET', url: `/v1/tracks/${trackId}` });
-    expect(anonymous.statusCode).toBe(401);
+    expect(anonymous.statusCode).toBe(404);
+  });
+
+  it('a published song opens for a reader with no account, and only what anyone may see', async () => {
+    const owner = await h.createUser({ credits: 5 });
+    const trackId = await deliverSong(owner, 'vis-anon', 'public');
+
+    const res = await h.app.inject({ method: 'GET', url: `/v1/tracks/${trackId}` });
+    expect(res.statusCode).toBe(200);
+    const body = res.json();
+    expect(body.trackId).toBe(trackId);
+    expect(body.visibility).toBe('public');
+    expect(typeof body.previewUrl).toBe('string');
+    expect(body.exports).toEqual([]);
+    expect(body.licensedByMe).toBeNull();
+    expect(body).not.toHaveProperty('playCount');
+
+    // A stale or forged token is read as no token, not as an error: the link
+    // still opens, and the reader is still nobody in particular.
+    const stale = await h.app.inject({
+      method: 'GET',
+      url: `/v1/tracks/${trackId}`,
+      headers: { authorization: 'Bearer not-a-real-token' },
+    });
+    expect(stale.statusCode).toBe(200);
+    expect(stale.json().exports).toEqual([]);
+
+    // Unpublishing closes it to anonymous readers as well.
+    await h.app.inject({
+      method: 'POST',
+      url: `/v1/tracks/${trackId}/visibility`,
+      headers: owner.authHeader,
+      payload: { visibility: 'private' } as never,
+    });
+    const after = await h.app.inject({ method: 'GET', url: `/v1/tracks/${trackId}` });
+    expect(after.statusCode).toBe(404);
+
+    // The owner still sees their own song, exports and all.
+    const asOwner = await h.app.inject({ method: 'GET', url: `/v1/tracks/${trackId}`, headers: owner.authHeader });
+    expect(asOwner.statusCode).toBe(200);
+    expect(asOwner.json()).toHaveProperty('exports');
   });
 
   it('the owner can publish and unpublish; a stranger loses access on unpublish', async () => {

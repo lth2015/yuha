@@ -11,6 +11,8 @@ declare module 'fastify' {
   }
   interface FastifyInstance {
     requireAuth: (req: FastifyRequest, reply: FastifyReply) => Promise<void>;
+    /** Sets `req.user` when a valid bearer token is present; never rejects. */
+    optionalAuth: (req: FastifyRequest, reply: FastifyReply) => Promise<void>;
     requireRole: (roles: UserRole[]) => (req: FastifyRequest, reply: FastifyReply) => Promise<void>;
     requireAgeConfirmed: (req: FastifyRequest, reply: FastifyReply) => Promise<void>;
   }
@@ -31,6 +33,23 @@ export default fp(async function authPlugin(app: FastifyInstance, opts: { adapte
       throw new AppError('FORBIDDEN', 'this account is not active');
     }
     req.user = user;
+  });
+
+  /**
+   * For routes a visitor with no account may read (a published song's page).
+   * A missing, invalid or expired token, or an inactive account, leaves the
+   * request anonymous rather than failing it: the reader still gets what
+   * anyone may see, and nothing an account would add.
+   */
+  app.decorate('optionalAuth', async (req: FastifyRequest, _reply: FastifyReply) => {
+    const header = req.headers.authorization;
+    if (!header?.startsWith('Bearer ')) return;
+    try {
+      const user = await adapter.verify(header.slice('Bearer '.length).trim());
+      if (user.status === 'active' && !user.deleted_at) req.user = user;
+    } catch {
+      /* treated as anonymous */
+    }
   });
 
   /**

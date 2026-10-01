@@ -93,24 +93,25 @@ export default async function trackRoutes(app: FastifyInstance, opts: { ctx: App
 
   /**
    * GET /v1/tracks/:id — owner detail with exports, or a published song read
-   * by any signed-in account (same view shape as the showcase, so one card
-   * component renders both).
+   * by anyone holding the link, signed in or not.
    *
-   * "Published" means the song is listed on the showcase and its link opens
-   * for anyone with an account — not for a logged-out visitor. This comment
-   * used to say "read anonymously", which the `requireAuth` on the very next
-   * line has always contradicted: a shared link has never opened without an
-   * account, so the sentence described an intention rather than the route.
-   * Kept as it is, deliberately; `GET /v1/explore` is where someone with no
-   * account can hear something.
+   * This used to require an account, deliberately, while the song page told
+   * readers 「凭链接可打开」 and CLAUDE.md defined public as "anyone holding the
+   * link can open it". Once Share offered X and LINE, the gap was the whole
+   * feature: every shared link opened onto a sign-in error. A logged-out
+   * reader now gets exactly what a signed-in stranger gets — title, lyrics,
+   * a playable preview — and nothing more: no exports, no master download,
+   * and `licensedByMe` is null because there is nobody to have bought one.
+   * Private songs stay NOT_FOUND to everyone but their owner.
    */
-  app.get('/v1/tracks/:id', { preHandler: app.requireAuth }, async (req) => {
+  app.get('/v1/tracks/:id', { preHandler: app.optionalAuth }, async (req) => {
     const { id } = req.params as { id: string };
-    const track = await getTrackForUser(id, req.user!.id);
-    if (track) {
+    const viewerId = req.user?.id ?? null;
+    const track = viewerId ? await getTrackForUser(id, viewerId) : null;
+    if (track && viewerId) {
       const assets = await listAssets(track.id);
       return {
-        ...(await toTrackView(ctx, track, req.user!.id)),
+        ...(await toTrackView(ctx, track, viewerId)),
         lyrics: track.lyrics,
         exports: assets
           .filter((a) => a.kind === 'export')
@@ -130,7 +131,7 @@ export default async function trackRoutes(app: FastifyInstance, opts: { ctx: App
     const publicRow = await getPublicTrack(id);
     if (!publicRow) throw new AppError('NOT_FOUND', 'track not found');
     const master = await getMasterAsset(publicRow.id);
-    const lic = await licenseStateFor(publicRow.id, req.user!.id);
+    const lic = await licenseStateFor(publicRow.id, viewerId);
     const previewUrl = master
       ? (
           await ctx.storage.signedUrl({

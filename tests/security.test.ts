@@ -91,10 +91,14 @@ describe('SEC-01: account isolation', () => {
     const owner = await h.createUser({ credits: 2 });
     const { trackId } = await deliverTrack(owner, 'iso-key-0002');
 
-    for (const url of ['/v1/tracks', `/v1/tracks/${trackId}`, '/v1/entitlements', '/v1/me']) {
+    for (const url of ['/v1/tracks', '/v1/entitlements', '/v1/me', `/v1/tracks/${trackId}/license`]) {
       const res = await h.app.inject({ method: 'GET', url });
-      expect(res.statusCode).toBe(401);
+      expect(res.statusCode, url).toBe(401);
     }
+    // The song detail route admits anonymous readers for published songs, so
+    // an unpublished one has to look like nothing at all.
+    const detail = await h.app.inject({ method: 'GET', url: `/v1/tracks/${trackId}` });
+    expect(detail.statusCode).toBe(404);
   });
 
   it('a tampered bearer token is rejected', async () => {
