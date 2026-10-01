@@ -28,6 +28,7 @@ export function SongCard({
   queue,
   index = 0,
   onRemove,
+  onVisibilityChange,
   disambiguator,
 }: {
   song: TrackView;
@@ -36,6 +37,13 @@ export function SongCard({
   index?: number;
   /** Library-only: called after a successful delete. */
   onRemove?: (trackId: string) => void;
+  /**
+   * Library-only: called after a successful publish or unpublish. The handler
+   * used to write `song.visibility = visibility` — mutating the prop — and
+   * rely on `setMenuOpen(false)` to force a repaint, so the label was correct
+   * by accident and the list the card came from still held the old value.
+   */
+  onVisibilityChange?: (trackId: string, visibility: 'public' | 'private') => void;
   /**
    * Set only when another song in the same list has this title. Sighted users
    * tell such cards apart by cover and position; a screen reader's list of
@@ -49,6 +57,14 @@ export function SongCard({
   const player = usePlayer();
   const [busy, setBusy] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
+  /*
+   * Publish, unpublish and delete were `try { … } finally { setBusy(false) }`
+   * with no `catch`. Confirm a delete while offline and you got an
+   * unhandled rejection: no navigation, no message, the card still there.
+   * The menu is a small surface, so the message is small too — but it is
+   * on screen, which nothing was.
+   */
+  const [failed, setFailed] = useState(false);
 
   const { me } = useSession();
   /*
@@ -99,10 +115,13 @@ export function SongCard({
 
   const setVisibility = async (visibility: 'public' | 'private') => {
     setBusy(true);
+    setFailed(false);
     try {
       await apiFetch(`/v1/tracks/${song.trackId}/visibility`, { method: 'POST', body: { visibility } });
-      song.visibility = visibility;
+      onVisibilityChange?.(song.trackId, visibility);
       setMenuOpen(false);
+    } catch {
+      setFailed(true);
     } finally {
       setBusy(false);
     }
@@ -111,9 +130,12 @@ export function SongCard({
   const remove = async () => {
     if (!window.confirm(t('song.confirmDelete', { title: song.title }))) return;
     setBusy(true);
+    setFailed(false);
     try {
       await apiFetch(`/v1/tracks/${song.trackId}`, { method: 'DELETE' });
       onRemove?.(song.trackId);
+    } catch {
+      setFailed(true);
     } finally {
       setBusy(false);
     }
@@ -223,6 +245,11 @@ export function SongCard({
                       {t('card.delete')}
                     </button>
                   </>
+                )}
+                {failed && (
+                  <p className="menu__error" role="alert">
+                    {t('card.actionFailed')}
+                  </p>
                 )}
               </div>
             )}

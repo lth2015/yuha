@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import type { OrderView, ProductView } from '@yuha/contracts';
-import { apiFetch, newIdempotencyKey } from '../lib/api';
+import { ApiError, apiFetch, newIdempotencyKey } from '../lib/api';
 import { useI18n } from '../lib/i18n';
 import { formatMoney, formatJst, useSession } from '../lib/session';
 import { LOCALES } from '../lib/money';
@@ -45,7 +45,17 @@ export function CheckoutConfirm() {
           apiFetch<{ items: ProductView[] }>('/v1/products'),
           apiFetch<Disclosure>('/v1/legal/business-disclosure'),
         ]);
-        setProduct(products.items.find((p) => p.priceKey === priceKey) ?? null);
+        /*
+         * A price key that is not in the catalogue used to set `product` to
+         * null and leave `error` null — and `ErrorNotice` renders nothing
+         * when its error is falsy. So `if (!product) return <ErrorNotice />`
+         * rendered a completely empty page, at the moment of payment, for a
+         * stale tab or a renamed product. This file's own comment records
+         * eight days lost to exactly that failure on /pricing.
+         */
+        const found = products.items.find((p) => p.priceKey === priceKey);
+        if (!found) throw new ApiError('NOT_FOUND', t('pay.unknownProduct'), 404);
+        setProduct(found);
         setDisclosure(d);
       } catch (err) {
         setError(err);
@@ -72,7 +82,16 @@ export function CheckoutConfirm() {
   };
 
   if (loading) return <Loading />;
-  if (!product) return <ErrorNotice error={error} />;
+  if (!product) {
+    return (
+      <div className="stack">
+        <ErrorNotice error={error} />
+        <Link className="btn" to="/pricing">
+          {t('pay.backToPricing')}
+        </Link>
+      </div>
+    );
+  }
 
   const nextChargeDate = new Date(Date.now() + 30 * 86400_000).toISOString();
 

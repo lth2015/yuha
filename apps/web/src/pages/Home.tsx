@@ -110,14 +110,39 @@ export default function Home() {
   const outOfCredits = !!me && credits < 1;
   const canSubmit = written && !submitting && !outOfCredits;
 
+  /*
+   * A mood chip does two things, and it used to do only one of them.
+   *
+   * Keeping the user's own words when they click a mood is right and was
+   * deliberate — `composer.moodKept` says so. But the handler returned before
+   * `setActiveMood`, so the mood itself was dropped: the chip never lit up
+   * (`.chip--mood[aria-pressed='true']` is the only pressed style), and
+   * `submit` reads `activeMood` for `styles`, so the style was never sent.
+   * Somebody who wrote their own description and then chose 夜 got no style
+   * at all, with a 12px grey line as the only acknowledgement.
+   *
+   * Clicking the active chip again clears it, because there was no way to
+   * unset a mood once chosen. And typing no longer clears it: a mood is an
+   * explicit choice, and losing it to one keystroke was its own surprise.
+   *
+   * The old guard was written `![MOOD_KEYS].some(() => MOOD_KEYS.some(...))`.
+   * The outer array has one element and the callback ignores its arguments,
+   * so it ran the inner test exactly once — it worked, by accident, and said
+   * nothing about what it meant.
+   */
   const pickMood = (mood: (typeof MOOD_KEYS)[number]) => {
-    const seeded = t(`mood.${mood}.text`);
-    if (prompt.trim() && ![MOOD_KEYS].some(() => MOOD_KEYS.some((k) => t(`mood.${k}.text`) === prompt))) {
+    if (mood === activeMood) {
+      setActiveMood(null);
+      setFeedbackKey(null);
+      return;
+    }
+    const ownWords = prompt.trim().length > 0 && !MOOD_KEYS.some((k) => t(`mood.${k}.text`) === prompt);
+    setActiveMood(mood);
+    if (ownWords) {
       setFeedbackKey({ key: 'composer.moodKept', params: { mood: t(`mood.${mood}`) } });
       return;
     }
-    setPrompt(seeded);
-    setActiveMood(mood);
+    setPrompt(t(`mood.${mood}.text`));
     setFeedbackKey({ key: 'composer.moodSeeded' });
   };
 
@@ -299,10 +324,7 @@ export default function Home() {
               ref={promptRef}
               value={prompt}
               maxLength={400}
-              onChange={(e) => {
-                setPrompt(e.target.value);
-                setActiveMood(null);
-              }}
+              onChange={(e) => setPrompt(e.target.value)}
               placeholder={t('composer.placeholder')}
               aria-describedby="home-prompt-format home-prompt-count"
             />

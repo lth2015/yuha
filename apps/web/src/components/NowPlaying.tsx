@@ -19,6 +19,7 @@ export function NowPlaying({
   timings,
   onClose,
   onDownload,
+  downloadError,
   title,
   artist,
   coverSeed,
@@ -28,6 +29,8 @@ export function NowPlaying({
   timings?: LyricTimings | null;
   onClose: () => void;
   onDownload?: () => void;
+  /** A failed export, shown here because this overlay covers the song page. */
+  downloadError?: unknown;
   title: string;
   artist: string;
   coverSeed: number;
@@ -41,7 +44,16 @@ export function NowPlaying({
   const at = Math.min(player.currentTime, duration || player.currentTime);
   const progress = duration ? (at / duration) * 100 : 0;
 
+  /*
+   * Guarded, because it was not idempotent. Two Escapes inside the 140ms
+   * close animation queued two `onClose` calls, and `Layout.closeNowPlaying`
+   * calls `window.history.back()` each time — so the second one popped the
+   * real page and threw the user off the screen they were on.
+   */
+  const closingRef = useRef(false);
   const close = () => {
+    if (closingRef.current) return;
+    closingRef.current = true;
     setClosing(true);
     setTimeout(onClose, 140);
   };
@@ -201,6 +213,11 @@ export function NowPlaying({
             <button type="button" className="text-action" onClick={onDownload}>
               {t('song.download')}
             </button>
+          )}
+          {downloadError !== null && downloadError !== undefined && (
+            <span className="player-bar__hint player-bar__hint--err" role="alert">
+              {t('card.actionFailed')}
+            </span>
           )}
         </div>
       </footer>

@@ -36,9 +36,12 @@ export default function Pricing() {
   const [error, setError] = useState<unknown>(null);
   const [busyKey, setBusyKey] = useState<string | null>(null);
 
+  const [attempt, setAttempt] = useState(0);
+
   useEffect(() => {
+    setError(null);
     fetchProducts().then(setProducts).catch(setError);
-  }, []);
+  }, [attempt]);
 
   const buy = async (priceKey: string) => {
     if (!me) {
@@ -125,9 +128,15 @@ export default function Pricing() {
         </p>
       </div>
 
-      <ErrorNotice error={error} />
+      <ErrorNotice error={error} onRetry={() => setAttempt((n) => n + 1)} />
 
-      {products === null ? (
+      {/*
+        Skeletons mean "loading". A failed catalogue read left `products` null,
+        so three shimmering plan placeholders sat under the banner for the rest
+        of the session — and the banner had no retry, so a browser reload was
+        the only way out of a pricing page with no prices.
+      */}
+      {products === null && error ? null : products === null ? (
         <div className="grid grid--plans" aria-hidden="true">
           {Array.from({ length: 3 }, (_, i) => (
             <div key={i} className="skeleton skeleton--plan" />

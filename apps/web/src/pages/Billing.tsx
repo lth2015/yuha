@@ -117,12 +117,19 @@ export default function Billing() {
       <section className="panel stack">
         <h2 className="section-title">{t('bill.credits')}</h2>
         <div className="row" style={{ gap: 'var(--s3)' }}>
+          {/*
+            A dash, not a zero. `ent` is null both before the first load and
+            after a failed one, so `?? 0` told a paying customer they had no
+            credits, in large type, next to the banner saying the page had
+            failed. Telling somebody nothing is better than telling them
+            something false about their balance.
+          */}
           <div>
-            <div className="num credit-figure">{ent?.availableUnits ?? 0}</div>
+            <div className="num credit-figure">{ent ? ent.availableUnits : '—'}</div>
             <div className="small muted">{t('bill.available')}</div>
           </div>
           <div>
-            <div className="num credit-figure">{ent?.reservedUnits ?? 0}</div>
+            <div className="num credit-figure">{ent ? ent.reservedUnits : '—'}</div>
             <div className="small muted">{t('bill.reserved')}</div>
           </div>
         </div>

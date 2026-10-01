@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { Link, NavLink, useLocation, useNavigate } from 'react-router-dom';
 import type { TrackView } from '@yuha/contracts';
 import { apiFetch } from '../lib/api';
@@ -82,6 +82,7 @@ export function Layout({ children }: { children: ReactNode }) {
   const [nowPlayingOpen, setNowPlayingOpen] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const [titleOverride, setTitleOverride] = useState<string | null>(null);
+  const [downloadError, setDownloadError] = useState<unknown>(null);
 
   // See lib/title.ts. Written here, once, so a page's override and the route's
   // default can never race each other on a language switch.
@@ -113,12 +114,58 @@ export function Layout({ children }: { children: ReactNode }) {
   const openNowPlaying = useCallback(() => {
     window.history.pushState({ ...(window.history.state ?? {}), yuhaNowPlaying: true }, '');
     setNowPlayingOpen(true);
-    const id = player.current?.trackId;
-    if (!id) return;
-    apiFetch<NowPlayingSong>(`/v1/tracks/${id}`)
-      .then(setNowPlaying)
-      .catch(() => setNowPlaying(null));
-  }, [player.current?.trackId]);
+  }, []);
+
+  /*
+   * The song shown, kept in step with the song playing.
+   *
+   * This fetch used to live inside `openNowPlaying`, so it ran once, when the
+   * view was opened, and nothing ever re-ran it. Let a queue advance —
+   * `player.onEnded` starts the next track — and the full-screen view kept
+   * the previous song's title, lyrics and timings: the karaoke display
+   * scrolled the wrong words against the new audio. Two opens in quick
+   * succession could also let the first response paint over the second,
+   * which the cancel flag now prevents.
+   */
+  const playingId = player.current?.trackId;
+  useEffect(() => {
+    if (!nowPlayingOpen || !playingId) return;
+    let cancelled = false;
+    apiFetch<NowPlayingSong>(`/v1/tracks/${playingId}`)
+      .then((s) => !cancelled && setNowPlaying(s))
+      .catch(() => !cancelled && setNowPlaying(null));
+    return () => {
+      cancelled = true;
+    };
+  }, [nowPlayingOpen, playingId]);
+
+  /*
+   * The account menu closes on an outside click, on Escape, and on a route
+   * change. It used to be toggled by the avatar and by nothing else: no
+   * outside-click handler, no Escape, no reset on navigation — so clicking
+   * the avatar and then anywhere else left the panel floating over the page,
+   * still reading `aria-expanded="true"`, until you found the avatar again.
+   * `ShareMenu` has done this correctly since it was written; this is its
+   * effect, in the one other menu in the app.
+   */
+  const accountRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!menuOpen) return;
+    const onDown = (e: PointerEvent) => {
+      if (accountRef.current && !accountRef.current.contains(e.target as Node)) setMenuOpen(false);
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setMenuOpen(false);
+    };
+    document.addEventListener('pointerdown', onDown);
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('pointerdown', onDown);
+      document.removeEventListener('keydown', onKey);
+    };
+  }, [menuOpen]);
+
+  useEffect(() => setMenuOpen(false), [location.pathname]);
 
 
   /*
@@ -149,8 +196,13 @@ export function Layout({ children }: { children: ReactNode }) {
         body: { clipStartSeconds: 0, clipDurationSeconds: Math.round(nowPlaying.durationSeconds), fadeOut: false },
       });
       window.location.href = res.downloadUrl;
-    } catch {
-      /* surfaced by the song page */
+    } catch (err) {
+      /*
+       * The old comment here said "surfaced by the song page", which was
+       * wrong about where the user is: this runs inside a full-screen overlay
+       * covering that page, so a failed export showed them nothing at all.
+       */
+      setDownloadError(err);
     }
   }, [nowPlaying]);
 
@@ -218,7 +270,7 @@ export function Layout({ children }: { children: ReactNode }) {
                 <Link to="/pricing" className="credit-pill">
                   {t('nav.credits', { n: credits })}
                 </Link>
-                <div className={`account${menuOpen ? ' is-open' : ''}`}>
+                <div ref={accountRef} className={`account${menuOpen ? ' is-open' : ''}`}>
                   <button
                     type="button"
                     className="account__btn"
@@ -337,6 +389,7 @@ export function Layout({ children }: { children: ReactNode }) {
           onDownload={
             nowPlaying && (me?.userId === nowPlaying.artistId || nowPlaying.licensedByMe) ? download : undefined
           }
+          downloadError={downloadError}
           onClose={closeNowPlaying}
         />
       )}

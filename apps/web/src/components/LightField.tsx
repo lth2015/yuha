@@ -13,9 +13,10 @@ import { startSheen } from '../lib/sheen';
  * field breathes with the real analyser from lib/beat; when nothing plays it
  * keeps a slow idle drift so the room is never dead.
  *
- * The grain on top is not decoration: wide gradients across a near-black
- * canvas band badly on 8-bit displays, and banding is the single clearest
- * tell of a cheap dark interface.
+ * The grain on top is not decoration: wide gradients band visibly on 8-bit
+ * displays and the grain dithers them. (It was written for a near-black
+ * canvas, which is gone — the reason survives the theme, the explanation did
+ * not, so this is the reason.)
  */
 export function LightField() {
   const [energy, setEnergy] = useState(0);
@@ -23,9 +24,34 @@ export function LightField() {
   const raf = useRef(0);
   const shown = useRef(0);
 
+  /*
+   * Reduced motion is respected here, not only in CSS.
+   *
+   * The stylesheet pins the lobes with `scale: 1 !important`, so nothing
+   * moves — but this component kept subscribing to the analyser and calling
+   * `setEnergy` from a requestAnimationFrame loop, re-rendering itself about
+   * sixty times a second for the whole length of every song, to animate a
+   * value the page had been told to ignore. `Score.tsx` already reads the
+   * same query with a live `change` listener; this had no check at all.
+   */
+  const [still, setStill] = useState(
+    () => typeof window !== 'undefined' && !!window.matchMedia?.('(prefers-reduced-motion: reduce)').matches,
+  );
+  useEffect(() => {
+    const mq = window.matchMedia?.('(prefers-reduced-motion: reduce)');
+    if (!mq) return;
+    const onChange = (e: MediaQueryListEvent) => setStill(e.matches);
+    mq.addEventListener('change', onChange);
+    return () => mq.removeEventListener('change', onChange);
+  }, []);
+
   useEffect(
     () =>
       subscribeBeat((e, playing) => {
+        if (still) {
+          setLive(playing);
+          return;
+        }
         setLive(playing);
         // Ease towards the analyser value; raw frames make the lobes jitter.
         const step = () => {
@@ -36,7 +62,7 @@ export function LightField() {
         cancelAnimationFrame(raf.current);
         raf.current = requestAnimationFrame(step);
       }),
-    [],
+    [still],
   );
 
   useEffect(() => () => cancelAnimationFrame(raf.current), []);

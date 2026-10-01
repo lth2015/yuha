@@ -57,6 +57,21 @@ export default function MfaChallenge() {
 
         <ErrorNotice error={error} />
 
+        {/*
+          Without `?challenge=` there is nothing to verify against, and the
+          form used to render anyway: the button enabled at six digits and
+          pressing it returned silently. A bookmark, a reload of a stale tab
+          or a shared URL all land here. The link to start again already
+          existed at the bottom of the page; nothing pointed anyone at it.
+        */}
+        {!challengeToken ? (
+          <div className="alert alert--warn">
+            <div className="alert__title">{t('mfa.noChallenge')}</div>
+            <div className="small">
+              <a href="/auth">{t('mfa.restart')}</a>
+            </div>
+          </div>
+        ) : (
         <form className="stack" onSubmit={submit} noValidate>
           <div>
             <label htmlFor="mfa-code">{t('mfa.code')}</label>
@@ -81,6 +96,7 @@ export default function MfaChallenge() {
             {busy ? t('mfa.verifying') : t('mfa.verify')}
           </button>
         </form>
+        )}
 
         <p className="small muted" style={{ textAlign: 'center', margin: 0 }}>
           <a href="/auth">{t('mfa.restart')}</a>

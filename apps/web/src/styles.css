@@ -920,6 +920,7 @@ tr:last-child td { border-bottom: none; }
 .player-bar__close:hover:not(:disabled) { color: var(--ink); }
 .player-bar__close:active { transform: translateY(-50%) scale(0.96); }
 .player-bar__close .icon { width: 16px; height: 16px; }
+.menu__error { margin: 4px 10px 2px; font-size: 12px; color: var(--danger); }
 .player-bar__hint { font-size: 12px; color: var(--muted); }
 /* Playback failure rendered in the same grey as the queue hint. */
 .player-bar__hint--err { color: var(--danger); font-weight: 500; }

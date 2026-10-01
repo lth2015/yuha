@@ -43,6 +43,12 @@ export default function SongDetail() {
   // A song page is best titled by its song, not by the word "song".
   usePageTitle(song?.title);
   const [error, setError] = useState<unknown>(null);
+  /*
+   * Kept apart from `error` on purpose. `error` is the page failing to
+   * load and replaces the page; this one belongs beside the buttons, so a
+   * failed download or licence purchase does not take the song with it.
+   */
+  const [actionError, setActionError] = useState<unknown>(null);
   const [busy, setBusy] = useState(false);
   const [licenseProduct, setLicenseProduct] = useState<ProductView | null>(null);
   const [licensing, setLicensing] = useState(false);
@@ -89,6 +95,13 @@ export default function SongDetail() {
       });
   }, []);
 
+  /*
+   * `error` is the LOAD failing, which is the only failure that should
+   * replace the page. Download and licence failures used to write the same
+   * state, so one flaky request made the cover, title, lyrics, player and
+   * every action vanish — replaced by a full-page error whose only way out
+   * was "back to library", with no retry and nothing re-run. On the buy path.
+   */
   if (error) {
     return (
       <div className="stack">
@@ -125,9 +138,28 @@ export default function SongDetail() {
 
   const setVisibility = async (visibility: 'public' | 'private') => {
     setBusy(true);
+    setActionError(null);
     try {
       await apiFetch(`/v1/tracks/${song.trackId}/visibility`, { method: 'POST', body: { visibility } });
       setSong({ ...song, visibility });
+    } catch (err) {
+      // There was no catch: offline, the menu kept the old label and said
+      // nothing, so publishing appeared to work and had not.
+      setActionError(err);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const remove = async () => {
+    if (!window.confirm(t('song.confirmDelete', { title: song.title }))) return;
+    setBusy(true);
+    setActionError(null);
+    try {
+      await apiFetch(`/v1/tracks/${song.trackId}`, { method: 'DELETE' });
+      navigate('/library');
+    } catch (err) {
+      setActionError(err);
     } finally {
       setBusy(false);
     }
@@ -142,7 +174,7 @@ export default function SongDetail() {
       });
       window.location.href = res.downloadUrl;
     } catch (err) {
-      setError(err);
+      setActionError(err);
     } finally {
       setBusy(false);
     }
@@ -151,7 +183,7 @@ export default function SongDetail() {
   const buyLicense = async () => {
     if (licensing || !me) return;
     setLicensing(true);
-    setError(null);
+    setActionError(null);
     try {
       const res = await apiFetch<{ orderId: string; checkoutUrl: string; simulated: boolean }>(
         `/v1/market/tracks/${song.trackId}/license`,
@@ -163,7 +195,7 @@ export default function SongDetail() {
         window.location.href = res.checkoutUrl;
       }
     } catch (err) {
-      setError(err);
+      setActionError(err);
     } finally {
       setLicensing(false);
     }
@@ -234,11 +266,7 @@ export default function SongDetail() {
                   type="button"
                   className="text-action is-danger"
                   disabled={busy}
-                  onClick={async () => {
-                    if (!window.confirm(t('song.confirmDelete', { title: song.title }))) return;
-                    await apiFetch(`/v1/tracks/${song.trackId}`, { method: 'DELETE' });
-                    navigate('/library');
-                  }}
+                  onClick={() => void remove()}
                 >
                   {t('song.delete')}
                 </button>
@@ -286,6 +314,9 @@ export default function SongDetail() {
               )
             )}
           </div>
+
+          {/* Beside the buttons that caused it, not in place of the page. */}
+          <ErrorNotice error={actionError} />
 
           {song.licenseCount > 0 && (
             <p className="song-spread__note">{t('song.licensesSold', { n: song.licenseCount })}</p>

@@ -22,6 +22,11 @@ export default function Library() {
   const [q, setQ] = useState('');
   const [error, setError] = useState<unknown>(null);
   const [loadingMore, setLoadingMore] = useState(false);
+  /*
+   * Bumped to re-run the load effect. The banner used to have no `onRetry`,
+   * so the only way out of a failed library was a browser reload.
+   */
+  const [attempt, setAttempt] = useState(0);
 
   const load = useCallback(async (params?: { cursor?: string }) => {
     const search = new URLSearchParams({ limit: '24' });
@@ -62,15 +67,58 @@ export default function Library() {
       cancelled = true;
       clearTimeout(timer);
     };
-  }, [load, q]);
+  }, [load, q, attempt]);
+
+  /*
+   * A song that finishes while you are looking at the library.
+   *
+   * The wait page's own exit is "go to my work" — `wait.sub` says in three
+   * languages that it is fine to leave the page and check later — and the
+   * card that greeted you there said "generating", with a disabled play
+   * button, for as long as you cared to watch. There was one load, keyed on
+   * the query, and nothing else ever wrote `songs`: no poll, no refresh
+   * control, no re-fetch on focus. The song was finished on the server and
+   * the only way to find out was to reload by hand.
+   *
+   * Polling stops the moment nothing is processing, so a settled library
+   * makes no requests. `setSongs` replaces the array, which does not remount
+   * the cards — the keys are track ids — so nothing flickers and the entrance
+   * animation does not re-run.
+   */
+  useEffect(() => {
+    if (!songs?.some((s) => s.state === 'processing')) return;
+    let cancelled = false;
+    const timer = setInterval(() => {
+      load()
+        .then((r) => {
+          if (cancelled) return;
+          setError(null);
+          setSongs(r.items);
+          setCursor(r.nextCursor);
+        })
+        // A failed poll is not worth a banner over a list that is already on
+        // screen; the next tick tries again.
+        .catch(() => undefined);
+    }, 5000);
+    return () => {
+      cancelled = true;
+      clearInterval(timer);
+    };
+  }, [songs, load]);
 
   const loadMore = async () => {
     if (!cursor || loadingMore) return;
     setLoadingMore(true);
+    setError(null);
     try {
       const r = await load({ cursor });
       setSongs((prev) => [...(prev ?? []), ...r.items]);
       setCursor(r.nextCursor);
+    } catch (err) {
+      // There was no catch here at all: the button flipped back from
+      // "loading" to "load more", no rows appeared, and the rejection went
+      // unhandled. The page said nothing about why the list had stopped.
+      setError(err);
     } finally {
       setLoadingMore(false);
     }
@@ -127,9 +175,15 @@ export default function Library() {
         </div>
       </div>
 
-      <ErrorNotice error={error} />
+      <ErrorNotice error={error} onRetry={() => setAttempt((n) => n + 1)} />
 
-      {songs === null ? (
+      {/*
+        Skeletons mean "loading", so a failure must not keep showing them.
+        `setSongs(null)` runs before every load, so a failed load left four
+        shimmering placeholders under the red banner — forever, since the
+        banner had no retry either.
+      */}
+      {songs === null && error ? null : songs === null ? (
         <div className="grid grid--songs" aria-hidden="true">
           {Array.from({ length: 4 }, (_, i) => (
             <div key={i} className="skeleton skeleton--card" />
@@ -158,6 +212,11 @@ export default function Library() {
                     : undefined
                 }
                 onRemove={(id) => setSongs((prev) => prev?.filter((s) => s.trackId !== id) ?? null)}
+                onVisibilityChange={(id, visibility) =>
+                  setSongs(
+                    (prev) => prev?.map((s) => (s.trackId === id ? { ...s, visibility } : s)) ?? null,
+                  )
+                }
               />
             ))}
           </div>

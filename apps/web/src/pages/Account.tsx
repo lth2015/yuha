@@ -50,10 +50,23 @@ export default function Account() {
   const [mfaCode, setMfaCode] = useState('');
   const [mfaBusy, setMfaBusy] = useState(false);
 
+  /*
+   * Three states, not two. This collapsed "not answered yet" and "the request
+   * failed" into the same `null`, and the panel renders `mfaEnabled === null`
+   * as the word "Loading…" — so one failed status call left two-factor
+   * security showing a loading line for ever: no Set-up button, no error, no
+   * retry. The same three-state bug `Auth.tsx` documents at length having
+   * already been fixed once.
+   */
+  const [mfaFailed, setMfaFailed] = useState(false);
   const refreshMfa = useCallback(() => {
+    setMfaFailed(false);
     apiFetch<{ enabled: boolean }>('/v1/auth/mfa/status')
       .then((s) => setMfaEnabled(s.enabled))
-      .catch(() => setMfaEnabled(null));
+      .catch(() => {
+        setMfaEnabled(null);
+        setMfaFailed(true);
+      });
   }, []);
   useEffect(refreshMfa, [refreshMfa]);
 
@@ -126,14 +139,28 @@ export default function Account() {
     }
   };
 
+  /*
+   * The button is the last control on a long page and the only error display
+   * was at the very top, off screen. Confirm a deletion request with no
+   * connection and nothing at all appeared — and the button was never
+   * disabled, so it could be pressed again and again. `Create.tsx` solved
+   * exactly this ("点击生成没有响应") by putting the message next to the
+   * control; this does the same.
+   */
+  const [deleteError, setDeleteError] = useState<unknown>(null);
+  const [deleting, setDeleting] = useState(false);
   const requestDeletion = async () => {
+    if (deleting) return;
     const ok = window.confirm(t('acct.deleteConfirm'));
     if (!ok) return;
-    setError(null);
+    setDeleting(true);
+    setDeleteError(null);
     try {
       setReceipt(await apiFetch<DeletionReceipt>('/v1/me/deletion-request', { method: 'POST', body: {} }));
     } catch (err) {
-      setError(err);
+      setDeleteError(err);
+    } finally {
+      setDeleting(false);
     }
   };
 
@@ -169,7 +196,14 @@ export default function Account() {
           {t('acct.mfaBody')}
         </p>
 
-        {mfaEnabled === null && <p className="small muted">{t('lib.loading')}</p>}
+        {mfaEnabled === null && !mfaFailed && <p className="small muted">{t('lib.loading')}</p>}
+        {mfaFailed && (
+          <div className="row">
+            <button type="button" className="btn btn--sm" onClick={refreshMfa}>
+              {t('common.retry')}
+            </button>
+          </div>
+        )}
 
         {mfaEnabled === false && !enrollment && (
           <button type="button" className="btn btn--primary" onClick={startEnrollment} disabled={mfaBusy}>
@@ -313,7 +347,13 @@ export default function Account() {
                 privacy: <Link to="/legal/privacy">{t('auth.privacyLink')}</Link>,
               })}
             </p>
-            <button type="button" className="btn btn--danger" onClick={() => void requestDeletion()}>
+            <ErrorNotice error={deleteError} />
+            <button
+              type="button"
+              className="btn btn--danger"
+              onClick={() => void requestDeletion()}
+              disabled={deleting}
+            >
               {t('acct.deleteRequest')}
             </button>
           </>

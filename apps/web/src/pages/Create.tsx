@@ -822,11 +822,21 @@ export default function Create() {
                 {t('create.lyrics')}{' '}
                 {draft.instrumental && <span className="muted">{t('create.lyrics.unused')}</span>}
               </label>
+              {/*
+                The prompt box carries `maxLength` and this one did not, while
+                the counter beside it promised a limit. `canSubmit` does not
+                check it either, so pasting a long lyric sheet looked fine all
+                the way to a VALIDATION_FAILED after pressing generate.
+                Measured in code points, as the counter and the contract are.
+              */}
               <textarea
                 id="lyrics"
                 rows={7}
                 value={draft.lyrics}
-                onChange={(e) => patch({ lyrics: e.target.value })}
+                onChange={(e) => {
+                  const next = [...e.target.value].slice(0, LYRICS_MAX_CODEPOINTS).join('');
+                  patch({ lyrics: next });
+                }}
                 placeholder={'[Verse]\nCity lights blur into gold\n…'}
                 disabled={draft.instrumental}
                 aria-describedby="lyrics-hint lyrics-count"
