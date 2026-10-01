@@ -43,9 +43,19 @@ function Pending({ what }: { what: string }) {
   );
 }
 
+/*
+ * Only products that can actually be bought.
+ *
+ * This mapped every entry from /v1/products with no filter, and
+ * `listProducts` marks subscriptions `available: false` while
+ * FEATURE_SUBSCRIPTIONS_ENABLED is off — which /pricing renders as "coming
+ * soon". So with subscriptions closed, the 特定商取引法 page advertised
+ * CREATOR and STUDIO as 販売価格 with 自動更新, as a statutory disclosure of
+ * prices, for two plans the product refuses to sell.
+ */
 function priceLines(products: ProductView[]): string[] {
   const locale = LOCALES.ja;
-  return products.map((p) => {
+  return products.filter((p) => p.available).map((p) => {
     const amount = formatMoney(p.amountMinor, p.currency, locale);
     const unit = p.kind === 'subscription' ? '／月（自動更新）' : '（買い切り）';
     const validity = p.validityDays ? `・有効期限 ${p.validityDays} 日` : '';

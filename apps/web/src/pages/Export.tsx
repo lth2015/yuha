@@ -69,10 +69,22 @@ export default function Export() {
     void load();
   }, [load]);
 
-  // A 30s export always covers the whole track, so the start is pinned to 0.
+  /*
+   * Keep the start inside the track when the length changes.
+   *
+   * This used to read "a 30s export always covers the whole track, so the
+   * start is pinned to 0" and did exactly that — but songs are 30 to 240
+   * seconds (`contracts/generation.ts`, default 120, and Create offers up to
+   * 4:00), so for anything but a 30-second song the claim was false and the
+   * effect threw away the start the user had chosen. Clamping is what was
+   * actually wanted, and it is right for a 30s song too: `maxStart` is 0
+   * there, so the pin still happens.
+   */
   useEffect(() => {
-    if (clipDuration === 30) setClipStart(0);
-  }, [clipDuration]);
+    if (!track) return;
+    const max = Math.max(0, Math.floor(track.durationSeconds - clipDuration));
+    setClipStart((start) => Math.min(start, max));
+  }, [clipDuration, track]);
 
   const maxStart = track ? Math.max(0, Math.floor(track.durationSeconds - clipDuration)) : 0;
 

@@ -202,16 +202,25 @@ export function Privacy() {
       </Section>
       <Section h="5. Publishing and public songs">
         <p>
-          Songs are private by default. If you publish a song to Explore, its title, styles, audio and
-          creator display name become publicly visible, and other users can play and like it. You can
-          unpublish at any time.
+          Songs are private by default. If you publish a song, its title, styles, audio and creator
+          display name become publicly visible: anyone holding the link can open it, and it appears in
+          the showcase on our home page. Other visitors can play it. You can unpublish at any time,
+          which removes it from the showcase and from the link — except that anyone who has bought a
+          licence for it keeps their download.
         </p>
       </Section>
       <Section h="6. Retention">
         <p>
-          Account and creation data are kept while your account is active. After deletion: account profile
-          and unpublished songs are removed; orders and payment records are retained for the statutory
-          period; songs under a rights complaint are retained until the review closes.
+          Account and creation data are kept while your account is active. After deletion your account
+          profile is anonymised and your songs are removed, published or not — with three exceptions:
+          orders and payment records are retained for the statutory period, a song under a rights
+          complaint is retained until the review closes, and a song somebody else has licensed is
+          retained so that their purchase keeps working.
+        </p>
+        <p>
+          A song you delete yourself leaves your library immediately; its stored audio is removed
+          after 90 days, subject to the same two exceptions. Where audio is held in versioned object
+          storage, the underlying copies are expired within a further 30 days.
         </p>
       </Section>
       <Section h="7. Your rights">

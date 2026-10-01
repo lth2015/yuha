@@ -86,7 +86,17 @@ export const paginated = <T extends z.ZodTypeAny>(item: T) =>
 
 /** Idempotency key header used by POST /v1/generations and /v1/checkout. */
 export const IDEMPOTENCY_HEADER = 'idempotency-key';
-export const idempotencyKeySchema = z.string().min(8).max(128).regex(/^[A-Za-z0-9._:-]+$/);
+/*
+ * The message matters as much as the rule. A 7-character key — `ret-old`,
+ * say — answered "a valid idempotency-key header is required", which names no
+ * constraint at all; two of my own tests died on it and the error told me
+ * nothing. Zod's own text is more use than the generic line the route prints.
+ */
+export const idempotencyKeySchema = z
+  .string()
+  .min(8, 'idempotency-key must be at least 8 characters')
+  .max(128, 'idempotency-key must be at most 128 characters')
+  .regex(/^[A-Za-z0-9._:-]+$/, 'idempotency-key may use letters, digits and . _ : - only');
 
 /**
  * A crash reported by the browser.

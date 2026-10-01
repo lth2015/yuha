@@ -3,6 +3,7 @@ import type { FastifyInstance } from 'fastify';
 import type { RuntimeInfo } from '@yuha/contracts';
 import type { AppContext } from '../context.js';
 import { resolveFromRoot } from '../paths.js';
+import { freeTrialAvailable } from '../services/billing.js';
 
 /**
  * Public, unauthenticated endpoints: the runtime descriptor, the sample audio
@@ -30,14 +31,17 @@ export default async function publicRoutes(app: FastifyInstance, opts: { ctx: Ap
    */
   app.get('/v1/runtime', async () => {
     const features = await ctx.features();
+    const trialAvailable = await freeTrialAvailable(ctx);
     const info: RuntimeInfo = {
       mode: ctx.config.mode,
       demo: ctx.config.isDemo,
       syntheticAudio: ctx.config.adapters.music === 'demo',
       features: {
         subscriptionsEnabled: features.subscriptionsEnabled,
-        freeTrialEnabled: features.freeTrialEnabled,
-        freeTrialUnits: features.freeTrialEnabled ? ctx.config.FREE_TRIAL_UNITS : 0,
+        // Not `features.freeTrialEnabled`: that flag is only half the
+        // condition the grant applies. See `freeTrialAvailable`.
+        freeTrialEnabled: trialAvailable,
+        freeTrialUnits: trialAvailable ? ctx.config.FREE_TRIAL_UNITS : 0,
         wavExportEnabled: features.wavExportEnabled,
         commercialDeliveryEnabled: features.commercialDeliveryEnabled,
         realPaymentsEnabled: features.realPaymentsEnabled,
@@ -67,9 +71,14 @@ export default async function publicRoutes(app: FastifyInstance, opts: { ctx: Ap
   });
 
   /**
-   * Landing-page samples (UI-01). In demo mode these are the synthesised
-   * fixtures we own outright; the provenance note travels with them so the page
-   * can state where the audio came from.
+   * Synthesised sample audio with its provenance note (UI-01 heritage).
+   *
+   * Not the landing page's source any more, whatever this used to say: Home
+   * renders the showcase from `GET /v1/explore`, and nothing in `apps/web`
+   * calls this. Kept because it is the one endpoint that serves audio we own
+   * outright, which is what a sales or legal conversation needs — but it has
+   * no reader in the product, and a route with no reader is a route nobody
+   * notices breaking.
    */
   app.get('/v1/samples', async () => {
     if (ctx.config.adapters.music !== 'demo') {

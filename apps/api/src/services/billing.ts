@@ -312,11 +312,27 @@ export async function cancelSubscription(
 }
 
 /** Grants the free-trial batch, if the operator has enabled it (§7: at most 2). */
-export async function grantTrialIfEligible(ctx: AppContext, userId: string): Promise<boolean> {
+/**
+ * Whether a new account would actually receive the trial.
+ *
+ * The pricing page renders the free card from `runtime.features
+ * .freeTrialEnabled`, which was only `FEATURE_FREE_TRIAL_ENABLED` — while the
+ * grant below has a second condition. In production with a provider that has
+ * no commercial-delivery clearance the page said "{n} welcome credits —
+ * included with your account" and new accounts received nothing. One
+ * predicate now, read by both, so the page cannot advertise a grant that will
+ * not happen.
+ */
+export async function freeTrialAvailable(ctx: AppContext): Promise<boolean> {
   const features = await ctx.features();
   if (!features.freeTrialEnabled) return false;
   const caps = ctx.music.capabilities();
   if (!caps.commercialDeliveryPermitted && ctx.config.mode === 'production') return false;
+  return true;
+}
+
+export async function grantTrialIfEligible(ctx: AppContext, userId: string): Promise<boolean> {
+  if (!(await freeTrialAvailable(ctx))) return false;
 
   return withTx(async (tx) => {
     const res = await grantUnits(

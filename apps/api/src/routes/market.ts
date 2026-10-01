@@ -18,7 +18,12 @@ export default async function marketRoutes(app: FastifyInstance, opts: { ctx: Ap
       const rawKey = req.headers[IDEMPOTENCY_HEADER];
       const parsedKey = idempotencyKeySchema.safeParse(Array.isArray(rawKey) ? rawKey[0] : rawKey);
       if (!parsedKey.success) {
-        throw new AppError('VALIDATION_FAILED', `a valid ${IDEMPOTENCY_HEADER} header is required`);
+        // Zod's own message, so the reason is on screen: the old line named
+        // no rule, and a 7-character key read as an unexplained 400.
+        throw new AppError(
+          'VALIDATION_FAILED',
+          parsedKey.error.issues[0]?.message ?? `a valid ${IDEMPOTENCY_HEADER} header is required`,
+        );
       }
       const result = await createLicenseCheckout(ctx, {
         userId: req.user!.id,

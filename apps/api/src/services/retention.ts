@@ -10,13 +10,18 @@ export interface RetentionSweepResult {
  * Remove the audio of songs their owners deleted more than the retention
  * window ago.
  *
- * A soft delete takes the song out of the library and leaves the file, which
- * is what makes "I deleted the wrong one" recoverable. Nothing ever came back
- * for those files: every song anyone has ever deleted is still stored, and the
- * retention promise had no expiry behind it. `TRACK_RETENTION_DAYS` is that
- * expiry — 90 days, a product decision rather than a number inherited from
- * somewhere — and 0 turns the sweep off for an operator who wants to keep
- * everything.
+ * A soft delete takes the song out of the library and leaves the file behind.
+ * Nothing ever came back for those files: every song anyone has ever deleted
+ * is still stored, and the retention promise had no expiry behind it.
+ * `TRACK_RETENTION_DAYS` is that expiry — 90 days, a product decision rather
+ * than a number inherited from somewhere — and 0 turns the sweep off for an
+ * operator who wants to keep everything.
+ *
+ * This used to say the delay "is what makes 'I deleted the wrong one'
+ * recoverable". It is not: there is no restore path anywhere in the codebase,
+ * and the confirmation the user sees says the delete cannot be undone. The
+ * window is a safety margin for operations — a mistaken sweep, a rights case
+ * opened just after a delete — not an undo the product offers.
  *
  * The object goes before the row that names it. The other order drops the key
  * on a half-finished run and leaves a file nobody can find again, which is the
