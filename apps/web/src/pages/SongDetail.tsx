@@ -50,11 +50,29 @@ export default function SongDetail() {
   // plays; the score itself only depends on the seed.
   const songScore = useMemo(() => (song ? scoreFromSeed(song.coverSeed, 72) : null), [song?.coverSeed]);
 
+  /*
+   * One load per id, and a slow one never wins.
+   *
+   * This used to be a bare `.then(setSong).catch(setError)` with no
+   * cancellation and no reset: clicking song A then quickly song B let A's
+   * slower response paint A's title, cover and lyrics under B's URL. And
+   * because `error` was never cleared, one failed song latched the error
+   * screen over every song opened afterwards, for the rest of the session.
+   */
   const load = useCallback(() => {
-    if (!id) return;
+    if (!id) return undefined;
+    let cancelled = false;
+    setError(null);
     apiFetch<SongDetailResponse>(`/v1/tracks/${id}`)
-      .then(setSong)
-      .catch(setError);
+      .then((s) => {
+        if (!cancelled) setSong(s);
+      })
+      .catch((e) => {
+        if (!cancelled) setError(e);
+      });
+    return () => {
+      cancelled = true;
+    };
   }, [id]);
 
   useEffect(load, [load]);
@@ -94,7 +112,14 @@ export default function SongDetail() {
     if (!active) {
       void apiFetch(`/v1/explore/${song.trackId}/plays`, { method: 'POST' }).catch(() => undefined);
     }
-    player.play({ ...song, previewUrl: song.previewUrl });
+    /*
+     * A queue of exactly this song. Without one the player kept whatever list
+     * was loaded last, while the active id was a track that is not in it: Next
+     * jumped to the FIRST song of that stale list and Prev did nothing, both
+     * with their buttons enabled.
+     */
+    const here = [{ ...song, previewUrl: song.previewUrl }];
+    player.play({ ...song, previewUrl: song.previewUrl }, here);
   };
 
 
@@ -293,12 +318,18 @@ export default function SongDetail() {
       {song.lyrics && (
         <section className="song-page__lyrics panel" aria-labelledby="lyrics-heading">
           <h2 id="lyrics-heading">{t('song.lyrics')}</h2>
+          {/*
+            * Only while THIS song is the one playing. The readout above has
+            * always guarded on `active`; these two props did not, so opening
+            * song B while song A played highlighted and auto-scrolled B's
+            * lines in time with A.
+            */}
           <SyncedLyrics
             lyrics={song.lyrics}
-            duration={player.duration || song.durationSeconds}
-            currentTime={player.currentTime}
+            duration={active ? player.duration || song.durationSeconds : song.durationSeconds}
+            currentTime={active ? player.currentTime : 0}
             timings={song.lyricTimings}
-            onSeek={player.seek}
+            onSeek={active ? player.seek : undefined}
           />
         </section>
       )}

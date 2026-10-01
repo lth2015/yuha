@@ -67,6 +67,20 @@ export class CognitoAuthAdapter implements AuthAdapter {
     if (payload['email_verified'] === false) {
       throw new AppError('UNAUTHENTICATED', 'email address is not verified');
     }
+    /*
+     * Cognito still creates here, and that is a known hole with the same shape
+     * as the dev one fixed above: an erased user's unexpired id token would
+     * re-create them. It cannot simply be removed — there is no Cognito login
+     * route, so this call IS first contact for a new user, and refusing would
+     * lock out everyone who has never used the API before.
+     *
+     * Closing it properly needs a record of which subjects have been erased
+     * (a hash, not the subject itself), checked here before creating. That is
+     * a schema change and is written up in docs/OPEN_ITEMS.md rather than
+     * invented at speed. Cognito is not the adapter any deployed environment
+     * runs today — the trial build uses dev — so the live exposure is the one
+     * above.
+     */
     return upsertUser({ authProvider: 'cognito', externalId: sub, email });
   }
 }
@@ -96,9 +110,25 @@ export class DevAuthAdapter implements AuthAdapter {
     const claims = this.issuer.verify(token, 'dev');
     if (!claims) throw new AppError('UNAUTHENTICATED', 'invalid or expired dev session token');
 
+    /*
+     * Look up only. Creating here undoes an erasure.
+     *
+     * This used to fall through to `upsertUser`, which looked harmless: the
+     * dev-login route upserts before it issues a token, so the row always
+     * exists for a real session. It is reachable in exactly one case — the row
+     * is gone — and that case is account deletion. `anonymiseUser` rotates
+     * `external_id` so a later sign-in starts a fresh account, which means the
+     * lookup above misses, which means the fall-through would INSERT a new
+     * active user carrying the email out of the still-valid token. Tokens last
+     * seven days, so for a week after an erasure the person's own browser
+     * would write their address back and keep its API access.
+     *
+     * `GoogleSessionAdapter` below has always done it this way, with the
+     * reason in its comment. Dev now agrees with it.
+     */
     const existing = await findByExternalId('dev', claims.sub);
-    if (existing) return existing;
-    return upsertUser({ authProvider: 'dev', externalId: claims.sub, email: claims.email });
+    if (!existing) throw new AppError('UNAUTHENTICATED', 'session no longer maps to an account');
+    return existing;
   }
 }
 

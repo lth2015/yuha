@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import type { JobView, TrackView } from '@yuha/contracts';
-import { apiFetch, newIdempotencyKey } from '../lib/api';
+import { ApiError, apiFetch, newIdempotencyKey } from '../lib/api';
+import { messageFor } from '../lib/messages';
 import { useI18n } from '../lib/i18n';
 import { useSession } from '../lib/session';
 import { Score } from '../components/Score';
@@ -146,7 +147,27 @@ export default function Home() {
       setJob(res);
       void refreshEntitlements();
     } catch (err) {
-      setError(err instanceof Error ? err.message : t('composer.submitFailed'));
+      /*
+       * The server's own English, printed to a Japanese or Chinese visitor.
+       *
+       * `err.message` here is the API's developer-facing text — "network
+       * unreachable", "this idempotency key was already used for a different
+       * request". Every other surface routes failures through `messageFor`,
+       * which picks a translated line by error code. The landing page is the
+       * first thing a new user touches, and it was the one place that did not.
+       */
+      const msg = messageFor(err);
+      setError(t(msg.titleKey));
+      /*
+       * And rotate the key on a reuse conflict. The key is minted once per
+       * mount, so without this a single 409 wedged this composer for good: the
+       * body had changed, the server kept refusing the stale key, and no
+       * amount of editing or re-pressing could ever produce a song again until
+       * the page was reloaded. `Create` has always rotated here.
+       */
+      if (err instanceof ApiError && err.code === 'IDEMPOTENCY_KEY_REUSED') {
+        idemKey.current = newIdempotencyKey();
+      }
     } finally {
       setSubmitting(false);
     }

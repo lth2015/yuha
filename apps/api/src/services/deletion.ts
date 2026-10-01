@@ -2,8 +2,10 @@ import { randomUUID } from 'node:crypto';
 import {
   anonymiseUser,
   claimAccountDeletion,
+  completeAccountDeletion,
   execute,
   failAccountDeletion,
+  forgetAsset,
   query,
   recordAccountDeletionOutcome,
   type AccountDeletionRow,
@@ -93,26 +95,40 @@ export async function executeAccountDeletion(
         `SELECT id, storage_key FROM asset_versions WHERE track_id = ?`,
         [track.id],
       );
+      let allGone = true;
       for (const asset of assets) {
         try {
           await ctx.storage.remove('delivery', asset.storage_key);
-          outcome.objectsRemoved += 1;
         } catch (err) {
-          // One unreachable object must not abandon the rest of the erasure.
-          // It is counted and logged, the run keeps going, and the count is on
-          // the record so nobody has to take "deleted" on trust.
+          /*
+           * One unreachable object must not abandon the rest of the erasure —
+           * but its row has to survive, because the row holds the only copy of
+           * the key. Deleting it would leave a file in the bucket that nothing
+           * can ever name again: stored for ever, unreachable, and invisible to
+           * every retry. The first version of this function deleted all the
+           * rows unconditionally, two lines under a comment explaining why the
+           * object has to go first. `sweepExpiredTrackAudio` got it right; this
+           * did not.
+           */
+          allGone = false;
           outcome.objectsFailed += 1;
           log?.error({ err, key: asset.storage_key }, 'could not remove a stored object');
+          continue;
         }
+        await forgetAsset(asset.id);
+        outcome.objectsRemoved += 1;
       }
-      await execute(`DELETE FROM asset_versions WHERE track_id = ?`, [track.id]);
+
+      // The song leaves the library either way: the owner asked for it to go,
+      // and a file we could not reach is not a reason to keep showing them the
+      // song. `tracksErased` counts only the ones that are really gone.
       await execute(
         `UPDATE tracks SET deleted_at = UTC_TIMESTAMP(3), state = 'deleted',
                            lyrics = NULL, lyric_timings = NULL, updated_at = UTC_TIMESTAMP(3)
           WHERE id = ?`,
         [track.id],
       );
-      outcome.tracksErased += 1;
+      if (allGone) outcome.tracksErased += 1;
     }
 
     // Raw provider output for this user's attempts. The quarantine lifecycle
@@ -135,8 +151,43 @@ export async function executeAccountDeletion(
       }
     }
 
+    /*
+     * Everything the person wrote, beyond the songs themselves.
+     *
+     * `generation_jobs.input` keeps the prompt, the title and any lyrics
+     * verbatim, and the support console can list a user's jobs by id — so an
+     * erasure that stopped at the audio left the words behind, readable by
+     * staff, attached to the same user row the orders reference. The job rows
+     * stay (they carry the cost and ledger trail); their text does not.
+     */
+    await execute(
+      `UPDATE generation_jobs
+          SET input = JSON_OBJECT('erased', true), updated_at = UTC_TIMESTAMP(3)
+        WHERE user_id = ?`,
+      [deletion.user_id],
+    );
+    // A second factor for an account nobody can sign into is a stored secret
+    // with no purpose.
+    await execute(`DELETE FROM mfa_factors WHERE user_id = ?`, [deletion.user_id]);
+
     await anonymiseUser({ userId: deletion.user_id, tombstone: randomUUID().slice(0, 12) });
     await recordAccountDeletionOutcome({ id: deletion.id, outcome });
+
+    /*
+     * An erasure that could not remove every object is not finished, and
+     * saying "executed" would be the record claiming more than happened. It is
+     * marked failed with the count, which puts it back in the admin list and
+     * makes it retryable — `claimAccountDeletion` accepts `failed` as well as
+     * `verified` for exactly this.
+     */
+    if (outcome.objectsFailed > 0) {
+      await failAccountDeletion({
+        id: deletion.id,
+        failure: `${outcome.objectsFailed} stored object(s) could not be removed; retry when storage is reachable`,
+      });
+    } else {
+      await completeAccountDeletion(deletion.id);
+    }
     return outcome;
   } catch (err) {
     await failAccountDeletion({ id: deletion.id, failure: (err as Error).message });

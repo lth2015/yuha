@@ -8,6 +8,7 @@ import {
 } from '@yuha/api';
 import {
   claimJob,
+  claimJobById,
   claimOutboxBatch,
   claimWebhookEvents,
   expireBatches,
@@ -101,13 +102,30 @@ export async function generationLoop(deps: LoopDeps): Promise<void> {
           continue;
         }
         try {
+          /*
+           * Claim the job this message names, or do nothing.
+           *
+           * This used to call `claimJob`, which ignores the id and takes the
+           * oldest unleased job, and then fell back to `runJobStep(jobId)` when
+           * the claim came back empty — stepping a job **nobody held the lease
+           * on**. `submitJob` calls the text model and the music provider
+           * before its first state transition, so two workers in that window
+           * both pay for a generation and only one of them can win the
+           * transition. `claimJobById` has existed for this since the lease was
+           * written and had no callers.
+           *
+           * An empty claim now means somebody else holds it or it is already
+           * terminal. Either way this message has nothing to do: the lease
+           * holder will finish it, and `pollingLoop` picks up anything stalled.
+           */
           const claimed = await withTx(async (tx) =>
-            claimJob({ owner, leaseSeconds: visibility, states: ['QUEUED', 'SUBMITTED', 'UNKNOWN', 'PROCESSING'] }, tx),
+            claimJobById({ jobId, owner, leaseSeconds: visibility }, tx),
           );
-          // The claim may return a different job than the message named — that
-          // is fine, work is work — but prefer the addressed one when free.
-          const target = claimed?.id ?? jobId;
-          await runJobStep(deps, target);
+          if (!claimed) {
+            await ctx.queue.deleteMessage(msg.receiptHandle);
+            continue;
+          }
+          await runJobStep(deps, claimed.id);
           await ctx.queue.deleteMessage(msg.receiptHandle);
         } catch (err) {
           log('error', 'job step failed', { jobId, err: (err as Error).message });

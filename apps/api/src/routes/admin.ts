@@ -275,7 +275,9 @@ export default async function adminRoutes(app: FastifyInstance, opts: { ctx: App
   app.get('/v1/admin/deletions', { preHandler: staff }, async (req) => {
     const q = z
       .object({
-        status: z.enum(['requested', 'verified', 'executed', 'failed', 'cancelled']).optional(),
+        status: z
+          .enum(['requested', 'verified', 'executing', 'executed', 'failed', 'cancelled'])
+          .optional(),
         limit: z.coerce.number().max(200).default(50),
       })
       .parse(req.query);
@@ -341,7 +343,11 @@ export default async function adminRoutes(app: FastifyInstance, opts: { ctx: App
 
     const deletion = await getAccountDeletion(id);
     if (!deletion) throw new AppError('NOT_FOUND', 'deletion request not found');
-    if (deletion.status !== 'verified') {
+    // `failed` is retryable: a run that could not reach storage left objects
+    // behind, and the identity check that let it start does not expire because
+    // a bucket was briefly unreachable. The claim inside the service is the
+    // real guard; this check is only here to give a better error.
+    if (deletion.status !== 'verified' && deletion.status !== 'failed' && deletion.status !== 'executing') {
       throw new AppError('CONFLICT', `deletion request is ${deletion.status}, not verified`);
     }
 

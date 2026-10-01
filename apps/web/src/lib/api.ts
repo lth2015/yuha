@@ -48,6 +48,15 @@ export function getToken(): string | null {
   }
 }
 
+/**
+ * Fired when the server rejects the stored token.
+ *
+ * A plain DOM event rather than a callback registry: the fetch layer must not
+ * import React, and the session provider is the only listener there will ever
+ * be.
+ */
+export const SESSION_EXPIRED_EVENT = 'yuha:session-expired';
+
 export function setToken(token: string | null): void {
   try {
     if (token) localStorage.setItem(TOKEN_KEY, token);
@@ -97,9 +106,24 @@ export async function apiFetch<T>(path: string, opts: RequestOptions = {}): Prom
   if (!res.ok) {
     const body = json as { error?: { code?: ErrorCode; message?: string; details?: unknown } } | null;
     const code = body?.error?.code ?? 'INTERNAL_ERROR';
-    // An expired or revoked session drops the stale token so the UI can
-    // re-prompt instead of looping on 401s.
-    if (res.status === 401) setToken(null);
+    /*
+     * An expired or revoked session drops the stale token — and says so.
+     *
+     * Dropping it silently was half a sign-out: the token went, but the
+     * session provider still held `me`, so the header kept showing the
+     * person's name and credits, the protected routes kept admitting them, and
+     * every single action failed with "you need to sign in" until they found
+     * Sign out in the menu or reloaded by hand. The event is what turns that
+     * into an actual sign-out.
+     */
+    if (res.status === 401) {
+      setToken(null);
+      try {
+        window.dispatchEvent(new Event(SESSION_EXPIRED_EVENT));
+      } catch {
+        /* no window: nothing is rendering, so nothing needs telling */
+      }
+    }
     throw new ApiError(code, body?.error?.message ?? res.statusText, res.status, body?.error?.details);
   }
 

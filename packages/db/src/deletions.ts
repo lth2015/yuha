@@ -1,7 +1,19 @@
 import type { PoolConnection } from 'mysql2/promise';
 import { execute, newId, query, queryOne } from './pool.js';
 
-export type AccountDeletionStatus = 'requested' | 'verified' | 'executed' | 'failed' | 'cancelled';
+export type AccountDeletionStatus =
+  | 'requested'
+  | 'verified'
+  | 'executing'
+  | 'executed'
+  | 'failed'
+  | 'cancelled';
+
+/**
+ * The states that still have work in them. `failed` is one: it is claimable
+ * and it left objects behind. `executing` is one because a run can die.
+ */
+const OPEN_STATUSES = "'requested','verified','executing','failed'";
 
 export interface AccountDeletionRow {
   id: string;
@@ -34,7 +46,7 @@ export async function openAccountDeletion(params: {
 }): Promise<{ row: AccountDeletionRow; created: boolean }> {
   const existing = await queryOne<AccountDeletionRow>(
     `SELECT ${COLUMNS} FROM account_deletions
-      WHERE user_id = ? AND status IN ('requested','verified')
+      WHERE user_id = ? AND status IN (${OPEN_STATUSES})
       ORDER BY requested_at DESC LIMIT 1`,
     [params.userId],
   );
@@ -93,14 +105,52 @@ export async function markAccountDeletionVerified(params: {
   return affectedRows === 1;
 }
 
-/** Claim a verified request for execution, so two runs cannot share one. */
+/**
+ * Claim a request for execution, so two runs cannot share one.
+ *
+ * Moves to `executing`, not `executed`. Writing the finished state before
+ * doing the work meant a run that died — SIGKILL, the worker's 15s exit —
+ * left a row that read exactly like a success, `outcome` NULL, and that no
+ * claim would pick up again: a half-erased account nobody could tell from a
+ * finished one. A row left `executing` is claimable once it is stale, so a
+ * dead run is taken over rather than abandoned.
+ *
+ * `failed` is claimable as well as `verified`. A run that could not reach
+ * storage leaves objects behind and marks itself failed; without this there
+ * was no transition out of that state and a half-erased account could only be
+ * finished by the user asking again, which an operator cannot do for them.
+ * Identity was already verified — that fact does not expire because a bucket
+ * was briefly unreachable.
+ */
 export async function claimAccountDeletion(id: string): Promise<boolean> {
   const { affectedRows } = await execute(
-    `UPDATE account_deletions SET status = 'executed', executed_at = UTC_TIMESTAMP(3)
-      WHERE id = ? AND status = 'verified'`,
-    [id],
+    `UPDATE account_deletions
+        SET status = 'executing', executed_at = UTC_TIMESTAMP(3), failure = NULL
+      WHERE id = ?
+        AND (status IN ('verified', 'failed')
+             OR (status = 'executing'
+                 AND updated_at < DATE_SUB(UTC_TIMESTAMP(3), INTERVAL ? MINUTE)))`,
+    [id, STALE_EXECUTION_MINUTES],
   );
   return affectedRows === 1;
+}
+
+/**
+ * How long a run may be in flight before another may take it over.
+ *
+ * An erasure is a bounded loop over one account's assets, so fifteen minutes
+ * is far beyond a healthy run and far short of leaving a crashed one stuck
+ * forever. Without this, a worker killed mid-erasure left a row nothing could
+ * ever claim again.
+ */
+const STALE_EXECUTION_MINUTES = 15;
+
+/** Mark a claimed run finished. Only the run that claimed it should call this. */
+export async function completeAccountDeletion(id: string): Promise<void> {
+  await execute(
+    `UPDATE account_deletions SET status = 'executed' WHERE id = ? AND status = 'executing'`,
+    [id],
+  );
 }
 
 export async function recordAccountDeletionOutcome(params: {

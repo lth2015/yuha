@@ -36,7 +36,29 @@ export async function buildServer(ctx: AppContext): Promise<FastifyInstance> {
         censor: '[redacted]',
       },
     },
-    trustProxy: true,
+    /*
+     * One hop, not "trust anything that says so".
+     *
+     * `true` makes Fastify take the LEFTMOST X-Forwarded-For entry as
+     * `req.ip`, and nginx uses `$proxy_add_x_forwarded_for`, which appends —
+     * so a header the client invented survives in that position. Every per-IP
+     * rate limit in this app keys on `req.ip`, including the one on
+     * `POST /v1/rights-cases`, which is unauthenticated by design and whose own
+     * comment calls rate limiting "the only gate". Filing a case suspends the
+     * named track immediately (SEC-10), so a forged header turned 5 complaints
+     * an hour into unlimited, and an unauthenticated caller could read 12 real
+     * track ids from `GET /v1/explore` and take every one of them down.
+     *
+     * The value below names which peers may be believed: loopback and the
+     * private ranges, which is where the nginx in front of this app sits and
+     * nowhere a request from the internet can originate. `req.ip` then becomes
+     * the rightmost address that is NOT one of those — the one nginx itself
+     * observed — and a client-invented entry further left is ignored.
+     *
+     * Never back to `true`. If a second proxy is ever put in front, it has to
+     * be added here rather than trusted by assertion.
+     */
+    trustProxy: 'loopback, linklocal, uniquelocal',
     bodyLimit: 1_000_000,
   });
 

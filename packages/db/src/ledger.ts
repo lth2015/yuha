@@ -452,13 +452,36 @@ export async function revokeUnusedUnits(
   const cap = params.maxUnits ?? unused;
   const revokable = Math.max(0, Math.min(unused, cap));
   if (revokable > 0) {
+    /*
+     * The status is decided here, in one place, from values already read under
+     * the row lock above.
+     *
+     * It used to be a `CASE WHEN granted_units - ? = 0` in the same UPDATE as
+     * `granted_units = granted_units - ?`. MySQL evaluates a single-table
+     * UPDATE's assignments left to right and a later one sees the NEW value, so
+     * that condition actually asked `granted_old - 2 × revokable = 0` — true
+     * only when exactly half the batch was revoked.
+     *
+     * Both directions were wrong and the money went the wrong way in each. A
+     * full refund of a 5-unit pack left `granted_units = 0` with status still
+     * `active`, so the entitlements screen kept showing a pack the customer had
+     * been refunded for. And revoking exactly half of an even pack flipped the
+     * whole batch to `revoked`, and `getBalance` only sums active batches — the
+     * buyer silently lost the units they had still paid for. The existing test
+     * (granted 5, revoked 3) passes under both behaviours, which is why it sat
+     * here.
+     *
+     * Not fixed by reordering the assignments, though that would also work:
+     * correctness should not depend on the reader knowing that rule.
+     */
+    const remainingGranted = batch.granted_units - revokable;
     await execute(
       `UPDATE entitlement_batches
-          SET granted_units = granted_units - ?,
-              status = CASE WHEN granted_units - ? = 0 THEN 'revoked' ELSE status END,
+          SET granted_units = ?,
+              status = ?,
               updated_at = UTC_TIMESTAMP(3)
         WHERE id = ?`,
-      [revokable, revokable, batch.id],
+      [remainingGranted, remainingGranted === 0 ? 'revoked' : batch.status, batch.id],
       tx,
     );
     await writeLedger(

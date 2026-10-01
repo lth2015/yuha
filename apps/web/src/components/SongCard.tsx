@@ -77,7 +77,18 @@ export function SongCard({
 
   const onPlay = () => {
     if (!song.previewUrl) return;
-    if (!active) reportPlay();
+    /*
+     * The button says 「一時停止」 while this card is the one playing, and it
+     * used to start the song again from 0:00 — `play()` resets `src` and
+     * `currentTime`. Pressing pause and hearing the song restart is the kind of
+     * thing people assume they did wrong. `SongDetail` has always toggled; the
+     * two surfaces disagreed about the same gesture.
+     */
+    if (active) {
+      player.toggle();
+      return;
+    }
+    reportPlay();
     player.play(
       { ...song, previewUrl: song.previewUrl },
       queue.filter((s) => s.previewUrl).map((s) => ({ ...s, previewUrl: s.previewUrl })),

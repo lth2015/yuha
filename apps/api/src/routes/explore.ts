@@ -124,6 +124,10 @@ export default async function exploreRoutes(app: FastifyInstance, opts: { ctx: A
   app.post(
     '/v1/explore/:id/plays',
     {
+      // It reads `req.user?.id` below, which was always undefined without
+      // this: no hook ran, so every play was recorded anonymously even when
+      // the caller sent a token.
+      preHandler: app.optionalAuth,
       config: {
         rateLimit: { max: 120, timeWindow: '1 minute' },
       },

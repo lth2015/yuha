@@ -31,20 +31,38 @@ export default function Library() {
     return apiFetch<{ items: TrackView[]; nextCursor: string | null }>(`/v1/tracks?${search.toString()}`);
   }, [filter, q]);
 
+  /*
+   * One request per settled query, and the banner clears when it works.
+   *
+   * Typing "night" used to fire five requests and blank the grid five times,
+   * because `load` is keyed on `q` and the effect calls `setSongs(null)`
+   * first. The 250ms wait is below the threshold where a list feels slow and
+   * above a touch-typist's gaps. A filter chip is a decision, not a keystroke,
+   * so it does not wait.
+   *
+   * `setError(null)` on success matters as much: one failed load pinned a red
+   * "this page failed" banner above a grid that had since loaded fine, for the
+   * rest of the session.
+   */
   useEffect(() => {
     let cancelled = false;
-    setSongs(null);
-    load()
-      .then((r) => {
-        if (cancelled) return;
-        setSongs(r.items);
-        setCursor(r.nextCursor);
-      })
-      .catch((err) => !cancelled && setError(err));
+    const delay = q.trim() ? 250 : 0;
+    const timer = setTimeout(() => {
+      setSongs(null);
+      load()
+        .then((r) => {
+          if (cancelled) return;
+          setError(null);
+          setSongs(r.items);
+          setCursor(r.nextCursor);
+        })
+        .catch((err) => !cancelled && setError(err));
+    }, delay);
     return () => {
       cancelled = true;
+      clearTimeout(timer);
     };
-  }, [load]);
+  }, [load, q]);
 
   const loadMore = async () => {
     if (!cursor || loadingMore) return;

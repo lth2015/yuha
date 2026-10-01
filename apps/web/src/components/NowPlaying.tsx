@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { LyricTimings } from '@yuha/contracts';
 import { useI18n } from '../lib/i18n';
 import { formatTime, usePlayer } from '../lib/player';
@@ -56,8 +56,31 @@ export function NowPlaying({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  /*
+   * A full-screen `role="dialog"` that never took focus.
+   *
+   * Pressing Expand left focus on the button underneath the overlay, so Tab
+   * then walked the whole page behind it — nav, song cards, footer links — and
+   * a screen reader read that page as if it were on top. `aria-modal` tells
+   * assistive technology the rest is inert; moving focus in, and putting it
+   * back where it came from on close, is what makes that true for a keyboard.
+   */
+  const panel = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const previous = document.activeElement as HTMLElement | null;
+    panel.current?.focus();
+    return () => previous?.focus?.();
+  }, []);
+
   return (
-    <div className={`now-playing${closing ? ' is-closing' : ''}`} role="dialog" aria-label={t('player.nowPlaying')}>
+    <div
+      ref={panel}
+      tabIndex={-1}
+      className={`now-playing${closing ? ' is-closing' : ''}`}
+      role="dialog"
+      aria-modal="true"
+      aria-label={t('player.nowPlaying')}
+    >
       {/* The sleeve's own colour, blown up and blurred, tints the room. */}
       <div className="now-playing__halo" aria-hidden="true">
         <CoverArt seed={coverSeed} title={title} styles={styles} className="now-playing__halo-art" />
@@ -165,7 +188,7 @@ export function NowPlaying({
               step={0.1}
               value={at}
               onChange={(e) => player.seek(Number(e.target.value))}
-              aria-label={t('player.play')}
+              aria-label={t('player.seek')}
               aria-valuetext={`${formatTime(at)} / ${formatTime(duration)}`}
               style={{ '--progress': `${progress.toFixed(2)}%` } as React.CSSProperties}
             />

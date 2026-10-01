@@ -1,7 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import type { ReactNode } from 'react';
 import type { EntitlementsView, MeView, RuntimeInfo } from '@yuha/contracts';
-import { apiFetch, getToken, setToken } from './api';
+import { SESSION_EXPIRED_EVENT, apiFetch, getToken, setToken } from './api';
 
 /**
  * Session and runtime state.
@@ -66,6 +66,19 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       setLoading(false);
     })();
   }, [refreshMe, refreshEntitlements]);
+
+  /*
+   * The fetch layer clears a rejected token; this clears the rest of the
+   * session so the UI stops claiming somebody is signed in.
+   */
+  useEffect(() => {
+    const onExpired = () => {
+      setMe(null);
+      setEntitlements(null);
+    };
+    window.addEventListener(SESSION_EXPIRED_EVENT, onExpired);
+    return () => window.removeEventListener(SESSION_EXPIRED_EVENT, onExpired);
+  }, []);
 
   const signIn = useCallback(
     (token: string, user: MeView) => {

@@ -76,7 +76,12 @@ export default function Pricing() {
         body: { priceKey, idempotencyKey: newIdempotencyKey('checkout') },
       });
       if (res.simulated) {
-        navigate(`/checkout/confirm?order_id=${res.orderId}&simulated=1`);
+        // `price` matters: the confirm screen reads it and defaulted to
+        // `drop_5`, so subscribing to a ¥2,980 plan showed a ¥980 confirmation
+        // and bought the cheaper pack, leaving the first order orphaned.
+        navigate(
+          `/checkout/confirm?order_id=${res.orderId}&price=${encodeURIComponent(priceKey)}&simulated=1`,
+        );
       } else {
         window.location.href = res.checkoutUrl;
       }
