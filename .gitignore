@@ -35,3 +35,8 @@ infra/terraform/*.tfvars
 .claude/settings.local.json
 .playwright-mcp/
 Claude outputs/
+
+# DGX deploy scratch (deploy/dgx): bench recordings, build logs, local data
+deploy/dgx/music/bench_out/
+deploy/dgx/music/build.log
+deploy/dgx/music/data/

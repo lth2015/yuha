@@ -1,0 +1,64 @@
+services:
+  music:
+    build:
+      context: .
+      args:
+        NGC_TAG: ${NGC_TAG}
+        ACE_STEP_REF: ${ACE_STEP_REF:-main}
+    image: yuha-music:latest
+    container_name: yuha-music
+    restart: unless-stopped          # survives reboot as long as docker.service is enabled
+    env_file: .env
+    ports:
+      - "${HOST_PORT:-8000}:8000"
+    volumes:
+      - ${HOME}/.cache/ace-step:/root/.cache/ace-step     # model weights (persistent, several GB)
+      - ${HOME}/.cache/huggingface:/root/.cache/huggingface
+      - ${HOME}/.cache/whisper:/root/.cache/whisper          # alignment model (~1.5GB, first use)
+      - ./data:/data                                       # jobs + mp3 output
+    ipc: host
+    ulimits:
+      memlock: -1
+      stack: 67108864
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+
+  # ACE-Step 1.5 (MIT), beside v1 — not replacing it. Its REST server is only
+  # reachable from `music` on the compose network; nothing is published.
+  # Start:   docker compose --profile v15 up -d --build acestep15
+  # Use:     ENGINE=v15 in .env, then docker compose up -d music
+  acestep15:
+    profiles: ["v15"]
+    build:
+      # pinned commit; its uv.lock carries torch 2.10.0+cu130 for aarch64 (DGX Spark)
+      context: https://github.com/ace-step/ACE-Step-1.5.git#ca1e85fe9430179831e6bc6be790c332190a3866
+    image: acestep15:ca1e85f
+    container_name: yuha-acestep15
+    restart: unless-stopped
+    environment:
+      ACESTEP_MODE: api
+      ACESTEP_API_HOST: 0.0.0.0
+      ACESTEP_API_PORT: "8001"
+      ACESTEP_API_KEY: ${V15_API_KEY:-}
+      ACESTEP_CONFIG_PATH: acestep-v15-xl-turbo     # slot 1: fast
+      ACESTEP_CONFIG_PATH2: acestep-v15-xl-sft      # slot 2: slower, higher quality
+      ACESTEP_INIT_LLM: "true"
+      ACESTEP_LM_MODEL_PATH: acestep-5Hz-lm-4B
+      ACESTEP_LM_BACKEND: pt
+      TOKENIZERS_PARALLELISM: "false"
+    volumes:
+      - ${HOME}/.cache/acestep15:/app/checkpoints        # weights, downloaded on first start
+    ipc: host
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+

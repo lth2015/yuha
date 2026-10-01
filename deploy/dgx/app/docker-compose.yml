@@ -1,0 +1,77 @@
+# YUHA test deployment on the DGX. Reached at http://<dgx-ip>:${APP_PORT}.
+name: yuha-app
+services:
+  mysql:
+    image: mysql:8.0.40
+    restart: unless-stopped
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_0900_ai_ci
+      - --default-time-zone=+00:00
+      - --sql-mode=STRICT_TRANS_TABLES,NO_ENGINE_SUBSTITUTION,ERROR_FOR_DIVISION_BY_ZERO
+      - --innodb-lock-wait-timeout=10
+      - --log-bin-trust-function-creators=1
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      MYSQL_DATABASE: loopscene_dev
+      MYSQL_USER: loopscene
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+    volumes: [ "mysql:/var/lib/mysql" ]
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-uloopscene", "-p${MYSQL_PASSWORD}"]
+      interval: 3s
+      timeout: 5s
+      retries: 60
+
+  api:
+    build: .
+    image: yuha-app:latest
+    restart: unless-stopped
+    env_file: app.env
+    command: ["node", "apps/api/dist/index.js"]
+    volumes: [ "storage:/data/storage" ]
+    depends_on: { mysql: { condition: service_healthy } }
+
+  worker:
+    image: yuha-app:latest
+    restart: unless-stopped
+    env_file: app.env
+    command: ["node", "apps/worker/dist/index.js"]
+    volumes: [ "storage:/data/storage" ]
+    depends_on: { mysql: { condition: service_healthy } }
+
+  web:
+    image: nginx:1.27-alpine
+    restart: unless-stopped
+    ports: [ "${APP_PORT}:80" ]
+    volumes:
+      - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
+      - web:/web:ro
+    depends_on: [ api ]
+
+  # copies the built bundle into the shared `web` volume, then exits
+  web-assets:
+    image: yuha-app:latest
+    command: ["sh", "-c", "rm -rf /web/* && cp -r apps/web/dist/. /web/"]
+    volumes: [ "web:/web" ]
+
+  # Stripe cannot reach a LAN address, so the CLI pulls test-mode events and
+  # forwards them to the api — the same thing `stripe listen` did on the Mac.
+  stripe:
+    image: stripe/stripe-cli:latest
+    restart: unless-stopped
+    env_file: app.env
+    command:
+      - listen
+      - --forward-to
+      - api:4000/v1/webhooks/stripe
+      - --events
+      - checkout.session.completed,checkout.session.expired,checkout.session.async_payment_succeeded,checkout.session.async_payment_failed,customer.subscription.created,customer.subscription.updated,customer.subscription.deleted,invoice.paid,invoice.payment_succeeded,invoice.payment_failed,charge.refunded,charge.dispute.created
+    environment:
+      STRIPE_API_KEY: ${STRIPE_SECRET_KEY}
+    depends_on: [ api ]
+
+volumes:
+  mysql: {}
+  storage: {}
+  web: {}
