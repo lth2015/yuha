@@ -141,11 +141,11 @@ config:
   legal:
     entityName: "<redacted: operator name>"
     representative: "<redacted: operator name>"
-    # 住所. Supplied 2026-10-02. The 〒 and <redacted: operator region> were added to the string as
-    # given ("<redacted: operator address>" +
-    # "<redacted: operator postcode>"), because a Japanese statutory disclosure conventionally
-    # carries both — if the 開業届 records it another way, that form wins and
-    # this should match it rather than the convention.
+    # 住所, in the form the operator gave as the registered one. The 〒 is
+    # prefixed because a Japanese statutory disclosure conventionally carries
+    # it; <redacted: operator region> is deliberately NOT, even though convention would add it,
+    # because <redacted: operator region> is a 政令指定都市 and the registered form omits the
+    # prefecture. The registered form wins over the convention.
     address: "<redacted: operator address>"
     contact: "redacted-operator@example.invalid"
     # <redacted: operator phone>, hyphenated the way a Japanese disclosure prints it.

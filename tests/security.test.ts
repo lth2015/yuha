@@ -780,7 +780,7 @@ describe('SEC-06 / §3.1: the runtime descriptor exposes no secrets', () => {
     const operator = {
       LEGAL_ENTITY_NAME: '<redacted: operator name>',
       LEGAL_ENTITY_REPRESENTATIVE: '<redacted: operator name>',
-      LEGAL_ENTITY_ADDRESS: '<redacted: operator postcode> <redacted: operator address><redacted: operator address>',
+      LEGAL_ENTITY_ADDRESS: '<redacted: operator address>',
       LEGAL_ENTITY_CONTACT: 'redacted-operator@example.invalid',
       LEGAL_ENTITY_PHONE: '<redacted: operator phone>',
     };
