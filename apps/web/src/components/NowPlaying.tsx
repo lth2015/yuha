@@ -95,7 +95,14 @@ export function NowPlaying({
     >
       {/* The sleeve's own colour, blown up and blurred, tints the room. */}
       <div className="now-playing__halo" aria-hidden="true">
-        <CoverArt seed={coverSeed} title={title} styles={styles} className="now-playing__halo-art" />
+        <CoverArt
+          seed={coverSeed}
+          title={title}
+          styles={styles}
+          mood={player.current?.mood}
+          vocalMode={player.current?.vocalMode}
+          className="now-playing__halo-art"
+        />
       </div>
 
       <header className="now-playing__top">
@@ -135,7 +142,14 @@ export function NowPlaying({
             <div className={`vinyl${playing ? ' is-spinning' : ''}`}>
               <div className="vinyl__grooves" />
               <div className="vinyl__label">
-                <CoverArt seed={coverSeed} title={title} styles={styles} className="vinyl__art" />
+                <CoverArt
+                  seed={coverSeed}
+                  title={title}
+                  styles={styles}
+                  mood={player.current?.mood}
+                  vocalMode={player.current?.vocalMode}
+                  className="vinyl__art"
+                />
               </div>
               <div className="vinyl__spindle" />
             </div>

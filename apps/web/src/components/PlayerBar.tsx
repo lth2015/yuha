@@ -31,6 +31,8 @@ export function PlayerBar({ onExpand }: { onExpand?: () => void }) {
             seed={player.current.coverSeed}
             title={player.current.title}
             styles={player.current.styles}
+            mood={player.current.mood}
+            vocalMode={player.current.vocalMode}
             size={48}
           />
           <span className="player-bar__titles">

@@ -15,9 +15,17 @@ import { creditHeard, hasHeardEnough, type Heard } from './listening';
 export type PlayerStatus = 'idle' | 'loading' | 'playing' | 'paused' | 'error';
 
 /** What the player bar needs to render: view fields + where it can link to. */
+/**
+ * What the player needs to carry a song around the app.
+ *
+ * `mood` is here for the sleeve's 温度 reading: the cover is drawn in the
+ * player bar and the now-playing view as well as on the card, and a song that
+ * read 72 in the library and 54 in the player bar would be worse than no
+ * reading at all.
+ */
 export type PlayerTrack = Pick<
   TrackView,
-  'trackId' | 'title' | 'artistName' | 'coverSeed' | 'styles' | 'durationSeconds' | 'vocalMode'
+  'trackId' | 'title' | 'artistName' | 'coverSeed' | 'styles' | 'durationSeconds' | 'vocalMode' | 'mood'
 >;
 
 interface PlayerState {

@@ -144,6 +144,9 @@ export function AudioPlayer({
         artistName: null,
         coverSeed: 0,
         styles: [],
+        // No mood and no styles: the sleeve shows no 温度 here, which is
+        // right — this is a preview clip, not a song anybody wrote.
+        mood: null,
         durationSeconds: duration,
         vocalMode: 'instrumental',
         previewUrl: url,

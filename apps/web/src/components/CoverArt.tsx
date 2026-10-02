@@ -1,4 +1,5 @@
 import { useMemo } from 'react';
+import { songWarmth, type Mood, type VocalMode } from '@yuha/contracts';
 import { useI18n } from '../lib/i18n';
 import { scoreFromSeed } from '../lib/score';
 import { Score } from './Score';
@@ -125,20 +126,26 @@ export function CoverArt({
   seed,
   title,
   styles,
+  mood,
+  vocalMode,
   size,
   className,
   playing = false,
 }: {
   seed: number;
   title: string;
-  /** The song's style tags; they choose the colour family. */
+  /** The song's style tags; they choose the colour family and the reading. */
   styles?: readonly string[];
+  /** Both feed 温度; both are optional, and the reading is absent without them. */
+  mood?: Mood | string | null;
+  vocalMode?: VocalMode | null;
   /** Upper bound, not a fixed width: the sleeve always fills its container. */
   size?: number;
   className?: string;
   playing?: boolean;
 }) {
   const { t } = useI18n();
+  const warmth = useMemo(() => songWarmth({ mood, styles, vocalMode }), [mood, styles, vocalMode]);
   const key = (styles ?? []).join('\u0000');
   const art = useMemo(() => {
     const rand = seedOf(seed);
@@ -148,11 +155,10 @@ export function CoverArt({
     const x = 14 + Math.floor(rand() * 72);
     const y = 8 + Math.floor(rand() * 84);
     const field = `radial-gradient(120% 100% at ${x}% ${y}%, ${lit} 0%, ${body} 60%, ${edge} 100%)`;
-    const index = String(1 + Math.floor(rand() * 999)).padStart(3, '0');
     // Denser on a big sleeve, sparser on a small one, so the marks keep the
     // same visual weight at every size the grid uses.
     const notes = (size ?? 320) >= 220 ? 52 : 34;
-    return { field, index, score: scoreFromSeed(seed, notes) };
+    return { field, score: scoreFromSeed(seed, notes) };
     // `key` stands in for `styles`: the array identity changes on every render
     // of a parent that maps over a list, and the colours must not.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -172,9 +178,25 @@ export function CoverArt({
         className="cover-art__score"
         label=""
       />
-      <span className="cover-art__index" aria-hidden="true">
-        N°{art.index}
-      </span>
+      {/*
+        The reading used to be `N°{random}` — three digits from the cover
+        seed, imitating a catalogue number. It was decoration that did not
+        read as decoration: two songs could carry the same one, and the first
+        thing anyone asked about it was what it meant. A label that invites
+        that question has already failed.
+
+        It is 温度 now: ours, nobody else's scale, but computed from the
+        song's own mood and styles — the same styles printed on the card
+        beside it, so the number can be checked against its inputs by eye. The
+        degree sign is doing work: it says "a reading", which is the one thing
+        `N°` said wrongly. Absent when the song has told us nothing to read.
+      */}
+      {warmth !== null && (
+        <span className="cover-art__index">
+          <span className="sr-only">{t('cover.warmth')} </span>
+          {warmth}°
+        </span>
+      )}
     </span>
   );
 }
