@@ -95,6 +95,7 @@ function buildMusic(cfg: AppConfig): MusicProvider {
     requestIdField: cfg.MUSIC_REQUEST_ID_FIELD!,
     statusField: cfg.MUSIC_STATUS_FIELD!,
     audioUrlField: cfg.MUSIC_AUDIO_URL_FIELD!,
+    ...(cfg.MUSIC_AUDIO_URL_REWRITE ? { audioUrlRewrite: cfg.MUSIC_AUDIO_URL_REWRITE } : {}),
     statusMap,
     ...(cfg.MUSIC_IDEMPOTENCY_HEADER ? { idempotencyHeader: cfg.MUSIC_IDEMPOTENCY_HEADER } : {}),
     supportsInstrumentalOnly: cfg.MUSIC_SUPPORTS_INSTRUMENTAL,

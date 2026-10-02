@@ -7,6 +7,7 @@ import type {
   MusicSubmitRequest,
   MusicSubmitResult,
 } from './types.js';
+import { rewriteAudioOrigin } from './audio-url.js';
 
 /**
  * Configurable HTTP music-provider adapter.
@@ -41,6 +42,11 @@ export const httpMusicProviderConfig = z.object({
   requestIdField: z.string().min(1),
   statusField: z.string().min(1),
   audioUrlField: z.string().min(1),
+  /**
+   * Optional `from-origin=>to-origin`, for a service whose audio links carry an
+   * address only its own network can reach. See music/audio-url.ts.
+   */
+  audioUrlRewrite: z.string().optional(),
   /** Provider status strings mapped onto our vocabulary. */
   statusMap: z.object({
     pending: z.array(z.string()),
@@ -271,7 +277,7 @@ export class HttpMusicProvider implements MusicProvider {
             providerRequestId: requestId,
             audio: {
               kind: 'url',
-              url: audioUrl,
+              url: rewriteAudioOrigin(audioUrl, this.cfg.audioUrlRewrite),
               format: req.format,
               providerRequestId: requestId,
             },
@@ -311,7 +317,12 @@ export class HttpMusicProvider implements MusicProvider {
         }
         return {
           status: 'completed',
-          audio: { kind: 'url', url: audioUrl, format: 'mp3', providerRequestId: ref },
+          audio: {
+            kind: 'url',
+            url: rewriteAudioOrigin(audioUrl, this.cfg.audioUrlRewrite),
+            format: 'mp3',
+            providerRequestId: ref,
+          },
         };
       }
       case 'rejected':

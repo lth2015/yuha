@@ -1,6 +1,7 @@
 export * from './music/types.js';
 export { DemoMusicProvider, type DemoProviderOptions } from './music/demo.js';
 export { HttpMusicProvider, httpMusicProviderConfig, type HttpMusicProviderConfig } from './music/http.js';
+export { rewriteAudioOrigin } from './music/audio-url.js';
 export {
   createGlmMusicProvider,
   glmMusicProviderConfig,

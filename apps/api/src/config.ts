@@ -90,6 +90,12 @@ const envSchema = z.object({
   MUSIC_REQUEST_ID_FIELD: z.string().optional(),
   MUSIC_STATUS_FIELD: z.string().optional(),
   MUSIC_AUDIO_URL_FIELD: z.string().optional(),
+  /**
+   * `from-origin=>to-origin` for an audio link whose host only resolves on the
+   * provider's own network. Optional, and inert unless the advertised origin
+   * matches the left-hand side exactly.
+   */
+  MUSIC_AUDIO_URL_REWRITE: z.string().optional(),
   MUSIC_STATUS_MAP: z.string().optional(),
   MUSIC_IDEMPOTENCY_HEADER: z.string().optional(),
   MUSIC_ALLOWED_AUDIO_HOSTS: z.string().optional(),
