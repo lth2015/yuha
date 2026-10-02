@@ -36,8 +36,13 @@ HOST=$(sed -E 's#^https?://([^:/]+).*#\1#' <<<"$BASE")
 # work. Do not probe with POST /v1/jobs: request-body validation runs *before*
 # auth there, so a deliberately invalid body returns 422 whatever the key is,
 # and the check passes for a key that is wrong. It did, on the first draft.
+# curl prints 000 on a connection failure *and* exits non-zero, so a trailing
+# `|| echo 000` produced "000\n000" — which matched neither 000 nor anything
+# else and fell through to "wiring anyway", writing a config block for a
+# service that could not be reached at all.
 code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 20 \
-  -H "authorization: Bearer $KEY" "$BASE/v1/jobs/wiring-check-no-such-job" || echo 000)
+  -H "authorization: Bearer $KEY" "$BASE/v1/jobs/wiring-check-no-such-job" 2>/dev/null) || true
+[[ -n "$code" ]] || code=000
 case "$code" in
   401|403) echo "✗ the service rejected that key ($code). Check YUHA_API_KEY in ~/yuha-spark/.env"; exit 1;;
   000) echo "✗ could not reach $BASE"; exit 1;;
