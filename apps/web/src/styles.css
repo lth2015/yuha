@@ -505,6 +505,65 @@ html:has(.player-bar) { scroll-padding-bottom: 100px; }
 /* background-COLOR, never the shorthand: the shorthand resets
    background-image and takes the sheen layer with it. */
 .panel { background-color: var(--glass); border-radius: var(--r-card); padding: var(--s6); }
+
+/*
+ * When the reader has asked for less of it.
+ * ---------------------------------------------------------------------------
+ * Translucency is a material, not a requirement, and two system settings say
+ * so outright. `prefers-reduced-transparency` is the operating system's own
+ * "Reduce Transparency"; `prefers-contrast: more` asks for separation over
+ * subtlety. Neither was honoured anywhere in this file, which is the thing
+ * Apple had to go back and add to Liquid Glass during the iOS 26 betas, for
+ * the same reason: a surface you can see through is a surface you can see
+ * *through*, and for some readers that is noise over the text.
+ *
+ * The fallback is the opaque surface the system already has, so nothing moves
+ * and no layout changes — only the material. The specular edge goes too: a
+ * highlight implying depth on a flat surface is a lie about the material, and
+ * it is the first thing that reads as cheap.
+ *
+ * `backdrop-filter` is also the most expensive thing on this page; dropping it
+ * here is why a reader who turns the setting on gets a faster page as well as
+ * a calmer one.
+ */
+@media (prefers-reduced-transparency: reduce), (prefers-contrast: more) {
+  .panel,
+  .card,
+  .topnav,
+  .player-bar,
+  .tabbar,
+  .account__menu,
+  .menu__panel,
+  .now-playing,
+  .glass--raised,
+  /* Found by the gate, not by eye: six surfaces that blur their backdrop and
+     ignored the setting entirely — a song card's play button, its state badges,
+     the cover panel, the Now Playing dock. */
+  .art-panel,
+  .cover-art__index,
+  .song-card__play,
+  .song-card__badge,
+  .song-card__public,
+  .now-playing__dock {
+    background-color: var(--surface-solid);
+    background-image: none;
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+    box-shadow: var(--shadow-raised);
+  }
+  /* The field is decoration under content; with transparency reduced it is
+     only something for text to fight. */
+  .lightfield { display: none; }
+  body { background: var(--bg); }
+}
+
+@media (prefers-contrast: more) {
+  /* Hairlines that read as "barely there" by design stop being visible at all
+     once the reader has asked for contrast. */
+  .panel, .card, .topnav, .player-bar, .tabbar, .account__menu, .menu__panel, .now-playing {
+    border-color: var(--line-strong);
+  }
+}
 .panel--tight { padding: var(--s4); }
 
 /* `.card` and `.grid` were referenced 20 times by Admin and Project and

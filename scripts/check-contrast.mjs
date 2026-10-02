@@ -187,6 +187,46 @@ for (const [token, min] of Object.entries(TEXT_TOKENS)) {
   }
 }
 
+/*
+ * Every translucent surface must have an opaque fallback.
+ *
+ * `prefers-reduced-transparency` and `prefers-contrast: more` are the reader
+ * saying the material is in the way. Honouring them is not optional polish —
+ * it is the setting Apple had to add back to Liquid Glass mid-beta — and it is
+ * the kind of rule that rots silently: a new glass surface gets added, nobody
+ * remembers the fallback block, and the setting quietly stops covering the
+ * page. So the gate counts them instead of trusting memory.
+ */
+const glassSelectors = new Set();
+// Comments sit between rules and their text reaches the selector capture, so a
+// sentence about glass was read as a selector named "the room (brightness)".
+const noComments = src.replace(/\/\*[\s\S]*?\*\//g, '');
+for (const m of noComments.matchAll(/([^{}]+)\{([^}]*backdrop-filter\s*:\s*blur[^}]*)\}/g)) {
+  for (const sel of m[1].split(',')) {
+    const name = sel.trim().split('\n').pop().trim();
+    // Only real selectors: a class or element, optionally with state.
+    if (!/^[.#]?[a-zA-Z][\w-]*([.:#][\w-]+(\([^)]*\))?)*$/.test(name)) continue;
+    glassSelectors.add(name.replace(/:[a-z-]+(\([^)]*\))?$/, ''));
+  }
+}
+const fallbackBlock = /@media \(prefers-reduced-transparency: reduce\)[^{]*\{([\s\S]*?)\n\}/.exec(src);
+if (!fallbackBlock) {
+  failures.push(
+    'no `@media (prefers-reduced-transparency: reduce)` block: every glass surface stays ' +
+      'translucent for a reader who asked the system for less transparency.',
+  );
+} else {
+  const covered = fallbackBlock[1];
+  const uncovered = [...glassSelectors].filter((sel) => !covered.includes(sel));
+  if (uncovered.length) {
+    failures.push(
+      `translucent but with no opaque fallback: ${uncovered.join(', ')} — add them to the ` +
+        'prefers-reduced-transparency block, or drop their backdrop-filter.',
+    );
+  }
+  console.log(`\n${glassSelectors.size} translucent surface(s), all with an opaque fallback`);
+}
+
 console.log(`contrast on ${surfaces.map(([n]) => n).join(', ')}:`);
 for (const r of rows) console.log(r);
 
