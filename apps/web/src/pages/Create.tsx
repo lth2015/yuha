@@ -423,6 +423,31 @@ export default function Create() {
     return editTrackId ? 'create.needInstructions' : 'create.needPrompt';
   }, [submitting, credits, canSubmit, editTrackId]);
 
+  const promptAtLimit = promptLength >= PROMPT_MAX_CODEPOINTS;
+  const lyricsAtLimit = lyricsLength >= LYRICS_MAX_CODEPOINTS;
+
+  /*
+   * Which field a refusal is about.
+   *
+   * The server names the rule it applied; the field follows from that. Without
+   * this a refusal was a paragraph above the button and nothing else — the
+   * reader had to work out which of two long text areas it meant, after
+   * scrolling back up to find them. `lyrics.tooLong` is the only hint that can
+   * only mean the lyrics; every other rule runs over whichever field tripped
+   * it, and the description is the one in view, so it is the better default.
+   */
+  const fieldForError = (err: unknown): 'prompt' | 'lyrics' | 'instructions' | null => {
+    if (!(err instanceof ApiError)) return null;
+    // The server names the field; it is the only side that knows which text it
+    // was screening. An older API that does not say falls back to the box in
+    // view rather than to nothing.
+    const named = (err.details as { field?: string } | undefined)?.field;
+    if (named === 'lyrics') return 'lyrics';
+    if (named === 'prompt') return editTrackId ? 'instructions' : 'prompt';
+    if (err.code === 'PROMPT_BLOCKED') return editTrackId ? 'instructions' : 'prompt';
+    return null;
+  };
+
   const toggleStyle = (style: string) => {
     setDraft((d) => ({
       ...d,
@@ -500,6 +525,31 @@ export default function Create() {
       void refreshEntitlements();
     } catch (err) {
       setError(err);
+      /*
+       * Move to the field, do not just describe it. WCAG 3.3.1 wants the error
+       * identified; identifying it at the top of a form the reader has
+       * scrolled past is identification they have to go looking for.
+       * `preventScroll` then an explicit scroll, so the field lands with room
+       * above it rather than jammed under the sticky header.
+       */
+      const field = fieldForError(err);
+      if (field) {
+        // After the re-render that shows the message, so the field is measured
+        // in its final position. Plain `focus()` — the browser's own scroll is
+        // immediate, lands correctly whatever the scroll container, and honours
+        // prefers-reduced-motion without being asked. `scroll-margin-block` on
+        // the field keeps it clear of the sticky header. A smooth
+        // `scrollIntoView` was tried first and animated for seconds across a
+        // long page, with the field still out of view when the message arrived.
+        // Lyrics live inside "more settings", which is collapsed by default and
+        // unmounts the field — so focusing it did nothing at all, and a refusal
+        // about the lyrics pointed at a box that was not on the screen. Open
+        // the panel first; the extra frame lets it mount before we reach for it.
+        if (field === 'lyrics') setMore(true);
+        requestAnimationFrame(() =>
+          requestAnimationFrame(() => document.getElementById(field)?.focus()),
+        );
+      }
       // A used key means the browser retried a submission that already landed;
       // keep the key only for genuine retries of a failed request.
       if (err instanceof ApiError && err.code === 'IDEMPOTENCY_KEY_REUSED') {
@@ -816,11 +866,12 @@ export default function Create() {
           maxLength={PROMPT_MAX_CODEPOINTS}
           onChange={(e) => patch({ prompt: e.target.value })}
           placeholder={t('create.prompt.placeholderSimple')}
+          className={promptAtLimit ? 'is-full' : undefined}
           aria-describedby="prompt-format prompt-count"
         />
-        <div className="composer__meta">
-          <span id="prompt-format">{format}</span>
-          <span id="prompt-count" className="num">
+        <div className={`composer__meta${promptAtLimit ? ' is-full' : ''}`}>
+          <span id="prompt-format">{promptAtLimit ? t('create.atLimit') : format}</span>
+          <span id="prompt-count" className="num" aria-live="polite">
             {promptLength} / {PROMPT_MAX_CODEPOINTS}
           </span>
         </div>
@@ -1025,9 +1076,9 @@ export default function Create() {
                   </button>
                 ))}
               </div>
-              <div className="composer__meta">
-                <span id="lyrics-hint">{t('create.lyrics.hint')}</span>
-                <span id="lyrics-count" className="num">
+              <div className={`composer__meta${lyricsAtLimit ? ' is-full' : ''}`}>
+                <span id="lyrics-hint">{lyricsAtLimit ? t('create.atLimit') : t('create.lyrics.hint')}</span>
+                <span id="lyrics-count" className="num" aria-live="polite">
                   {lyricsLength} / {LYRICS_MAX_CODEPOINTS}
                 </span>
               </div>

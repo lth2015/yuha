@@ -132,6 +132,11 @@ export async function createGeneration(
       reason: safety.reason,
       hintKey: safety.hintKey,
       appealable: safety.appealable,
+      // Which box to send the writer back to. Only this side knows: both fields
+      // share hint keys (a URL in the lyrics and a URL in the description are
+      // the same rule), so the client was guessing from the hint and guessing
+      // wrong — a URL pasted into the lyrics focused the description.
+      field: 'prompt',
     });
   }
   if (req.lyrics) {
@@ -141,6 +146,7 @@ export async function createGeneration(
         reason: lyricsSafety.reason,
         hintKey: lyricsSafety.hintKey,
         appealable: lyricsSafety.appealable,
+        field: 'lyrics',
       });
     }
   }

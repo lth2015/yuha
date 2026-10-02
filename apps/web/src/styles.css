@@ -672,6 +672,22 @@ tr:last-child td { border-bottom: none; }
 .composer textarea { border: 0; resize: vertical; background: transparent; width: 100%; min-height: 105px; padding: 8px 0; font-size: 16px; line-height: 1.7; }
 .composer textarea:focus-visible { outline-offset: 4px; border-radius: 4px; }
 .composer__meta { display: flex; justify-content: space-between; gap: 12px; font-size: 12px; color: var(--muted); margin-top: var(--s2); }
+/*
+ * The counter at its ceiling.
+ *
+ * `maxLength` silently drops whatever will not fit — paste 600 characters into
+ * a 500 field and 100 disappear without a word. Colour alone would not say so
+ * (WCAG 1.4.1), so the count is joined by a sentence; this only makes it the
+ * loudest thing in the row. Weight and colour together, because a 12px count
+ * tinted red and nothing else is easy to miss.
+ */
+.composer__meta.is-full { color: var(--danger); font-weight: 600; }
+.composer__meta.is-full .num { color: var(--danger); }
+textarea.is-full { border-color: var(--danger); }
+/* Room above a field the browser scrolls to on focus, so it does not land
+   under the sticky header. Not :focus-visible — focus-driven scrolling happens
+   whether or not the ring is drawn. */
+.composer textarea, .studio textarea, textarea#prompt, textarea#lyrics, textarea#instructions { scroll-margin-block: var(--s6); }
 .composer .chips { margin: 20px 0; }
 .composer__row { display: flex; justify-content: space-between; align-items: center; gap: 16px; }
 .composer__cost { font-size: 12px; color: var(--muted); line-height: 1.6; }
