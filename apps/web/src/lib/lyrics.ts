@@ -54,16 +54,39 @@ export function buildLyricTimeline(
   }
   if (!entries.length) return { lines: [], sections: [] };
 
-  // Instrumental breathing room: sections get a short pause before they start.
-  const SECTION_PAUSE = 0.6;
-  const sectionSwitch = entries.map((e, i) => (i > 0 && e.section && e.section !== entries[i - 1]!.section ? SECTION_PAUSE : 0));
+/*
+   * Section gaps are silence BEFORE the line, not extra length ON it.
+   *
+   * This read `span = singable * (weight + pause) / totalWeight`, which does not
+   * insert a gap anywhere: the first line of a new section started at the exact
+   * instant the previous line ended, and was merely held on screen longer. The
+   * comment above it said sections "get a pause before they start", and nothing
+   * in the code did that.
+   *
+   * Both reported symptoms come out of this. Nothing pauses over an interlude,
+   * because there is no gap in the timeline to pause in — the lyrics walk
+   * straight through the instrumental between a verse and a chorus. And the
+   * inflated line is highlighted for longer than it is sung, so from the first
+   * section change onwards the highlight sits behind the voice, and the error
+   * accumulates with every section after it.
+   *
+   * SECTION_GAP_SECONDS is a guess and is marked as one. A real interlude is
+   * somewhere between zero and ten seconds and this estimator has never heard
+   * the audio — knowing where the singing actually stops is the whole job of
+   * the aligner. Two seconds is enough to read as a pause without stalling a
+   * song that does not have one.
+   */
+  const SECTION_GAP_SECONDS = 2;
+  const gaps = entries.map((e, i) => (i > 0 && e.section && e.section !== entries[i - 1]!.section ? SECTION_GAP_SECONDS : 0));
+  const gapTotal = gaps.reduce((a: number, b: number) => a + b, 0);
 
-  const totalWeight = entries.reduce((sum, e, i) => sum + e.weight + sectionSwitch[i]!, 0);
-  const singable = Math.max(1, durationSeconds - leadIn - tailOut);
+  const totalWeight = entries.reduce((sum, e) => sum + e.weight, 0);
+  const singable = Math.max(1, durationSeconds - leadIn - tailOut - gapTotal);
 
   let t = leadIn;
   const lines: LyricLine[] = entries.map((e, i) => {
-    const span = (singable * (e.weight + sectionSwitch[i]!)) / totalWeight;
+    t += gaps[i]!;
+    const span = (singable * e.weight) / totalWeight;
     const line: LyricLine = { section: e.section, text: e.text, start: t, end: t + span };
     t += span;
     return line;

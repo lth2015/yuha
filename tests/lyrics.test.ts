@@ -12,7 +12,7 @@ I drive until the morning breaks
 We are electric, we are alive`;
 
 describe('buildLyricTimeline', () => {
-  it('lays every line on a monotone, gap-free axis that fits the song', () => {
+  it('lays every line on a monotone axis that fits the song', () => {
     const { lines } = buildLyricTimeline(LYRICS, 120);
     expect(lines).toHaveLength(3);
 
@@ -25,6 +25,40 @@ describe('buildLyricTimeline', () => {
     // The last line ends at the tail of the song, not after it.
     expect(prevEnd).toBeLessThanOrEqual(120);
     expect(prevEnd).toBeGreaterThan(100);
+  });
+
+  /*
+   * The axis used to be gap-free everywhere, including across a section
+   * change, because the "section pause" was added to the first line's own
+   * span instead of inserted before it. So the lyrics walked straight through
+   * the instrumental between a verse and a chorus, and that line was held on
+   * screen longer than it was sung — which puts the highlight behind the
+   * voice from there on, cumulatively.
+   */
+  it('leaves silence at a section boundary, and only there', () => {
+    const { lines } = buildLyricTimeline(LYRICS, 120);
+
+    // Inside the verse: one line hands straight over to the next.
+    expect(lines[1]!.start).toBeCloseTo(lines[0]!.end, 6);
+
+    // Verse → Chorus: a real gap, with no line claiming it.
+    const gap = lines[2]!.start - lines[1]!.end;
+    expect(gap).toBeGreaterThan(1);
+    const midGap = (lines[1]!.end + lines[2]!.start) / 2;
+    expect(activeLineIndex(lines, midGap)).toBe(1);
+    expect(lineProgress(lines, 1, midGap)).toBe(1);
+  });
+
+  it('keeps the gaps inside the song rather than pushing past the end', () => {
+    // Many sections, little room: the gaps must come out of the sung time,
+    // not be added on top of a timeline that already fills the song.
+    const many = ['[Verse]', 'a', '[Chorus]', 'b', '[Verse]', 'c', '[Chorus]', 'd'].join('\n');
+    const { lines } = buildLyricTimeline(many, 30);
+    expect(lines).toHaveLength(4);
+    expect(lines[3]!.end).toBeLessThanOrEqual(30);
+    for (let i = 1; i < lines.length; i += 1) {
+      expect(lines[i]!.start).toBeGreaterThanOrEqual(lines[i - 1]!.end);
+    }
   });
 
   it('marks section labels and gives longer lines more time', () => {

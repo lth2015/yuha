@@ -24,7 +24,7 @@ export class EstimatedAlignmentProvider implements AlignmentProvider {
   async align(req: AlignmentRequest): Promise<AlignmentResult> {
     const leadIn = Math.min(3, req.durationSeconds * 0.08);
     const tailOut = Math.min(4, req.durationSeconds * 0.1);
-    const SECTION_PAUSE = 0.6;
+    const SECTION_GAP_SECONDS = 2;
 
     let section = '';
     const entries: Array<{ section: string; text: string; weight: number }> = [];
@@ -39,15 +39,41 @@ export class EstimatedAlignmentProvider implements AlignmentProvider {
     }
     if (!entries.length) return { status: 'failed', reason: 'no lyric lines' };
 
-    const pauses = entries.map((e, i) =>
-      i > 0 && e.section && e.section !== entries[i - 1]!.section ? SECTION_PAUSE : 0,
+/*
+     * Section gaps are silence BEFORE the line, not extra length ON it.
+     *
+     * This read `span = singable * (weight + pause) / totalWeight`, which does not
+     * insert a gap anywhere: the first line of a new section started at the exact
+     * instant the previous line ended, and was merely held on screen longer. The
+     * comment above it said sections "get a pause before they start", and nothing
+     * in the code did that.
+     *
+     * Both reported symptoms come out of this. Nothing pauses over an interlude,
+     * because there is no gap in the timeline to pause in — the lyrics walk
+     * straight through the instrumental between a verse and a chorus. And the
+     * inflated line is highlighted for longer than it is sung, so from the first
+     * section change onwards the highlight sits behind the voice, and the error
+     * accumulates with every section after it.
+     *
+     * SECTION_GAP_SECONDS is a guess and is marked as one. A real interlude is
+     * somewhere between zero and ten seconds and this estimator has never heard
+     * the audio — knowing where the singing actually stops is the whole job of
+     * the aligner. Two seconds is enough to read as a pause without stalling a
+     * song that does not have one.
+     */
+    const gaps = entries.map((e, i) =>
+      i > 0 && e.section && e.section !== entries[i - 1]!.section ? SECTION_GAP_SECONDS : 0,
     );
-    const totalWeight = entries.reduce((sum, e, i) => sum + e.weight + pauses[i]!, 0);
-    const singable = Math.max(1, req.durationSeconds - leadIn - tailOut);
+    const gapTotal = gaps.reduce((a: number, b: number) => a + b, 0);
+    const totalWeight = entries.reduce((sum, e) => sum + e.weight, 0);
+    // The gaps come out of the same budget, so they cannot push the last line
+    // past the end of the song; a lyric-dense short song keeps most of it.
+    const singable = Math.max(1, req.durationSeconds - leadIn - tailOut - gapTotal);
 
     let t = leadIn;
     const lines: LyricTimings['lines'] = entries.map((e, i) => {
-      const span = (singable * (e.weight + pauses[i]!)) / totalWeight;
+      t += gaps[i]!;
+      const span = (singable * e.weight) / totalWeight;
       const line = { text: e.text, section: e.section, start: Number(t.toFixed(3)), end: Number((t + span).toFixed(3)) };
       t += span;
       return line;

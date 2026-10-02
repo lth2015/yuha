@@ -497,7 +497,18 @@ async function processAudio(
     if (intent.lyrics && intent.vocalMode === 'with_vocals') {
       const alignment = await ctx.alignment.align({
         lyrics: intent.lyrics,
-        durationSeconds: intent.durationSeconds,
+        /*
+         * The probed length of the file, not the length that was requested.
+         *
+         * `deliver` above already uses `check.probe` for exactly this reason —
+         * the encoder cannot land on 120.000s, and the pipeline accepts
+         * anything within AUDIO_DURATION_TOLERANCE_MS (750ms) of the request.
+         * The estimator lays the lines across whatever length it is handed, so
+         * handing it the request meant the whole lyric timeline was scaled to
+         * a song of a slightly different length than the one playing, drifting
+         * further out the longer the song ran.
+         */
+        durationSeconds: (check.probe?.durationMs ?? intent.durationSeconds * 1000) / 1000,
         providerRequestId: audioRef.providerRequestId,
       });
       if (alignment.status === 'ok') {

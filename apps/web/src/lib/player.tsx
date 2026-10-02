@@ -40,6 +40,18 @@ interface PlayerApi extends PlayerState {
   stop(): void;
   /** Fires once per song when 10s of audio has actually been heard (§11.1). */
   onTenSeconds(handler: (id: string) => void): () => void;
+  /**
+   * The playhead at frame rate, for anything that has to land on a beat.
+   *
+   * `currentTime` on this object comes from the audio element's `timeupdate`
+   * event, which fires about four times a second. That is fine for a progress
+   * bar and much too coarse for karaoke: a line could not light up until as
+   * much as 250ms after it was sung, every line, which reads as the lyrics
+   * running late — and the fill crawled in four steps a second instead of
+   * moving. Subscribers here are driven by requestAnimationFrame and read the
+   * element directly, so nothing in the React tree re-renders for them.
+   */
+  onTime(handler: (seconds: number) => void): () => void;
 }
 
 const PlayerContext = createContext<PlayerApi | null>(null);
@@ -47,6 +59,7 @@ const PlayerContext = createContext<PlayerApi | null>(null);
 export function PlayerProvider({ children }: { children: ReactNode }) {
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const listeners = useRef(new Set<(id: string) => void>());
+  const timeListeners = useRef(new Set<(seconds: number) => void>());
   const reported = useRef(new Set<string>());
   /** Seconds of this song really heard; the rule is in lib/listening.ts. */
   const heard = useRef<Heard>({ id: null, seconds: 0, last: 0 });
@@ -210,9 +223,33 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     return () => listeners.current.delete(handler);
   }, []);
 
+  const onTime = useCallback((handler: (seconds: number) => void) => {
+    timeListeners.current.add(handler);
+    return () => timeListeners.current.delete(handler);
+  }, []);
+
+  /*
+   * One rAF loop for every time subscriber, running only while audio is
+   * playing. It reads `audio.currentTime` straight off the element rather
+   * than any React state, so a subscriber sees the real playhead with at most
+   * one frame of delay and the provider never re-renders on its account.
+   */
+  useEffect(() => {
+    if (state.status !== 'playing') return;
+    let raf = 0;
+    const tick = () => {
+      raf = requestAnimationFrame(tick);
+      const audio = audioRef.current;
+      if (!audio) return;
+      for (const l of timeListeners.current) l(audio.currentTime);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [state.status]);
+
   const api = useMemo<PlayerApi>(
-    () => ({ ...state, current, queue, play, toggle, seek, next, prev, stop, onTenSeconds }),
-    [state, current, queue, play, toggle, seek, next, prev, stop, onTenSeconds],
+    () => ({ ...state, current, queue, play, toggle, seek, next, prev, stop, onTenSeconds, onTime }),
+    [state, current, queue, play, toggle, seek, next, prev, stop, onTenSeconds, onTime],
   );
 
   return <PlayerContext.Provider value={api}>{children}</PlayerContext.Provider>;

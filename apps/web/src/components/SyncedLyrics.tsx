@@ -1,7 +1,8 @@
-import { useEffect, useMemo, useRef } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import type { LyricTimings } from '@yuha/contracts';
 import { useI18n } from '../lib/i18n';
 import { activeLineIndex, buildLyricTimeline, lineProgress } from '../lib/lyrics';
+import { usePlayer } from '../lib/player';
 
 /**
  * Karaoke lyrics: the active line lifts, brightens and fills left-to-right;
@@ -33,7 +34,25 @@ export function SyncedLyrics({
     [timings, lyrics, duration],
   );
   const source = timings?.lines?.length ? timings.source : ('estimated' as const);
-  const active = activeLineIndex(lines, currentTime);
+
+  /*
+   * The playhead at frame rate, not at `timeupdate`'s four times a second.
+   *
+   * `currentTime` arrives as a prop from the player's React state, which is
+   * written on `timeupdate` — so a line could not light up until as much as
+   * 250ms after it was sung, on every line, and the karaoke fill advanced in
+   * four visible steps a second. Subscribing to `onTime` reads the audio
+   * element directly inside a requestAnimationFrame loop.
+   *
+   * The prop is still what this falls back to, and still what updates while
+   * paused or seeking, so a song that is not playing shows the right line.
+   */
+  const [liveTime, setLiveTime] = useState(currentTime);
+  useEffect(() => setLiveTime(currentTime), [currentTime]);
+  const player = usePlayer();
+  useEffect(() => player.onTime(setLiveTime), [player]);
+
+  const active = activeLineIndex(lines, liveTime);
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const lineRefs = useRef<Array<HTMLButtonElement | null>>([]);
 
@@ -65,7 +84,7 @@ export function SyncedLyrics({
       </span>
       {lines.map((line, i) => {
         const state = i < active ? 'past' : i === active ? 'active' : 'future';
-        const fill = i === active ? lineProgress(lines, i, currentTime) : state === 'past' ? 1 : 0;
+        const fill = i === active ? lineProgress(lines, i, liveTime) : state === 'past' ? 1 : 0;
         return (
           <div key={i} role="listitem" className="lyrics-sync__section">
             {line.section && (i === 0 || lines[i - 1]!.section !== line.section) && (
