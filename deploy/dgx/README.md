@@ -12,40 +12,70 @@ that depends on it.
 
 ## Updating both stacks to the latest commit
 
-Everything below runs **on the Mac that can `ssh dgx`**. Neither stack pulls
-from git on its own: `deploy_yuha.sh` ships this repository's tracked files,
-and the music service's code is `COPY`ed into its image, so a change to
-`server/app.py` needs a rebuild and not just a restart.
-
-Both steps restart containers, so anything mid-generation at that moment dies.
-Since `d8460f6` that is survivable rather than permanent — an abandoned job is
-swept after `JOB_UPSTREAM_DEADLINE_SECONDS` (1h) and its credit released — but
-it is still a minute of other people's work, so pick a quiet moment.
-
 ```bash
 cd ~/workplace/music
-git checkout master && git pull         # or: git checkout yuha && git pull
+git checkout master && git pull
+cd deploy/dgx && ./update.sh
 ```
 
-### 1. The music service, if `music/server/` changed
+One command for both stacks. It runs **on the Mac that can `ssh dgx`**;
+neither stack pulls from git on its own.
 
-```bash
-cd deploy/dgx/music
-scp -q server/app.py server/align.py "dgx:yuha-spark/server/"
-ssh dgx 'cd ~/yuha-spark && docker compose up -d --build music'
-```
+What it does that doing it by hand did not:
 
-`--build` is required: the Dockerfile has `COPY server/ /opt/server/`, so the
-running container holds a copy of the old file. The rebuild reuses every layer
-up to that COPY, and the model weights live in mounted caches
-(`~/.cache/ace-step`, `~/.cache/huggingface`), so this is a couple of minutes
-rather than the 20-40 of a first install.
+- **Decides whether the music service needs rebuilding by hashing
+  `music/server/`**, not by remembering. That code is `COPY`ed into the image,
+  so a container that was only restarted keeps serving the old `app.py` and
+  reports success while doing it.
+- **Checks the site afterwards, through the front door.** `3da18de` exists
+  because a redeploy left the whole site answering 502 — nginx resolves `api`
+  once at start, and every redeploy gives that container a new address — and
+  the way it was found was somebody failing to sign in. The script fetches
+  `/v1/auth/config` through nginx (not the api's own port, where the failure
+  is invisible) and fetches the script `index.html` actually references, so a
+  build that did not happen cannot pass.
+  Note it does **not** use `/health`: nginx proxies only `/v1/`, so `/health`
+  falls through to the SPA and answers 200 with the page shell. A check that
+  cannot fail is not a check.
+- **Records the deployed commit** in `~/yuha-app/.deployed`, and on the next
+  run prints the commits since it — which is the list of things to accept.
 
-Check it came back, and that the mastering is on:
+It refuses a dirty working tree, because `deploy_yuha.sh` ships tracked files
+at their *working tree* content: uncommitted edits do go up, under a commit id
+that does not contain them. `ALLOW_DIRTY=1` overrides it and marks the
+recorded commit `+dirty`.
+
+Both stacks restart containers, so anything mid-generation at that moment
+dies. Since `d8460f6` that is survivable rather than permanent — an abandoned
+job is swept after `JOB_UPSTREAM_DEADLINE_SECONDS` (1h) and its credit
+released — but it is still a minute of other people's work, so pick a quiet
+moment.
+
+Other switches: `MUSIC=yes|no` forces or skips the music rebuild,
+`SKIP_APP=1` does the music service alone, `DGX=` picks another ssh host.
+
+### The migration step is the one to watch
+
+`update.sh` delegates the app to `deploy_yuha.sh`, which tars this
+repository's tracked files, uploads, rebuilds the API image, waits for MySQL,
+**runs `pnpm db:migrate`**, seeds, builds the web assets, restarts
+api/worker/web/stripe, and tops the shared team account back up. It reads the
+Mac's `.env` for the secrets it carries over, so run it from a checkout that
+has one.
+
+Migrations change a schema holding everyone's songs. `0007`/`0008` add the
+account-deletion tables and `0009` rewrites `asset_versions`'s unique key to
+include `owner_id` — it adds the new key before dropping the old one, because
+the old one was the only index the `track_id` foreign key could use, and
+adding a column to a unique key only ever loosens it, so no existing row can
+collide. If `db:migrate` fails, the old containers are still running and
+nothing is half-deployed; paste the error rather than re-running.
+
+### Checking the music service by hand
 
 ```bash
 ssh dgx 'P=$(sed -n "s/^HOST_PORT=//p" ~/yuha-spark/.env); curl -s http://127.0.0.1:${P:-8000}/healthz'
-# expect "model_loaded":true
+# expect "model_loaded":true   (update.sh already waits for this)
 cd deploy/dgx/music && ssh dgx 'cd ~/yuha-spark && python3 02_acceptance.py --quick'
 ```
 
@@ -55,32 +85,10 @@ bail-out that refuses a near-silent result instead of delivering it. If a
 generated song still ends abruptly or plays noticeably quieter than the rest,
 the rebuild did not take — check `docker logs --tail 40 yuha-music`.
 
-### 2. The app
-
-```bash
-cd deploy/dgx/app
-./deploy_yuha.sh
-```
-
-One command: it tars this repository's tracked files, uploads, rebuilds the
-API image, waits for MySQL, **runs `pnpm db:migrate`**, seeds, builds the web
-assets, restarts api/worker/web/stripe, and tops the shared team account back
-up. It reads the Mac's `.env` for the secrets it carries over, so run it from
-a checkout that has one.
-
-The migration step is the part to watch, because it changes a schema holding
-everyone's songs. `0007`/`0008` add the account-deletion tables and `0009`
-rewrites `asset_versions`'s unique key to include `owner_id` — it adds the new
-key before dropping the old one, because the old one was the only index the
-`track_id` foreign key could use, and adding a column to a unique key only
-ever loosens it, so no existing row can collide. If `db:migrate` fails, the
-old containers are still running and nothing is half-deployed; paste the error
-rather than re-running.
-
-Nobody should see the new 18+ consent banner on this build: sign-in here is
-the dev sign-in, whose form already requires both checkboxes and records them,
-so every account that can sign in is already confirmed. It exists for the
-Google path, which this build does not use.
+Nobody should see the 18+ consent banner on this build: sign-in here is the
+dev sign-in, whose form already requires both checkboxes and records them, so
+every account that can sign in is already confirmed. It exists for the Google
+path, which this build does not use.
 
 ## Music service (`music/`)
 
