@@ -406,6 +406,23 @@ export default function Create() {
     return mode === 'custom' || draft.prompt.trim().length > 0;
   }, [submitting, credits, editTrackId, instructions, mode, draft.prompt]);
 
+  /*
+   * Why the button is off, when it is off for something the writer can fix.
+   *
+   * `canSubmit` had three reasons and the button showed none of them: it simply
+   * greyed out. With styles, length and voice all chosen it looks finished, so
+   * the missing description is invisible and the only number in view is the
+   * credit balance — which is how a full balance got read as a credit fault.
+   * Submitting is blocked by one thing at a time, so one line is enough.
+   *
+   * Nothing is said while submitting (the label already says so) or at zero
+   * credits (that branch swaps in a link to buy some, with its own note).
+   */
+  const blockedReason = useMemo(() => {
+    if (submitting || credits < 1 || canSubmit) return null;
+    return editTrackId ? 'create.needInstructions' : 'create.needPrompt';
+  }, [submitting, credits, canSubmit, editTrackId]);
+
   const toggleStyle = (style: string) => {
     setDraft((d) => ({
       ...d,
@@ -715,11 +732,21 @@ export default function Create() {
               <button type="button" className="btn" onClick={startAnother}>
                 {t('create.edit.cancel')}
               </button>
-              <button type="submit" className="btn btn--primary btn--lg" disabled={!canSubmit}>
+              <button
+                type="submit"
+                className="btn btn--primary btn--lg"
+                disabled={!canSubmit}
+                aria-describedby={blockedReason ? 'submit-blocked' : undefined}
+              >
                 {submitting ? t('create.submitting') : t('create.submit')}
               </button>
             </div>
           </div>
+          {blockedReason && (
+            <p className="composer__feedback" id="submit-blocked">
+              {t(blockedReason)}
+            </p>
+          )}
           {outOfCreditsNote}
           <p className="composer__feedback">{t('create.guarantee')}</p>
         </form>
@@ -1055,11 +1082,21 @@ export default function Create() {
               <span aria-hidden="true">↗</span>
             </Link>
           ) : (
-            <button type="submit" className="btn btn--primary btn--lg" disabled={!canSubmit}>
+            <button
+              type="submit"
+              className="btn btn--primary btn--lg"
+              disabled={!canSubmit}
+              aria-describedby={blockedReason ? 'submit-blocked' : undefined}
+            >
               {submitting ? t('create.submitting') : t('create.submit')}
             </button>
           )}
         </div>
+        {blockedReason && (
+          <p className="composer__feedback" id="submit-blocked">
+            {t(blockedReason)}
+          </p>
+        )}
         {outOfCreditsNote}
         <p className="composer__feedback">{t('create.guarantee')}</p>
       </form>
