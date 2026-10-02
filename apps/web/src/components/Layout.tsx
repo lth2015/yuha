@@ -5,6 +5,7 @@ import { apiFetch } from '../lib/api';
 import { usePlayer } from '../lib/player';
 import { useI18n } from '../lib/i18n';
 import { useSession } from '../lib/session';
+import { useDismiss } from '../lib/dismiss';
 import { BrandLogo, PetalMark } from './Brand';
 import { ErrorBoundary } from './ErrorBoundary';
 import { LightField } from './LightField';
@@ -149,25 +150,12 @@ export function Layout({ children }: { children: ReactNode }) {
    * outside-click handler, no Escape, no reset on navigation — so clicking
    * the avatar and then anywhere else left the panel floating over the page,
    * still reading `aria-expanded="true"`, until you found the avatar again.
-   * `ShareMenu` has done this correctly since it was written; this is its
-   * effect, in the one other menu in the app.
+   * `ShareMenu` has done this correctly since it was written; the shared
+   * `useDismiss` is now the single copy of it.
    */
   const accountRef = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    if (!menuOpen) return;
-    const onDown = (e: PointerEvent) => {
-      if (accountRef.current && !accountRef.current.contains(e.target as Node)) setMenuOpen(false);
-    };
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') setMenuOpen(false);
-    };
-    document.addEventListener('pointerdown', onDown);
-    document.addEventListener('keydown', onKey);
-    return () => {
-      document.removeEventListener('pointerdown', onDown);
-      document.removeEventListener('keydown', onKey);
-    };
-  }, [menuOpen]);
+  const closeMenu = useCallback(() => setMenuOpen(false), []);
+  useDismiss(accountRef, menuOpen, closeMenu);
 
   useEffect(() => setMenuOpen(false), [location.pathname]);
 

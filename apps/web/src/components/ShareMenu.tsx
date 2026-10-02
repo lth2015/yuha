@@ -1,6 +1,7 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useI18n } from '../lib/i18n';
 import { copyText, isPrivateHost, shareTargets } from '../lib/share';
+import { useDismiss } from '../lib/dismiss';
 
 /**
  * The song's Share control: a small menu rather than a silent copy.
@@ -21,21 +22,8 @@ export function ShareMenu({ url, title }: { url: string; title: string }) {
   const internal = isPrivateHost(new URL(url).hostname);
   const canNativeShare = typeof navigator !== 'undefined' && typeof navigator.share === 'function';
 
-  useEffect(() => {
-    if (!open) return;
-    const onDown = (e: PointerEvent) => {
-      if (root.current && !root.current.contains(e.target as Node)) setOpen(false);
-    };
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') setOpen(false);
-    };
-    document.addEventListener('pointerdown', onDown);
-    document.addEventListener('keydown', onKey);
-    return () => {
-      document.removeEventListener('pointerdown', onDown);
-      document.removeEventListener('keydown', onKey);
-    };
-  }, [open]);
+  const closeMenu = useCallback(() => setOpen(false), []);
+  useDismiss(root, open, closeMenu);
 
   const doCopy = async () => {
     const ok = await copyText(url);

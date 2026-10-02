@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import type { TrackView } from '@yuha/contracts';
 import { apiFetch } from '../lib/api';
@@ -6,6 +6,7 @@ import { TRACK_STATE_KEY } from '../lib/messages';
 import { useI18n } from '../lib/i18n';
 import { formatTime, usePlayer } from '../lib/player';
 import { useSession } from '../lib/session';
+import { useDismiss } from '../lib/dismiss';
 import { CoverArt } from './CoverArt';
 import { Eq } from './Eq';
 
@@ -57,6 +58,9 @@ export function SongCard({
   const player = usePlayer();
   const [busy, setBusy] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
+  const closeMenu = useCallback(() => setMenuOpen(false), []);
+  useDismiss(menuRef, menuOpen, closeMenu);
   /*
    * Publish, unpublish and delete were `try { … } finally { setBusy(false) }`
    * with no `catch`. Confirm a delete while offline and you got an
@@ -175,12 +179,80 @@ export function SongCard({
         {/* h2: the library's h1 is the only heading above the grid, and this
             was an h3 with no h2 between them (axe heading-order). The library
             is the card's only host. */}
-        <h2 className="song-card__title" title={song.title}>
-          <Link to={`/song/${song.trackId}`}>
-            {song.title}
-            {disambiguator && <span className="sr-only"> {disambiguator}</span>}
-          </Link>
-        </h2>
+        {/*
+          The menu sits on the title's own line.
+          It used to be a row of its own under the style chips, hard against
+          the bottom of the card — which in a grid puts it midway between this
+          card and the one below, belonging visually to neither. Three dots
+          floating in a gap are not a control anybody can place. Beside the
+          title it is unmistakably this song's, and the card loses a strip of
+          dead height it never needed.
+        */}
+        <div className="song-card__head">
+          <h2 className="song-card__title" title={song.title}>
+            <Link to={`/song/${song.trackId}`}>
+              {song.title}
+              {disambiguator && <span className="sr-only"> {disambiguator}</span>}
+            </Link>
+          </h2>
+          {me && (onRemove || song.state === 'deliverable') && (
+            <div className="menu" ref={menuRef}>
+              <button
+                type="button"
+                className="menu__btn"
+                onClick={() => setMenuOpen((v) => !v)}
+                aria-haspopup="menu"
+                aria-expanded={menuOpen}
+                aria-label={t('card.more', { title: spoken })}
+              >
+                <span className="icon icon--dots" aria-hidden="true" />
+              </button>
+              {menuOpen && (
+                <div className="menu__panel" role="menu">
+                  <Link role="menuitem" to={`/song/${song.trackId}`} onClick={closeMenu}>
+                    <span className="icon icon--note" aria-hidden="true" />
+                    {t('card.open')}
+                  </Link>
+                  {canDownload && (
+                    <a
+                      role="menuitem"
+                      href={song.previewUrl ?? '#'}
+                      download
+                      aria-disabled={!song.previewUrl}
+                      onClick={(e) => !song.previewUrl && e.preventDefault()}
+                    >
+                      <span className="icon icon--download" aria-hidden="true" />
+                      {t('card.download')}
+                    </a>
+                  )}
+                  {onRemove && (
+                    <>
+                      <button
+                        type="button"
+                        role="menuitem"
+                        onClick={() => setVisibility(song.visibility === 'public' ? 'private' : 'public')}
+                        disabled={busy}
+                      >
+                        <span className="icon icon--link" aria-hidden="true" />
+                        {t(song.visibility === 'public' ? 'card.unpublish' : 'card.publish')}
+                      </button>
+                      <span className="menu__rule" role="separator" />
+                      <button type="button" role="menuitem" className="menu__danger" onClick={remove} disabled={busy}>
+                        <span className="icon icon--trash" aria-hidden="true" />
+                        {t('card.delete')}
+                      </button>
+                    </>
+                  )}
+                  {failed && (
+                    <p className="menu__error" role="alert">
+                      {t('card.actionFailed')}
+                    </p>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
         <div className="song-card__sub">
           <span className="song-card__artist">
             {song.artistName ?? t(isMine ? 'card.you' : 'card.creator')}
@@ -201,61 +273,6 @@ export function SongCard({
         )}
       </div>
 
-      <div className="song-card__actions">
-
-        {me && (onRemove || song.state === 'deliverable') && (
-          <div className="menu">
-            <button
-              type="button"
-              className="menu__btn"
-              onClick={() => setMenuOpen((v) => !v)}
-              aria-haspopup="menu"
-              aria-expanded={menuOpen}
-              aria-label={t('card.more', { title: spoken })}
-            >
-              <span className="icon icon--dots" aria-hidden="true" />
-            </button>
-            {menuOpen && (
-              <div className="menu__panel" role="menu">
-                <Link role="menuitem" to={`/song/${song.trackId}`} onClick={() => setMenuOpen(false)}>
-                  {t('card.open')}
-                </Link>
-                {canDownload && (
-                  <a
-                    role="menuitem"
-                    href={song.previewUrl ?? '#'}
-                    download
-                    aria-disabled={!song.previewUrl}
-                    onClick={(e) => !song.previewUrl && e.preventDefault()}
-                  >
-                    {t('card.download')}
-                  </a>
-                )}
-                {onRemove && (
-                  <>
-                    <button
-                      type="button"
-                      role="menuitem"
-                      onClick={() => setVisibility(song.visibility === 'public' ? 'private' : 'public')}
-                      disabled={busy}
-                    >
-                      {t(song.visibility === 'public' ? 'card.unpublish' : 'card.publish')}
-                    </button>
-                    <button type="button" role="menuitem" className="menu__danger" onClick={remove} disabled={busy}>
-                      {t('card.delete')}
-                    </button>
-                  </>
-                )}
-                {failed && (
-                  <p className="menu__error" role="alert">
-                    {t('card.actionFailed')}
-                  </p>
-                )}
-              </div>
-            )}
-          </div>
-        )}
-      </div>
     </article>
   );
 }
