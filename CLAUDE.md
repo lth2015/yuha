@@ -111,6 +111,35 @@ check was about the rendering.
   symptom and declaring the environment insufficient is the same move as
   reading a screenshot and declaring the feature working.
 
+### Running the suite from outside this machine
+
+An agent session that runs in a cloud container cannot reach this machine's
+MySQL and cannot execute the macOS `rollup`/`esbuild` binaries, so it works
+from a clone inside the container, carried in as `git bundle create
+yuha.bundle --all` plus a `git diff --cached --binary` patch — both written to
+the repo root, because that is the only place such a session can copy files
+out of, and both gitignored for that reason. `pnpm build` before `pnpm test` —
+tests import `@yuha/*` by package name and resolve to `dist/`, not `src/` —
+and `mysqld` on 53307 with `docker-compose.yml`'s flags.
+
+**Do not leave the bundle configured as that clone's `origin`.** `git clone`
+sets it as a remote, and a bundle cannot be pushed to, so the clone reads as
+permanently ahead of its remote. The Stop hook that checks for unpushed work
+then fires every single turn — about a throwaway clone, demanding a push that
+cannot succeed, while the repository it is really asking about sits on this
+machine, clean and outside the container entirely. Fetch by path instead:
+
+```bash
+git remote remove origin
+git fetch /path/to/yuha.bundle 'refs/heads/*:refs/remotes/bundle/*'
+```
+
+This is the same failure as the bullet above, inverted: there the environment
+was declared insufficient when it was not, here the environment reports a
+problem that is not in this repository. Both are a check believed over the
+thing it claims to describe.
+
+
 ## Commands
 
 ```bash

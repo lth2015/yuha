@@ -44,3 +44,11 @@ deploy/dgx/music/data/
 # Python bytecode from the DGX service scripts
 __pycache__/
 *.pyc
+
+# Agent session transfer artifacts (CLAUDE.md, "Running the suite from outside
+# this machine"). They have to sit inside this folder, because that is the only
+# place a cloud session can copy files out of — so they are ignored here rather
+# than kept elsewhere. Untracked, they would otherwise be swept into the very
+# patch being built: work.patch would carry the whole 8MB bundle inside itself.
+/yuha.bundle
+/work.patch
