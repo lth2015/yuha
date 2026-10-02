@@ -60,7 +60,13 @@ PREV=$(ssh "$DGX" "cat $AR/.deployed 2>/dev/null" || true)
 # Portable on purpose: `sort -z` and `xargs -0` are GNU, and this runs on a
 # Mac. Sorting shasum's OUTPUT rather than the file list is stable whatever
 # order find walks in, and does not care about spaces in a name.
-SERVER_HASH=$(cd music/server && find . -type f -not -name '*.pyc' -exec shasum {} + \
+#
+# The Dockerfile and docker-compose.yml are part of the image too. They were
+# left out at first, and that is exactly how the box ended up without Whisper:
+# server/ was current, the Dockerfile that installs openai-whisper was not,
+# and /healthz said aligner_error "No module named 'whisper'" — so lyrics fell
+# back to an estimated timeline while every check here passed.
+SERVER_HASH=$(cd music && find server Dockerfile docker-compose.yml -type f -not -name '*.pyc' -exec shasum {} + \
   | LC_ALL=C sort | shasum | awk '{print $1}')
 REMOTE_HASH=$(ssh "$DGX" "cat $MR/.server-hash 2>/dev/null" || true)
 
@@ -73,8 +79,11 @@ esac
 
 if [[ "$NEED_MUSIC" == yes ]]; then
   say "music service: code differs, rebuilding (a couple of minutes; weights are cached)"
-  ssh "$DGX" "mkdir -p $MR/server"
-  scp -q music/server/* "$DGX:yuha-spark/server/"
+  ssh "$DGX" "mkdir -p $MR/server ~/.cache/whisper"
+  # files only: server/ holds a __pycache__ directory, and scp without -r
+  # refuses a directory and exits non-zero, which `set -e` turns into a stop
+  scp -q music/server/*.py music/server/requirements.txt "$DGX:yuha-spark/server/"
+  scp -q music/Dockerfile music/docker-compose.yml "$DGX:yuha-spark/"
   # --build is required: a plain `up -d` restarts the container with the old
   # COPY of the code still inside it, and reports success.
   ssh "$DGX" "cd $MR && docker compose up -d --build music"
@@ -95,6 +104,12 @@ done
 [[ "$HEALTH" == *'"model_loaded":true'* ]] \
   || die "music service never reported model_loaded — ssh $DGX 'docker logs --tail 40 yuha-music'"
 echo "   ok"
+# Lyric sync depends on the aligner. Its absence is not fatal — songs still
+# render — but it silently degrades every vocal song, so say it out loud.
+if [[ "$HEALTH" == *"No module named"* ]]; then
+  echo "   !! aligner missing: $(printf '%s' "$HEALTH" | grep -o '"aligner_error":"[^"]*"')"
+  echo "      lyrics will follow an estimated timeline. Re-run with MUSIC=yes to rebuild the image."
+fi
 
 # ------------------------------------------------------------------ 2. the app
 if [[ "${SKIP_APP:-}" == "1" ]]; then
