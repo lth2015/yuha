@@ -19,7 +19,8 @@
  * It belongs as a fallback for when no hint arrives, not stacked on top of one.
  */
 import { describe, expect, it } from 'vitest';
-import { nextLineKey, PROMPT_HINT_KEYS } from '../apps/web/src/lib/messages.js';
+import { ApiError } from '../apps/web/src/lib/api.js';
+import { messageFor, nextLineKey, PROMPT_HINT_KEYS } from '../apps/web/src/lib/messages.js';
 
 describe('which next-step line an error panel shows', () => {
   it('prefers the server hint over the generic advice', () => {
@@ -47,5 +48,50 @@ describe('which next-step line an error panel shows', () => {
 
   it('leaves errors that are not prompt blocks alone', () => {
     expect(nextLineKey('err.INTERNAL_ERROR.next', undefined)).toBe('err.INTERNAL_ERROR.next');
+  });
+});
+
+/**
+ * A refused *title* is not a refused prompt.
+ *
+ * Rename reuses PROMPT_BLOCKED, because the rules and the appeal machinery are
+ * the same. The words were not. A title with a URL in it produced:
+ *
+ *   This content cannot be used to generate
+ *   URLs are not accepted... Describe it with mood and instruments.
+ *
+ * Nothing was being generated — the song already exists — and "describe it with
+ * mood and instruments" is advice for the description box, which is not on the
+ * page. That is the same defect this file was opened for, arriving by a new
+ * route: the reader is handed the next step for a different refusal.
+ */
+const blocked = (field: string, hintKey?: string) =>
+  new ApiError('PROMPT_BLOCKED', 'blocked', 422, { field, hintKey });
+
+describe('a refused title says so in its own words', () => {
+  it('does not tell the reader their title cannot be generated', () => {
+    const title = messageFor(blocked('title'));
+    const prompt = messageFor(blocked('prompt'));
+    expect(title.titleKey).not.toBe(prompt.titleKey);
+    expect(title.titleKey).toBe('err.PROMPT_BLOCKED.titleField.title');
+    expect(title.tone).toBe(prompt.tone);
+  });
+
+  it('falls back to title-shaped advice, not description-shaped advice', () => {
+    const title = messageFor(blocked('title'));
+    expect(nextLineKey(title.nextKey, undefined)).toBe('err.PROMPT_BLOCKED.titleField.next');
+  });
+
+  it('leaves every other blocked field exactly as it was', () => {
+    for (const field of ['prompt', 'lyrics', undefined]) {
+      expect(messageFor(blocked(field as string)).titleKey).toBe('err.PROMPT_BLOCKED.title');
+    }
+  });
+
+  it('accepts the title-specific hints the server can now send', () => {
+    for (const key of ['title.tooLong', 'title.noUrl', 'title.rewriteAsName']) {
+      expect(PROMPT_HINT_KEYS as readonly string[]).toContain(key);
+      expect(nextLineKey('err.PROMPT_BLOCKED.titleField.next', key)).toBe(key);
+    }
   });
 });

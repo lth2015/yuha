@@ -224,8 +224,26 @@ export function checkLyrics(lyrics: string): SafetyResult {
  * title is a claim about what the song is.
  */
 export function checkTitle(title: string): SafetyResult {
-  return check(title, TITLE_MAX_CODEPOINTS, 'title.tooLong');
+  const got = check(title, TITLE_MAX_CODEPOINTS, 'title.tooLong');
+  if (got.allowed || !got.reason) return got;
+  const hintKey = TITLE_HINTS[got.reason];
+  return hintKey ? { ...got, hintKey } : got;
 }
+
+/**
+ * Where the shared hint would mislead a reader who is naming a song.
+ *
+ * The rules are the same in every field, which is why the hint keys are shared
+ * — a URL in a description and a URL in a title are one rule. The *advice* is
+ * not: `prompt.noUrl` ends with "describe it with mood and instruments" and
+ * `prompt.rewriteAsMood` is nothing but that, and neither is anything a person
+ * can do to a name. The reasons absent from this table read correctly as they
+ * are, and are deliberately left alone rather than duplicated.
+ */
+const TITLE_HINTS: Partial<Record<BlockReason, string>> = {
+  reference_media_url: 'title.noUrl',
+  prompt_injection: 'title.rewriteAsName',
+};
 
 function checkContent(text: string): SafetyResult {
   if (URL_PATTERN.test(text)) {

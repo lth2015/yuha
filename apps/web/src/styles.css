@@ -1207,6 +1207,31 @@ textarea.is-full { border-color: var(--danger); }
   margin: 0 0 var(--s3);
   overflow-wrap: anywhere;
 }
+/*
+ * Renaming, in place.
+ *
+ * The input inherits the heading's size, weight, tracking and wrapping rather
+ * than restating them, so opening the field cannot move the page under the
+ * reader's hands — the one thing an inline edit must not do. It keeps a
+ * visible box because a field that looks exactly like static text does not
+ * read as editable, which is the failure of every "click the heading" rename
+ * ever shipped.
+ */
+.song-spread__title--editing { margin-bottom: var(--s2); }
+.song-spread__title--editing input {
+  font: inherit; letter-spacing: inherit; line-height: inherit;
+  width: 100%; max-width: 100%; box-sizing: border-box;
+  color: var(--ink);
+  padding: 4px 10px; margin: -4px -10px;
+  border: 1px solid var(--control-line); border-radius: var(--r-control);
+  background-color: var(--surface-solid);
+}
+.song-spread__title--editing input.is-full { border-color: var(--danger); }
+.song-spread__rename { margin: 0 0 var(--s4); }
+.song-spread__rename-actions {
+  display: flex; align-items: center; gap: var(--s4); margin-top: var(--s3);
+}
+
 .song-spread__meta { color: var(--muted); font-size: 15px; margin: 0 0 var(--s6); }
 .song-spread__actions { display: flex; align-items: center; gap: var(--s3); flex-wrap: wrap; margin: 0 0 var(--s4); }
 .song-spread__note { font-size: 12px; color: var(--muted); margin: 0 0 var(--s2); }

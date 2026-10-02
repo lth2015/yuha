@@ -69,10 +69,36 @@ export const ERROR_MESSAGES: Record<ErrorCode, UserMessage> = {
 const NETWORK_MESSAGE: UserMessage = msg('NETWORK', 'error');
 const UNKNOWN_MESSAGE: UserMessage = msg('UNKNOWN', 'error');
 
+/**
+ * A refused title is not a refused prompt.
+ *
+ * Rename reuses PROMPT_BLOCKED — same rules, same appeal machinery — and so
+ * inherited its words, which are about generating. A title with a URL in it
+ * told the reader "this content cannot be used to generate" about a song that
+ * already exists, and then offered the description box's advice for a box that
+ * is not on the page. The server already says which field it refused; this is
+ * the only thing that reads it.
+ */
+const BLOCKED_TITLE_MESSAGE: UserMessage = {
+  titleKey: 'err.PROMPT_BLOCKED.titleField.title',
+  nextKey: 'err.PROMPT_BLOCKED.titleField.next',
+  tone: 'warn',
+};
+
 export function messageFor(err: unknown): UserMessage {
   if (err instanceof NetworkError) return NETWORK_MESSAGE;
-  if (err instanceof ApiError) return ERROR_MESSAGES[err.code] ?? UNKNOWN_MESSAGE;
+  if (err instanceof ApiError) {
+    if (err.code === 'PROMPT_BLOCKED' && blockedField(err) === 'title') {
+      return BLOCKED_TITLE_MESSAGE;
+    }
+    return ERROR_MESSAGES[err.code] ?? UNKNOWN_MESSAGE;
+  }
   return UNKNOWN_MESSAGE;
+}
+
+function blockedField(err: ApiError): string | undefined {
+  const field = (err.details as { field?: unknown } | undefined)?.field;
+  return typeof field === 'string' ? field : undefined;
 }
 
 /** Extra guidance for a blocked prompt, keyed by the server's hint (SEC-07). */
@@ -83,6 +109,11 @@ export function messageFor(err: unknown): UserMessage {
 export const PROMPT_HINT_KEYS = [
   'prompt.tooLong',
   'lyrics.tooLong',
+  'title.tooLong',
+  // Shared rules, title-shaped wording: the prompt versions of these two end
+  // by telling the reader to describe a mood, which is not what a name is.
+  'title.noUrl',
+  'title.rewriteAsName',
   'prompt.noExistingLyrics',
   'prompt.noUrl',
   'prompt.noPersonalInfo',

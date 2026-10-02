@@ -111,6 +111,23 @@ check was about the rendering.
   symptom and declaring the environment insufficient is the same move as
   reading a screenshot and declaring the feature working.
 
+### Two sessions, one test database
+
+Worktrees are cheap and the test database is not: every session on this machine
+shares `loopscene_test` on 53307, and `resetData()` truncates between tests. Two
+suites running at once interleave truncations and produce failures that look
+like deep breakage — foreign keys to `users` failing, "job vanished", "Table
+definition has changed", deadlocks — in files the running change never touched.
+
+29 such failures arrived once while a spawned background task was running its
+own suite in a sibling worktree. Nothing was wrong. The tell is the *shape*: a
+change to a string table cannot deadlock InnoDB, and a failure list that spans
+files with no relation to the diff is about the environment, not the diff.
+
+Before believing a broad failure, run one of the failing files alone. If it
+passes, wait for the other session and re-run; `git worktree list` says whether
+there is one. Do not start fixing.
+
 ### Running the suite from outside this machine
 
 An agent session that runs in a cloud container cannot reach this machine's

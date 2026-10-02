@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import type { LyricTimings, ProductView, TrackView } from '@yuha/contracts';
+import { TITLE_MAX_CODEPOINTS, type LyricTimings, type ProductView, type TrackView } from '@yuha/contracts';
 import { apiFetch, newIdempotencyKey } from '../lib/api';
 import { formatTime, usePlayer } from '../lib/player';
 import { fetchProducts, findLicenceProduct } from '../lib/catalog';
@@ -52,6 +52,16 @@ export default function SongDetail() {
   const [busy, setBusy] = useState(false);
   const [licenseProduct, setLicenseProduct] = useState<ProductView | null>(null);
   const [licensing, setLicensing] = useState(false);
+  /*
+   * Renaming. The title was chosen once, at generation, by someone who had not
+   * heard the song yet, so it is the one piece of a finished song that most
+   * wants changing — and until now the only way was to generate another one.
+   */
+  const [renaming, setRenaming] = useState(false);
+  const [draftTitle, setDraftTitle] = useState('');
+  const [renameError, setRenameError] = useState<unknown>(null);
+  const titleInput = useRef<HTMLInputElement>(null);
+  const renameButton = useRef<HTMLButtonElement>(null);
   // `player.currentTime` re-renders this several times a second while the song
   // plays; the score itself only depends on the seed.
   const songScore = useMemo(() => (song ? scoreFromSeed(song.coverSeed, 72) : null), [song?.coverSeed]);
@@ -82,6 +92,18 @@ export default function SongDetail() {
   }, [id]);
 
   useEffect(load, [load]);
+
+  useEffect(() => {
+    // Focus follows the field that just appeared, and selects what is there so
+    // a replacement name can be typed straight over the old one. Without this
+    // the reader has to find a freshly rendered input with the pointer, and a
+    // keyboard reader never finds it at all.
+    if (!renaming) return;
+    const el = titleInput.current;
+    if (!el) return;
+    el.focus();
+    el.select();
+  }, [renaming]);
 
   useEffect(() => {
     // Not `.catch(() => undefined)`. That swallowed a shape mismatch for eight
@@ -135,6 +157,54 @@ export default function SongDetail() {
     player.play({ ...song, previewUrl: song.previewUrl }, here);
   };
 
+
+  /*
+   * The server collapses whitespace and trims; this mirrors it only to decide
+   * whether Save is worth offering. The stored value is whatever the server
+   * decides, and the response is what is written back — never this string.
+   */
+  const tidyTitle = (v: string) => v.replace(/\s+/g, ' ').trim();
+  const titleLength = [...tidyTitle(draftTitle)].length;
+  const titleAtLimit = titleLength >= TITLE_MAX_CODEPOINTS;
+  const titleUnchanged = tidyTitle(draftTitle) === song.title;
+  const canSaveTitle = titleLength > 0 && titleLength <= TITLE_MAX_CODEPOINTS && !titleUnchanged;
+
+  const openRename = () => {
+    setRenameError(null);
+    setDraftTitle(song.title);
+    setRenaming(true);
+  };
+
+  const cancelRename = () => {
+    setRenaming(false);
+    setRenameError(null);
+    // Put focus back where it came from; leaving it on a removed input drops
+    // a keyboard reader at the top of the document.
+    window.requestAnimationFrame(() => renameButton.current?.focus());
+  };
+
+  const saveTitle = async () => {
+    if (!canSaveTitle) return;
+    setBusy(true);
+    setRenameError(null);
+    try {
+      const res = await apiFetch<{ title: string }>(`/v1/tracks/${song.trackId}/title`, {
+        method: 'POST',
+        body: { title: draftTitle },
+      });
+      // The server's value, not the typed one: it trims and collapses, and the
+      // page should show what is stored rather than what was typed at it.
+      setSong({ ...song, title: res.title });
+      setRenaming(false);
+      window.requestAnimationFrame(() => renameButton.current?.focus());
+    } catch (err) {
+      // Stay open with the text intact. A refusal that closed the field would
+      // throw away the writing and leave nothing to correct.
+      setRenameError(err);
+    } finally {
+      setBusy(false);
+    }
+  };
 
   const setVisibility = async (visibility: 'public' | 'private') => {
     setBusy(true);
@@ -232,7 +302,68 @@ export default function SongDetail() {
             {t(song.visibility === 'public' ? 'song.public' : isOwner ? 'song.private' : 'song.work')} ·{' '}
             {t(song.vocalMode === 'instrumental' ? 'song.instrumental' : 'song.vocals')} · {formatTime(song.durationSeconds)}
           </p>
-          <h1 className="song-spread__title">{song.title}</h1>
+          {renaming ? (
+            /*
+             * The heading swaps in place, at the same type scale, so the page
+             * does not jump under the reader's hands when the field opens.
+             * `h1` stays: it is still the page's heading while it is being
+             * edited, and a document that loses its h1 mid-interaction loses
+             * the landmark a screen reader navigates by.
+             */
+            <h1 className="song-spread__title song-spread__title--editing">
+              <input
+                ref={titleInput}
+                type="text"
+                value={draftTitle}
+                maxLength={TITLE_MAX_CODEPOINTS}
+                onChange={(e) => setDraftTitle(e.target.value)}
+                onKeyDown={(e) => {
+                  // Enter saves and Escape cancels, because this is a
+                  // one-field form and reaching for a button to commit one
+                  // line is the slow path. Both still have buttons below.
+                  if (e.key === 'Enter') { e.preventDefault(); void saveTitle(); }
+                  if (e.key === 'Escape') { e.preventDefault(); cancelRename(); }
+                }}
+                className={titleAtLimit ? 'is-full' : undefined}
+                aria-label={t('song.rename.label')}
+                aria-describedby="rename-count rename-error"
+                autoComplete="off"
+                enterKeyHint="done"
+              />
+            </h1>
+          ) : (
+            <h1 className="song-spread__title">{song.title}</h1>
+          )}
+          {renaming && (
+            <div className="song-spread__rename">
+              <div className={`composer__meta${titleAtLimit ? ' is-full' : ''}`}>
+                <span id="rename-count" className="num" aria-live="polite">
+                  {titleLength} / {TITLE_MAX_CODEPOINTS}
+                </span>
+              </div>
+              {/*
+                The refusal sits under the field it is about, not at the top of
+                the page: an error the reader has to go looking for is an error
+                they act on last. `ErrorNotice` already carries role="alert".
+              */}
+              <div id="rename-error">
+                <ErrorNotice error={renameError} />
+              </div>
+              <div className="song-spread__rename-actions">
+                <button
+                  type="button"
+                  className="btn btn--primary btn--sm"
+                  onClick={() => void saveTitle()}
+                  disabled={busy || !canSaveTitle}
+                >
+                  {busy ? t('song.rename.saving') : t('song.rename.save')}
+                </button>
+                <button type="button" className="text-action" onClick={cancelRename} disabled={busy}>
+                  {t('song.rename.cancel')}
+                </button>
+              </div>
+            </div>
+          )}
           <p className="song-spread__meta">
             {/* No play count. Plays are still recorded server-side, because the
                 operations dashboard needs to know what gets listened to — but
@@ -248,6 +379,22 @@ export default function SongDetail() {
             )}
             {isOwner && (
               <>
+                {/*
+                  A named action rather than a pencil that appears on hover:
+                  this page is read on phones, where there is no hover at all,
+                  and the row beside it already speaks in plain verbs.
+                */}
+                {!renaming && (
+                  <button
+                    type="button"
+                    ref={renameButton}
+                    className="text-action"
+                    onClick={openRename}
+                    disabled={busy}
+                  >
+                    {t('song.rename')}
+                  </button>
+                )}
                 <Link className="text-action" to={`/create?edit=${song.trackId}`}>
                   {t('song.edit')}
                 </Link>
