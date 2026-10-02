@@ -23,17 +23,21 @@ SQL() {
 }
 
 echo "== the job"
-SQL "SELECT id, state, phase, error_code, error_detail, provider_id,
+# No `phase` column: the phase a client sees is derived from the state
+# (JOB_STATE_TO_PHASE), not stored. The timestamps below say how far it got —
+# queued_at set but submitted_at null means it never reached the provider.
+SQL "SELECT id, state, error_code, error_detail, provider_id, attempt_count,
             JSON_EXTRACT(input,'\$.durationSeconds') AS dur,
             JSON_EXTRACT(input,'\$.voice')           AS voice,
             JSON_EXTRACT(input,'\$.instrumental')    AS instrumental,
             CHAR_LENGTH(JSON_UNQUOTE(JSON_EXTRACT(input,'\$.lyrics'))) AS lyric_chars,
             resolved_params IS NOT NULL AS has_intent,
-            created_at, updated_at
+            created_at, queued_at, submitted_at, delivered_at, finished_at
        FROM generation_jobs WHERE id LIKE '${ID}%'\\G"
 
 echo "== what the provider said, attempt by attempt"
-SQL "SELECT a.attempt_no, a.provider_id, a.status, a.error_code, a.provider_request_id, a.created_at
+SQL "SELECT a.attempt_no, a.provider_id, a.status, a.error_code, a.provider_request_id,
+            a.started_at, a.finished_at, LEFT(a.response_payload, 400) AS response
        FROM generation_attempts a JOIN generation_jobs j ON j.id = a.job_id
       WHERE j.id LIKE '${ID}%' ORDER BY a.attempt_no\\G"
 
