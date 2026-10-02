@@ -1,5 +1,6 @@
 import { z } from 'zod';
-import { AudioFormat, JobPhase, JobState, Mood, Scene, TempoHint, TrackState, Visibility, VocalMode } from './enums.js';
+import { AudioFormat, JobPhase, JobState, Mood, Scene, TempoHint, TrackState, Visibility, VocalMode, VoiceChoice } from './enums.js';
+import { SECTION_GAP_SECONDS, sectionName } from './sections.js';
 
 /**
  * Song creation contract (Suno-class product scope).
@@ -24,6 +25,47 @@ const songDurationSchema = z.union([
   z.literal(180),
   z.literal(240),
 ]);
+
+/**
+ * Let the song be as long as the words need.
+ *
+ * The creator had to name a length before writing a line, and the four on
+ * offer are not lengths anybody knows in advance — "is this a 2:00 song or a
+ * 3:00 song" is a question about an arrangement that does not exist yet. With
+ * `auto` the length is read off the lyrics instead.
+ *
+ * Deterministic on purpose, rather than another model call: the same
+ * per-line budget the intent prompt uses to *write* lyrics is the one used
+ * here to *measure* them, so a song written to fit and a song measured to fit
+ * agree. Section markers are not sung but an interlude still takes time, so
+ * each one costs a gap. The result is the shortest offered length that holds
+ * the words; if nothing does, the longest, because a song cut short is worse
+ * than one with room to breathe.
+ */
+export function fitDurationToLyrics(
+  lyrics: string,
+  secondsPerLine: number,
+  supported: readonly number[] = SONG_DURATIONS,
+): number {
+  const options = [...supported].sort((a, b) => a - b);
+  const longest = options[options.length - 1]!;
+  const fallback = options.includes(120) ? 120 : longest;
+
+  let sung = 0;
+  let markers = 0;
+  for (const raw of lyrics.split(/\r?\n/)) {
+    const line = raw.trim();
+    if (!line) continue;
+    if (sectionName(line) !== null) markers += 1;
+    else sung += 1;
+  }
+  if (sung === 0) return fallback;
+
+  // Lead-in and tail-out match the timeline's own edges, so the words are not
+  // laid out tighter than they will be sung.
+  const needed = sung * secondsPerLine + markers * SECTION_GAP_SECONDS + 3 + 4;
+  return options.find((d) => d >= needed) ?? longest;
+}
 
 export const CreateMode = z.enum(['simple', 'custom']);
 export type CreateMode = z.infer<typeof CreateMode>;
@@ -109,7 +151,9 @@ export const createGenerationRequest = z
      * change nothing a listener can hear.
      */
     energy: z.number().min(0).max(1).default(0.5),
-    durationSeconds: songDurationSchema.default(120),
+    /** A named length, or `auto` to take it from the lyrics (fitDurationToLyrics). */
+    durationSeconds: z.union([songDurationSchema, z.literal('auto')]).default(120),
+    voice: VoiceChoice.default('auto'),
     visibility: Visibility.default('private'),
   })
   .superRefine((v, ctx) => {
@@ -157,6 +201,12 @@ export const musicIntent = z.object({
   instruments: z.array(z.string().min(1).max(32)).min(1).max(6),
   durationSeconds: z.number().int().positive(),
   vocalMode: VocalMode,
+  /**
+   * Who sings it. Defaulted rather than required: the text model does not
+   * choose this — the creator does, and the pipeline writes their choice over
+   * whatever the model returned.
+   */
+  voice: VoiceChoice.default('auto'),
   /** Style tags echoed to the provider and shown on the song card. */
   styles: z.array(z.string().min(1).max(40)).max(MAX_STYLE_TAGS),
   /** Short English brief handed to the music provider. Never the raw user text. */

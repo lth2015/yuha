@@ -161,6 +161,12 @@ export default async function generationRoutes(app: FastifyInstance, opts: { ctx
           ...(revision.lyrics && track.vocal_mode === 'with_vocals' ? { lyrics: revision.lyrics } : {}),
           styles: revision.styles,
           instrumental: track.vocal_mode === 'instrumental',
+          // KNOWN GAP: an edit does not carry the original voice choice over,
+          // so editing a duet re-generates it as whatever the model picks.
+          // `tracks` has no column for it; the value is on the source job's
+          // resolved_params. Recorded in docs/OPEN_ITEMS.md §4 rather than
+          // guessed at here. Energy has the same shape of gap and predates it.
+          voice: 'auto',
           energy: 0.5,
           durationSeconds: [30, 60, 120, 180, 240].includes(duration) ? duration : 120,
           visibility: track.visibility,

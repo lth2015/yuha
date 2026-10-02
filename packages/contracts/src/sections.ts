@@ -30,6 +30,15 @@
  * line of `(ooh ooh)` is backing vocals and must stay a sung line. So round
  * brackets only count as a marker when the name inside is one we recognise.
  */
+/**
+ * Silence inserted before a new section by the deterministic timeline.
+ *
+ * A guess, and marked as one: nothing has heard the audio, so two seconds is
+ * what an interlude is assumed to cost. It lived as a local constant in both
+ * timeline builders, which is how they came to disagree in the first place.
+ */
+export const SECTION_GAP_SECONDS = 2;
+
 const SQUARE_RE = /^\s*\[\s*([^\]]{1,40}?)\s*\]\s*$/;
 const PAREN_RE = /^\s*\(\s*([^)]{1,40}?)\s*\)\s*$/;
 

@@ -119,6 +119,9 @@ export class LocalTextProvider implements TextProvider {
         instruments: defaults.instruments,
         durationSeconds: req.durationSeconds,
         vocalMode,
+        // The pipeline writes the creator's choice over this; the local
+        // keyword mapper has no opinion about who sings.
+        voice: 'auto',
         styles,
         // The brief is capped at the contract maximum.
         brief: brief.slice(0, 400),

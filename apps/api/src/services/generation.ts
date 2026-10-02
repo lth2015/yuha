@@ -3,6 +3,7 @@ import {
   AppError,
   JOB_STATE_TO_PHASE,
   SONG_DURATIONS,
+  fitDurationToLyrics,
   type CreateGenerationRequest,
   type JobView,
 } from '@yuha/contracts';
@@ -48,6 +49,7 @@ export function hashRequest(userId: string, req: CreateGenerationRequest): strin
     i: req.instrumental,
     e: Math.round(req.energy * 1000),
     d: req.durationSeconds,
+    vo: req.voice,
     v: req.visibility,
   });
   return createHash('sha256').update(canonical).digest('hex');
@@ -88,11 +90,23 @@ export async function createGeneration(
   const req = params.request;
   const caps = ctx.music.capabilities();
 
+  /*
+   * `auto` is resolved here, before the capability check, so what gets gated,
+   * hashed into the job and checked against the delivered audio is one
+   * concrete number. The creator's "let it be as long as it needs" is a
+   * question about this request; everything downstream only ever sees an
+   * answer.
+   */
+  const durationSeconds =
+    req.durationSeconds === 'auto'
+      ? fitDurationToLyrics(req.lyrics ?? '', ctx.config.LYRIC_SECONDS_PER_LINE, caps.supportedDurationsSeconds)
+      : req.durationSeconds;
+
   // AI-05: reject what the configured provider cannot deliver, before any spend.
-  if (!caps.supportedDurationsSeconds.includes(req.durationSeconds)) {
+  if (!caps.supportedDurationsSeconds.includes(durationSeconds)) {
     throw new AppError(
       'UNSUPPORTED_CAPABILITY',
-      `the configured music provider does not support ${req.durationSeconds}s output`,
+      `the configured music provider does not support ${durationSeconds}s output`,
     );
   }
   if (req.instrumental && !caps.supportsInstrumentalOnly) {
@@ -202,7 +216,7 @@ export async function createGeneration(
             styles: req.styles,
             instrumental: req.instrumental,
             energy: req.energy,
-            durationSeconds: req.durationSeconds,
+            durationSeconds,
             vocalMode: req.instrumental ? 'instrumental' : 'with_vocals',
             visibility: req.visibility,
           },
@@ -269,7 +283,7 @@ export async function createGeneration(
         props: {
           mode: req.mode,
           instrumental: req.instrumental,
-          durationSeconds: req.durationSeconds,
+          durationSeconds,
           provider: caps.providerId,
         },
         runMode: ctx.config.mode,

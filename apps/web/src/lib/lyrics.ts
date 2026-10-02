@@ -7,7 +7,7 @@
  * proxy, sections as pauses) and lay the lines across the song's duration.
  * The result syncs well enough for karaoke display and is deterministic.
  */
-import { sectionName } from '@yuha/contracts';
+import { SECTION_GAP_SECONDS, sectionName } from '@yuha/contracts';
 
 export interface LyricLine {
   /** Section marker ([Verse] etc.) this line belongs to. */
@@ -77,7 +77,6 @@ export function buildLyricTimeline(
    * the aligner. Two seconds is enough to read as a pause without stalling a
    * song that does not have one.
    */
-  const SECTION_GAP_SECONDS = 2;
   const gaps = entries.map((e, i) => (i > 0 && e.section && e.section !== entries[i - 1]!.section ? SECTION_GAP_SECONDS : 0));
   const gapTotal = gaps.reduce((a: number, b: number) => a + b, 0);
 

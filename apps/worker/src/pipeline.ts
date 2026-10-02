@@ -1,6 +1,6 @@
 import type { AppContext } from '@yuha/api';
 import { deliver, failJob, handleLateResult, quarantineKey } from '@yuha/api';
-import { musicIntent, type MusicIntent } from '@yuha/contracts';
+import { musicIntent, type MusicIntent, type VoiceChoice } from '@yuha/contracts';
 import {
   extendLease,
   getJob,
@@ -128,6 +128,7 @@ async function submitJob(deps: PipelineDeps, job: JobRow): Promise<void> {
     title?: string | null;
     energy: number;
     durationSeconds: number;
+    voice?: VoiceChoice;
   };
 
   // ---- text model: turn the creator's description into validated parameters
@@ -190,6 +191,10 @@ async function submitJob(deps: PipelineDeps, job: JobRow): Promise<void> {
     ...intentResult.intent,
     durationSeconds: input.durationSeconds,
     vocalMode: input.instrumental === false ? 'with_vocals' : 'instrumental',
+    // The creator picked the voice; the model does not get a say in it. It is
+    // not asked for one either, but a model that volunteered a different
+    // value would otherwise quietly win over the person who chose.
+    voice: input.voice ?? 'auto',
     lyrics: resolvedLyrics,
     title: input.title ?? intentResult.intent.title ?? null,
   });

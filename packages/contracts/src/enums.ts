@@ -93,6 +93,18 @@ export type TempoHint = z.infer<typeof TempoHint>;
 export const VocalMode = z.enum(['instrumental', 'with_vocals']);
 export type VocalMode = z.infer<typeof VocalMode>;
 
+/**
+ * Who sings it.
+ *
+ * `auto` leaves the choice to the model, which is what every song got before
+ * this existed. The others are the voices the music service can already be
+ * asked for — it reads them out of the production brief with a word-boundary
+ * regex (deploy/dgx/music/server/app.py, _VOICE_WORDS), so naming one here
+ * costs no redeploy of that service.
+ */
+export const VoiceChoice = z.enum(['auto', 'female', 'male', 'duet', 'choir']);
+export type VoiceChoice = z.infer<typeof VoiceChoice>;
+
 /** Whether a delivered song appears on the public Explore feed. */
 export const Visibility = z.enum(['private', 'public']);
 export type Visibility = z.infer<typeof Visibility>;

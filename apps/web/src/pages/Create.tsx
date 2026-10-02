@@ -8,6 +8,7 @@ import {
   STYLE_TAG_MAX_LENGTH,
   type JobView,
   type TrackView,
+  type VoiceChoice,
 } from '@yuha/contracts';
 import { ApiError, apiFetch, newIdempotencyKey } from '../lib/api';
 import { useI18n } from '../lib/i18n';
@@ -56,9 +57,10 @@ interface Draft {
   prompt: string;
   lyrics: string;
   styles: string[];
+  voice: VoiceChoice;
   instrumental: boolean;
   energy: number;
-  durationSeconds: 30 | 60 | 120 | 180 | 240;
+  durationSeconds: 30 | 60 | 120 | 180 | 240 | 'auto';
   visibility: 'private' | 'public';
 }
 
@@ -67,6 +69,7 @@ const DEFAULT_DRAFT: Draft = {
   prompt: '',
   lyrics: '',
   styles: [],
+  voice: 'auto',
   instrumental: false,
   energy: 0.5,
   durationSeconds: 120,
@@ -150,7 +153,10 @@ const PRESETS: Array<{
   },
 ];
 
+const VOICES: VoiceChoice[] = ['auto', 'female', 'male', 'duet', 'choir'];
+
 const DURATIONS: Array<{ value: Draft['durationSeconds']; label: string }> = [
+  { value: 'auto', label: '' },
   { value: 30, label: '0:30' },
   { value: 60, label: '1:00' },
   { value: 120, label: '2:00' },
@@ -462,6 +468,7 @@ export default function Create() {
             prompt: draft.prompt.trim(),
             ...(mode === 'custom' ? { lyrics: draft.lyrics.trim() } : {}),
             styles: draft.styles,
+            voice: draft.voice,
             instrumental: draft.instrumental,
             energy: draft.energy,
             durationSeconds: draft.durationSeconds,
@@ -846,11 +853,42 @@ export default function Create() {
                   aria-pressed={draft.durationSeconds === d.value}
                   onClick={() => patch({ durationSeconds: d.value })}
                 >
-                  {d.label}
+                  {d.value === 'auto' ? t('create.length.auto') : d.label}
                 </button>
               ))}
             </div>
+            {draft.durationSeconds === 'auto' && (
+              <span className="studio__dial-hint">{t('create.length.auto.hint')}</span>
+            )}
           </div>
+
+          {/*
+            Who sings. Hidden on an instrumental, because there is nobody to
+            choose — a control that cannot affect anything is worse than one
+            that is absent. The choice reaches the music service as a word in
+            the production brief, which is how that service has always read a
+            voice, so none of this needed it redeployed.
+          */}
+          {!draft.instrumental && (
+            <div className="studio__dial">
+              <span className="studio__dial-label" id="voice-label">
+                {t('create.voice')}
+              </span>
+              <div className="chips" role="group" aria-labelledby="voice-label">
+                {VOICES.map((v) => (
+                  <button
+                    key={v}
+                    type="button"
+                    className={`chip chip--btn${draft.voice === v ? ' is-on' : ''}`}
+                    aria-pressed={draft.voice === v}
+                    onClick={() => patch({ voice: v })}
+                  >
+                    {t(`create.voice.${v}`)}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
 
           <div className="studio__dial">
             <span className="studio__dial-label" id="voc-label">

@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { withCanonicalSections } from '@yuha/contracts';
+import { withCanonicalSections, type MusicIntent } from '@yuha/contracts';
 import type {
   MusicCapabilities,
   MusicPollResult,
@@ -79,6 +79,35 @@ function readPath(obj: unknown, path: string): unknown {
     if (acc && typeof acc === 'object') return (acc as Record<string, unknown>)[key];
     return undefined;
   }, obj);
+}
+
+/**
+ * The English words the music service recognises as a voice.
+ *
+ * It finds them by scanning the production brief with word-boundary regexes
+ * (deploy/dgx/music/server/app.py, _VOICE_WORDS) and emits the matching tag.
+ * So the way to ask for a duet is to make sure the brief says "duet" — which
+ * means a creator can choose one without that service being redeployed.
+ *
+ * `auto` is absent on purpose: it means "do not ask", and the service then
+ * tags a generic lead vocal exactly as it did before this existed.
+ */
+const VOICE_WORDS: Record<string, string> = {
+  female: 'female vocals',
+  male: 'male vocals',
+  duet: 'duet',
+  choir: 'choir',
+};
+
+function briefWithVoice(intent: MusicIntent): string {
+  if (intent.vocalMode === 'instrumental') return intent.brief;
+  const word = VOICE_WORDS[intent.voice ?? 'auto'];
+  if (!word) return intent.brief;
+  if (intent.brief.toLowerCase().includes(word)) return intent.brief;
+  // Prepended, not appended: the tag builder keeps only the first four
+  // phrases of the brief, so a voice added at the end can fall off the back.
+  // Still capped at the brief's contract maximum.
+  return `${word}, ${intent.brief}`.slice(0, 400);
 }
 
 export class HttpMusicProvider implements MusicProvider {
@@ -166,7 +195,7 @@ export class HttpMusicProvider implements MusicProvider {
     const body: Record<string, unknown> = {
       model: this.cfg.model,
       duration_seconds: req.intent.durationSeconds,
-      prompt: req.intent.brief,
+      prompt: briefWithVoice(req.intent),
       tempo: req.intent.tempoHint,
       energy: req.intent.energy,
       instruments: req.intent.instruments,

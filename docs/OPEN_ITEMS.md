@@ -202,6 +202,16 @@ tone, so it waits on a provider agreement.
 
 ## 4. Decisions that need a human
 
+**An edit forgets the voice and the energy.** `POST /v1/tracks/:id/edit`
+rebuilds a create request from the track row, and that row records neither the
+voice the creator chose nor the energy — both live on the source job's
+`resolved_params`. So editing a duet re-generates it as whatever the model
+picks, silently. The fix is a join back to the job (or two columns on
+`tracks`); the decision is whether an edit should inherit every original
+choice or only the ones the editor is shown. Energy has behaved this way since
+the edit flow existed; the voice joins it today rather than being quietly
+dropped without a note.
+
 | Question | Why it is not an engineering call |
 | --- | --- |
 | Refund policy | The proposed "unused, within 7 days" rule is a **draft**. It must be reconciled with 資金決済法, 特商法 and consumer law before it is presented as binding. The code applies whatever is configured; it does not decide. |

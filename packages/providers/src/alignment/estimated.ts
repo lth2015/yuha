@@ -1,4 +1,4 @@
-import { sectionName } from '@yuha/contracts';
+import { SECTION_GAP_SECONDS, sectionName } from '@yuha/contracts';
 import type { LyricTimings } from '@yuha/contracts';
 import type { AlignmentProvider, AlignmentRequest, AlignmentResult } from './types.js';
 
@@ -24,7 +24,6 @@ export class EstimatedAlignmentProvider implements AlignmentProvider {
   async align(req: AlignmentRequest): Promise<AlignmentResult> {
     const leadIn = Math.min(3, req.durationSeconds * 0.08);
     const tailOut = Math.min(4, req.durationSeconds * 0.1);
-    const SECTION_GAP_SECONDS = 2;
 
     let section = '';
     const entries: Array<{ section: string; text: string; weight: number }> = [];
