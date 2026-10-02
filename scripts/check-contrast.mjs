@@ -122,15 +122,20 @@ const hex = (c) => `#${c.map((v) => Math.max(0, Math.min(255, Math.round(v))).to
  * a changed token fails loudly rather than being measured as its old value.
  */
 const GLASS_ALPHAS = Object.fromEntries(
-  ['--glass', '--glass-strong'].map((name) => {
-    const m = new RegExp(`${name}:\\s*rgba\\([^)]*?,\\s*([0-9.]+)\\s*\\)`).exec(src);
-    if (!m) {
-      console.log(`✗ could not read an alpha for ${name} from styles.css`);
-      process.exit(1);
-    }
-    return [name, Number(m[1])];
-  }),
+  // Discovered, not listed. A hand-written list is how a new tier of glass gets
+  // added and goes unmeasured — the same shape as the fallback block this file
+  // already checks by collecting rather than remembering.
+  [...src.matchAll(/(--glass[\w-]*):\s*rgba\([^)]*?,\s*([0-9.]+)\s*\)/g)]
+    // Surfaces only. `--glass-edge` is a hairline and `--glass-spec` a 1px
+    // highlight; no text sits on either, and measuring against them reports a
+    // ratio for a background that does not exist.
+    .filter((m) => !/-(edge|spec)$/.test(m[1]))
+    .map((m) => [m[1], Number(m[2])]),
 );
+if (!Object.keys(GLASS_ALPHAS).length) {
+  console.log('✗ found no --glass* rgba token in styles.css');
+  process.exit(1);
+}
 
 function readToken(name) {
   // First definition wins, which is the `:root` block.

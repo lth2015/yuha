@@ -19,9 +19,38 @@
   --surface-solid: #ffffff;
   --surface-soft: #eceee7;
 
-  /* surfaces: near-opaque white over the light field */
-  --glass: rgba(255, 255, 255, 0.78);
-  --glass-strong: rgba(255, 255, 255, 0.92);
+  /*
+   * Two depths, and the line between them is not height — it is whether the
+   * surface knows what is behind it.
+   *
+   * A panel in the page flow sits over one known, gentle thing: the light
+   * field. It can afford to be thin, and being thin is the only reason to have
+   * a light field at all. Everything else sits over content that cannot be
+   * predicted — the top nav is sticky and the player bar fixed, so a cover
+   * image or a wall of lyrics scrolls under both; a menu opens over whatever
+   * happened to be there. Those must stay legible against all of it, so they
+   * are nearly solid.
+   *
+   * The first draft of this had three tiers with fixed chrome in the middle,
+   * on the theory that depth should grade smoothly. It does not: the mobile
+   * tab bar already carried a hand-written `--glass-strong` with the comment
+   * "opaque enough that scrolled content does not read through the labels",
+   * which is this same rule, found earlier and by hand. A middle tier would
+   * have made the nav and the player bar thinner than the bar sitting beside
+   * them, for a distinction nothing could feel.
+   *
+   * Before this they were all one value, so depth conveyed nothing — a floating
+   * menu and a static card were made of the same material.
+   *
+   * Measured by scripts/check-contrast.mjs, which finds these by name rather
+   * than from a list it has to be told about.
+   */
+  /* in the page flow, over the light field only */
+  --glass-sunken: rgba(255, 255, 255, 0.68);
+  /* over content that cannot be predicted: sticky nav, bars, menus, sheets */
+  --glass: rgba(255, 255, 255, 0.92);
+  /* `.glass--raised`: the same promise, with a whiter face */
+  --glass-strong: rgba(255, 255, 255, 0.96);
   --glass-edge: rgba(32, 34, 31, 0.08);
   --glass-spec: rgba(255, 255, 255, 0.95);
   --glass-blur: 24px;
@@ -273,6 +302,43 @@ code { font-family: var(--mono); font-size: 0.86em; background: var(--surface-so
 }
 
 /*
+ * Depth, applied. The only place a surface is assigned a depth.
+ *
+ * The rule above gives every glass surface the same material; this one says
+ * which layer two of them are on, and it is the whole reason for having more
+ * than one token.
+ *
+ * Panels and cards are thinner than everything around them, so the room reads
+ * through the content rather than through the furniture. Everything else keeps
+ * the shared `--glass`, nearly solid for the reason given at the tokens.
+ *
+ * `.panel` and `.card` each used to restate this at their own rule further
+ * down, same value, and the later declaration quietly won. Two places holding
+ * one fact is two places to edit and one to forget, so the assignment lives
+ * only here. background-COLOR, never the shorthand — the shorthand resets
+ * background-image and takes the sheen layer with it.
+ *
+ * `.art-panel` and `.plan` are in this list because they are in the flow, and
+ * "in the flow is thin" has to be true of everything in the flow or it is not
+ * a rule, just a description of two selectors. They were left on `--glass`
+ * when the tiers were introduced, which made a pricing card more solid than
+ * the panel beside it for no reason either one could state.
+ *
+ * `.alert` is the one deliberate exception and keeps `--glass`. It is in the
+ * flow, so by the rule above it should be thin — but an alert sits *inside* a
+ * panel, and at the same thinness the two would differ only by a hairline. Its
+ * solidity is emphasis, not legibility, which is a different argument from the
+ * one these tiers make. Said here so the next reader finds a reason rather
+ * than an oversight.
+ */
+.panel,
+.card,
+.art-panel,
+.plan {
+  background-color: var(--glass-sunken);
+}
+
+/*
  * The sheen. `--mx`/`--my` come from lib/sheen; the fallback keeps a fixed
  * highlight near the top edge so a surface still reads as glass before the
  * pointer ever reaches it, and on touch, where there is no hover at all.
@@ -502,9 +568,8 @@ html:has(.player-bar) { scroll-padding-bottom: 100px; }
 .icon--create { --icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M11 5h2v6h6v2h-6v6h-2v-6H5v-2h6z'/%3E%3C/svg%3E"); }
 
 /* ---------------------------------------------------------------- surfaces */
-/* background-COLOR, never the shorthand: the shorthand resets
-   background-image and takes the sheen layer with it. */
-.panel { background-color: var(--glass); border-radius: var(--r-card); padding: var(--s6); }
+/* Depth comes from the one assignment near the material rule, not from here. */
+.panel { border-radius: var(--r-card); padding: var(--s6); }
 
 /*
  * When the reader has asked for less of it.
@@ -574,7 +639,7 @@ html:has(.player-bar) { scroll-padding-bottom: 100px; }
    reads as separate figures rather than one block of numbers. */
 .card {
   display: flex; flex-direction: column; gap: var(--s2);
-  background-color: var(--glass); border: 1px solid var(--line);
+  border: 1px solid var(--line);
   border-radius: var(--r-control); padding: var(--s4);
   transition: border-color var(--t-ui) var(--ease-ui);
 }
@@ -611,6 +676,8 @@ html:has(.player-bar) { scroll-padding-bottom: 100px; }
 .empty p { margin: 0; max-width: 46ch; }
 .load-more { display: flex; justify-content: center; margin-top: var(--s6); }
 
+/* `--glass` on purpose, not by omission: see the depth rule. An alert sits in
+   a panel and has to read as a separate thing from it. */
 .alert { border-radius: var(--r-control); border: 1px solid var(--line); padding: 14px 16px; margin: 0 0 var(--s4); background-color: var(--glass); }
 .alert__title { font-weight: 600; margin-bottom: 4px; }
 .alert--error { border-color: color-mix(in srgb, var(--danger) 45%, transparent); background-color: color-mix(in srgb, var(--danger) 12%, var(--glass)); }
@@ -764,7 +831,7 @@ textarea.is-full { border-color: var(--danger); }
 /* art panel: the brand moment */
 .art-panel {
   position: relative; isolation: isolate; overflow: hidden;
-  background-color: var(--glass);
+  /* depth assigned with the other in-flow surfaces, near the material rule */
   -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-sat)) brightness(1.08);
   backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-sat)) brightness(1.08);
   border: 1px solid var(--glass-edge);
@@ -1509,8 +1576,7 @@ textarea.is-full { border-color: var(--danger); }
   position: relative; display: flex; flex-direction: column; gap: 10px;
   padding: var(--s6); border-radius: var(--r-card);
   border: 1px solid var(--line);
-  /* background-COLOR, so the panel sheen layer survives. */
-  background-color: var(--glass);
+  /* depth assigned with the other in-flow surfaces, near the material rule */
 }
 .plan--highlight { border-color: color-mix(in srgb, var(--petal) 46%, transparent); box-shadow: var(--shadow-raised); }
 .plan--free { border-style: dashed; }
@@ -1612,8 +1678,9 @@ textarea.is-full { border-color: var(--danger); }
     z-index: 70; grid-auto-flow: column; grid-auto-columns: 1fr;
     border-top: 1px solid var(--glass-edge);
     min-height: 60px;
-    /* opaque enough that scrolled content does not read through the labels */
-    background-color: var(--glass-strong);
+    /* The reason this bar was given its own stronger value — scrolled content
+       reading through the labels — is now what `--glass` means, so it inherits
+       rather than restating it a little differently. */
   }
   .player-bar__right { display: none; }
   .tabbar__link { display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 60px; color: var(--muted); font-size: 12px; font-weight: 500; }
