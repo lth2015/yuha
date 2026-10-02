@@ -5,6 +5,7 @@ import {
   getActiveProduct,
   getOrder,
   getProductVersion,
+  inferredPeriodDays,
   grantLicense,
   grantUnits,
   findOrderBySession,
@@ -347,25 +348,31 @@ async function handleInvoicePaid(ctx: AppContext, event: StripeEventLike): Promi
    * never compounds. It is flagged, because an operator should be able to see
    * that a period was guessed.
    *
-   * An annual plan would be mis-served by this — recorded in docs/OPEN_ITEMS.md
-   * rather than guessed at from the price key's spelling.
+   * The length of the inferred period comes from the product's own
+   * `billing_interval`, not from a constant and not from the price key's
+   * spelling. It was a flat 31 days, which was right only because every plan
+   * in the catalogue happens to be monthly — an annual plan would have been
+   * granted a month and the subscriber would have lost eleven.
    */
-  const INFERRED_PERIOD_DAYS = 31;
   const authoritativeEnd =
     live?.currentPeriodEnd ??
     sub?.current_period_end ??
     line.end ??
     (invoiceEnd && periodStart && invoiceEnd.getTime() > periodStart.getTime() ? invoiceEnd : null);
   const effectiveStart = periodStart ?? new Date();
-  const periodEnd =
-    authoritativeEnd ?? new Date(effectiveStart.getTime() + INFERRED_PERIOD_DAYS * 86400_000);
   const periodInferred = authoritativeEnd === null;
   const invoiceId = String(invoice['id'] ?? '');
 
+  // Looked up before the period is computed, not after: the period now depends
+  // on what the catalogue says this plan's cadence is.
   const priceKey = sub?.price_key ?? invoiceMeta(invoice, 'price_key') ?? 'creator_monthly';
   const product =
     (sub ? await getProductVersion(priceKey, sub.price_version) : null) ?? (await getActiveProduct(priceKey));
   if (!product) throw new Error(`unknown subscription product ${priceKey}`);
+
+  const periodEnd =
+    authoritativeEnd ??
+    new Date(effectiveStart.getTime() + inferredPeriodDays(product.billing_interval) * 86400_000);
 
   await withTx(async (tx) => {
     if (live) {

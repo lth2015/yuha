@@ -57,6 +57,7 @@ await upsertProduct({
   units: 5,
   validity_days: 90,
   auto_renew: false,
+  billing_interval: null,
   stripe_price_id: config.STRIPE_PRICE_ID_DROP_5 ?? null,
   active: true,
 });
@@ -74,6 +75,7 @@ await upsertProduct({
   units: 15,
   validity_days: null,
   auto_renew: true,
+  billing_interval: 'month',
   stripe_price_id: config.STRIPE_PRICE_ID_PRO_MONTHLY ?? null,
   active: true,
 });
@@ -101,6 +103,7 @@ await upsertProduct({
   units: 45,
   validity_days: null,
   auto_renew: true,
+  billing_interval: 'month',
   stripe_price_id: config.STRIPE_PRICE_ID_PREMIER_MONTHLY ?? null,
   active: true,
 });
@@ -116,6 +119,7 @@ await upsertProduct({
   units: 1,
   validity_days: null,
   auto_renew: false,
+  billing_interval: null,
   stripe_price_id: config.STRIPE_PRICE_ID_MARKET_LICENSE ?? null,
   active: true,
 });

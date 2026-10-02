@@ -13,13 +13,36 @@ export interface ProductRow {
   units: number;
   validity_days: number | null;
   auto_renew: boolean;
+  /** How often it bills. NULL for one_time, which does not bill again. */
+  billing_interval: BillingInterval | null;
   stripe_price_id: string | null;
   active: boolean;
 }
 
+export type BillingInterval = 'month' | 'year';
+
+/**
+ * How long to call a subscription period when nothing authoritative says.
+ *
+ * Only reached when Stripe's own period end is missing — a moved invoice
+ * shape, a reconstructed event — and the alternative is a batch that never
+ * expires. It errs long on purpose: a batch living a few days past its period
+ * is a bounded error in the customer's favour, where ending early takes
+ * something they paid for. The next invoice grants the next period under its
+ * own key regardless, so the error never compounds.
+ *
+ * This was a flat 31 days, correct only because every plan in the catalogue is
+ * monthly. An unknown cadence still lands there rather than producing NaN and
+ * an Invalid Date on the grant path — a value out of the database is a string,
+ * and this runs where a subscriber is waiting for credits.
+ */
+export function inferredPeriodDays(interval: string | null | undefined): number {
+  return interval === 'year' ? 366 : 31;
+}
+
 const PRODUCT_COLUMNS = `
   price_key, version, kind, display_name, amount_minor, currency, tax_included,
-  units, validity_days, auto_renew, stripe_price_id, active
+  units, validity_days, auto_renew, billing_interval, stripe_price_id, active
 `;
 
 /** Current sellable version of a product. Existing orders keep their own version (UI-10). */
@@ -96,6 +119,17 @@ export async function upsertProduct(p: ProductRow, tx?: PoolConnection): Promise
     if ((existing.validity_days ?? null) !== (p.validity_days ?? null)) {
       changed.push(`validity_days ${existing.validity_days} -> ${p.validity_days}`);
     }
+    /*
+     * Cadence is a commercial term, and for a subscription it is the one that
+     * decides what the price buys. It was in neither this comparison nor the
+     * UPDATE below when the column was added, so moving a plan from monthly to
+     * annual under the same version would have been accepted silently and then
+     * ignored — the row keeping its old interval while the seed said otherwise,
+     * and `handleInvoicePaid` granting the length nobody meant.
+     */
+    if ((existing.billing_interval ?? null) !== (p.billing_interval ?? null)) {
+      changed.push(`billing_interval ${existing.billing_interval} -> ${p.billing_interval}`);
+    }
     if (changed.length) {
       throw new Error(
         `${p.price_key} version ${p.version} already exists with different commercial terms ` +
@@ -107,8 +141,8 @@ export async function upsertProduct(p: ProductRow, tx?: PoolConnection): Promise
   await execute(
     `INSERT INTO product_catalog
        (price_key, version, kind, display_name, amount_minor, currency, tax_included,
-        units, validity_days, auto_renew, stripe_price_id, active)
-     VALUES (?,?,?,?,?,?,?,?,?,?,?,?)
+        units, validity_days, auto_renew, billing_interval, stripe_price_id, active)
+     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)
      ON DUPLICATE KEY UPDATE
        display_name = VALUES(display_name),
        stripe_price_id = VALUES(stripe_price_id),
@@ -124,6 +158,7 @@ export async function upsertProduct(p: ProductRow, tx?: PoolConnection): Promise
       p.units,
       p.validity_days,
       p.auto_renew ? 1 : 0,
+      p.billing_interval,
       p.stripe_price_id,
       p.active ? 1 : 0,
     ],

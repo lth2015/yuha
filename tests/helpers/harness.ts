@@ -136,6 +136,7 @@ async function seedCatalogue(): Promise<void> {
     units: 5,
     validity_days: 90,
     auto_renew: false,
+    billing_interval: null,
     stripe_price_id: 'price_test_drop5',
     active: true,
   });
@@ -150,6 +151,7 @@ async function seedCatalogue(): Promise<void> {
     units: 100,
     validity_days: null,
     auto_renew: true,
+    billing_interval: 'month',
     stripe_price_id: 'price_test_pro',
     active: true,
   });
@@ -164,6 +166,7 @@ async function seedCatalogue(): Promise<void> {
     units: 1,
     validity_days: null,
     auto_renew: false,
+    billing_interval: null,
     stripe_price_id: 'price_test_market',
     active: true,
   });
@@ -178,6 +181,7 @@ async function seedCatalogue(): Promise<void> {
     units: 400,
     validity_days: null,
     auto_renew: true,
+    billing_interval: 'month',
     stripe_price_id: 'price_test_premier',
     active: true,
   });
