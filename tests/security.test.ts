@@ -765,6 +765,43 @@ describe('SEC-06 / §3.1: the runtime descriptor exposes no secrets', () => {
     }
     expect(JSON.stringify(res.json()).toLowerCase()).not.toContain('netstars');
   });
+
+  /*
+   * The other half of SEC-13, which had no test: that a configured deployment
+   * actually reports itself as configured, and publishes what it was given
+   * rather than any default.
+   *
+   * `legalEntityConfigured` is what `loadConfig` checks before letting
+   * production start, and what the pages read to decide whether the operator
+   * block is a placeholder — so it is worth one case that it flips on the
+   * three fields the config requires, and not on the two it does not.
+   */
+  it('SEC-13: a configured deployment publishes the operator it was given', async () => {
+    const operator = {
+      LEGAL_ENTITY_NAME: '<redacted: operator name>',
+      LEGAL_ENTITY_REPRESENTATIVE: '<redacted: operator name>',
+      LEGAL_ENTITY_ADDRESS: '<redacted: operator postcode> <redacted: operator address><redacted: operator address>',
+      LEGAL_ENTITY_CONTACT: 'redacted-operator@example.invalid',
+      LEGAL_ENTITY_PHONE: '<redacted: operator phone>',
+    };
+    const configured = await createHarness(operator);
+    try {
+      const res = await configured.app.inject({
+        method: 'GET',
+        url: '/v1/legal/business-disclosure',
+      });
+      expect(res.json().configured).toBe(true);
+      expect(res.json().isPlaceholder).toBe(false);
+      expect(res.json().notice).toBeNull();
+      for (const [key, value] of Object.entries(operator)) {
+        const field = key.replace('LEGAL_ENTITY_', '').toLowerCase();
+        const name = field === 'name' ? 'entityName' : field;
+        expect(res.json()[name], key).toBe(value);
+      }
+    } finally {
+      await configured.close();
+    }
+  });
 });
 
 describe('SEC-11: cancellation, deletion and marketing are separate actions', () => {

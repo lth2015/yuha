@@ -34,8 +34,31 @@ export function useDisclosure() {
   return disclosure;
 }
 
+/**
+ * Whether the operative legal text below has been through counsel.
+ *
+ * A constant and not configuration, on purpose: the text lives in this
+ * repository, so whether it has been reviewed is a fact about the repository.
+ * A deployment flag would let an operator silence the warning without anyone
+ * having read a word. Flip it in the same commit that lands the reviewed
+ * text, and not before.
+ */
+const LEGAL_TEXT_REVIEWED = false;
+
+/**
+ * The banner used to be gated on `isPlaceholder`, which is a different claim.
+ *
+ * `isPlaceholder` means the LEGAL_ENTITY_* fields are unset. The banner says
+ * "this text has not been reviewed by counsel". Those are facts about two
+ * different things, and tying them together meant that filling in the last
+ * operator field — the 住所 — would have removed a legal warning from the
+ * Terms, the Privacy Policy, /legal/company and the 特商法 page, while the
+ * text itself stayed exactly as unreviewed as it was the minute before.
+ *
+ * It shows while either is true now.
+ */
 export function DraftBanner({ isPlaceholder }: { isPlaceholder: boolean }) {
-  if (!isPlaceholder) return null;
+  if (LEGAL_TEXT_REVIEWED && !isPlaceholder) return null;
   return (
     <div className="alert alert--warn">
       <div className="alert__title">Draft — pending legal review</div>
