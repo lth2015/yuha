@@ -44,6 +44,24 @@ SQL "SELECT a.attempt_no, a.provider_id, a.status, a.error_code, a.provider_requ
 echo "== the intent the text model produced (null here means it never got that far)"
 SQL "SELECT JSON_PRETTY(resolved_params) AS intent FROM generation_jobs WHERE id LIKE '${ID}%'\\G"
 
+# `upstream_unreachable` means the worker's fetch threw before any reply — not
+# a timeout, which is reported separately. The question it raises is always
+# the same one, so ask it here rather than leaving it to the decode table:
+# can the worker, from inside its own container, reach the URL it was
+# configured with? This is the same fetch, the same env var and the same
+# network namespace the provider uses, so its answer is the provider's answer.
+echo "== can the worker reach the music service?"
+ssh "$DGX" "cd $AR && grep -E '^MUSIC_(ADAPTER|BASE_URL|SUBMIT_PATH)=' app.env" 2>/dev/null || true
+ssh "$DGX" "cd $AR && docker compose exec -T worker node -" <<'PROBE' || echo "   (the worker container is not running — that alone would do it)"
+const u = process.env.MUSIC_BASE_URL;
+if (!u) { console.log('   MUSIC_BASE_URL is not set in the worker'); process.exit(0); }
+console.log('   worker sees MUSIC_BASE_URL =', u);
+fetch(new URL('/healthz', u), { signal: AbortSignal.timeout(8000) })
+  .then((r) => r.text())
+  .then((t) => console.log('   reachable:', t.slice(0, 200)))
+  .catch((e) => console.log('   UNREACHABLE:', e.name, e.message, e.cause?.code ?? ''));
+PROBE
+
 echo "== worker and api lines mentioning this job"
 ssh "$DGX" "cd $AR && docker compose logs --no-color --tail 4000 worker api 2>/dev/null | grep -i '${ID}' | tail -40" || true
 
