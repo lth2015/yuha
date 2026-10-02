@@ -1316,6 +1316,8 @@ tr:last-child td { border-bottom: none; }
 .studio__dial { display: flex; flex-direction: column; gap: var(--s2); min-width: 0; }
 .studio__dial-label { font-size: 12px; font-weight: 600; letter-spacing: 0.04em; color: var(--muted); }
 .studio__dial-hint { font-size: 12px; color: var(--muted); }
+.lyrics-sync__head { display: flex; align-items: center; justify-content: space-between; gap: var(--s2); flex-wrap: wrap; }
+.lyrics-sync__note { font-size: 12px; line-height: 1.6; color: var(--muted); margin: var(--s2) 0 0; max-width: 56ch; }
 /* A creator's own style tag, and the section markers, are added under the
    control they belong to rather than in a dialog: both are things you reach
    for mid-thought, and a dialog would cost the thought. */

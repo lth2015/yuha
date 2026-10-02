@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import type { LyricTimings } from '@yuha/contracts';
+import { lrcFileName, toLrc, type LyricTimings } from '@yuha/contracts';
 import { useI18n } from '../lib/i18n';
 import { activeLineIndex, buildLyricTimeline, lineProgress } from '../lib/lyrics';
 import { usePlayer } from '../lib/player';
@@ -19,6 +19,8 @@ export function SyncedLyrics({
   currentTime,
   timings,
   onSeek,
+  title,
+  artist,
   compact = false,
 }: {
   lyrics: string;
@@ -26,14 +28,38 @@ export function SyncedLyrics({
   currentTime: number;
   timings?: LyricTimings | null;
   onSeek?: (seconds: number) => void;
+  title?: string | null;
+  artist?: string | null;
   compact?: boolean;
 }) {
   const { t } = useI18n();
-  const lines = useMemo(
-    () => (timings?.lines?.length ? timings.lines : buildLyricTimeline(lyrics, duration).lines),
+  /*
+   * One timeline object, whichever way it was produced, so the lines on
+   * screen and the lines in a downloaded .lrc are the same array rather than
+   * two computations that can drift.
+   */
+  const timeline: LyricTimings = useMemo(
+    () =>
+      timings?.lines?.length
+        ? timings
+        : { source: 'estimated', aligner: 'estimated-v1', lines: buildLyricTimeline(lyrics, duration).lines },
     [timings, lyrics, duration],
   );
-  const source = timings?.lines?.length ? timings.source : ('estimated' as const);
+  const lines = timeline.lines;
+  const source = timeline.source;
+
+  const downloadLrc = () => {
+    const url = URL.createObjectURL(
+      new Blob([toLrc(timeline, { title, artist, durationSeconds: duration })], {
+        type: 'text/plain;charset=utf-8',
+      }),
+    );
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = lrcFileName(title);
+    a.click();
+    URL.revokeObjectURL(url);
+  };
 
   /*
    * The playhead at frame rate, not at `timeupdate`'s four times a second.
@@ -79,9 +105,25 @@ export function SyncedLyrics({
       aria-label={t('song.lyrics')}
       data-source={source}
     >
-      <span className={`lyrics-sync__pill${source === 'aligned' ? ' is-aligned' : ''}`}>
-        {t(source === 'aligned' ? 'lyrics.aligned' : 'lyrics.estimated')}
-      </span>
+      <div className="lyrics-sync__head">
+        <span className={`lyrics-sync__pill${source === 'aligned' ? ' is-aligned' : ''}`}>
+          {t(source === 'aligned' ? 'lyrics.aligned' : 'lyrics.estimated')}
+        </span>
+        {!compact && lines.length > 0 && (
+          <button type="button" className="btn btn--ghost btn--sm" onClick={downloadLrc}>
+            {t('lyrics.download')}
+          </button>
+        )}
+      </div>
+      {/*
+        Said in full, on the songs that have the problem, rather than left to
+        a two-word pill. "Estimated" is the answer to every report that the
+        words run ahead of the voice, and nobody reads a pill — this has been
+        reported three times against songs that were never aligned at all.
+      */}
+      {!compact && source === 'estimated' && (
+        <p className="lyrics-sync__note">{t('lyrics.estimated.why')}</p>
+      )}
       {lines.map((line, i) => {
         const state = i < active ? 'past' : i === active ? 'active' : 'future';
         const fill = i === active ? lineProgress(lines, i, liveTime) : state === 'past' ? 1 : 0;

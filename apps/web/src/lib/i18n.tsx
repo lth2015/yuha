@@ -105,6 +105,8 @@ const zh: Dict = {
   'cover.aria': '「{title}」的封面',
   'lyrics.instrumental': '纯音乐——没有歌词可以显示。',
   'lyrics.estimated': '估算同步', 'lyrics.aligned': '词级同步',
+  'lyrics.download': '下载 .lrc',
+  'lyrics.estimated.why': '这首歌的时间轴是按字数估算的——没有任何模型听过它的声音，所以间奏停在哪里、哪一句唱得慢，它都不知道。要逐词对齐需要声音对齐服务跑成功。',
   'lyrics.playFrom': '从这里播放',
 
   'card.play': '播放「{title}」', 'card.pause': '暂停「{title}」',
@@ -727,6 +729,8 @@ const ja: Dict = {
   'cover.aria': '「{title}」のカバー',
   'lyrics.instrumental': 'インスト — 表示できる歌詞はありません。',
   'lyrics.estimated': '推定同期', 'lyrics.aligned': '単語同期',
+  'lyrics.download': '.lrc をダウンロード',
+  'lyrics.estimated.why': 'この曲のタイミングは文字数からの推定です。音声を聴いたモデルはないので、間奏の位置も歌い回しも分かりません。単語単位の同期には音声アライメントの成功が必要です。',
   'lyrics.playFrom': 'ここから再生',
 
   'card.play': '「{title}」を再生', 'card.pause': '「{title}」を一時停止',
@@ -1345,6 +1349,8 @@ const en: Dict = {
   'cover.aria': 'Cover for “{title}”',
   'lyrics.instrumental': 'Instrumental — no lyrics to show.',
   'lyrics.estimated': 'Estimated sync', 'lyrics.aligned': 'Word-synced',
+  'lyrics.download': 'Download .lrc',
+  'lyrics.estimated.why': 'These timings are estimated from syllable counts — nothing listened to the audio, so it cannot know where an interlude sits or which line is held. Word-level sync needs the alignment service to have run.',
   'lyrics.playFrom': 'Play from here',
 
   'card.play': 'Play “{title}”', 'card.pause': 'Pause “{title}”',

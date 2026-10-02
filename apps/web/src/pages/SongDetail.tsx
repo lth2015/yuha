@@ -360,6 +360,8 @@ export default function SongDetail() {
             duration={active ? player.duration || song.durationSeconds : song.durationSeconds}
             currentTime={active ? player.currentTime : 0}
             timings={song.lyricTimings}
+            title={song.title}
+            artist={song.artistName}
             onSeek={active ? player.seek : undefined}
           />
         </section>
