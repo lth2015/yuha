@@ -1,13 +1,18 @@
 import type { ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import { useI18n } from '../lib/i18n';
-import { messageFor, isPromptHint, type UserMessage } from '../lib/messages';
+import { messageFor, nextLineKey, type UserMessage } from '../lib/messages';
 import { ApiError } from '../lib/api';
 import { formatTime, usePlayer } from '../lib/player';
 
 /**
- * Error display. Every failure shows a cause AND a next step (UI-12), and a
- * blocked prompt additionally shows the rewrite hint the server returned.
+ * Error display. Every failure shows a cause AND a next step (UI-12).
+ *
+ * One next step, not two. This used to render the generic next step and then
+ * the server's hint beneath it, so a description over the length limit was told
+ * first to rewrite itself in terms of mood and tempo — advice for a different
+ * refusal, placed where it is read first. The hint is the reason; it replaces
+ * the generic line rather than following it. See `nextLineKey`.
  */
 export function ErrorNotice({ error, onRetry }: { error: unknown; onRetry?: () => void }) {
   const { t } = useI18n();
@@ -25,8 +30,7 @@ export function ErrorNotice({ error, onRetry }: { error: unknown; onRetry?: () =
   return (
     <div className={`alert alert--${msg.tone}`} role="alert" aria-live="assertive">
       <div className="alert__title">{t(msg.titleKey)}</div>
-      <div>{t(msg.nextKey)}</div>
-      {hintKey && isPromptHint(hintKey) && <div className="alert__next">{t(hintKey)}</div>}
+      <div>{t(nextLineKey(msg.nextKey, hintKey))}</div>
       {appealable && (
         <div className="alert__next small">
           {t('common.rightsNotice')}

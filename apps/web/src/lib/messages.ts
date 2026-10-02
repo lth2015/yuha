@@ -94,6 +94,22 @@ export function isPromptHint(key: string): boolean {
   return (PROMPT_HINT_KEYS as readonly string[]).includes(key);
 }
 
+/**
+ * The single next-step line a failure should show.
+ *
+ * The panel used to render the generic next step *and* the server's hint, so a
+ * description that was merely too long was told first to "rewrite it in terms
+ * of mood, instruments and tempo" — advice for a different refusal, read first
+ * and therefore acted on. The specific reason replaces the generic one; the
+ * generic one remains for failures that arrive without a hint.
+ *
+ * An unrecognised key falls back rather than being passed to `t()`: the hint
+ * names a dictionary entry, and the names come from a response.
+ */
+export function nextLineKey(genericKey: string, hintKey: string | undefined): string {
+  return hintKey && isPromptHint(hintKey) ? hintKey : genericKey;
+}
+
 /** Compile-time completeness guard for the message table. */
 const _exhaustive: readonly ErrorCode[] = ERROR_CODES;
 void _exhaustive;
