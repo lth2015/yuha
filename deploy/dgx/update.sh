@@ -66,28 +66,49 @@ PREV=$(ssh "$DGX" "cat $AR/.deployed 2>/dev/null" || true)
 # server/ was current, the Dockerfile that installs openai-whisper was not,
 # and /healthz said aligner_error "No module named 'whisper'" — so lyrics fell
 # back to an estimated timeline while every check here passed.
-SERVER_HASH=$(cd music && find server Dockerfile docker-compose.yml -type f -not -name '*.pyc' -exec shasum {} + \
-  | LC_ALL=C sort | shasum | awk '{print $1}')
-REMOTE_HASH=$(ssh "$DGX" "cat $MR/.server-hash 2>/dev/null" || true)
+#
+# Two hashes, because not everything in the image can change what the service
+# does. The first version of this restarted a GPU service for two and a half
+# minutes of model loading because a *benchmark script* had been added beside
+# it. The service never imports bench_*.py — `docker compose run` does, out of
+# the image — so a bench change rebuilds the image, which it must to be
+# runnable at all, and leaves the running container alone.
+hash_of() { ( cd music && find server Dockerfile docker-compose.yml -type f \
+  -not -name '*.pyc' "$@" -exec shasum {} + | LC_ALL=C sort | shasum | awk '{print $1}' ); }
+SERVICE_HASH=$(hash_of -not -name 'bench_*.py')
+IMAGE_HASH=$(hash_of)
+REMOTE_SERVICE=$(ssh "$DGX" "cat $MR/.server-hash 2>/dev/null" || true)
+REMOTE_IMAGE=$(ssh "$DGX" "cat $MR/.image-hash 2>/dev/null" || true)
 
-NEED_MUSIC=no
+NEED_MUSIC=no      # rebuild AND restart: what the service runs has changed
+NEED_IMAGE=no      # rebuild only: the image changed, but not the running service
 case "$MUSIC_MODE" in
   yes) NEED_MUSIC=yes ;;
-  no)  NEED_MUSIC=no ;;
-  *)   [[ "$SERVER_HASH" != "$REMOTE_HASH" ]] && NEED_MUSIC=yes ;;
+  no)  : ;;
+  *)   [[ "$SERVICE_HASH" != "$REMOTE_SERVICE" ]] && NEED_MUSIC=yes
+       [[ "$IMAGE_HASH"   != "$REMOTE_IMAGE"   ]] && NEED_IMAGE=yes ;;
 esac
+
+# files only: server/ holds a __pycache__ directory, and scp without -r
+# refuses a directory and exits non-zero, which `set -e` turns into a stop
+upload_music() {
+  ssh "$DGX" "mkdir -p $MR/server ~/.cache/whisper"
+  scp -q music/server/*.py music/server/requirements.txt "$DGX:yuha-spark/server/"
+  scp -q music/Dockerfile music/docker-compose.yml "$DGX:yuha-spark/"
+}
 
 if [[ "$NEED_MUSIC" == yes ]]; then
   say "music service: code differs, rebuilding (a couple of minutes; weights are cached)"
-  ssh "$DGX" "mkdir -p $MR/server ~/.cache/whisper"
-  # files only: server/ holds a __pycache__ directory, and scp without -r
-  # refuses a directory and exits non-zero, which `set -e` turns into a stop
-  scp -q music/server/*.py music/server/requirements.txt "$DGX:yuha-spark/server/"
-  scp -q music/Dockerfile music/docker-compose.yml "$DGX:yuha-spark/"
+  upload_music
   # --build is required: a plain `up -d` restarts the container with the old
   # COPY of the code still inside it, and reports success.
   ssh "$DGX" "cd $MR && docker compose up -d --build music"
-  ssh "$DGX" "echo '$SERVER_HASH' > $MR/.server-hash"
+  ssh "$DGX" "echo '$SERVICE_HASH' > $MR/.server-hash; echo '$IMAGE_HASH' > $MR/.image-hash"
+elif [[ "$NEED_IMAGE" == yes ]]; then
+  say "music service: only files it does not run changed (benchmarks) — rebuilding the image, not restarting it"
+  upload_music
+  ssh "$DGX" "cd $MR && docker compose build music"
+  ssh "$DGX" "echo '$IMAGE_HASH' > $MR/.image-hash"
 else
   say "music service: unchanged since the last deploy, left alone"
 fi
@@ -103,12 +124,28 @@ for _ in $(seq 1 60); do
 done
 [[ "$HEALTH" == *'"model_loaded":true'* ]] \
   || die "music service never reported model_loaded — ssh $DGX 'docker logs --tail 40 yuha-music'"
-echo "   ok"
-# Lyric sync depends on the aligner. Its absence is not fatal — songs still
-# render — but it silently degrades every vocal song, so say it out loud.
-if [[ "$HEALTH" == *"No module named"* ]]; then
+echo "   generator ok"
+
+# Lyric sync depends on a SECOND model, reported separately by /healthz, and
+# loaded about ninety seconds after the generator. Checking only for an error
+# left that window silent: the deploy said ok, and every song made in it
+# rendered perfectly well with lyrics timed by the estimator rather than
+# heard — which is the 估算同步 pill, a day later, on a song nobody can
+# explain. So wait for it, and only then decide what to say.
+for _ in $(seq 1 36); do
+  [[ "$HEALTH" == *'"aligner_loaded":true'* ]] && break
+  sleep 5
+  HEALTH=$(ssh "$DGX" "curl -fsS --max-time 5 http://127.0.0.1:$MUSIC_PORT/healthz" 2>/dev/null || true)
+done
+if [[ "$HEALTH" == *'"aligner_loaded":true'* ]]; then
+  echo "   aligner ok"
+elif [[ "$HEALTH" == *"No module named"* ]]; then
   echo "   !! aligner missing: $(printf '%s' "$HEALTH" | grep -o '"aligner_error":"[^"]*"')"
   echo "      lyrics will follow an estimated timeline. Re-run with MUSIC=yes to rebuild the image."
+else
+  echo "   !! the aligner is still not loaded after three minutes."
+  echo "      Songs generated now will render, but their lyrics will be timed by"
+  echo "      the estimator rather than heard: ssh $DGX 'docker logs --tail 40 yuha-music'"
 fi
 
 # ------------------------------------------------------------------ 2. the app
