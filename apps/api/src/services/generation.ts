@@ -29,7 +29,7 @@ import {
   withTxRetry,
   type JobRow,
 } from '@yuha/db';
-import { checkLyrics, checkPrompt } from '@yuha/providers';
+import { checkLyrics, checkPrompt, checkTitle } from '@yuha/providers';
 import type { AppContext } from '../context.js';
 
 /**
@@ -138,6 +138,23 @@ export async function createGeneration(
       // wrong — a URL pasted into the lyrics focused the description.
       field: 'prompt',
     });
+  }
+  if (req.title) {
+    /*
+     * The title had no content screening at all — `titleSchema` counted code
+     * points and stopped — while the description beside it was screened
+     * before a note was generated. It is the string that travels furthest of
+     * the three: the page, the tab, the share sheet, the link preview.
+     */
+    const titleSafety = checkTitle(req.title);
+    if (!titleSafety.allowed) {
+      throw new AppError('PROMPT_BLOCKED', `title rejected: ${titleSafety.reason}`, {
+        reason: titleSafety.reason,
+        hintKey: titleSafety.hintKey,
+        appealable: titleSafety.appealable,
+        field: 'title',
+      });
+    }
   }
   if (req.lyrics) {
     const lyricsSafety = checkLyrics(req.lyrics);

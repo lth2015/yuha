@@ -5,6 +5,7 @@ import {
   listTracksQuery,
   lyricTimings,
   markCorrected,
+  renameTrackRequest,
   type LicenseSnapshotView,
   type TrackView,
 } from '@yuha/contracts';
@@ -18,6 +19,7 @@ import {
   countLicenses,
   listAssets,
   listTracks,
+  renameTrack,
   setTrackLyricTimings,
   softDeleteTrack,
   trackEvent,
@@ -281,6 +283,55 @@ export default async function trackRoutes(app: FastifyInstance, opts: { ctx: App
     const timings = markCorrected(parsed.data);
     await setTrackLyricTimings({ trackId: track.id, timings });
     return { lyricTimings: timings };
+  });
+
+  /**
+   * POST /v1/tracks/:id/title — rename, owner only.
+   *
+   * The title used to be decided once, at generation, by someone who had not
+   * heard the song yet. This is the other half of taking it out of that drawer.
+   *
+   * The name is screened exactly as it is at creation. It had to be: the title
+   * is rendered on the song page, in the browser tab, in the share sheet and
+   * in the link preview of a song anyone holding the URL can open, and until
+   * now nothing read it at either door. No credit is spent and no audio is
+   * touched — the song is already made, and this only says what it is called.
+   */
+  app.post('/v1/tracks/:id/title', { preHandler: app.requireAuth }, async (req) => {
+    const { id } = req.params as { id: string };
+    // Ownership first, and a missing song and someone else's song answer
+    // identically: a 403 here would confirm that an id names a real song.
+    const track = await getTrackForUser(id, req.user!.id);
+    if (!track) throw new AppError('NOT_FOUND', 'song not found');
+
+    const parsed = renameTrackRequest.safeParse(req.body);
+    if (!parsed.success) {
+      throw new AppError('VALIDATION_FAILED', 'a song needs a name, and it has a length limit');
+    }
+    const { title } = parsed.data;
+
+    const { checkTitle } = await import('@yuha/providers');
+    const safety = checkTitle(title);
+    if (!safety.allowed) {
+      throw new AppError('PROMPT_BLOCKED', `title rejected: ${safety.reason}`, {
+        reason: safety.reason,
+        hintKey: safety.hintKey,
+        appealable: safety.appealable,
+        // Which box to send the writer back to; the hint keys are shared
+        // between fields, so only this side knows which one was refused.
+        field: 'title',
+      });
+    }
+
+    await renameTrack({ trackId: track.id, ownerId: req.user!.id, title });
+    await trackEvent({
+      name: 'track_renamed',
+      userRef: req.user!.id,
+      props: { track_id: track.id },
+      runMode: ctx.config.mode,
+      isInternal: ctx.config.isDemo,
+    });
+    return { trackId: track.id, title };
   });
 
   app.post('/v1/tracks/:id/adopted', { preHandler: app.requireAuth }, async (req, reply) => {

@@ -304,6 +304,31 @@ export async function setTrackVisibility(
   return res.affectedRows > 0;
 }
 
+/**
+ * Rename, owner only.
+ *
+ * Deliberately no `affectedRows` check and no `state` condition. MySQL reports
+ * zero changed rows when the new title equals the old one, so a reader who
+ * opened the rename field and saved without editing would have been told their
+ * song did not exist — which is what `setTrackVisibility` would do in the same
+ * situation. The route establishes ownership with `getTrackForUser` before
+ * calling this, so a silent no-op here means the name was already right.
+ *
+ * Unlike publishing, renaming is allowed on a song in any state: a failed or
+ * still-generating song is still the writer's to name.
+ */
+export async function renameTrack(
+  params: { trackId: string; ownerId: string; title: string },
+  tx?: PoolConnection,
+): Promise<void> {
+  await execute(
+    `UPDATE tracks SET title = ?, updated_at = UTC_TIMESTAMP(3)
+      WHERE id = ? AND owner_id = ? AND deleted_at IS NULL`,
+    [params.title, params.trackId, params.ownerId],
+    tx,
+  );
+}
+
 /** Fire-and-forget engagement counter; rate limited at the route, not here. */
 export async function incrementPlayCount(trackId: string): Promise<void> {
   await execute(

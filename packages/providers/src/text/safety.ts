@@ -1,4 +1,4 @@
-import { LYRICS_MAX_CODEPOINTS, PROMPT_MAX_CODEPOINTS } from '@yuha/contracts';
+import { LYRICS_MAX_CODEPOINTS, PROMPT_MAX_CODEPOINTS, TITLE_MAX_CODEPOINTS } from '@yuha/contracts';
 
 /**
  * Input pre-check (SEC-07 / AI-03 heritage).
@@ -145,11 +145,31 @@ const VOICE_PATTERNS: RegExp[] = [
 
 const URL_PATTERN = /\b(?:https?:\/\/|www\.)\S+/i;
 
-/** Rough PII screens; keeps card numbers and addresses out of the model call (SEC-12). */
+/**
+ * Rough PII screens; keeps card numbers and addresses out of the model call
+ * (SEC-12).
+ *
+ * Phone numbers were missing. A card shape needs 15-16 digits, the postal rule
+ * needs a prefecture or ward character after it, and an email needs an @ — so
+ * 090-1234-5678 matched nothing and travelled in a description or a lyric all
+ * the way to the provider. Found while screening titles, but it was never a
+ * title problem; every field that reaches a model had the same hole.
+ *
+ * The shapes below are deliberately narrow, because this screen also runs over
+ * lyrics, where numbers are ordinary. `2024-01-15`, `Route 66`, `3-2-1 Go!`,
+ * `Op. 27 No. 2` and `120 BPM` all have to keep working, and each is a case in
+ * tests/title-screening.test.ts. That is why the landline rule insists on a
+ * leading 0 and three separated groups rather than matching any digits with
+ * hyphens in them.
+ */
 const PII_PATTERNS: RegExp[] = [
   /\b\d{4}[ -]?\d{4}[ -]?\d{4}[ -]?\d{3,4}\b/, // card-shaped
   /[\w.+-]+@[\w-]+\.[\w.]{2,}/, // email
   /\b\d{3}-?\d{4}\b\s*[都道府県市区町村]/, // JP postal + address
+  /\b0[5789]0[-\s]?\d{4}[-\s]?\d{4}\b/, // JP mobile / IP, 11 digits
+  /\b0\d{1,3}-\d{2,4}-\d{3,4}\b/, // JP landline and toll-free, separated
+  /\b1[3-9]\d{9}\b/, // CN mobile, 11 digits bare
+  /\+\d{1,3}[-\s]?\d{2,4}[-\s]?\d{3,4}[-\s]?\d{3,4}/, // international
 ];
 
 /** Attempts to reframe the untrusted text as an instruction to the system. */
@@ -188,6 +208,23 @@ export function checkPrompt(prompt: string): SafetyResult {
 /** The lyrics field, which is allowed to be much longer. */
 export function checkLyrics(lyrics: string): SafetyResult {
   return check(lyrics, LYRICS_MAX_CODEPOINTS, 'lyrics.tooLong');
+}
+
+/**
+ * The title, which travels further than either of them.
+ *
+ * It had no content screening at all: `titleSchema` counted code points and
+ * stopped there, so every rule the description is held to — real artists,
+ * quoted works, voice imitation, URLs, personal information — was absent from
+ * the one string that is rendered on the song page, in the browser tab, in the
+ * share sheet and in the link preview of a song anyone with the URL can open.
+ *
+ * Nothing about a title makes those rules weaker. If anything it is the
+ * reverse: a description is a private instruction to a model, and a public
+ * title is a claim about what the song is.
+ */
+export function checkTitle(title: string): SafetyResult {
+  return check(title, TITLE_MAX_CODEPOINTS, 'title.tooLong');
 }
 
 function checkContent(text: string): SafetyResult {

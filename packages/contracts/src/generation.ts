@@ -120,13 +120,25 @@ export const lyricsSchema = z
     message: `lyrics must be at most ${LYRICS_MAX_CODEPOINTS} Unicode code points`,
   });
 
+/**
+ * A title is one line, however it was pasted.
+ *
+ * It is rendered in an `h1`, in the browser tab and in a link preview, and a
+ * newline survives into all three and breaks each one differently. `.trim()`
+ * alone only took the ends off. Collapsing runs of whitespace is done here
+ * rather than at a route so that both doors into this field — the title given
+ * at generation and a later rename — cannot disagree about it.
+ */
 export const titleSchema = z
   .string()
-  .trim()
-  .min(1)
+  .transform((v) => v.replace(/\s+/g, ' ').trim())
+  .refine((v) => v.length > 0, { message: 'title must not be blank' })
   .refine((v) => [...v].length <= TITLE_MAX_CODEPOINTS, {
     message: `title must be at most ${TITLE_MAX_CODEPOINTS} Unicode code points`,
   });
+
+export const renameTrackRequest = z.object({ title: titleSchema });
+export type RenameTrackRequest = z.infer<typeof renameTrackRequest>;
 
 export const styleTagSchema = z
   .string()

@@ -15,7 +15,14 @@ export { HttpAlignmentProvider, type HttpAlignmentConfig } from './alignment/htt
 export * from './text/types.js';
 export { TokenStarsTextProvider, type TokenStarsConfig } from './text/tokenstars.js';
 export { LocalTextProvider } from './text/local.js';
-export { checkLyrics, checkPrompt, redactPrompt, type SafetyResult, type BlockReason } from './text/safety.js';
+export {
+  checkLyrics,
+  checkPrompt,
+  checkTitle,
+  redactPrompt,
+  type SafetyResult,
+  type BlockReason,
+} from './text/safety.js';
 
 export * from './storage/types.js';
 export { LocalStorageAdapter, type LocalStorageOptions } from './storage/local.js';
