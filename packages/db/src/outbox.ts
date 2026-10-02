@@ -119,8 +119,41 @@ export interface WebhookEventRow {
 }
 
 const WEBHOOK_COLUMNS = `
-  id, provider, event_id, event_type, signature_verified, payload, status, attempts, last_error, received_at
+  id, provider, event_id, event_type, signature_verified, payload, status, attempts, last_error, received_at, attempted_at
 `;
+
+/**
+ * How long a claim is good for before another worker may take the row.
+ *
+ * A handler that has not finished in five minutes is not going to: the work is
+ * a grant and a couple of writes. The row was previously held for ever by a
+ * worker that no longer existed, which is the failure this bounds.
+ *
+ * Re-claiming is safe by construction, not by luck. The event id is UNIQUE and
+ * every grant is keyed on (user, source, source_ref), so an event applied
+ * twice grants once — the two idempotency layers PAY-05 asks for are exactly
+ * what makes a lease the right answer here rather than a risk.
+ */
+export const WEBHOOK_LEASE_SECONDS = 300;
+
+/** Attempts past this are never retried; the row waits for a human. */
+export const WEBHOOK_MAX_ATTEMPTS = 10;
+
+/**
+ * How long to wait before trying a failed event again.
+ *
+ * There was no wait at all: a failed row was taken by the next pass, 100ms
+ * later, so the ten attempts were spent in about a second and any upstream
+ * hiccup parked the event permanently. Doubling from 30s and capped at 30
+ * minutes spends the same ten attempts over roughly two hours, which is a
+ * length an incident can actually be.
+ */
+const MAX_BACKOFF_SECONDS = 1800;
+
+export function webhookRetryDelaySeconds(attempts: number): number {
+  const n = Math.max(1, attempts);
+  return Math.min(30 * 2 ** (n - 1), MAX_BACKOFF_SECONDS);
+}
 
 /**
  * Stores a verified webhook before doing any work (PAY-04/§4.2): persist,
@@ -160,13 +193,39 @@ export async function recordWebhookEvent(
 }
 
 export async function claimWebhookEvents(limit: number, tx: PoolConnection): Promise<WebhookEventRow[]> {
+  /*
+   * Three ways a row becomes claimable, and they are genuinely different:
+   *
+   *  - 'received': never tried. `attempted_at` is NULL until the first claim.
+   *  - 'failed': tried and threw. Waits out a backoff that grows with attempts,
+   *    so the budget spans an outage instead of a second.
+   *  - 'processing': claimed by a worker that never came back. Reclaimed once
+   *    the lease expires. Without this the row was held for ever by a process
+   *    that no longer existed.
+   *
+   * The backoff is computed in SQL rather than filtered in JS because the
+   * claim has to stay one statement: selecting candidates and then discarding
+   * some of them in the worker would hold locks on rows it had already decided
+   * to skip, and would under-fill every batch.
+   */
   const candidates = await query<{ id: string }>(
     `SELECT id FROM webhook_events
-      WHERE status IN ('received','failed') AND attempts < 10 AND signature_verified = 1
+      WHERE signature_verified = 1
+        AND attempts < ?
+        AND (
+          status = 'received'
+          OR (status = 'failed'
+              AND (attempted_at IS NULL
+                   OR attempted_at <= UTC_TIMESTAMP(3)
+                      - INTERVAL LEAST(30 * POW(2, GREATEST(attempts, 1) - 1), ?) SECOND))
+          OR (status = 'processing'
+              AND (attempted_at IS NULL
+                   OR attempted_at <= UTC_TIMESTAMP(3) - INTERVAL ? SECOND))
+        )
       ORDER BY received_at
       LIMIT ?
       FOR UPDATE SKIP LOCKED`,
-    [limit],
+    [WEBHOOK_MAX_ATTEMPTS, MAX_BACKOFF_SECONDS, WEBHOOK_LEASE_SECONDS, limit],
     tx,
   );
   if (!candidates.length) return [];
@@ -174,7 +233,8 @@ export async function claimWebhookEvents(limit: number, tx: PoolConnection): Pro
   const ids = candidates.map((c) => c.id);
   const placeholders = ids.map(() => '?').join(', ');
   await execute(
-    `UPDATE webhook_events SET status = 'processing', attempts = attempts + 1
+    `UPDATE webhook_events
+        SET status = 'processing', attempts = attempts + 1, attempted_at = UTC_TIMESTAMP(3)
       WHERE id IN (${placeholders})`,
     ids,
     tx,
