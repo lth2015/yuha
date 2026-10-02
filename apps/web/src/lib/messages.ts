@@ -101,6 +101,37 @@ function blockedField(err: ApiError): string | undefined {
   return typeof field === 'string' ? field : undefined;
 }
 
+/** Composer fields that live inside the collapsed "more settings" panel. */
+export const FIELDS_IN_MORE_PANEL = ['title'] as const;
+
+export type FocusField = 'prompt' | 'lyrics' | 'instructions' | 'title';
+
+/**
+ * Which box to send the writer back to after a refusal.
+ *
+ * This lived inside Create.tsx, out of reach of any test, and had drifted in
+ * two directions at once. It did not know `field: 'title'`, which the server
+ * began sending when titles started being screened, so a blocked title fell
+ * through to the catch-all and focused the description — the exact bug this
+ * function exists to prevent, arriving from the other side. And its caller
+ * opened the "more settings" panel for `lyrics`, on the strength of a comment
+ * saying the lyrics field is unmounted while that panel is shut. It has not
+ * been since b8f26b3 took the lyrics out of the drawer; the field still in
+ * there is the title, and nothing opened the panel for it.
+ *
+ * Only the server knows which text it screened, so a named field wins. An
+ * older API that names nothing falls back to the box in view.
+ */
+export function focusFieldFor(err: unknown, editing: boolean): FocusField | null {
+  if (!(err instanceof ApiError)) return null;
+  const named = blockedField(err);
+  if (named === 'title') return 'title';
+  if (named === 'lyrics') return 'lyrics';
+  if (named === 'prompt') return editing ? 'instructions' : 'prompt';
+  if (err.code === 'PROMPT_BLOCKED') return editing ? 'instructions' : 'prompt';
+  return null;
+}
+
 /** Extra guidance for a blocked prompt, keyed by the server's hint (SEC-07). */
 /**
  * The server names a hint; the dictionary holds its text. Same reason as the

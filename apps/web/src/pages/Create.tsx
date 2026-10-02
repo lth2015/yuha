@@ -5,12 +5,15 @@ import {
   LYRICS_MAX_CODEPOINTS,
   MAX_STYLE_TAGS,
   PROMPT_MAX_CODEPOINTS,
+  TITLE_MAX_CODEPOINTS,
   STYLE_TAG_MAX_LENGTH,
   type JobView,
   type TrackView,
   type VoiceChoice,
 } from '@yuha/contracts';
 import { ApiError, apiFetch, newIdempotencyKey } from '../lib/api';
+import { clampToCodePoints, codePointLength } from '../lib/codepoints';
+import { FIELDS_IN_MORE_PANEL, focusFieldFor } from '../lib/messages';
 import { useI18n } from '../lib/i18n';
 import { JOB_PHASES as PHASE_STEPS, fractionOfPhase } from '../lib/phases';
 import { Score } from '../components/Score';
@@ -174,10 +177,6 @@ const DURATIONS: Array<{ value: Draft['durationSeconds']; label: string }> = [
   { value: 180, label: '3:00' },
   { value: 240, label: '4:00' },
 ];
-
-function countCodePoints(s: string): number {
-  return [...s].length;
-}
 
 /** The creator's own stored draft, or the defaults. */
 function readStoredDraft(): Draft {
@@ -395,8 +394,8 @@ export default function Create() {
     };
   }, [job, refreshEntitlements]);
 
-  const promptLength = countCodePoints(draft.prompt);
-  const lyricsLength = countCodePoints(draft.lyrics);
+  const promptLength = codePointLength(draft.prompt);
+  const lyricsLength = codePointLength(draft.lyrics);
 
   /**
    * The server reads `mode` for exactly one thing: whether to pass the
@@ -460,18 +459,6 @@ export default function Create() {
    * only mean the lyrics; every other rule runs over whichever field tripped
    * it, and the description is the one in view, so it is the better default.
    */
-  const fieldForError = (err: unknown): 'prompt' | 'lyrics' | 'instructions' | null => {
-    if (!(err instanceof ApiError)) return null;
-    // The server names the field; it is the only side that knows which text it
-    // was screening. An older API that does not say falls back to the box in
-    // view rather than to nothing.
-    const named = (err.details as { field?: string } | undefined)?.field;
-    if (named === 'lyrics') return 'lyrics';
-    if (named === 'prompt') return editTrackId ? 'instructions' : 'prompt';
-    if (err.code === 'PROMPT_BLOCKED') return editTrackId ? 'instructions' : 'prompt';
-    return null;
-  };
-
   const toggleStyle = (style: string) => {
     setDraft((d) => ({
       ...d,
@@ -556,7 +543,7 @@ export default function Create() {
        * `preventScroll` then an explicit scroll, so the field lands with room
        * above it rather than jammed under the sticky header.
        */
-      const field = fieldForError(err);
+      const field = focusFieldFor(err, Boolean(editTrackId));
       if (field) {
         // After the re-render that shows the message, so the field is measured
         // in its final position. Plain `focus()` — the browser's own scroll is
@@ -565,11 +552,14 @@ export default function Create() {
         // the field keeps it clear of the sticky header. A smooth
         // `scrollIntoView` was tried first and animated for seconds across a
         // long page, with the field still out of view when the message arrived.
-        // Lyrics live inside "more settings", which is collapsed by default and
-        // unmounts the field — so focusing it did nothing at all, and a refusal
-        // about the lyrics pointed at a box that was not on the screen. Open
-        // the panel first; the extra frame lets it mount before we reach for it.
-        if (field === 'lyrics') setMore(true);
+        // A field inside "more settings" is unmounted while that panel is
+        // collapsed, so focusing it does nothing at all and the refusal points
+        // at a box that is not on the screen. Open the panel first; the extra
+        // frame lets it mount before we reach for it. This said `lyrics` long
+        // after the lyrics left the drawer in b8f26b3, while the title — which
+        // is in there — was not opened for. The list is in messages.ts now,
+        // beside the routing, with a test that fails if the two disagree.
+        if ((FIELDS_IN_MORE_PANEL as readonly string[]).includes(field)) setMore(true);
         requestAnimationFrame(() =>
           requestAnimationFrame(() => document.getElementById(field)?.focus()),
         );
@@ -785,8 +775,9 @@ export default function Create() {
           <textarea
             id="instructions"
             value={instructions}
-            maxLength={PROMPT_MAX_CODEPOINTS}
-            onChange={(e) => setInstructions(e.target.value)}
+            onChange={(e) =>
+              setInstructions(clampToCodePoints(e.target.value, PROMPT_MAX_CODEPOINTS))
+            }
             placeholder={t('create.edit.placeholder')}
             aria-describedby="instructions-format instructions-count"
             required
@@ -794,7 +785,7 @@ export default function Create() {
           <div className="composer__meta">
             <span id="instructions-format">{t('create.edit.keeps', { kept })}</span>
             <span id="instructions-count" className="num">
-              {countCodePoints(instructions)} / {PROMPT_MAX_CODEPOINTS}
+              {codePointLength(instructions)} / {PROMPT_MAX_CODEPOINTS}
             </span>
           </div>
 
@@ -887,8 +878,7 @@ export default function Create() {
         <textarea
           id="prompt"
           value={draft.prompt}
-          maxLength={PROMPT_MAX_CODEPOINTS}
-          onChange={(e) => patch({ prompt: e.target.value })}
+          onChange={(e) => patch({ prompt: clampToCodePoints(e.target.value, PROMPT_MAX_CODEPOINTS) })}
           placeholder={t('create.prompt.placeholderSimple')}
           className={promptAtLimit ? 'is-full' : undefined}
           aria-describedby="prompt-format prompt-count"
@@ -1146,8 +1136,7 @@ export default function Create() {
               <input
                 id="title"
                 value={draft.title}
-                maxLength={120}
-                onChange={(e) => patch({ title: e.target.value })}
+                onChange={(e) => patch({ title: clampToCodePoints(e.target.value, TITLE_MAX_CODEPOINTS) })}
                 placeholder={t('create.title.placeholder')}
               />
             </div>

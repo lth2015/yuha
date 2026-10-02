@@ -125,8 +125,25 @@ change to a string table cannot deadlock InnoDB, and a failure list that spans
 files with no relation to the diff is about the environment, not the diff.
 
 Before believing a broad failure, run one of the failing files alone. If it
-passes, wait for the other session and re-run; `git worktree list` says whether
-there is one. Do not start fixing.
+passes, nothing is wrong with the change. `ps aux | grep [v]itest` says whether
+another suite is running and `git worktree list` says whether there is a
+sibling to blame. Do not start fixing.
+
+Then do not wait, either — a session doing TDD runs the suite every few
+minutes, and waiting for a gap costs more than the collision. `TEST_DATABASE_URL`
+overrides the connection, so give each session its own schema on the same
+container:
+
+```bash
+docker exec loopscene-mysql-test sh -lc 'mysql -uroot -p"$MYSQL_ROOT_PASSWORD" \
+  -e "CREATE DATABASE IF NOT EXISTS loopscene_test_b CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
+      GRANT ALL ON loopscene_test_b.* TO '"'"'loopscene'"'"'@'"'"'%'"'"'; FLUSH PRIVILEGES;"'
+TEST_DATABASE_URL='mysql://loopscene:loopscene_local_test@localhost:53307/loopscene_test_b' pnpm test
+```
+
+Migrations run from the harness, so a fresh schema needs nothing else. 386 of
+386 passed on `_b` while the sibling was still running on the default schema,
+which is both the fix and the proof that the collision was all it ever was.
 
 ### Running the suite from outside this machine
 

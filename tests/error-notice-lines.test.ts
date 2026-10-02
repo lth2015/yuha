@@ -20,7 +20,13 @@
  */
 import { describe, expect, it } from 'vitest';
 import { ApiError } from '../apps/web/src/lib/api.js';
-import { messageFor, nextLineKey, PROMPT_HINT_KEYS } from '../apps/web/src/lib/messages.js';
+import {
+  FIELDS_IN_MORE_PANEL,
+  focusFieldFor,
+  messageFor,
+  nextLineKey,
+  PROMPT_HINT_KEYS,
+} from '../apps/web/src/lib/messages.js';
 
 describe('which next-step line an error panel shows', () => {
   it('prefers the server hint over the generic advice', () => {
@@ -93,5 +99,56 @@ describe('a refused title says so in its own words', () => {
       expect(PROMPT_HINT_KEYS as readonly string[]).toContain(key);
       expect(nextLineKey('err.PROMPT_BLOCKED.titleField.next', key)).toBe(key);
     }
+  });
+});
+
+/**
+ * Which box the composer sends the writer back to.
+ *
+ * `fieldForError` lived inside Create.tsx, where nothing could reach it, and
+ * two things had gone wrong unnoticed.
+ *
+ * It did not know about `field: 'title'`, which the server started sending when
+ * titles began to be screened. A blocked title fell through to the catch-all
+ * and focused the *description* — the precise bug this function was written to
+ * fix, reintroduced from the other end.
+ *
+ * And its caller opened the "more settings" panel for `lyrics`, with a comment
+ * explaining that the lyrics field is unmounted while that panel is collapsed.
+ * It is not, any more: the lyrics came out of the drawer in b8f26b3. The field
+ * still in there is the title, and nothing opened the panel for it — so the
+ * focus would have landed on an element that is not rendered.
+ */
+describe('which field a refusal sends the writer to', () => {
+  const blockedAt = (field?: string) =>
+    new ApiError('PROMPT_BLOCKED', 'blocked', 422, field ? { field } : {});
+
+  it('sends a refused title to the title box', () => {
+    expect(focusFieldFor(blockedAt('title'), false)).toBe('title');
+    expect(focusFieldFor(blockedAt('title'), true)).toBe('title');
+  });
+
+  it('still routes the fields it already knew', () => {
+    expect(focusFieldFor(blockedAt('lyrics'), false)).toBe('lyrics');
+    expect(focusFieldFor(blockedAt('prompt'), false)).toBe('prompt');
+    // While editing an existing song the description is called "instructions".
+    expect(focusFieldFor(blockedAt('prompt'), true)).toBe('instructions');
+  });
+
+  it('falls back to the box in view when an older API names nothing', () => {
+    expect(focusFieldFor(blockedAt(), false)).toBe('prompt');
+    expect(focusFieldFor(blockedAt(), true)).toBe('instructions');
+  });
+
+  it('says nothing for failures that are not about a field', () => {
+    expect(focusFieldFor(new ApiError('INTERNAL_ERROR', 'boom', 500), false)).toBe(null);
+    expect(focusFieldFor(new Error('offline'), false)).toBe(null);
+  });
+
+  it('names the one field that is inside the collapsed panel', () => {
+    // The caller opens "more settings" for exactly these. If the title ever
+    // moves out of the drawer, or another field moves in, this is the list to
+    // change — and the test fails rather than the focus silently missing.
+    expect(FIELDS_IN_MORE_PANEL).toEqual(['title']);
   });
 });

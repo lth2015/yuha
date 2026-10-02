@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { TITLE_MAX_CODEPOINTS, type LyricTimings, type ProductView, type TrackView } from '@yuha/contracts';
 import { apiFetch, newIdempotencyKey } from '../lib/api';
+import { clampToCodePoints } from '../lib/codepoints';
 import { formatTime, usePlayer } from '../lib/player';
 import { fetchProducts, findLicenceProduct } from '../lib/catalog';
 import { useI18n } from '../lib/i18n';
@@ -315,8 +316,9 @@ export default function SongDetail() {
                 ref={titleInput}
                 type="text"
                 value={draftTitle}
-                maxLength={TITLE_MAX_CODEPOINTS}
-                onChange={(e) => setDraftTitle(e.target.value)}
+                onChange={(e) =>
+                  setDraftTitle(clampToCodePoints(e.target.value, TITLE_MAX_CODEPOINTS))
+                }
                 onKeyDown={(e) => {
                   // Enter saves and Escape cancels, because this is a
                   // one-field form and reaching for a button to commit one

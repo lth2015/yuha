@@ -17,6 +17,7 @@
     "check:orphans": "node scripts/find-orphan-exports.mjs",
     "check:i18n": "node scripts/check-i18n.mjs",
     "check:contrast": "node scripts/check-contrast.mjs",
+    "check:limits": "node scripts/check-codepoint-limits.mjs",
     "pretest": "node scripts/check-build-fresh.mjs",
     "test": "vitest run",
     "test:watch": "vitest",

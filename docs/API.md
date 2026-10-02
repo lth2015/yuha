@@ -219,6 +219,21 @@ is **not** a copyright certificate. Provider commercial terms are not exposed.
 Soft delete. Returns `423 TRACK_SUSPENDED` if the track is evidence in an open
 rights case — preservation beats a user-initiated wipe.
 
+### `POST /v1/tracks/:id/title`
+Rename. Owner only; a song that is not yours and a song that does not exist
+both answer `404`, so an id cannot be tested for existence. Body `{ title }`.
+
+The name is screened exactly as the title given at generation is — same rules,
+same `PROMPT_BLOCKED` shape, `details.field: "title"` — because the title is
+rendered on the song page, in the browser tab, in the share sheet and in the
+link preview of a song anyone holding the link can open. Whitespace is
+collapsed to single spaces and the result must be 1–120 code points; the
+response returns the stored value, which is what the client should display
+rather than what it sent.
+
+No credit is spent and no audio is touched. Allowed in any state: a failed or
+still-generating song is still the writer's to name.
+
 ### `POST /v1/tracks/:id/adopted`
 Self-reported "I used this in real content". Deliberately distinct from a
 download, so cost-per-adopted-result is not inflated by curiosity downloads
