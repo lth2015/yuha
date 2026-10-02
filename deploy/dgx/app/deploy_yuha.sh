@@ -32,7 +32,7 @@ echo "== 2/6 configuration (from music/.env, rewritten for the DGX)"
 TMP=$(mktemp -d); trap 'rm -rf "$TMP"' EXIT
 # keep secrets/settings from the Mac, drop what is machine-specific, then pin the DGX values
 grep -E '^[A-Z_][A-Z0-9_]*=' "$MUSIC/.env" \
-  | grep -vE '^(GOOGLE_|VITE_|DATABASE_URL=|PORT=|HOST=|PUBLIC_WEB_URL=|PUBLIC_API_URL=|STORAGE_|DEV_AUTH_SECRET=|RUN_MODE=|AUTH_ADAPTER=|QUEUE_ADAPTER=|FEATURE_FREE_TRIAL_ENABLED=)' > "$TMP/app.env"
+  | grep -vE '^(GOOGLE_|VITE_|DATABASE_URL=|PORT=|HOST=|PUBLIC_WEB_URL=|PUBLIC_API_URL=|STORAGE_|DEV_AUTH_SECRET=|RUN_MODE=|AUTH_ADAPTER=|QUEUE_ADAPTER=|FEATURE_FREE_TRIAL_ENABLED=|MUSIC_BASE_URL=|MUSIC_ALLOWED_AUDIO_HOSTS=)' > "$TMP/app.env"
 # reuse the DB password and signing secrets across redeploys
 ssh "$DGX" "cat $R/.env 2>/dev/null; grep -E '^(DEV_AUTH_SECRET|STORAGE_SIGNING_SECRET)=' $R/app.env 2>/dev/null" > "$TMP/prev" || true
 prev() { sed -n "s/^$1=//p" "$TMP/prev" | head -1; }
@@ -55,9 +55,33 @@ STORAGE_SIGNING_SECRET=$STORAGE_SIGNING_SECRET
 DEV_AUTH_SECRET=$DEV_AUTH_SECRET
 FEATURE_FREE_TRIAL_ENABLED=true
 DEV_LOGIN_ALLOWLIST=$ALLOWLIST
+MUSIC_BASE_URL=$MUSIC_URL
+MUSIC_ALLOWED_AUDIO_HOSTS=$MUSIC_AUDIO_HOSTS
 ENV
 # one line per key, last value wins (docker env_file must not see duplicates)
 awk -F= '{k=$1; if(!(k in v)) ord[++n]=k; v[k]=$0} END{for(i=1;i<=n;i++) print v[ord[i]]}' "$TMP/app.env" > "$TMP/app.env.d" && mv "$TMP/app.env.d" "$TMP/app.env"
+# Where the music service is, FROM INSIDE THIS BOX.
+#
+# This was carried over from the Mac verbatim, and on the Mac it is the
+# office's public address — which is correct there and ECONNREFUSED here: a
+# container on the DGX connecting to its own site's public IP does not come
+# back in. The first generation after a deploy failed in five seconds with
+# upstream_unreachable and submitted_at NULL, and nothing in the deploy had
+# said a word. It belongs with DATABASE_URL and PUBLIC_WEB_URL — pinned to
+# this machine, not inherited from the one that ran the script.
+MUSIC_PORT=$(ssh "$DGX" "sed -n 's/^HOST_PORT=//p' ~/yuha-spark/.env 2>/dev/null" | head -1)
+[[ -n "$MUSIC_PORT" ]] || MUSIC_PORT=$(sed -n 's#^MUSIC_BASE_URL=.*:\([0-9][0-9]*\).*#\1#p' "$MUSIC/.env" | tail -1)
+[[ -n "$MUSIC_PORT" ]] || MUSIC_PORT=8583
+MUSIC_URL="http://$IP:$MUSIC_PORT"
+# SEC-05: the worker refuses to pull audio from a host that is not on this
+# list, and the service hands back URLs built from its own AUDIO_BASE_URL. If
+# that still names the public address, fixing only the line above moves the
+# failure from upstream_unreachable to audio_fetch_failed. Both addresses are
+# allowed, so whichever the service is configured with, the pull works.
+MUSIC_AUDIO_HOSTS="$IP"
+PREV_AUDIO_HOST=$(ssh "$DGX" "sed -n 's#^AUDIO_BASE_URL=##p' ~/yuha-spark/.env 2>/dev/null" | sed -E 's#^https?://##; s#[:/].*##' | head -1)
+[[ -n "$PREV_AUDIO_HOST" && "$PREV_AUDIO_HOST" != "$IP" ]] && MUSIC_AUDIO_HOSTS="$IP,$PREV_AUDIO_HOST"
+
 STRIPE_SECRET_KEY=$(sed -n 's/^STRIPE_SECRET_KEY=//p' "$MUSIC/.env" | tail -1)
 cat > "$TMP/.env" <<ENV
 APP_PORT=$APP_PORT
