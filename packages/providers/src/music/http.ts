@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { withCanonicalSections } from '@yuha/contracts';
 import type {
   MusicCapabilities,
   MusicPollResult,
@@ -176,7 +177,11 @@ export class HttpMusicProvider implements MusicProvider {
       body['instrumental'] = true;
     } else if (this.cfg.supportsVocals) {
       body['instrumental'] = false;
-      if (req.intent.lyrics) body['lyrics'] = req.intent.lyrics;
+      // The creator's own markers stay on the song page; the model is given
+      // the English tags it was prompted with. `[高潮部分]` means nothing to
+      // it, `[chorus]` does, and an unrecognised marker is passed through
+      // rather than guessed at.
+      if (req.intent.lyrics) body['lyrics'] = withCanonicalSections(req.intent.lyrics);
     }
 
     let res;

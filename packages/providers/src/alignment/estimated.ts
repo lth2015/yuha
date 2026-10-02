@@ -1,7 +1,7 @@
+import { sectionName } from '@yuha/contracts';
 import type { LyricTimings } from '@yuha/contracts';
 import type { AlignmentProvider, AlignmentRequest, AlignmentResult } from './types.js';
 
-const SECTION_RE = /^\s*[[(](?:verse|chorus|bridge|intro|outro|pre-?chorus|hook|refrain|interlude|instrumental)[^)\]]*[)\]]\s*$/i;
 
 /** Vowel clusters as a syllable proxy; CJK characters weigh by count. */
 function weight(text: string): number {
@@ -31,8 +31,9 @@ export class EstimatedAlignmentProvider implements AlignmentProvider {
     for (const raw of req.lyrics.split(/\r?\n/)) {
       const line = raw.trim();
       if (!line) continue;
-      if (SECTION_RE.test(line)) {
-        section = line.replace(/^[[(]\s*|\s*[)\]]$/g, '');
+      const marker = sectionName(line);
+      if (marker !== null) {
+        section = marker;
         continue;
       }
       entries.push({ section, text: line, weight: weight(line) });

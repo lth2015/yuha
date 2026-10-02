@@ -261,6 +261,7 @@ in code (`is_estimate = true` on every modelled cost event):
 | Revenue share | 0% | The **target** contract condition. SOUNDRAW's public agreement says 70%/50% for downloads. |
 | Monthly minimum commitment | 45,000 JPY | A budget placeholder. |
 | Stripe fees | 3.6% + 0.7% | Public JP rates; the actual merchant agreement governs. |
+| ACE-Step's section-tag vocabulary | `[intro] [verse] [pre-chorus] [chorus] [bridge] [rap] [interlude] [instrumental] [solo] [outro]` | The intent prompt has always asked for `[verse]/[chorus]/[bridge]`, and the set was widened to the ten above when creators were given buttons for them. **Which of the ten the model actually acts on has never been measured.** `bench_vocals.py` on the DGX box is where that would be answered: one short lyric, each tag in turn, listen for whether the structure changes. Until then a marker is translated into this vocabulary and nothing is claimed about the result. An unrecognised marker is passed through untranslated, which is a third unknown. |
 
 The reporting layer keeps modelled and invoiced cost in **separate fields** and
 never sums them, so a simulation cannot be read as a supplier bill.

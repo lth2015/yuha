@@ -7,6 +7,8 @@
  * proxy, sections as pauses) and lay the lines across the song's duration.
  * The result syncs well enough for karaoke display and is deterministic.
  */
+import { sectionName } from '@yuha/contracts';
+
 export interface LyricLine {
   /** Section marker ([Verse] etc.) this line belongs to. */
   section: string;
@@ -17,8 +19,6 @@ export interface LyricLine {
   /** Per-word (CJK: per-character) timing, when an aligner heard the vocal. */
   words?: Array<{ w: string; start: number; end: number }>;
 }
-
-const SECTION_RE = /^\s*[[(](?:verse|chorus|bridge|intro|outro|pre-?chorus|hook|refrain|interlude|instrumental)[^)\]]*[)\]]\s*$/i;
 
 /** Rough syllable proxy: groups of vowels, plus a floor so short lines still breathe. */
 function weight(text: string): number {
@@ -46,8 +46,9 @@ export function buildLyricTimeline(
   for (const line of raw) {
     const trimmed = line.trim();
     if (!trimmed) continue;
-    if (SECTION_RE.test(trimmed)) {
-      section = trimmed.replace(/^[[(]\s*|\s*[)\]]$/g, '');
+    const marker = sectionName(trimmed);
+    if (marker !== null) {
+      section = marker;
       continue;
     }
     entries.push({ section, text: trimmed, weight: weight(trimmed) });

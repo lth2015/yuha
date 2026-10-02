@@ -33,6 +33,36 @@ export const PROMPT_MAX_CODEPOINTS = 500;
 export const LYRICS_MAX_CODEPOINTS = 3000;
 export const TITLE_MAX_CODEPOINTS = 120;
 export const MAX_STYLE_TAGS = 6;
+export const STYLE_TAG_MAX_LENGTH = 40;
+
+/**
+ * The three states `energy` actually has.
+ *
+ * It travels as a float because that is the shape the music service accepts,
+ * but on arrival it is compressed into one of three words — see build_tags_v2
+ * in deploy/dgx/music/server/app.py:
+ *
+ *   e < 0.35 -> "mellow"   |   e > 0.7 -> "energetic"   |   otherwise -> nothing
+ *
+ * and the text provider turns the same number into a tempo hint at its own
+ * boundaries. A 0..1 slider therefore offered a hundred positions for three
+ * outcomes, and its default — 0.5 — sat in the band that contributes nothing
+ * at all: moving it anywhere from 35% to 70% changed not one character of what
+ * the model was asked for. `http.ts` carries a note (AI-05) that we do not
+ * pretend a control was honoured just because the creator set it locally; a
+ * percentage readout on a three-state control is that same pretence, in
+ * resolution rather than in kind.
+ *
+ * One value per band, each chosen to clear both the word and the tempo
+ * threshold at once, so the choice is audible twice over.
+ */
+export const ENERGY_LEVELS = [
+  { id: 'mellow', value: 0.2 },
+  { id: 'medium', value: 0.5 },
+  { id: 'strong', value: 0.85 },
+] as const;
+
+export type EnergyLevelId = (typeof ENERGY_LEVELS)[number]['id'];
 
 export const promptSchema = z
   .string()
@@ -60,7 +90,7 @@ export const styleTagSchema = z
   .string()
   .trim()
   .min(1)
-  .max(40, 'each style tag is at most 40 characters');
+  .max(STYLE_TAG_MAX_LENGTH, `each style tag is at most ${STYLE_TAG_MAX_LENGTH} characters`);
 
 export const createGenerationRequest = z
   .object({
@@ -72,7 +102,12 @@ export const createGenerationRequest = z
     styles: z.array(styleTagSchema).max(MAX_STYLE_TAGS).default([]),
     /** When true the song has no vocals; when false the provider sings the lyrics. */
     instrumental: z.boolean().default(false),
-    /** 0..1, coarse energy slider. */
+    /**
+     * 0..1, but only three bands of it are distinguishable downstream — see
+     * ENERGY_LEVELS. Kept a float because that is what the music service
+     * accepts, so narrowing it here would force a redeploy of that service to
+     * change nothing a listener can hear.
+     */
     energy: z.number().min(0).max(1).default(0.5),
     durationSeconds: songDurationSchema.default(120),
     visibility: Visibility.default('private'),

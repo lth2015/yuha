@@ -1,9 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import {
+  ENERGY_LEVELS,
   LYRICS_MAX_CODEPOINTS,
   MAX_STYLE_TAGS,
   PROMPT_MAX_CODEPOINTS,
+  STYLE_TAG_MAX_LENGTH,
   type JobView,
   type TrackView,
 } from '@yuha/contracts';
@@ -70,6 +72,16 @@ const DEFAULT_DRAFT: Draft = {
   durationSeconds: 120,
   visibility: 'private',
 };
+
+/**
+ * Section markers offered as one-tap inserts.
+ *
+ * The label is the creator's own language and the marker is written in it —
+ * a Chinese creator gets `[副歌]`, which is what they then see on the song
+ * page. The music model is given the English tag instead; `withCanonicalSections`
+ * does that translation at the wire, so the two needs never have to agree.
+ */
+const SECTION_PRESETS = ['intro', 'verse', 'chorus', 'bridge', 'rap', 'interlude'] as const;
 
 const STYLE_PRESETS = [
   'lofi',
@@ -222,6 +234,8 @@ export default function Create() {
    */
   const [recent, setRecent] = useState<TrackView[] | null>(null);
   const [instructions, setInstructions] = useState('');
+  const [styleInput, setStyleInput] = useState('');
+  const lyricsRef = useRef<HTMLTextAreaElement>(null);
   const idemKey = useRef<string>(newIdempotencyKey());
   const pollTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   /**
@@ -393,6 +407,43 @@ export default function Create() {
         ? d.styles.filter((s) => s !== style)
         : [...d.styles, style].slice(0, MAX_STYLE_TAGS),
     }));
+  };
+
+  const customStyles = draft.styles.filter((s) => !STYLE_PRESETS.includes(s));
+  const stylesFull = draft.styles.length >= MAX_STYLE_TAGS;
+
+  const addStyle = () => {
+    // Collapse internal runs of space so "city  pop" and "city pop" are one tag.
+    const tag = styleInput.trim().replace(/\s+/gu, ' ').slice(0, STYLE_TAG_MAX_LENGTH);
+    setStyleInput('');
+    if (!tag || stylesFull) return;
+    // Case-insensitive: the model reads "Lofi" and "lofi" as the same word, so
+    // letting both in spends one of six slots on nothing.
+    if (draft.styles.some((s) => s.toLowerCase() === tag.toLowerCase())) return;
+    setDraft((d) => ({ ...d, styles: [...d.styles, tag] }));
+  };
+
+  /**
+   * Drops a section marker at the cursor, on a line of its own.
+   *
+   * On its own line is the whole point: the parser only treats a bracketed
+   * line as structure when nothing else shares it, and a marker that ends up
+   * mid-line is sung instead.
+   */
+  const insertSection = (label: string) => {
+    const el = lyricsRef.current;
+    const tag = `[${label}]`;
+    const at = el ? el.selectionStart : draft.lyrics.length;
+    const before = draft.lyrics.slice(0, at).replace(/\s+$/u, '');
+    const after = draft.lyrics.slice(at).replace(/^\s+/u, '');
+    const head = before ? `${before}\n\n` : '';
+    const next = [...`${head}${tag}\n${after}`].slice(0, LYRICS_MAX_CODEPOINTS).join('');
+    patch({ lyrics: next });
+    const caret = head.length + tag.length + 1;
+    requestAnimationFrame(() => {
+      el?.focus();
+      el?.setSelectionRange(caret, caret);
+    });
   };
 
   const submit = async (e: React.FormEvent) => {
@@ -736,12 +787,48 @@ export default function Create() {
                 type="button"
                 className={`chip chip--btn${draft.styles.includes(s) ? ' is-on' : ''}`}
                 aria-pressed={draft.styles.includes(s)}
-                disabled={draft.styles.length >= MAX_STYLE_TAGS && !draft.styles.includes(s)}
+                disabled={stylesFull && !draft.styles.includes(s)}
                 onClick={() => toggleStyle(s)}
               >
                 {s}
               </button>
             ))}
+            {customStyles.map((s) => (
+              <button
+                key={s}
+                type="button"
+                className="chip chip--btn is-on"
+                aria-pressed={true}
+                aria-label={t('create.styles.remove', { s })}
+                onClick={() => toggleStyle(s)}
+              >
+                {s} <span aria-hidden="true">×</span>
+              </button>
+            ))}
+          </div>
+          <div className="tag-add">
+            <input
+              id="style-add"
+              type="text"
+              value={styleInput}
+              maxLength={STYLE_TAG_MAX_LENGTH}
+              disabled={stylesFull}
+              placeholder={t('create.styles.custom')}
+              aria-label={t('create.styles.custom')}
+              onChange={(e) => setStyleInput(e.target.value)}
+              onKeyDown={(e) => {
+                // Without this the form submits: Enter in a lone text input is
+                // a form submit, and generating a song is not what Enter means
+                // while someone is still naming the styles.
+                if (e.key === 'Enter') {
+                  e.preventDefault();
+                  addStyle();
+                }
+              }}
+            />
+            <button type="button" className="btn btn--ghost btn--sm" disabled={stylesFull || !styleInput.trim()} onClick={addStyle}>
+              {t('create.styles.add')}
+            </button>
           </div>
         </div>
 
@@ -831,16 +918,33 @@ export default function Create() {
               */}
               <textarea
                 id="lyrics"
+                ref={lyricsRef}
                 rows={7}
                 value={draft.lyrics}
                 onChange={(e) => {
                   const next = [...e.target.value].slice(0, LYRICS_MAX_CODEPOINTS).join('');
                   patch({ lyrics: next });
                 }}
-                placeholder={'[Verse]\nCity lights blur into gold\n…'}
+                placeholder={t('create.lyrics.placeholder')}
                 disabled={draft.instrumental}
                 aria-describedby="lyrics-hint lyrics-count"
               />
+              <div className="chips chips--sections" role="group" aria-labelledby="sections-label">
+                <span className="studio__dial-label" id="sections-label">
+                  {t('create.sections')}
+                </span>
+                {SECTION_PRESETS.map((id) => (
+                  <button
+                    key={id}
+                    type="button"
+                    className="chip chip--btn"
+                    disabled={draft.instrumental}
+                    onClick={() => insertSection(t(`create.section.${id}`))}
+                  >
+                    {t(`create.section.${id}`)}
+                  </button>
+                ))}
+              </div>
               <div className="composer__meta">
                 <span id="lyrics-hint">{t('create.lyrics.hint')}</span>
                 <span id="lyrics-count" className="num">
@@ -849,20 +953,31 @@ export default function Create() {
               </div>
             </div>
 
-            <div>
-              <label htmlFor="energy">
-                {t('create.energy')}{' '}
-                <span className="muted num">{Math.round(draft.energy * 100)}%</span>
-              </label>
-              <input
-                id="energy"
-                type="range"
-                min={0}
-                max={1}
-                step={0.05}
-                value={draft.energy}
-                onChange={(e) => patch({ energy: Number(e.target.value) })}
-              />
+            {/*
+              Three buttons, not a slider. `energy` reaches the music service
+              as a float and is immediately compressed into one of three
+              words, so a percentage readout promised a precision that nothing
+              downstream could act on — and its default, 50%, sat in the band
+              that adds nothing at all. See ENERGY_LEVELS.
+            */}
+            <div className="studio__dial">
+              <span className="studio__dial-label" id="energy-label">
+                {t('create.energy')}
+              </span>
+              <div className="chips" role="group" aria-labelledby="energy-label">
+                {ENERGY_LEVELS.map((level) => (
+                  <button
+                    key={level.id}
+                    type="button"
+                    className={`chip chip--btn${draft.energy === level.value ? ' is-on' : ''}`}
+                    aria-pressed={draft.energy === level.value}
+                    onClick={() => patch({ energy: level.value })}
+                  >
+                    {t(`create.energy.${level.id}`)}
+                  </button>
+                ))}
+              </div>
+              <span className="studio__dial-hint">{t('create.energy.hint')}</span>
             </div>
 
             <div className="checkbox-row">
