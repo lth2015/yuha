@@ -3,6 +3,7 @@ import type { ReactNode } from 'react';
 import type { TrackView } from '@yuha/contracts';
 import { attachBeat as attachBeatSafe, wakeBeat } from './beat';
 import { creditHeard, hasHeardEnough, type Heard } from './listening';
+import { createResignGuard, freshPreviewUrl } from './preview-url';
 
 /**
  * A single shared <audio> element with a queue.
@@ -66,6 +67,7 @@ const PlayerContext = createContext<PlayerApi | null>(null);
 
 export function PlayerProvider({ children }: { children: ReactNode }) {
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  const resign = useRef(createResignGuard());
   const listeners = useRef(new Set<(id: string) => void>());
   const timeListeners = useRef(new Set<(seconds: number) => void>());
   const reported = useRef(new Set<string>());
@@ -94,6 +96,9 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     audio.pause();
     audio.src = track.previewUrl;
     audio.dataset['trackId'] = track.trackId;
+    // A new attempt gets a fresh chance: pressing play on the same song an
+    // hour later will meet an expired signature all over again.
+    resign.current.armFor(track.trackId);
     audio.currentTime = 0;
     // Replaying the same song starts its ten seconds over; `reported` is what
     // keeps the event itself to once per page load.
@@ -176,7 +181,37 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       nextRef.current?.();
     };
     const onWaiting = () => setState((s) => ({ ...s, status: 'loading' }));
-    const onError = () => setState((s) => ({ ...s, status: 'error' }));
+    /*
+     * A failed load is usually an expired signature, not a broken song.
+     *
+     * `previewUrl` is signed when the track was fetched and lasts five
+     * minutes; a library left open longer than that has a row of play buttons
+     * that each do nothing and say nothing. Ask the server to sign it again,
+     * once, and play it. `createResignGuard` is what keeps "once" true —
+     * `error` fires for genuinely broken audio too, and a retry that re-armed
+     * itself would turn one dead file into a request loop.
+     *
+     * `audio.dataset.trackId` rather than React state: this listener is bound
+     * once, so a captured `activeId` would be the one from the first render.
+     */
+    const onError = () => {
+      const trackId = audio.dataset['trackId'] ?? null;
+      if (!resign.current.mayRetry(trackId)) {
+        setState((s) => ({ ...s, status: 'error' }));
+        return;
+      }
+      setState((s) => ({ ...s, status: 'loading' }));
+      void freshPreviewUrl(trackId!).then((url) => {
+        // The listener may have raced a different song into the element while
+        // the request was out; writing a stale url here would stop that one.
+        if (!url || audio.dataset['trackId'] !== trackId) {
+          setState((s) => ({ ...s, status: 'error' }));
+          return;
+        }
+        audio.src = url;
+        void audio.play().catch(() => setState((s) => ({ ...s, status: 'error' })));
+      });
+    };
 
     audio.addEventListener('timeupdate', onTime);
     audio.addEventListener('loadedmetadata', onLoaded);
