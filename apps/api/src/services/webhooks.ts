@@ -1,4 +1,4 @@
-import type { SubscriptionStatus } from '@yuha/contracts';
+import { describeError, type SubscriptionStatus } from '@yuha/contracts';
 import type { OrderRow } from '@yuha/db';
 import {
   finishWebhookEvent,
@@ -92,7 +92,7 @@ export async function processWebhookEvent(ctx: AppContext, row: WebhookEventRow)
     }
     await finishWebhookEvent({ id: row.id, status: 'processed', error: null });
   } catch (err) {
-    await finishWebhookEvent({ id: row.id, status: 'failed', error: (err as Error).message });
+    await finishWebhookEvent({ id: row.id, status: 'failed', error: describeError(err) });
     throw err;
   }
 }
@@ -871,13 +871,20 @@ export async function reconcilePendingCheckouts(
         await setOrderStatus({ orderId: order.id, status: 'canceled' });
       }
     } catch (err) {
+      /*
+       * `.catch`, and it matters: this is a database write, and the likeliest
+       * reason the block above threw is that the database is unwell. A
+       * reporter that throws here would propagate out of the per-order try —
+       * the error path reintroducing the exact failure the isolation exists to
+       * contain — and silence the sweep for every order behind this one.
+       */
       await trackEvent({
         name: 'reconcile_checkout_failed',
         userRef: order.user_id,
-        props: { order_id: order.id, session_id: sessionId, error: (err as Error).message },
+        props: { order_id: order.id, session_id: sessionId, error: describeError(err) },
         runMode: ctx.config.mode,
         isInternal: ctx.config.isDemo,
-      });
+      }).catch(() => undefined);
     }
   }
 
@@ -929,13 +936,15 @@ export async function reconcileUngrantedSubscriptions(ctx: AppContext, limit = 5
     try {
       repaired += await reconcileOneSubscription(ctx, order);
     } catch (err) {
+      // `.catch` for the reason given in `reconcilePendingCheckouts`: recording
+      // a failure must not be able to cause one.
       await trackEvent({
         name: 'reconcile_subscription_failed',
         userRef: order.user_id,
-        props: { order_id: order.id, error: (err as Error).message },
+        props: { order_id: order.id, error: describeError(err) },
         runMode: ctx.config.mode,
         isInternal: ctx.config.isDemo,
-      });
+      }).catch(() => undefined);
     }
   }
 

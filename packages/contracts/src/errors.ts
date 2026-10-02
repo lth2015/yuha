@@ -128,3 +128,32 @@ export class AppError extends Error {
     };
   }
 }
+
+
+/**
+ * What to write down when something was thrown.
+ *
+ * `(err as Error).message` is `undefined` for anything that is not an Error,
+ * and plenty of things are not: a driver rejecting with `{ code: 'ER_...' }`,
+ * a bare `throw 'ECONNRESET'`, a null. Seventeen call sites used it, so a log
+ * line could name a failed maintenance step and say nothing whatever about it,
+ * and a webhook row could record a failure with no reason — the same blindness
+ * the step name was added to fix, arriving one field to the right.
+ *
+ * Lives here rather than in the worker because the webhook service needs it
+ * too, and the worker already depends on that service: the other direction
+ * would be a cycle.
+ */
+export function describeError(err: unknown): string {
+  if (err instanceof Error) return err.message || err.name;
+  if (typeof err === 'string') return err;
+  if (err === null) return 'null';
+  if (err === undefined) return 'undefined thrown';
+  try {
+    // A circular object is what a driver error often is, and a reporter that
+    // throws while reporting is worse than a vague line.
+    return JSON.stringify(err) ?? String(err);
+  } catch {
+    return String(err);
+  }
+}

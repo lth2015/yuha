@@ -246,13 +246,34 @@ export async function claimWebhookEvents(limit: number, tx: PoolConnection): Pro
   );
 }
 
+/**
+ * `last_error` is VARCHAR(500), and the cut has to land between characters.
+ *
+ * It was `.slice(0, 500)`, which counts UTF-16 code units: a message whose
+ * 500th unit is the first half of a surrogate pair was cut through the middle
+ * of a character, and the lone surrogate reached the driver, which encodes it
+ * as U+FFFD. The row stored fine — this never refused a write — but the tail
+ * of the message was replaced by a question mark in a diamond, in the one
+ * column whose whole job is saying what went wrong.
+ *
+ * Not exotic: any message quoting the user text that caused it — a title, a
+ * prompt, a lyric — can carry an emoji, and those are the messages worth
+ * keeping. Same shape as the `maxLength` defect in the composer, in a column
+ * instead of a field.
+ */
+function trimError(error: string | null | undefined): string | null {
+  if (!error) return null;
+  const points = [...error];
+  return points.length <= 500 ? error : points.slice(0, 500).join('');
+}
+
 export async function finishWebhookEvent(
   params: { id: string; status: 'processed' | 'failed' | 'ignored'; error?: string | null },
   tx?: PoolConnection,
 ): Promise<void> {
   await execute(
     `UPDATE webhook_events SET status = ?, last_error = ?, processed_at = UTC_TIMESTAMP(3) WHERE id = ?`,
-    [params.status, params.error?.slice(0, 500) ?? null, params.id],
+    [params.status, trimError(params.error), params.id],
     tx,
   );
 }

@@ -1,4 +1,5 @@
 import type { AppContext } from '@yuha/api';
+import { describeError } from '@yuha/contracts';
 import {
   processWebhookEvent,
   recoverUngrantedOrders,
@@ -24,6 +25,41 @@ import { failAbandonedJob, failStaleUnknownJob } from './reconcile.js';
 
 export interface LoopDeps extends PipelineDeps {
   stopped: () => boolean;
+}
+
+export type LoopLog = (
+  level: 'info' | 'warn' | 'error',
+  msg: string,
+  fields?: Record<string, unknown>,
+) => void;
+
+/**
+ * One sweep's failure, kept to that sweep.
+ *
+ * The eight maintenance sweeps ran inside a single `try`, so a throw anywhere
+ * skipped everything after it — and skipped it again every minute, because the
+ * input that threw was still there on the next pass. The reachable version is
+ * not hypothetical: `reconcilePendingCheckouts` calls `handleCheckoutCompleted`,
+ * which throws by design when a charge disagrees with the catalogue, and its
+ * query is `ORDER BY created_at`, so one order at the front of the queue
+ * silenced the subscription recovery sweep, the retention sweep and the ledger
+ * reconciliation for good. Nothing would have said so either: the catch logged
+ * `maintenance loop error` without naming the step, and the three alarms that
+ * depend on those sweeps read the only thing they could, which is zero.
+ *
+ * This was a closure inside the loop until a test wanted to inject a throwing
+ * sweep and could not reach it — so the fix for a silent, permanent,
+ * money-and-compliance failure rested on reading the code.
+ * tests/maintenance-isolation.test.ts.
+ */
+export function isolatedStep(log: LoopLog) {
+  return async (name: string, run: () => Promise<void>): Promise<void> => {
+    try {
+      await run();
+    } catch (err) {
+      log('error', 'maintenance step failed', { step: name, err: describeError(err) });
+    }
+  };
 }
 
 export function makeLogger(component: string) {
@@ -57,16 +93,16 @@ export async function outboxLoop(deps: LoopDeps): Promise<void> {
         } catch (err) {
           await markDispatchFailed({
             id: row.id,
-            error: (err as Error).message,
+            error: describeError(err),
             // Exponential-ish backoff, capped.
             retryInSeconds: Math.min(300, 2 ** Math.min(row.attempts, 8)),
             maxAttempts: 10,
           });
-          log('error', 'outbox dispatch failed', { outboxId: row.id, err: (err as Error).message });
+          log('error', 'outbox dispatch failed', { outboxId: row.id, err: describeError(err) });
         }
       }
     } catch (err) {
-      log('error', 'outbox loop error', { err: (err as Error).message });
+      log('error', 'outbox loop error', { err: describeError(err) });
     }
     await sleep(dispatched > 0 ? 100 : 1000);
   }
@@ -129,18 +165,18 @@ export async function generationLoop(deps: LoopDeps): Promise<void> {
           await runJobStep(deps, claimed.id);
           await ctx.queue.deleteMessage(msg.receiptHandle);
         } catch (err) {
-          log('error', 'job step failed', { jobId, err: (err as Error).message });
+          log('error', 'job step failed', { jobId, err: describeError(err) });
           if (msg.receiveCount >= 5) {
             // Retry cap: park it rather than looping forever on a persistent
             // upstream fault (§12.3).
-            await ctx.queue.deadLetter(msg.receiptHandle, (err as Error).message);
+            await ctx.queue.deadLetter(msg.receiptHandle, describeError(err));
           } else {
             await ctx.queue.changeVisibility(msg.receiptHandle, Math.min(300, 5 * 2 ** msg.receiveCount));
           }
         }
       }
     } catch (err) {
-      log('error', 'generation loop error', { err: (err as Error).message });
+      log('error', 'generation loop error', { err: describeError(err) });
       await sleep(2000);
     }
   }
@@ -164,7 +200,7 @@ export async function pollingLoop(deps: LoopDeps): Promise<void> {
       }
       await runJobStep(deps, job.id);
     } catch (err) {
-      log('error', 'polling loop error', { err: (err as Error).message });
+      log('error', 'polling loop error', { err: describeError(err) });
       await sleep(2000);
     }
   }
@@ -190,12 +226,12 @@ export async function webhookLoop(deps: LoopDeps): Promise<void> {
           log('error', 'webhook processing failed', {
             eventId: ev.event_id,
             type: ev.event_type,
-            err: (err as Error).message,
+            err: describeError(err),
           });
         }
       }
     } catch (err) {
-      log('error', 'webhook loop error', { err: (err as Error).message });
+      log('error', 'webhook loop error', { err: describeError(err) });
     }
     await sleep(processed > 0 ? 100 : 1000);
   }
@@ -211,28 +247,9 @@ export async function webhookLoop(deps: LoopDeps): Promise<void> {
 export async function maintenanceLoop(deps: LoopDeps, intervalMs = 60_000): Promise<void> {
   const { ctx, log } = deps;
 
-  /*
-   * One try per sweep, not one try around all of them.
-   *
-   * These eight ran inside a single `try` in sequence, so a throw anywhere
-   * skipped everything after it — and skipped it again every minute, because
-   * the input that threw was still there on the next pass. The reachable
-   * version of that is not hypothetical: `reconcilePendingCheckouts` calls
-   * `handleCheckoutCompleted`, which throws by design when a charge disagrees
-   * with the catalogue, and its query is `ORDER BY created_at`, so one order
-   * at the front of the queue silenced the subscription recovery sweep, the
-   * retention sweep and the ledger reconciliation for good. Nothing would
-   * have said so either: the catch logged `maintenance loop error` without
-   * naming the step, and the three alarms that depend on those sweeps read
-   * the only thing they could, which is zero.
-   */
-  const step = async (name: string, run: () => Promise<void>): Promise<void> => {
-    try {
-      await run();
-    } catch (err) {
-      log('error', 'maintenance step failed', { step: name, err: (err as Error).message });
-    }
-  };
+  // One try per sweep, not one around all of them. Why, and what it cost when
+  // it was the other way, is at `isolatedStep`.
+  const step = isolatedStep(log);
 
   while (!deps.stopped()) {
     await step('expire-batches', async () => {
@@ -248,7 +265,7 @@ export async function maintenanceLoop(deps: LoopDeps, intervalMs = 60_000): Prom
         try {
           await failStaleUnknownJob(ctx, job, log);
         } catch (err) {
-          log('error', 'could not time out stale job', { jobId: job.id, err: (err as Error).message });
+          log('error', 'could not time out stale job', { jobId: job.id, err: describeError(err) });
         }
       }
     });
@@ -268,7 +285,7 @@ export async function maintenanceLoop(deps: LoopDeps, intervalMs = 60_000): Prom
         } catch (err) {
           log('error', 'could not time out abandoned job', {
             jobId: job.id,
-            err: (err as Error).message,
+            err: describeError(err),
           });
         }
       }
