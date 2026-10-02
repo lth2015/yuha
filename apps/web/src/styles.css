@@ -29,11 +29,20 @@
   /* `--surface` stays the name the components already use. */
   --surface: var(--glass);
 
-  /* ink — measured by scripts/check-contrast.mjs (4.5:1 floor) */
+  /*
+   * ink — measured by scripts/check-contrast.mjs (4.5:1 floor)
+   *
+   * Nudged darker on 2026-10-03 when that gate learned to composite. It had
+   * been measuring these against `--bg`, but the light field lays a lobe over
+   * the page at up to 34%, so the real backdrop under unpanelled text is
+   * #ddd6e9, not #f6f5f0. 33 pieces of `--muted` text on /create sit directly
+   * on it — a song card's artist, duration and vocal tag, the section heading —
+   * and were between 4.17 and 4.45:1. The change is at most 6/255 per channel.
+   */
   --ink: #20221f;
-  --muted: #61665d;
+  --muted: #5b6057;
   /* 11-13px text, used inside panels too — must clear 4.5:1 on --surface-soft */
-  --faint: #5f645b;
+  --faint: #5b6057;
   --line: rgba(32, 34, 31, 0.1);
   --line-strong: rgba(32, 34, 31, 0.18);
   --control-line: #7b8177;
@@ -48,9 +57,9 @@
   --cyan: #2a98a8;
   --link: #a33f22;
   --focus: #5748b9;
-  --ok: #28704b;
-  --warning: #855619;
-  --danger: #b33131;
+  --ok: #226a45;
+  --warning: #835417;
+  --danger: #af2d2d;
 
   /* score drawing on the page (covers override these) */
   --score-neutral: 32, 34, 31;
@@ -1115,7 +1124,11 @@ textarea.is-full { border-color: var(--danger); }
    the gate read the token and not the fade. The hierarchy is the same one,
    rebuilt out of colour, weight and scale instead, with the fade kept
    where it is not carrying text — the container's mask. */
-.lyrics-sync__line { position: relative; display: block; width: 100%; text-align: left; border: none; background: none; padding: 6px 0; font: inherit; font-size: clamp(17px, 1.6vw, 22px); font-weight: 500; color: var(--ink); opacity: 0.66; cursor: pointer; transition: opacity 0.3s var(--ease-out), transform 0.3s var(--ease-out), color 0.3s var(--ease-out); transform-origin: left center; }
+/* Lyric lines are children of `.song-page__lyrics` / `.now-playing__lyrics`,
+   both glass over the light field — checked in the browser: the nearest
+   ancestor with a background is rgba(255,255,255,0.78) + blur(24px). They never
+   sit on the bare field, so that is what this gate measures them against. */
+.lyrics-sync__line { --contrast-on: --glass; position: relative; display: block; width: 100%; text-align: left; border: none; background: none; padding: 6px 0; font: inherit; font-size: clamp(17px, 1.6vw, 22px); font-weight: 500; color: var(--ink); opacity: 0.66; cursor: pointer; transition: opacity 0.3s var(--ease-out), transform 0.3s var(--ease-out), color 0.3s var(--ease-out); transform-origin: left center; }
 .lyrics-sync__line:hover { color: var(--ink); opacity: 0.85; }
 /* Sung lines settle to grey, as on a karaoke screen — a colour change,
    not a fade, so they stay readable after the song moves on. */
@@ -1196,7 +1209,7 @@ textarea.is-full { border-color: var(--danger); }
   color: var(--ink); opacity: 0.62; filter: blur(0.4px);
   transition: opacity 0.4s var(--ease-out), transform 0.4s var(--ease-out), filter 0.4s var(--ease-out);
 }
-.now-playing__lyrics .lyrics-sync__line.is-past { --contrast-floor: 3; color: var(--ink); opacity: 0.5; }
+.now-playing__lyrics .lyrics-sync__line.is-past { --contrast-on: --glass; --contrast-floor: 3; color: var(--ink); opacity: 0.5; }
 .now-playing__lyrics .lyrics-sync__line.is-active { opacity: 1; filter: none; transform: scale(1.06); }
 .now-playing__lyrics .lyrics-sync__fill {
   /* --petal is 2.7:1 on warm white; the sweep now runs between the two

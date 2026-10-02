@@ -39,11 +39,98 @@ const TEXT_TOKENS = {
  * shipped one of its own, for exactly the reason recorded as rule 10 — a check
  * has to be asked what it cannot see.
  *
- * Glass surfaces are translucent over a moving light field, so their rendered
- * colour is not knowable from the stylesheet. `--surface-soft` is the lightest
- * opaque surface in the system and is used as the conservative stand-in.
+ * Glass is computed, not stood in for. The note here used to say the rendered
+ * colour of a translucent surface "is not knowable from the stylesheet" and
+ * used `--surface-soft` as a conservative proxy. It was conservative only by
+ * accident of the current numbers: the glass sits at 78% white, so it composites
+ * lighter than that proxy and dark text has more contrast than measured, not
+ * less. Make the glass thinner — which is the whole point of a material pass —
+ * and the proxy silently becomes optimistic while the gate stays green. A check
+ * standing in for the thing it cannot see is the failure this file already
+ * carries a scar from; so now it composites.
+ *
+ * (That note also called `--surface-soft` "the lightest opaque surface". It is
+ * the darkest — #eceee7 against #f6f5f0 — which is why it was the binding case.
+ * The behaviour was right and the sentence was wrong, which is its own lesson
+ * about comments that are never executed.)
  */
 const SURFACES = ['--bg', '--surface-solid', '--surface-soft'];
+
+/**
+ * The darkest the backdrop behind a glass panel can get.
+ *
+ * The light field paints a radial gradient ending at `--bg-deep`, then lays
+ * three coloured lobes over it at up to 34% alpha. Those lobes are warm and
+ * mid-toned, so they pull the green and blue channels *down*: the darkest point
+ * is bg-deep with every lobe at full strength, not bg-deep alone. Dark text on
+ * a light surface loses contrast as the surface darkens, so this is the case
+ * that binds.
+ *
+ * Kept in step with styles.css by hand. If a lobe's colour or alpha changes
+ * there and not here, the gate measures a backdrop that no longer exists —
+ * which is why the numbers are named and sourced rather than inlined.
+ */
+const LOBES = [
+  { name: 'petal', rgb: [255, 168, 133], alpha: 0.34 },
+  { name: 'violet', rgb: [178, 160, 240], alpha: 0.3 },
+  { name: 'cyan', rgb: [168, 206, 170], alpha: 0.32 },
+];
+
+/** Source-over compositing on rgb triples (the `over` below takes hex). */
+function composite(base, src, a) {
+  return base.map((b, i) => Math.round(a * src[i] + (1 - a) * b));
+}
+
+/**
+ * The glass surfaces text actually sits on, as rendered.
+ *
+ * Each entry is the alpha of a `--glass*` token laid over the darkest backdrop
+ * the light field can produce. `backdrop-filter`'s blur does not move the mean
+ * colour of a smooth gradient, so it is ignored; `saturate` pushes channels
+ * apart around their mean and `brightness` scales them, and both are applied
+ * where a rule uses them.
+ */
+function glassSurfaces() {
+  const deep = rgb(readToken('--bg-deep') ?? '#efede6');
+  /*
+   * One lobe, not all three.
+   *
+   * Compositing all three at their centre alpha was the first model and it is
+   * not a case that exists: the lobes are pinned to different corners in
+   * styles.css (petal top-left, violet off the right edge, cyan bottom-left)
+   * and each falls to transparent well before another's centre. Stacking them
+   * failed the build on a geometry the stylesheet forbids, which would have
+   * taught everyone to distrust this gate.
+   *
+   * The darkest point a panel can actually sit over is the centre of whichever
+   * single lobe darkens most, over the gradient's dark end.
+   */
+  const darkestBackdrop = LOBES
+    .map((l) => composite(deep, l.rgb, l.alpha))
+    .reduce((a, b) => (luminance(a) <= luminance(b) ? a : b));
+  const out = [['light-field (no glass)', hex(darkestBackdrop)]];
+  for (const [name, alpha] of Object.entries(GLASS_ALPHAS)) {
+    out.push([name, hex(composite(darkestBackdrop, [255, 255, 255], alpha))]);
+  }
+  return out;
+}
+
+const hex = (c) => `#${c.map((v) => Math.max(0, Math.min(255, Math.round(v))).toString(16).padStart(2, '0')).join('')}`;
+
+/**
+ * Alpha of each translucent surface token, read from styles.css. Named here so
+ * a changed token fails loudly rather than being measured as its old value.
+ */
+const GLASS_ALPHAS = Object.fromEntries(
+  ['--glass', '--glass-strong'].map((name) => {
+    const m = new RegExp(`${name}:\\s*rgba\\([^)]*?,\\s*([0-9.]+)\\s*\\)`).exec(src);
+    if (!m) {
+      console.log(`✗ could not read an alpha for ${name} from styles.css`);
+      process.exit(1);
+    }
+    return [name, Number(m[1])];
+  }),
+);
 
 function readToken(name) {
   // First definition wins, which is the `:root` block.
@@ -76,6 +163,9 @@ for (const name of SURFACES) {
   }
   surfaces.push([name, value]);
 }
+// The composited glass, measured rather than assumed. If a material pass makes
+// a surface thinner, the number moves here and the gate notices.
+surfaces.push(...glassSurfaces());
 
 const failures = [];
 const rows = [];
@@ -171,8 +261,24 @@ const fades = [];
     if (DECORATIVE.some((d) => selector.includes(d))) continue;
     const col = /color:\s*var\((--[a-z-]+)\)/.exec(body);
     const floor = /--contrast-floor:\s*([0-9.]+)/.exec(body);
+    /*
+     * Which surface this text actually sits on.
+     *
+     * The default is the bare light field, the darkest thing in the system, and
+     * that is right for the many elements that do sit straight on the page. It
+     * is wrong for text inside a panel: the synced lyric lines are children of
+     * `.song-page__lyrics`, which is glass over the field, and measuring them
+     * against the bare field failed the build on a surface they never touch.
+     *
+     * A rule may name its surface with `--contrast-on: --glass`. Doing so is a
+     * claim about the DOM that this file cannot verify, so it carries the
+     * evidence in a comment next to it, and a wrong name fails loudly rather
+     * than being ignored.
+     */
+    const on = /--contrast-on:\s*(--[a-z-]+)/.exec(body);
     fades.push({
       selector,
+      on: on ? on[1] : null,
       alpha,
       token: col ? col[1] : null,
       floor: floor ? Number(floor[1]) : 4.5,
@@ -205,7 +311,18 @@ if (fades.length) {
       failures.push(`${f.selector} fades ${f.token}, which is not in :root`);
       continue;
     }
-    const worst = surfaces
+    let candidates = surfaces;
+    if (f.on) {
+      candidates = surfaces.filter(([name]) => name === f.on);
+      if (!candidates.length) {
+        failures.push(
+          `${f.selector} declares \`--contrast-on: ${f.on}\`, which is not a surface this ` +
+            `gate knows (${surfaces.map(([n]) => n).join(', ')}). Fix the name or add the surface.`,
+        );
+        continue;
+      }
+    }
+    const worst = candidates
       .map(([name, bg]) => [name, ratioRaw(over(value, bg, f.alpha), rgb(bg))])
       .reduce((a, b) => (a[1] <= b[1] ? a : b));
     console.log(
