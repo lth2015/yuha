@@ -82,6 +82,7 @@ export function messageFor(err: unknown): UserMessage {
  */
 export const PROMPT_HINT_KEYS = [
   'prompt.tooLong',
+  'lyrics.tooLong',
   'prompt.noExistingLyrics',
   'prompt.noUrl',
   'prompt.noPersonalInfo',

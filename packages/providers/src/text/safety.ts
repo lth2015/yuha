@@ -1,4 +1,4 @@
-import { PROMPT_MAX_CODEPOINTS } from '@yuha/contracts';
+import { LYRICS_MAX_CODEPOINTS, PROMPT_MAX_CODEPOINTS } from '@yuha/contracts';
 
 /**
  * Input pre-check (SEC-07 / AI-03 heritage).
@@ -41,11 +41,37 @@ function block(reason: BlockReason, hintKey: string): SafetyResult {
   return { allowed: false, reason, hintKey, appealable: true };
 }
 
-/** "〜風", "〜っぽい", "like <name>" combined with a proper-noun-looking token. */
+/**
+ * "〜風", "〜っぽい", "like <name>" combined with a proper-noun-looking token.
+ *
+ * The Chinese rules below exist because there were none. 「周杰伦风格的歌」 was
+ * accepted, charged and generated — the quoted-title rule wants 「…」 or 《…》
+ * and Chinese writes the name bare, so nothing matched. A bare name cannot be
+ * recognised as a name without a list of names, so these match the *frame* a
+ * reference is built in — a title in 《》, or a comparison word — rather than
+ * trying to know who is famous.
+ */
 const STYLE_OF_PATTERNS: RegExp[] = [
   /[「『"][^」』"]{2,40}[」』"]\s*(風|っぽい|みたいな|のような|の曲|そっくり)/,
   /\b(like|in the style of|sounds? like|cover of|remix of)\s+[A-Z][\w.'-]+/i,
   /(の|と)(そっくり|同じ曲|カバー|替え歌)/,
+  // 《曲名》 is a title mark in Chinese; its presence is the reference.
+  /《[^》]{1,40}》/,
+  /*
+   * 「X 风格」「像 X 的唱法」 — a comparison to a named performer or work.
+   *
+   * Not any comparison. 「像清晨一样」 is how people describe a mood, and the
+   * first draft refused it: 像 + any two characters + 一样 matched. What marks
+   * a reference is that the thing compared to is *musical* — a style, a way of
+   * singing, an arrangement — so the comparison rule now requires one of those
+   * words rather than any trailing 那样/一样.
+   */
+  // 的 is optional: 「周杰伦风格的歌」 writes the name straight onto 风格.
+  /[\u4e00-\u9fff]{2,10}\s*(的)?\s*(风格|曲风|唱腔|唱法|编曲|編曲)/,
+  /(像|仿照|参照|照着|按照)\s*[^。\n]{1,12}\s*的\s*(风格|曲风|唱腔|唱法|编曲|編曲|那种唱)/,
+  /(翻唱|改编自|致敬)\s*(这首|那首|原曲)?/,
+  // 模仿 + a musical object, as distinct from 模仿雨声 (imitating a sound).
+  /模仿\s*(这首|那首|原曲|原唱)/,
 ];
 
 /**
@@ -75,13 +101,46 @@ const QUOTED_LYRICS_PATTERNS: RegExp[] = [
   // Somebody else's, explicitly.
   /(既存|実在|有名|他人)[^。\n]{0,12}歌詞/,
   /(アーティスト|歌手|バンド|アイドル)[^。\n]{0,12}の歌詞/,
+  // Chinese. 歌词 on its own is ordinary — the product asks for lyrics — so
+  // these need a named work, a verb of copying, or somebody else's.
+  /《[^》]{1,40}》\s*(的)?\s*(歌词|歌詞)/,
+  /(歌词|歌詞)[^。\n]{0,8}(照搬|照抄|抄过来|抄過來|引用|复制|複製|原封不动)/,
+  /(照搬|照抄|引用|复制|複製)[^。\n]{0,8}(歌词|歌詞)/,
+  /(原曲|原唱|别人|別人|他人|现有|現有|已有)[^。\n]{0,8}(的)?\s*(歌词|歌詞)/,
 ];
 
-/** Voice / person imitation and implied endorsement. */
+/**
+ * Voice / person imitation and implied endorsement.
+ *
+ * Japanese puts the object first — 声を真似 — and the first rule reads that
+ * order. Chinese puts the verb first, 模仿…的声音, so none of these fired on
+ * 「模仿周杰伦的声音唱」 and the request was generated and billed.
+ *
+ * The Chinese rules below require a *person's* voice, not any imitation:
+ * 模仿雨声 (imitate the sound of rain) is an ordinary thing to ask for and
+ * must keep working. 声音/嗓音/音色 preceded by a possessive is the shape that
+ * means a person.
+ */
 const VOICE_PATTERNS: RegExp[] = [
   /(声|ボイス)(を)?(真似|まね|模倣|コピー|クローン)/,
   /\b(voice\s*(clone|clon|imitat|impersonat))/i,
   /(公認|オフィシャル|本人)(の)?(声|歌声)/,
+  /*
+   * 模仿/克隆 … 的嗓音|唱腔|歌声 — a person's voice.
+   *
+   * 音色 is deliberately absent and 声音 is qualified: 「模仿雨声的那种音色」
+   * is an ordinary request about timbre, and the first draft refused it. A
+   * screen that rejects ordinary Chinese costs more than one that misses a
+   * case — it makes the product look like it cannot read the language.
+   * 嗓音, 唱腔, 歌声 and 声线 only describe people; 声音 does not, so it is
+   * only matched with a possessive naming whose voice it is.
+   */
+  /(模仿|模彷|模擬|模拟|克隆|複製|复制)[^。\n]{0,12}(的)?(嗓音|唱腔|歌声|歌聲|声线|聲線)/,
+  /(模仿|模彷|模擬|模拟|克隆|複製|复制)\s*[^。\n]{1,10}的\s*(声音|聲音)/,
+  // 用 X 的嗓音 / 声线 — borrowing a named person's voice.
+  /(用|按照|照)[^。\n]{0,12}的\s*(声音|聲音|嗓音|声线|聲線|唱腔)/,
+  // Implied endorsement, the Chinese counterpart of 公認/本人の声.
+  /(本人|官方|亲自|親自)[^。\n]{0,6}(演唱|献唱|演繹|演绎|的声音|的歌声)/,
 ];
 
 const URL_PATTERN = /\b(?:https?:\/\/|www\.)\S+/i;
@@ -100,13 +159,38 @@ const INJECTION_PATTERNS: RegExp[] = [
   /\b(you are now|act as|jailbreak|DAN mode)\b/i,
 ];
 
-export function checkPrompt(prompt: string): SafetyResult {
-  const text = prompt.trim();
-  if (!text) return ALLOW;
+/**
+ * Content rules, shared; the length rule, not.
+ *
+ * Lyrics are user text exactly like the description and get the same screening
+ * for artist names, quoted works and impersonation. Length is the one rule that
+ * legitimately differs — the composer accepts 3000 code points of lyrics and
+ * 500 of description — and it used to be shared, because lyrics were simply
+ * passed to `checkPrompt`. An ordinary 600-character lyric was refused with
+ * "keep the description within the length limit", pointing at a description
+ * that was well inside it. Reported from the composer with 478 / 500 on screen.
+ */
+function check(text: string, maxCodePoints: number, tooLongHint: string): SafetyResult {
+  const trimmed = text.trim();
+  if (!trimmed) return ALLOW;
 
-  if ([...text].length > PROMPT_MAX_CODEPOINTS) {
-    return block('too_long', 'prompt.tooLong');
+  if ([...trimmed].length > maxCodePoints) {
+    return block('too_long', tooLongHint);
   }
+  return checkContent(trimmed);
+}
+
+/** The description field. */
+export function checkPrompt(prompt: string): SafetyResult {
+  return check(prompt, PROMPT_MAX_CODEPOINTS, 'prompt.tooLong');
+}
+
+/** The lyrics field, which is allowed to be much longer. */
+export function checkLyrics(lyrics: string): SafetyResult {
+  return check(lyrics, LYRICS_MAX_CODEPOINTS, 'lyrics.tooLong');
+}
+
+function checkContent(text: string): SafetyResult {
   if (URL_PATTERN.test(text)) {
     // SEC-05: we never accept a reference-music URL, and the server never
     // fetches a user-supplied address.

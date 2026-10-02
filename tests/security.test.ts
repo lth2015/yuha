@@ -14,7 +14,8 @@ import {
   query,
   setLicenseStatus,
 } from '@yuha/db';
-import { LocalStorageAdapter, assertSafeUrl, checkPrompt, isPublicAddress } from '@yuha/providers';
+import { LocalStorageAdapter, assertSafeUrl, checkLyrics, checkPrompt, isPublicAddress } from '@yuha/providers';
+import { LYRICS_MAX_CODEPOINTS, PROMPT_MAX_CODEPOINTS } from '@yuha/contracts';
 import { runJobStep } from '@yuha/worker/pipeline';
 import { createHarness, resetData, teardown, type Harness, type TestUser } from './helpers/harness.js';
 
@@ -366,6 +367,105 @@ describe('SEC-07: input rules are narrow and contestable', () => {
     ]) {
       expect(checkPrompt(prompt).reason, prompt).toBe('quoted_existing_lyrics');
     }
+  });
+
+  /*
+   * Every pattern was written in Japanese and English, so Chinese went through.
+   * Found by typing 「模仿周杰伦的声音唱」 into the composer while testing
+   * something else: it was accepted, charged a credit, and generated. The
+   * README and the scope doc both say the input screen refuses voice
+   * imitation, quoted lyrics and artist references before any spend — true in
+   * two of the product's three languages.
+   *
+   * Word order is why. The Japanese rule reads 声を真似 (voice-then-imitate);
+   * Chinese puts the verb first, 模仿…的声音. The artist rule wanted a quoted
+   * title, and Chinese writes the name bare.
+   */
+  it('refuses voice imitation written in Chinese', () => {
+    for (const prompt of [
+      '模仿周杰伦的声音唱',
+      '模彷某歌手的聲音',
+      '用邓丽君的嗓音来唱',
+      '克隆这个人的声音',
+      '本人亲自演唱的那种声音',
+    ]) {
+      expect(checkPrompt(prompt).reason, prompt).toBe('voice_imitation');
+    }
+  });
+
+  it('refuses artist and title references written in Chinese', () => {
+    for (const prompt of [
+      '周杰伦风格的歌',
+      '像陈奕迅那样的唱法',
+      '《夜曲》那样的曲子',
+      '翻唱这首歌',
+      '模仿这首歌的编曲',
+    ]) {
+      expect(checkPrompt(prompt).reason, prompt).toBe('artist_or_title_reference');
+    }
+  });
+
+  it('refuses asking for an existing work\'s lyrics in Chinese', () => {
+    for (const prompt of [
+      '用《七里香》的歌词',
+      '把原歌词照搬过来',
+      '直接引用原曲歌词',
+      '别人的歌词拿来用',
+    ]) {
+      expect(checkPrompt(prompt).reason, prompt).toBe('quoted_existing_lyrics');
+    }
+  });
+
+  /*
+   * The half that matters more. A screen that refuses ordinary Chinese is
+   * worse than one that misses a few cases, because every refusal costs the
+   * writer a rewrite and teaches them the product does not understand them.
+   */
+  it('leaves ordinary Chinese descriptions alone', () => {
+    for (const prompt of [
+      '雨后的清晨，温暖的钢琴和轻柔鼓点',
+      '写一首关于夏天的歌，副歌要明亮',
+      '女声，温柔一点，慢板',
+      '我想要自己的歌词被唱出来',
+      '模仿雨声的那种音色',
+      '风格明快，像清晨一样',
+      '这首歌的歌词我自己写',
+      '合唱，声音要厚一些',
+    ]) {
+      expect(checkPrompt(prompt), prompt).toMatchObject({ allowed: true });
+    }
+  });
+
+  /*
+   * The composer accepts 3000 code points of lyrics and refused them at 500.
+   *
+   * Lyrics go through the same screening as the description — artist names,
+   * quoted works, impersonation — and that part is right. Length is the one
+   * rule that is legitimately different between the two fields, and it was
+   * shared: `checkPrompt` enforced PROMPT_MAX_CODEPOINTS on both. So an
+   * ordinary 600-character lyric was refused, and the message said "keep the
+   * description within the length limit" while pointing at a description that
+   * read 478 / 500.
+   */
+  it('screens lyrics at the lyrics limit, not the description limit', () => {
+    const lyrics = '[Verse]\nSunny countryside picnic in October light\n'.repeat(12);
+    expect([...lyrics].length).toBeGreaterThan(PROMPT_MAX_CODEPOINTS);
+    expect([...lyrics].length).toBeLessThan(LYRICS_MAX_CODEPOINTS);
+    expect(checkLyrics(lyrics), 'lyrics under their own limit must pass').toMatchObject({
+      allowed: true,
+    });
+    // The description keeps its own, smaller limit.
+    expect(checkPrompt(lyrics).reason).toBe('too_long');
+  });
+
+  it('still refuses lyrics past the lyrics limit, and says which field', () => {
+    const tooLong = 'la '.repeat(LYRICS_MAX_CODEPOINTS);
+    expect(checkLyrics(tooLong)).toMatchObject({ reason: 'too_long', hintKey: 'lyrics.tooLong' });
+  });
+
+  it('applies every content rule to lyrics as before', () => {
+    expect(checkLyrics('模仿周杰伦的声音唱').reason).toBe('voice_imitation');
+    expect(checkLyrics('https://example.com/a.mp3').reason).toBe('reference_media_url');
   });
 
   it('allows ordinary mood, instrument and tempo descriptions', () => {

@@ -254,6 +254,7 @@ const zh: Dict = {
   'track.deleted': '已删除',
   // ---- blocked-prompt hints ----
   'prompt.tooLong': '把描述控制在字数上限内。',
+  'lyrics.tooLong': '把歌词控制在字数上限内。',
   'prompt.noExistingLyrics': '不能直接使用已有歌曲的歌词，请用自己的话写。',
   'prompt.noUrl': '不接受网址，也不能指定参考曲目。请用情绪和乐器来描述。',
   'prompt.noPersonalInfo': '请不要填写邮箱、卡号等个人信息。',
@@ -886,6 +887,7 @@ const ja: Dict = {
   'track.deleted': '削除済み',
   // ---- blocked-prompt hints ----
   'prompt.tooLong': '説明は文字数の上限内に収めてください。',
+  'lyrics.tooLong': '歌詞を文字数の上限内に収めてください。',
   'prompt.noExistingLyrics': '既存の曲の歌詞をそのまま使うことはできません。自分の言葉で書いてください。',
   'prompt.noUrl': 'URLは受け付けていません。参考曲の指定はできません。気分や楽器で表現してください。',
   'prompt.noPersonalInfo': 'メールアドレスやカード番号などの個人情報は入力しないでください。',
@@ -1518,6 +1520,7 @@ const en: Dict = {
   'track.deleted': 'Deleted',
   // ---- blocked-prompt hints ----
   'prompt.tooLong': 'Keep the description within the length limit.',
+  'lyrics.tooLong': 'Keep the lyrics within the length limit.',
   'prompt.noExistingLyrics': 'Write your own lyrics — quoting an existing song\'s lyrics is not supported.',
   'prompt.noUrl': 'URLs are not accepted, and you cannot point at a reference track. Describe the mood and instruments instead.',
   'prompt.noPersonalInfo': 'Do not enter personal details such as email addresses or card numbers.',

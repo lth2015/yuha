@@ -29,7 +29,7 @@ import {
   withTxRetry,
   type JobRow,
 } from '@yuha/db';
-import { checkPrompt } from '@yuha/providers';
+import { checkLyrics, checkPrompt } from '@yuha/providers';
 import type { AppContext } from '../context.js';
 
 /**
@@ -135,7 +135,7 @@ export async function createGeneration(
     });
   }
   if (req.lyrics) {
-    const lyricsSafety = checkPrompt(req.lyrics);
+    const lyricsSafety = checkLyrics(req.lyrics);
     if (!lyricsSafety.allowed) {
       throw new AppError('PROMPT_BLOCKED', `lyrics rejected: ${lyricsSafety.reason}`, {
         reason: lyricsSafety.reason,
