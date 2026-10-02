@@ -112,15 +112,25 @@ export function PlayerBar({ onExpand }: { onExpand?: () => void }) {
               <span className="icon icon--expand" aria-hidden="true" />
             </button>
           )}
-        </div>
+          {/*
+            Closing stops playback and clears the queue; playing anything
+            brings the bar back.
 
-        {/* Once a song had been played there was no way to put the bar away:
-            pausing left it parked over the bottom of every page. Closing
-            stops playback and clears the queue; playing anything brings it
-            back. */}
-        <button type="button" className="btn-icon player-bar__close" onClick={player.stop} aria-label={t('player.stop')} title={t('player.stop')}>
-          <span className="icon icon--close" aria-hidden="true" />
-        </button>
+            This button existed before and was reported missing. It was: 36px
+            instead of 40, a 16px glyph instead of 18, painted `--muted`
+            instead of `--ink`, and positioned absolutely in a 64px strip of
+            padding with no other control near it. Every one of those choices
+            says "not important", and together they say "not here" — the first
+            report of it was someone looking straight at the bar and asking
+            for a close button. Being quiet is not the same as being
+            discoverable, and the cost of missing this one is a bar parked
+            over the bottom of every page with no way to dismiss it. It is a
+            peer of the other transport controls now.
+          */}
+          <button type="button" className="btn-icon" onClick={player.stop} aria-label={t('player.stop')} title={t('player.stop')}>
+            <span className="icon icon--close" aria-hidden="true" />
+          </button>
+        </div>
       </div>
     </footer>
   );

@@ -897,7 +897,7 @@ tr:last-child td { border-bottom: none; }
 
 /* ---------------------------------------------------------------- player bar */
 .player-bar { position: fixed; left: 0; right: 0; bottom: 0; z-index: 80; border-top: 1px solid var(--glass-edge); padding-bottom: env(safe-area-inset-bottom, 0px); }
-.player-bar__inner { position: relative; max-width: 1248px; margin: 0 auto; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 2fr) minmax(0, 1fr); align-items: center; gap: var(--s4); min-height: 84px; padding: 10px 64px 10px 24px; }
+.player-bar__inner { position: relative; max-width: 1248px; margin: 0 auto; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 2fr) minmax(0, 1fr); align-items: center; gap: var(--s4); min-height: 84px; padding: 10px 24px; }
 .player-bar__now { display: flex; align-items: center; gap: 12px; min-width: 0; border-radius: 12px; }
 .player-bar__now .cover-art { width: 48px; height: 48px; border-radius: 12px; flex: none; }
 .player-bar__titles { display: flex; flex-direction: column; min-width: 0; }
@@ -916,10 +916,6 @@ tr:last-child td { border-bottom: none; }
 .player-bar__right { display: flex; justify-content: flex-end; align-items: center; gap: var(--s2); }
 /* Close sits at the bar's far edge, outside the three-column grid, so it
    stays reachable at every width (the right column is hidden on phones). */
-.player-bar__close { position: absolute; top: 50%; right: 12px; transform: translateY(-50%); width: 36px; height: 36px; color: var(--muted); }
-.player-bar__close:hover:not(:disabled) { color: var(--ink); }
-.player-bar__close:active { transform: translateY(-50%) scale(0.96); }
-.player-bar__close .icon { width: 16px; height: 16px; }
 .menu__error { margin: 4px 10px 2px; font-size: 12px; color: var(--danger); }
 .player-bar__hint { font-size: 12px; color: var(--muted); }
 /* Playback failure rendered in the same grey as the queue hint. */
@@ -1954,7 +1950,6 @@ tr:last-child td { border-bottom: none; }
   .player-bar__seek::-webkit-slider-runnable-track { height: 3px; border-radius: 0; }
   .player-bar__seek::-webkit-slider-thumb { width: 10px; height: 10px; margin-top: -3.5px; }
   .player-bar__seek::-moz-range-track, .player-bar__seek::-moz-range-progress { height: 3px; border-radius: 0; }
-  .player-bar__close { right: 8px; }
 }
 
 /*
