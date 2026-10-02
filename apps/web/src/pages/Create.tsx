@@ -546,8 +546,23 @@ export default function Create() {
         {/* The same recording surface as the home screen. There were two
             different progress UIs before, so one job looked like different
             progress depending on where you happened to be watching it. */}
+        {/*
+          The band draws the writing this song is made of — all of it.
+
+          It read `prompt || lyrics`, so any description at all, however
+          short, hid the lyrics completely. A song written as four hundred
+          characters of verse and described as 「中国风 戏腔」 was drawn from
+          the six: five notes spread across 880px, which looks like a fault
+          rather than like a short description. Measured, not guessed —
+          scoreFromText gives 5 notes for that prompt and 73 for the prompt
+          and lyrics together.
+
+          Lyrics only when they are actually sung: on an instrumental they
+          are not part of the song, and drawing them would be drawing
+          something the recording does not contain.
+        */}
         <Score
-          text={instructions || draft.prompt || draft.lyrics}
+          text={instructions || [draft.prompt, draft.instrumental ? '' : draft.lyrics].filter((t) => t.trim()).join('\n')}
           progress={failed ? undefined : fractionOfPhase(job.phase)}
           className="wait-page__score"
           height={200}
