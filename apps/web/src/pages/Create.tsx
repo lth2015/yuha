@@ -55,6 +55,16 @@ const DRAFT_KEY = 'sonare.draft';
 interface Draft {
   title: string;
   prompt: string;
+  /**
+   * Who writes the words.
+   *
+   * Lyrics used to live inside "more settings", collapsed, next to visibility
+   * and energy — sorted by how advanced the control is rather than by what the
+   * writer came to do. It is the one input the product has real control over,
+   * and the capability was invisible unless you opened a drawer. This makes the
+   * choice itself visible; the box only appears once it has been made.
+   */
+  lyricsBy: 'ai' | 'me';
   lyrics: string;
   styles: string[];
   voice: VoiceChoice;
@@ -67,6 +77,7 @@ interface Draft {
 const DEFAULT_DRAFT: Draft = {
   title: '',
   prompt: '',
+  lyricsBy: 'ai',
   lyrics: '',
   styles: [],
   voice: 'auto',
@@ -172,7 +183,18 @@ function countCodePoints(s: string): number {
 function readStoredDraft(): Draft {
   try {
     const saved = localStorage.getItem(DRAFT_KEY);
-    return saved ? { ...DEFAULT_DRAFT, ...(JSON.parse(saved) as Partial<Draft>) } : DEFAULT_DRAFT;
+    if (!saved) return DEFAULT_DRAFT;
+    const stored = { ...DEFAULT_DRAFT, ...(JSON.parse(saved) as Partial<Draft>) };
+    /*
+     * Drafts written before `lyricsBy` existed carry lyrics and no choice, and
+     * the default is 'ai' — which would quietly drop the words someone had
+     * already written from the request. Having lyrics *was* the choice back
+     * then, so read it that way.
+     */
+    if (stored.lyrics.trim() && !(JSON.parse(saved) as Partial<Draft>).lyricsBy) {
+      stored.lyricsBy = 'me';
+    }
+    return stored;
   } catch {
     return DEFAULT_DRAFT;
   }
@@ -187,7 +209,8 @@ function readStoredDraft(): Draft {
 function advancedTouched(d: Draft): number {
   let n = 0;
   if (d.title.trim()) n += 1;
-  if (d.lyrics.trim()) n += 1;
+  // Lyrics are not in this panel any more; counting them here would put a
+  // badge on a drawer that no longer holds what the badge is about.
   if (d.energy !== DEFAULT_DRAFT.energy) n += 1;
   if (d.visibility !== DEFAULT_DRAFT.visibility) n += 1;
   return n;
@@ -224,6 +247,7 @@ export default function Create() {
    * mount restores it and the creator's work silently becomes the defaults.
    */
   const [draft, setDraft] = useState<Draft>(() => (editTrackId ? DEFAULT_DRAFT : readStoredDraft()));
+  const writesOwnLyrics = draft.lyricsBy === 'me' && !draft.instrumental;
   const [more, setMore] = useState(() => advancedTouched(readStoredDraft()) > 0);
   const [job, setJob] = useState<JobView | null>(null);
   const [result, setResult] = useState<TrackView | null>(null);
@@ -380,7 +404,7 @@ export default function Create() {
    * question, not a tab — and instrumental songs have no lyrics to pass.
    */
   const mode: 'simple' | 'custom' =
-    draft.lyrics.trim() && !draft.instrumental ? 'custom' : 'simple';
+    writesOwnLyrics && draft.lyrics.trim() ? 'custom' : 'simple';
 
   /*
    * The on-ramp gets out of the way once the creator writes their own words.
@@ -1008,6 +1032,99 @@ export default function Create() {
           </div>
         </div>
 
+        {/*
+          Who writes the words, in the open.
+          -------------------------------------------------------------------
+          This choice used to be implicit — type into a box inside a collapsed
+          drawer and the request quietly became `custom`. The capability the
+          product is built around was invisible unless you went looking, and
+          sorted next to visibility and energy as though it were a preference.
+          The control is the choice; the editor appears once it is made.
+
+          Switching back to "written for you" keeps the text. `lyrics` is only
+          sent when the mode is custom, so nothing has to be cleared to stop it
+          being used — and a draft someone spent ten minutes on survives a
+          misclick.
+        */}
+        {!draft.instrumental && (
+          <div className="studio__dial studio__dial--lyricsby">
+            <span className="studio__dial-label" id="lyricsby-label">
+              {t('create.lyricsBy')}
+            </span>
+            <div className="seg" role="group" aria-labelledby="lyricsby-label">
+              <button
+                type="button"
+                className={`seg__btn${draft.lyricsBy === 'ai' ? ' is-active' : ''}`}
+                aria-pressed={draft.lyricsBy === 'ai'}
+                onClick={() => patch({ lyricsBy: 'ai' })}
+              >
+                {t('create.lyricsBy.ai')}
+              </button>
+              <button
+                type="button"
+                className={`seg__btn${draft.lyricsBy === 'me' ? ' is-active' : ''}`}
+                aria-pressed={draft.lyricsBy === 'me'}
+                onClick={() => patch({ lyricsBy: 'me' })}
+              >
+                {t('create.lyricsBy.me')}
+              </button>
+            </div>
+            <span className="studio__dial-hint">
+              {draft.lyricsBy === 'ai' && draft.lyrics.trim()
+                ? t('create.lyricsBy.kept')
+                : draft.lyricsBy === 'ai'
+                  ? t('create.lyricsBy.aiHint')
+                  : t('create.lyrics.hint')}
+            </span>
+          </div>
+        )}
+
+        {writesOwnLyrics && (
+          <div>
+            <label htmlFor="lyrics">{t('create.lyrics')}</label>
+            {/*
+              The prompt box carries `maxLength` and this one did not, while
+              the counter beside it promised a limit. `canSubmit` does not
+              check it either, so pasting a long lyric sheet looked fine all
+              the way to a VALIDATION_FAILED after pressing generate.
+              Measured in code points, as the counter and the contract are.
+            */}
+            <textarea
+              id="lyrics"
+              ref={lyricsRef}
+              rows={7}
+              value={draft.lyrics}
+              onChange={(e) => {
+                const next = [...e.target.value].slice(0, LYRICS_MAX_CODEPOINTS).join('');
+                patch({ lyrics: next });
+              }}
+              placeholder={t('create.lyrics.placeholder')}
+              aria-describedby="lyrics-hint lyrics-count"
+            />
+            <div className="chips chips--sections" role="group" aria-labelledby="sections-label">
+              <span className="studio__dial-label" id="sections-label">
+                {t('create.sections')}
+              </span>
+              {SECTION_PRESETS.map((id) => (
+                <button
+                  key={id}
+                  type="button"
+                  className="chip chip--btn"
+                  onClick={() => insertSection(t(`create.section.${id}`))}
+                >
+                  {t(`create.section.${id}`)}
+                </button>
+              ))}
+            </div>
+            <div className={`composer__meta${lyricsAtLimit ? ' is-full' : ''}`}>
+              <span id="lyrics-hint">{lyricsAtLimit ? t('create.atLimit') : t('create.lyrics.hint')}</span>
+              <span id="lyrics-count" className="num" aria-live="polite">
+                {lyricsLength} / {LYRICS_MAX_CODEPOINTS}
+              </span>
+            </div>
+          </div>
+        )}
+
         <div className="studio__more">
           <button
             type="button"
@@ -1035,53 +1152,6 @@ export default function Create() {
               />
             </div>
 
-            <div>
-              <label htmlFor="lyrics">
-                {t('create.lyrics')}{' '}
-                {draft.instrumental && <span className="muted">{t('create.lyrics.unused')}</span>}
-              </label>
-              {/*
-                The prompt box carries `maxLength` and this one did not, while
-                the counter beside it promised a limit. `canSubmit` does not
-                check it either, so pasting a long lyric sheet looked fine all
-                the way to a VALIDATION_FAILED after pressing generate.
-                Measured in code points, as the counter and the contract are.
-              */}
-              <textarea
-                id="lyrics"
-                ref={lyricsRef}
-                rows={7}
-                value={draft.lyrics}
-                onChange={(e) => {
-                  const next = [...e.target.value].slice(0, LYRICS_MAX_CODEPOINTS).join('');
-                  patch({ lyrics: next });
-                }}
-                placeholder={t('create.lyrics.placeholder')}
-                disabled={draft.instrumental}
-                aria-describedby="lyrics-hint lyrics-count"
-              />
-              <div className="chips chips--sections" role="group" aria-labelledby="sections-label">
-                <span className="studio__dial-label" id="sections-label">
-                  {t('create.sections')}
-                </span>
-                {SECTION_PRESETS.map((id) => (
-                  <button
-                    key={id}
-                    type="button"
-                    className="chip chip--btn"
-                    disabled={draft.instrumental}
-                    onClick={() => insertSection(t(`create.section.${id}`))}
-                  >
-                    {t(`create.section.${id}`)}
-                  </button>
-                ))}
-              </div>
-              <div className={`composer__meta${lyricsAtLimit ? ' is-full' : ''}`}>
-                <span id="lyrics-hint">{lyricsAtLimit ? t('create.atLimit') : t('create.lyrics.hint')}</span>
-                <span id="lyrics-count" className="num" aria-live="polite">
-                  {lyricsLength} / {LYRICS_MAX_CODEPOINTS}
-                </span>
-              </div>
             </div>
 
             {/*
@@ -1121,7 +1191,6 @@ export default function Create() {
               <label htmlFor="visibility">{t('create.visibility')}</label>
             </div>
           </div>
-        </div>
 
         <SubmitError error={error} />
 
