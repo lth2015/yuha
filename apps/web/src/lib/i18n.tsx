@@ -211,7 +211,7 @@ const zh: Dict = {
 
   'footer.terms': '服务条款', 'footer.privacy': '隐私', 'footer.company': '公司信息',
   'footer.rights': '内容申诉', 'footer.slogan': '让心动，有回声。',
-  'footer.made': '© {year} NetStars Co., Ltd.',
+  'footer.made': '© {year} YUHA',
 
   // ---- studio (/create) ----
   'song.transport': '《{title}》的乐谱与播放位置，可拖动或用方向键定位',
@@ -805,7 +805,7 @@ const ja: Dict = {
 
   'footer.terms': '利用規約', 'footer.privacy': 'プライバシー', 'footer.company': '会社情報',
   'footer.rights': '権利の申立て', 'footer.slogan': 'ときめきに、響きを。',
-  'footer.made': '© {year} NetStars Co., Ltd.',
+  'footer.made': '© {year} YUHA',
 
   // ---- studio (/create) ----
   'song.transport': '「{title}」のスコアと再生位置。ドラッグまたは矢印キーで移動できます',
@@ -1399,7 +1399,7 @@ const en: Dict = {
 
   'footer.terms': 'Terms', 'footer.privacy': 'Privacy', 'footer.company': 'Company',
   'footer.rights': 'Report content', 'footer.slogan': 'Let a feeling echo.',
-  'footer.made': '© {year} NetStars Co., Ltd.',
+  'footer.made': '© {year} YUHA',
 
   // ---- studio (/create) ----
   'song.transport': 'Score and playback position for “{title}”. Drag or use the arrow keys to seek.',

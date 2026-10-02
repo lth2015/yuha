@@ -83,7 +83,10 @@ cp .env.example .env   # 然后按需填写下表中的值
 - `MUSIC_COMMERCIAL_DELIVERY=true` **仅在签署供应商协议后**开启
 - `TRACK_RETENTION_DAYS=90` 歌曲被作者删除后，音频还保留多久可恢复；到期由 worker 的 maintenance 循环真正删除存储对象。处于未结权利申诉、或已被他人购买授权的歌不受影响。设 0 表示永不删除
 - `MUSIC_ALLOW_INSECURE_SELF_HOSTED=true` 只用于自托管模型服务器（局域网 GPU 机器，地址形如 `http://192.168.x.x:8000`）。它关掉的是音频抓取的 https 检查和私有地址检查，且只对已经写进 `MUSIC_ALLOWED_AUDIO_HOSTS` 的 host 生效。`loadConfig` 在 `RUN_MODE=production` 下直接拒绝这个开关
-- `LEGAL_ENTITY_NAME / ADDRESS / CONTACT`（真实事业主体信息，NetStars 由配置提供）
+- `LEGAL_ENTITY_NAME / REPRESENTATIVE / ADDRESS / CONTACT / PHONE`（真实事业主体信息，
+  由配置提供，代码里没有任何默认值可以冒充它）。运营主体是个人事业主 **<redacted: operator name>**
+  （`redacted-operator@example.invalid` / <redacted: operator phone>）；住所 尚未确定，见 `docs/OPEN_ITEMS.md` §4。
+  生产模式在 NAME / ADDRESS / CONTACT 任一为空时拒绝启动（SEC-13）。
 
 ---
 

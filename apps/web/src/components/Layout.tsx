@@ -59,9 +59,6 @@ function SiteFooter() {
             it. Checkout.tsx was the only thing linking here. Where exactly the
             disclosure must sit is a legal call; making it findable is not. */}
         <Link to="/legal/tokushoho">{t('footer.tokushoho')}</Link>
-        <a href="https://netstars.co.jp" target="_blank" rel="noreferrer">
-          NetStars
-        </a>
       </span>
       <span className="site-foot__fine">
         {t('footer.made', { year: new Date().getFullYear() })} · {t('footer.slogan')}

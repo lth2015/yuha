@@ -49,12 +49,16 @@ api:
 ingress:
   enabled: true
   className: alb
-  host: ""           # production hostname; ALB Ingress rejects an empty host
+  host: "yuha.studio"   # the product's official domain
   certificateArn: "" # ACM certificate in ap-northeast-1
 
 config:
-  publicWebUrl: ""
-  publicApiUrl: ""
+  # One host serves both; the ALB Ingress routes /v1 to the api service. The
+  # DNS record and the ACM certificate for this name are SRE's to create —
+  # `certificateArn` above is still empty and the chart renders without it, so
+  # that is worth checking before the first real deploy.
+  publicWebUrl: "https://yuha.studio"
+  publicApiUrl: "https://yuha.studio"
   logLevel: warn
 
   authAdapter: google
@@ -143,9 +147,19 @@ config:
   # production mode refuses to start unless entityName, address and contact are
   # all non-empty — the 特定商取引法 disclosure must not be a placeholder. These
   # overrides used to blank out even the name the chart already knows.
+  #
+  # The operator is a sole proprietor (個人事業主), so 販売業者 and 代表者 are
+  # the same person. <redacted: operator name> is the Japanese-kanji form of the name, which is
+  # what a Japanese statutory page prints.
   legal:
-    entityName: "NetStars Co., Ltd."
-    representative: ""   # 代表者名 — 特商法 requires it; 要法務確認
-    address: "Tokyo, Japan — https://netstars.co.jp"
-    contact: ""          # production will not start while this is empty
-    phone: ""            # 特商法 requires a telephone number; 要法務確認
+    entityName: "<redacted: operator name>"
+    representative: "<redacted: operator name>"
+    # 住所 — the one field still outstanding. Deliberately EMPTY rather than a
+    # placeholder: 特商法 requires it, and an empty value keeps production
+    # refusing to start, which is the correct behaviour while it is unknown.
+    # A plausible-looking placeholder here would let a deployment publish a
+    # false address instead. See docs/OPEN_ITEMS.md §4.
+    address: ""
+    contact: "redacted-operator@example.invalid"
+    # <redacted: operator phone>, hyphenated the way a Japanese disclosure prints it.
+    phone: "<redacted: operator phone>"

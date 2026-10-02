@@ -206,10 +206,15 @@ config:
     exportRateLimitPerHour: "60"
 
   # SEC-13: production refuses to start if these are empty.
+  #
+  # Blank here on purpose. The chart is the generic default and must not name
+  # a party; `deploy/envs/*.yaml` carry the real operator. These used to hold
+  # a live company's name and address, which the chart then published as the
+  # operator of this service.
   legal:
-    entityName: "NetStars Co., Ltd."
+    entityName: ""
     representative: ""
-    address: "Tokyo, Japan — https://netstars.co.jp"
+    address: ""
     contact: ""
     phone: ""
 

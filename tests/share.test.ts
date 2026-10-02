@@ -13,14 +13,14 @@ describe('isPrivateHost', () => {
     }
   });
   it('leaves public names and addresses alone', () => {
-    for (const h of ['yuha.app', '8.8.8.8', '172.32.0.1', '172.15.0.1', '11.0.0.1', 'example.com']) {
+    for (const h of ['yuha.studio', '8.8.8.8', '172.32.0.1', '172.15.0.1', '11.0.0.1', 'example.com']) {
       expect(isPrivateHost(h), h).toBe(false);
     }
   });
 });
 
 describe('shareTargets', () => {
-  const url = 'https://yuha.app/song/abc?x=1&y=2';
+  const url = 'https://yuha.studio/song/abc?x=1&y=2';
   const text = '我用 YUHA 做了一首歌：《雨 & 夜》';
 
   it('encodes the link and text so neither can break out of its parameter', () => {

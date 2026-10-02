@@ -754,10 +754,16 @@ describe('SEC-06 / §3.1: the runtime descriptor exposes no secrets', () => {
     const res = await h.app.inject({ method: 'GET', url: '/v1/legal/business-disclosure' });
     expect(res.json().configured).toBe(false);
     expect(res.json().isPlaceholder).toBe(true);
-    // The unconfigured default is the NetStars display block, and the notice
-    // says plainly that it must be replaced before real charging.
+    // The unconfigured default must not name a real party. It used to be a
+    // live company's name, address and privacy mailbox, so every demo
+    // published that company as the operator of this service and as the
+    // controller of its users' personal data.
     expect(res.json().notice).toContain('Before real charging');
-    expect(res.json().entityName).toBe('NetStars Co., Ltd.');
+    expect(res.json().entityName).toBe('YUHA (operator not configured)');
+    for (const field of ['representative', 'address', 'contact'] as const) {
+      expect(res.json()[field], field).toBe('(not configured)');
+    }
+    expect(JSON.stringify(res.json()).toLowerCase()).not.toContain('netstars');
   });
 });
 

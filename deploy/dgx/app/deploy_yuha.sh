@@ -5,6 +5,10 @@
 #                    DEV_LOGIN_ALLOWLIST=@netstars.co.jp   (who may sign in; "-" = anyone, not recommended)
 set -euo pipefail
 cd "$(dirname "$0")"
+# The @netstars.co.jp addresses below are office test access for the internal
+# build on the DGX, not the product's legal identity — that moved to <redacted: operator name>
+# (個人事業主) in `deploy/envs/*.yaml`. Seven or eight colleagues sign in with
+# their work addresses, so clearing this allowlist locks them all out. Leave it.
 DGX="${DGX:-dgx}"
 MUSIC="$(cd ../../.. && pwd)"   # repo root (this script lives in deploy/dgx/app)
 TEAM_EMAIL="${TEAM_EMAIL:-yuha-team@netstars.co.jp}"

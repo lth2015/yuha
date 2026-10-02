@@ -16,11 +16,15 @@ interface Disclosure {
 /**
  * Legal pages.
  *
- * Operated by NetStars Co., Ltd. (https://netstars.co.jp). The company block is
- * served by the API from operator configuration (LEGAL_ENTITY_*); while the
- * fields are placeholders the pages say so plainly — placeholder legal copy is
- * acceptable for a demo and must be replaced with counsel-reviewed text before
- * real charging.
+ * The operator block — name, representative, address, contact, phone — is
+ * served by the API from configuration (LEGAL_ENTITY_*), never written here;
+ * while those fields are unset the pages say so plainly. Placeholder legal
+ * copy is acceptable for a demo and must be replaced with counsel-reviewed
+ * text before real charging.
+ *
+ * The one thing that *was* written here was a hardcoded website row pointing
+ * at a company that does not operate this service. The operator is now a sole
+ * proprietor and the site is its own domain, so the row is the domain.
  */
 export function useDisclosure() {
   const [disclosure, setDisclosure] = useState<Disclosure | null>(null);
@@ -252,14 +256,14 @@ export function Company() {
       <Section h="Operator">
         <dl className="company-facts">
           <div>
-            <dt>Company</dt>
+            <dt>Operator</dt>
             <dd>{d.entityName}</dd>
           </div>
           <div>
             <dt>Website</dt>
             <dd>
-              <a href="https://netstars.co.jp" target="_blank" rel="noreferrer">
-                https://netstars.co.jp
+              <a href="https://yuha.studio" target="_blank" rel="noreferrer">
+                https://yuha.studio
               </a>
             </dd>
           </div>

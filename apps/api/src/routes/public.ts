@@ -138,10 +138,23 @@ export default async function publicRoutes(app: FastifyInstance, opts: { ctx: Ap
   app.get('/v1/legal/business-disclosure', async () => ({
     configured: ctx.config.legalEntityConfigured,
     isPlaceholder: !ctx.config.legalEntityConfigured,
-    entityName: ctx.config.LEGAL_ENTITY_NAME ?? 'NetStars Co., Ltd.',
-    representative: ctx.config.LEGAL_ENTITY_REPRESENTATIVE ?? 'See https://netstars.co.jp',
-    address: ctx.config.LEGAL_ENTITY_ADDRESS ?? 'Tokyo, Japan — https://netstars.co.jp',
-    contact: ctx.config.LEGAL_ENTITY_CONTACT ?? 'privacy@netstars.co.jp',
+    /*
+     * The unconfigured fallback is a visible placeholder, not a real party.
+     *
+     * It used to be a live company's name, address and privacy mailbox, so
+     * every demo and every local checkout published that company as the
+     * operator of this service and as the controller of its users' personal
+     * data — `Legal.tsx` renders "{entityName} ({address}) operates YUHA and
+     * is the controller of the personal data described below", and the
+     * 特商法 page puts the same block under 販売業者. A default should never
+     * be able to name somebody; production refuses to start without the real
+     * values (SEC-13), and until they are set this says so in the field
+     * itself rather than relying on the banner above it.
+     */
+    entityName: ctx.config.LEGAL_ENTITY_NAME ?? 'YUHA (operator not configured)',
+    representative: ctx.config.LEGAL_ENTITY_REPRESENTATIVE ?? '(not configured)',
+    address: ctx.config.LEGAL_ENTITY_ADDRESS ?? '(not configured)',
+    contact: ctx.config.LEGAL_ENTITY_CONTACT ?? '(not configured)',
     phone: ctx.config.LEGAL_ENTITY_PHONE ?? '—',
     notice: ctx.config.legalEntityConfigured
       ? null
