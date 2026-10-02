@@ -943,16 +943,40 @@ textarea.is-full { border-color: var(--danger); }
    * x 14-86%, y 8-92% (CoverArt.tsx). The index is pinned near (4%, 4%), so
    * depending only on the seed this white sat on anything from the deep edge
    * (about 8:1) to the lit centre of `ember` or `teal` (about 1.3:1). The
-   * stylesheet cannot see that and neither can check-contrast.mjs, which
-   * reads tokens and not canvas. A scrim makes the ground the index sits on
-   * a property of this rule instead of a property of the seed.
+   * stylesheet cannot see that. A scrim makes the ground the index sits on a
+   * property of this rule instead of a property of the seed.
+   *
+   * It was 42%, and that claim was not true yet: against the lit stop of each
+   * family the reading came out at 3.32:1 on `teal`, 3.79 on `magenta`, 4.00
+   * on `ember` — all six families under the 4.5:1 floor this 11px text needs.
+   * The scrim had narrowed the spread without ever clearing the bar, and the
+   * comment asserted the conclusion rather than the measurement. 62% puts the
+   * worst family at 5.82:1, with margin for the blur, which mixes in
+   * neighbouring pixels this model does not see.
+   *
+   * 62% is also the point where the claim above becomes true of any colour,
+   * not just these six: a scrim this dark over a pure white lit stop still
+   * leaves the reading at 4.83:1, so a family added later cannot break it by
+   * being bright. Only a lighter scrim can.
+   *
+   * check-contrast.mjs now reads FAMILIES straight out of CoverArt.tsx and
+   * recomputes all six, so a new colour family or a lighter scrim fails the
+   * build rather than being argued about in a comment.
    */
   padding: 2px 7px; border-radius: 999px;
-  background-color: rgb(16 16 14 / 42%);
+  background-color: rgb(16 16 14 / 62%);
   -webkit-backdrop-filter: blur(6px);
   backdrop-filter: blur(6px);
   text-shadow: none;
 }
+/*
+ * The scale's name, `°YU`. Same colour and weight as the digits — the gate
+ * measures this rule's own opacity and folds it in, so fading the letters to
+ * make them subordinate would have to clear the floor too. The hierarchy
+ * comes from the digits being digits, and from a hair of space after the
+ * degree sign so "32°YU" does not set solid.
+ */
+.cover-art__scale { margin-left: 0.12em; }
 .cover-art.is-playing { box-shadow: 0 0 0 2px var(--petal), var(--shadow-card); }
 
 /*

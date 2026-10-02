@@ -382,6 +382,100 @@ if (fades.length) {
   }
 }
 
+/*
+ * The sleeve reading, measured against the thing it actually sits on.
+ *
+ * Everything above this point reasons about tokens on page surfaces. The 温度
+ * reading does not sit on a page surface: it sits on a generated gradient
+ * whose colours come from CoverArt.tsx, at a position chosen by the song's
+ * seed. So the gate reads the families out of the component and composites the
+ * reading over each one's lit stop — the brightest ground the scrim can land
+ * on — rather than trusting a comment about it. At 42% every family failed.
+ *
+ * The lit stop is a conservative bound: the gradient places it in x 14-86%,
+ * y 8-92% while the reading is pinned near the top-left, so most seeds put
+ * lighter ground elsewhere. Some put it right under the reading, and a bound
+ * that holds for those holds for all of them.
+ */
+const TSX = readFileSync(new URL('../apps/web/src/components/CoverArt.tsx', import.meta.url), 'utf8');
+
+/** `rgb(255 255 255 / 92%)` and `rgb(16 16 14 / 62%)`, the only form used here. */
+function rgbaSpaced(value) {
+  const m = /rgb\(\s*(\d+)\s+(\d+)\s+(\d+)\s*(?:\/\s*([\d.]+)%\s*)?\)/.exec(value);
+  if (!m) return null;
+  return { c: [+m[1], +m[2], +m[3]], a: m[4] === undefined ? 1 : Number(m[4]) / 100 };
+}
+
+function block(css, selector) {
+  // Literal start token, so `.cover-art__index,` in the fallback list and
+  // `.now-playing__halo-art .cover-art__index` further down are not mistaken
+  // for the rule itself. No glass rule nests braces, so the first `}` ends it.
+  const bare = css.replace(/\/\*[\s\S]*?\*\//g, '');
+  const at = bare.indexOf(`${selector} {`);
+  if (at < 0) return null;
+  const open = at + selector.length + 2;
+  const close = bare.indexOf('}', open);
+  return close < 0 ? null : bare.slice(open, close);
+}
+
+const famBlock = /const FAMILIES = \{([\s\S]*?)\n\} as const;/.exec(TSX);
+const indexBlock = block(src, '.cover-art__index');
+const scaleBlock = block(src, '.cover-art__scale');
+
+if (!famBlock || !indexBlock) {
+  failures.push(
+    'cannot measure the sleeve reading: ' +
+      (!famBlock ? 'FAMILIES not found in CoverArt.tsx. ' : '') +
+      (!indexBlock ? '.cover-art__index not found in styles.css. ' : '') +
+      'One of them was renamed, and this pass must follow it rather than fall silent.',
+  );
+} else {
+  const families = [...famBlock[1].matchAll(/(\w+):\s*\['(#[0-9A-Fa-f]{6})'/g)].map((m) => [m[1], m[2]]);
+  const ink = rgbaSpaced(/color:\s*([^;]+);/.exec(indexBlock)?.[1] ?? '');
+  const scrim = rgbaSpaced(/background-color:\s*([^;]+);/.exec(indexBlock)?.[1] ?? '');
+  const size = Number(/font-size:\s*([\d.]+)px/.exec(indexBlock)?.[1] ?? 11);
+  const weight = Number(/font-weight:\s*(\d+)/.exec(indexBlock)?.[1] ?? 400);
+  // The scale name shares the ink; if it is ever faded, that fade counts.
+  const scaleAlpha = Number(/opacity:\s*([\d.]+)/.exec(scaleBlock ?? '')?.[1] ?? 1);
+  // WCAG large text starts at 18.66px bold or 24px; this is neither, so 4.5.
+  const floor = size >= 24 || (size >= 18.66 && weight >= 700) ? 3 : 4.5;
+
+  if (!families.length || !ink || !scrim) {
+    failures.push(
+      'the sleeve reading parsed to nothing usable ' +
+        `(families ${families.length}, ink ${!!ink}, scrim ${!!scrim}). ` +
+        'Colours must stay as six-digit hex in FAMILIES and as `rgb(r g b / a%)` here.',
+    );
+  } else {
+    console.log(`\nsleeve reading (${size}px on each family's lit stop, scrim ${scrim.a}):`);
+    const measured = families.map(([name, lit]) => {
+      const ground = scrim.c.map((c, i) => scrim.a * c + (1 - scrim.a) * rgb(lit)[i]);
+      const a = ink.a * scaleAlpha;
+      const text = ink.c.map((c, i) => a * c + (1 - a) * ground[i]);
+      return [name, ratioRaw(text, ground)];
+    });
+    measured.sort((a, b) => a[1] - b[1]);
+    console.log(`  ${measured.map(([n, v]) => `${n} ${v.toFixed(2)}`).join('  ')}`);
+    for (const [name, got] of measured) {
+      if (got < floor) {
+        // Name the cause that actually moved, not a generic one: a faded
+        // scale name is the likeliest edit here and darkening the scrim is
+        // the wrong answer to it.
+        const fix =
+          scaleAlpha < 1
+            ? `.cover-art__scale fades the scale name to ${scaleAlpha}; the digits and ` +
+              `the letters share one ink, so raise that back toward 1 or darken the scrim.`
+            : `Darken the scrim on .cover-art__index, or darken that family's first ` +
+              `colour in CoverArt.tsx.`;
+        failures.push(
+          `the sleeve reading is ${got.toFixed(2)}:1 over the lit stop of \`${name}\` ` +
+            `(scrim ${scrim.a}), below ${floor}:1. ${fix}`,
+        );
+      }
+    }
+  }
+}
+
 if (failures.length) {
   console.log(`\n${failures.length} failure(s):\n`);
   for (const f of failures) console.log(`  ${f}`);

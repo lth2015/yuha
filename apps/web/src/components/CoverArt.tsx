@@ -190,11 +190,30 @@ export function CoverArt({
         beside it, so the number can be checked against its inputs by eye. The
         degree sign is doing work: it says "a reading", which is the one thing
         `N°` said wrongly. Absent when the song has told us nothing to read.
+
+        `YU` after the degree sign names the scale, the way `°C` does. A scale
+        with no name is a number with no authority, and "32°" alone invites
+        the guess that it is Celsius — which it is not, and which would make
+        every song read as room temperature.
+
+        The position is the whole argument. `YU 32°` was the first idea and is
+        the wrong one: a letter group in front of digits is the shape of a
+        catalogue number, which is exactly what `N°{random}` was and exactly
+        why it was removed. Behind the degree sign it occupies a unit's slot
+        instead, so it reads as whose scale rather than as which record.
+
+        `V` for voice was the other candidate. It would be false on every
+        instrumental: `songWarmth` reads mood and styles too, so a song with
+        no vocals still has a temperature and would be labelled with a thing
+        it does not have. `YU` is true of all of them.
+
+        Hidden from assistive tech, which already hears "温度" from the label
+        before the number; "32°YU" would be read out as letters.
       */}
       {warmth !== null && (
         <span className="cover-art__index">
           <span className="sr-only">{t('cover.warmth')} </span>
-          {warmth}°
+          {warmth}°<span className="cover-art__scale" aria-hidden="true">YU</span>
         </span>
       )}
     </span>
