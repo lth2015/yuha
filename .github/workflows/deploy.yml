@@ -4,6 +4,13 @@
 # lints the chart. Everything was built and checked and nothing was ever
 # delivered; this is the part that delivers it.
 #
+# It now waits for that, which it did not. This workflow fires on `v*` and had
+# no `needs:` of any kind, while `ci.yml` was triggered only by `main` and
+# `master` — and development happens on `yuha`, without pull requests. The two
+# facts together meant a tag could deploy a commit no test had ever been run
+# against, and in practice that was every commit. `verify` calls `ci.yml`
+# through `workflow_call`, on this exact ref, and `deploy` needs it.
+#
 # Inputs live in `deploy/`. The only repository configuration is the IAM role
 # ARN — there is no static AWS key anywhere, by design.
 name: Deploy
@@ -33,7 +40,16 @@ env:
   RELEASE: yuha
 
 jobs:
+  # The whole of CI — suite, image, Terraform, chart — against the ref being
+  # deployed. Not a copy of it: a second definition would drift from the first
+  # and the drift would be invisible until a release broke.
+  verify:
+    uses: ./.github/workflows/ci.yml
+    permissions:
+      contents: read
+
   deploy:
+    needs: verify
     # A tag deploys production; the manual trigger says which.
     environment: ${{ inputs.environment || 'production' }}
     runs-on: ${{ (inputs.environment || 'production') == 'production' && vars.DEPLOY_RUNNER_PRODUCTION || 'ubuntu-latest' }}

@@ -1,37 +1,69 @@
+# Build, check and test every commit, and every release before it ships.
+#
+# This file was complete and had never run. The triggers were `main` and
+# `master`; development happens on `yuha` and goes in without pull requests,
+# so from the day the branch was created until 2026-10-02 nothing here
+# executed — a full CI suite, green by never having been asked. `yuha` is in
+# the list now. So is release: `deploy.yml` fires on `v*` and had no
+# dependency on this workflow at all, so tagging shipped code CI had never
+# seen — and in practice that was every commit. It now calls this file through
+# `workflow_call` and will not deploy unless it passes.
 name: CI
 
 on:
   push:
-    branches: [main, master]
+    # `yuha` is the working branch. Leaving it out is what made this file
+    # decorative; whichever branch the work is on has to be in this list.
+    branches: [main, master, yuha]
   pull_request:
+  workflow_dispatch:
+  # Called by deploy.yml on the ref being released, so a release runs this
+  # whole file before anything ships. Deliberately not also `push: tags` —
+  # that would run the suite twice for every release, once here and once as
+  # the deploy's gate, and the gate is the one that has to pass.
+  workflow_call:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  # A newer push supersedes an older one — but never cancel a tag's run. That
+  # run is the gate a deploy is waiting on, and cancelling it fails the deploy
+  # with "verification cancelled", which reads like a test failure and is not.
+  cancel-in-progress: ${{ !startsWith(github.ref, 'refs/tags/') }}
 
 jobs:
   build-and-test:
     runs-on: ubuntu-latest
     timeout-minutes: 20
 
-    services:
-      # A real MySQL 8.0, not a stand-in: §12.1 requires the ledger,
-      # concurrency and constraint tests to run against the actual engine.
-      mysql:
-        image: mysql:8.0.40
-        env:
-          MYSQL_ROOT_PASSWORD: root
-          MYSQL_DATABASE: loopscene_test
-          MYSQL_USER: loopscene
-          MYSQL_PASSWORD: loopscene_local_test
-        ports:
-          - 53307:3306
-        options: >-
-          --health-cmd="mysqladmin ping -h 127.0.0.1 -uroot -proot"
-          --health-interval=5s
-          --health-timeout=5s
-          --health-retries=20
-
+    # No `services:` block. A real MySQL 8.0 is still required — §12.1 wants
+    # the ledger, concurrency and constraint tests run against the actual
+    # engine — but `services:` can set environment variables and not command
+    # arguments, and every server setting this project depends on is a command
+    # argument in `docker-compose.yml`:
+    #
+    #   --sql-mode=STRICT_TRANS_TABLES,NO_ENGINE_SUBSTITUTION,ERROR_FOR_DIVISION_BY_ZERO
+    #   --innodb-lock-wait-timeout=10
+    #   --default-time-zone=+00:00
+    #   --character-set-server / --collation-server
+    #   --log-bin-trust-function-creators=1
+    #
+    # So CI was running on the image's defaults instead, and the step that
+    # used to set the last of those by hand — SEC-08's licence-immutability
+    # trigger needs it, exactly as the RDS parameter group does — is gone
+    # because the compose file carries it.
+    #
+    # The defaults are a different engine from the one everybody develops
+    # against. Read off `mysqld --verbose --help` (8.0.46; sql_mode's default
+    # has not moved across 8.0.x, but that is the build I measured, not
+    # 8.0.40): sql_mode gains ONLY_FULL_GROUP_BY, NO_ZERO_IN_DATE and
+    # NO_ZERO_DATE, and innodb_lock_wait_timeout is 50 rather than 10 — which
+    # matters here, because the ledger tests deliberately race concurrent
+    # transactions and vitest's own timeout is 30s. A lock the suite expects
+    # to give up at 10 seconds would instead be killed by vitest at 30 and
+    # reported as a test that hung.
+    #
+    # `docker compose` is on every GitHub-hosted runner, so the compose file
+    # is the definition in both places. Change a flag there and CI follows.
     steps:
       - uses: actions/checkout@v4
 
@@ -52,13 +84,29 @@ jobs:
       - name: Install ffmpeg
         run: sudo apt-get update && sudo apt-get install -y --no-install-recommends ffmpeg
 
-      - name: Configure MySQL for the licence-immutability trigger
-        # SEC-08's trigger needs this, exactly as the RDS parameter group does.
-        run: |
-          mysql -h 127.0.0.1 -P 53307 -uroot -proot \
-            -e "SET GLOBAL log_bin_trust_function_creators = 1;"
+      - name: Start MySQL from docker-compose.yml
+        # The test database only — `pnpm db:up` would also start the
+        # development one, which nothing in CI reads.
+        #
+        # Started here and waited for further down, so it boots while the
+        # build and the four checks that need no database are running. Those
+        # are also the fast failures, and they should not be queued behind a
+        # container.
+        run: docker compose up -d mysql-test
+
+      - name: Restore cached audio fixtures
+        id: fixtures
+        uses: actions/cache@v4
+        with:
+          path: assets/fixtures/audio
+          # The generator is the only input: it synthesises every file from
+          # scratch with ffmpeg and writes the length into each name. If it
+          # changes, the set is regenerated; otherwise this saves about four
+          # minutes on every run, which is most of the job.
+          key: audio-fixtures-${{ hashFiles('scripts/make-audio-fixtures.mjs') }}
 
       - name: Generate demo audio fixtures
+        if: steps.fixtures.outputs.cache-hit != 'true'
         run: pnpm fixtures:audio
 
       - name: Build workspace
@@ -87,10 +135,52 @@ jobs:
         # this makes it a gate.
         run: pnpm check:contrast
 
+      - name: Wait for MySQL
+        # `--wait` blocks on the healthcheck the compose file already defines,
+        # so there is no second readiness loop here to keep in step with it.
+        run: docker compose up -d --wait mysql-test
+
+      - name: Report the engine the suite is about to run against
+        # Printed, not asserted: these values come from docker-compose.yml, and
+        # a check here would only restate that file in a second place. In the
+        # log they are what makes an "it passes on my machine" argument
+        # settleable in one glance.
+        run: |
+          mysql -h 127.0.0.1 -P 53307 -uloopscene -ploopscene_local_test \
+            -e "SELECT VERSION() AS version, @@sql_mode AS sql_mode,
+                       @@innodb_lock_wait_timeout AS lock_wait_s,
+                       @@time_zone AS time_zone\G"
+
+      - name: Migrate the test database from empty, twice
+        # The harness calls `migrate()` itself, so this is not about coverage —
+        # it is about the failure being legible. Migration 0009 was first
+        # written dropping an index before adding its replacement and failed
+        # with ER_DROP_INDEX_FK, because the old unique key was the only index
+        # the foreign key could use. From inside a test run that surfaced as 24
+        # files of skipped tests and one serialised error object; here it is a
+        # single red step that names the statement.
+        #
+        # Twice, because a migration that is not idempotent passes its first
+        # run and breaks the next deploy instead.
+        env:
+          DATABASE_URL: mysql://loopscene:loopscene_local_test@127.0.0.1:53307/loopscene_test
+        run: |
+          set -euo pipefail
+          pnpm db:migrate
+          pnpm db:migrate
+
       - name: Test
+        # `pretest` runs check-build-fresh first, which is the gate for the one
+        # failure mode that cannot be seen from the output: the suite imports
+        # `dist/`, so a stale build means these tests pass against the
+        # previous commit's code.
         run: pnpm test
         env:
           TEST_DATABASE_URL: mysql://loopscene:loopscene_local_test@127.0.0.1:53307/loopscene_test
+
+      - name: MySQL logs
+        if: failure()
+        run: docker compose logs --no-color --tail=100 mysql-test
 
       - name: Verify the demo configuration boots
         # A mode/adapter combination that cannot start is a build failure, not a
@@ -165,6 +255,25 @@ jobs:
             exit 1
           }
           echo "production correctly refused the development login (SEC-03)"
+
+  workflows:
+    # Lint the workflows themselves.
+    #
+    # The one failure mode a CI file cannot report is its own: written as a
+    # plain scalar instead of a block scalar, a `run:` step containing
+    # `RUN_MODE: 'demo',` made this file invalid YAML, and GitHub's answer to
+    # invalid YAML is to not run the workflow — so it sat broken from cc2b918
+    # with nothing red anywhere. actionlint parses the schema, checks every
+    # expression context and runs shellcheck over each `run:` block, which
+    # also covers the quieter version of the same problem: a step that is
+    # syntactically fine and silently never executes.
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker://rhysd/actionlint:1.7.7
+        with:
+          args: -color
 
   terraform:
     runs-on: ubuntu-latest

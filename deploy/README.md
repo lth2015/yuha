@@ -12,7 +12,7 @@ layout:
 | --- | --- | --- |
 | VPC, EKS, RDS MySQL, S3, ECR, CloudFront, Cognito, KMS, IRSA, alarms | `infra/terraform/` | written, **never applied** — see `docs/OPEN_ITEMS.md` |
 | Deployments, Service, **ALB Ingress**, HPAs, PDB, migration hook, ConfigMap | `infra/helm/loopscene/` | complete |
-| Build, test, image checks, `terraform validate`, `helm lint` | `.github/workflows/ci.yml` | complete |
+| Build, test, image checks, `terraform validate`, `helm lint` | `.github/workflows/ci.yml` | complete, and now actually runs — see below |
 
 The ALB is already modelled: `ingress.className: alb`, internet-facing,
 `target-type: ip`, HTTPS-only with redirect, `/health` checks and a 60-second
@@ -44,6 +44,37 @@ reads workflows from `.github/workflows`. It takes all of its inputs from here.
 The GitHub OIDC role is `infra/terraform/github_oidc.tf`, with the rest of the
 Terraform. It is an AWS resource, and a second Terraform state mirroring a
 folder name would have to be applied separately forever.
+
+## The workflows are not in this folder, and cannot be
+
+GitHub Actions reads workflows from `.github/workflows/` and nowhere else, so
+both live there even though everything else about delivery is here:
+
+| File | Fires on | Does |
+| --- | --- | --- |
+| `.github/workflows/ci.yml` | push to `main`/`master`/`yuha`, any pull request, manual, **and `workflow_call`** | build, typecheck, the four gates, the suite against a real MySQL, the image checks, `terraform validate`, `helm lint`, and actionlint over these two files |
+| `.github/workflows/deploy.yml` | `v*` tag, or manual with an environment | `verify` (which *is* `ci.yml`, on the ref being released) and then `helm upgrade` |
+
+Two things about that were wrong until 2026-10-02 and are worth knowing, because
+both were invisible:
+
+- **CI had never run.** Its triggers were `main` and `master`; work happens on
+  `yuha` and goes in without pull requests. A complete CI suite, green because
+  nothing ever asked it.
+- **A release did not run it.** `deploy.yml` fires on `v*` and had no `needs:`
+  of any kind, so a tag shipped a commit no test had been run against. It now
+  calls `ci.yml` through `workflow_call` on that exact ref and will not deploy
+  unless it passes. One definition, called from two places — a copy of the
+  suite in this workflow would drift from the real one, and the drift would
+  only show up as a broken release.
+
+The test job starts MySQL with `docker compose up -d --wait mysql-test` rather
+than a `services:` block, for the same single-source reason: `services:` can
+set environment variables but not command arguments, and every server setting
+this project relies on — `sql_mode`, `innodb_lock_wait_timeout`,
+`default-time-zone`, `log-bin-trust-function-creators` — is a command argument
+in `docker-compose.yml`. CI was running against the image's defaults, which is
+a different engine from the one everybody develops against.
 
 ## Two naming domains
 
