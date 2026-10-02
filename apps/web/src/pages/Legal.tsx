@@ -1,6 +1,8 @@
 import { useEffect, useState, type ReactNode } from 'react';
+import { Link } from 'react-router-dom';
 import { apiFetch } from '../lib/api';
 import { Loading } from '../components/common';
+import { useI18n } from '../lib/i18n';
 
 interface Disclosure {
   configured: boolean;
@@ -266,6 +268,29 @@ export function Privacy() {
           creations. No advertising or third-party tracking cookies are used.
         </p>
       </Section>
+    </LegalPage>
+  );
+}
+
+/**
+ * Where the statutory pages live, so they do not have to live in the footer.
+ *
+ * The footer used to carry four of them, ending in 「特定商取引法相关标示」 —
+ * a legal label in the middle of a product. They are all still one click from
+ * every page, and the 特商法 disclosure keeps its own direct link on the
+ * checkout screen, which is the placement that carries the obligation.
+ */
+export function LegalIndex() {
+  const { t } = useI18n();
+  return (
+    <LegalPage title={t('footer.legal')}>
+      <nav className="stack">
+        <Link to="/legal/terms">{t('footer.terms')}</Link>
+        <Link to="/legal/privacy">{t('footer.privacy')}</Link>
+        <Link to="/legal/company">{t('footer.company')}</Link>
+        <Link to="/legal/tokushoho">{t('footer.tokushoho')}</Link>
+        <Link to="/help/rights">{t('footer.rights')}</Link>
+      </nav>
     </LegalPage>
   );
 }

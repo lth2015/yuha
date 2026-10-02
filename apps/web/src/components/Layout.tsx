@@ -49,16 +49,23 @@ function SiteFooter() {
       <span className="site-foot__brand">
         <BrandLogo width={104} />
       </span>
+      {/*
+        Two links, not five. A row ending in 「特定商取引法相关标示」 is a
+        statutory label sitting in the middle of a product, and nobody reads
+        it there.
+
+        Reporting content stays, because that is something a visitor may
+        actually need and needs to find fast. The rest — terms, privacy,
+        company, 特商法 — collapse behind one quiet link to /legal, which
+        lists them.
+        
+        Quiet, deliberately, and not hidden: 特商法 requires the disclosure to
+        be accessible, and the purchase path keeps its own direct link to it
+        from Checkout, which is the placement that actually matters.
+      */}
       <span className="site-foot__links">
-        <Link to="/legal/terms">{t('footer.terms')}</Link>
-        <Link to="/legal/privacy">{t('footer.privacy')}</Link>
-        <Link to="/legal/company">{t('footer.company')}</Link>
         <Link to="/help/rights">{t('footer.rights')}</Link>
-        {/* Reachable from every page, not only from the final confirmation
-            screen — the pricing page is an advertisement and prices appear on
-            it. Checkout.tsx was the only thing linking here. Where exactly the
-            disclosure must sit is a legal call; making it findable is not. */}
-        <Link to="/legal/tokushoho">{t('footer.tokushoho')}</Link>
+        <Link to="/legal">{t('footer.legal')}</Link>
       </span>
       <span className="site-foot__fine">
         {t('footer.made', { year: new Date().getFullYear() })} · {t('footer.slogan')}

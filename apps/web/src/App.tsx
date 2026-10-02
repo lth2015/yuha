@@ -17,7 +17,7 @@ import Export from './pages/Export';
 import GoogleCallback from './pages/GoogleCallback';
 import MfaChallenge from './pages/MfaChallenge';
 import Home from './pages/Home';
-import { Company, Privacy, Terms } from './pages/Legal';
+import { Company, LegalIndex, Privacy, Terms } from './pages/Legal';
 import { Tokushoho } from './pages/Tokushoho';
 import Library from './pages/Library';
 import NotFound from './pages/NotFound';
@@ -171,6 +171,7 @@ export default function App() {
 
               {/* Public on purpose: a rights holder must not need an account. */}
               <Route path="/help/rights" element={<Rights />} />
+              <Route path="/legal" element={<LegalIndex />} />
               <Route path="/legal/terms" element={<Terms />} />
               <Route path="/legal/privacy" element={<Privacy />} />
               <Route path="/legal/company" element={<Company />} />

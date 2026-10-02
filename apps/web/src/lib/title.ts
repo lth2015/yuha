@@ -55,6 +55,7 @@ export function pageTitleKey(path: string): string | null {
     [/^\/legal\/privacy/, 'footer.privacy'],
     [/^\/legal\/company/, 'footer.company'],
     [/^\/legal\/tokushoho/, 'footer.tokushoho'],
+    [/^\/legal$/, 'footer.legal'],
   ];
   return rules.find(([re]) => re.test(path))?.[1] ?? 'title.notFound';
 }

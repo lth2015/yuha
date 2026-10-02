@@ -209,6 +209,7 @@ const zh: Dict = {
   'mfa.verify': '验证并登录', 'mfa.verifying': '正在验证…',
   'mfa.restart': '重新开始',
 
+  'footer.legal': '法律信息',
   'footer.terms': '服务条款', 'footer.privacy': '隐私', 'footer.company': '公司信息',
   'footer.rights': '内容申诉', 'footer.slogan': '让心动，有回声。',
   'footer.made': '© {year} YUHA',
@@ -803,6 +804,7 @@ const ja: Dict = {
   'mfa.code': 'コード', 'mfa.lost': '端末を失くした場合はリカバリーコードを入力できます。',
   'mfa.verify': '確認してログイン', 'mfa.verifying': '確認中…', 'mfa.restart': 'やり直す',
 
+  'footer.legal': '法的情報',
   'footer.terms': '利用規約', 'footer.privacy': 'プライバシー', 'footer.company': '会社情報',
   'footer.rights': '権利の申立て', 'footer.slogan': 'ときめきに、響きを。',
   'footer.made': '© {year} YUHA',
@@ -1397,6 +1399,7 @@ const en: Dict = {
   'mfa.code': 'Code', 'mfa.lost': 'Lost your phone? Enter a recovery code instead.',
   'mfa.verify': 'Verify & sign in', 'mfa.verifying': 'Verifying…', 'mfa.restart': 'Start over',
 
+  'footer.legal': 'Legal',
   'footer.terms': 'Terms', 'footer.privacy': 'Privacy', 'footer.company': 'Company',
   'footer.rights': 'Report content', 'footer.slogan': 'Let a feeling echo.',
   'footer.made': '© {year} YUHA',
