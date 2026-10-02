@@ -3,6 +3,7 @@ export * from './errors.js';
 export * from './generation.js';
 export * from './sections.js';
 export * from './lrc.js';
+export * from './timing-edit.js';
 export * from './billing.js';
 export * from './license.js';
 export * from './common.js';

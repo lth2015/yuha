@@ -3,6 +3,8 @@ import {
   AppError,
   createExportRequest,
   listTracksQuery,
+  lyricTimings,
+  markCorrected,
   type LicenseSnapshotView,
   type TrackView,
 } from '@yuha/contracts';
@@ -16,6 +18,7 @@ import {
   countLicenses,
   listAssets,
   listTracks,
+  setTrackLyricTimings,
   softDeleteTrack,
   trackEvent,
   type TrackRow,
@@ -241,6 +244,45 @@ export default async function trackRoutes(app: FastifyInstance, opts: { ctx: App
    * the track in their content — deliberately distinct from a download, so the
    * cost-per-adopted-result metric is not inflated by curiosity downloads.
    */
+  /**
+   * POST /v1/tracks/:id/lyric-timings — the owner's own corrections.
+   *
+   * Owner only, and only ever the owner: these timings are shown to everyone
+   * holding the link, so letting a licensee write them would let one listener
+   * rewrite what the rest see. No credit is spent and no audio is touched —
+   * the song is already made, and this only says when its words land.
+   */
+  app.post('/v1/tracks/:id/lyric-timings', { preHandler: app.requireAuth }, async (req) => {
+    const { id } = req.params as { id: string };
+    const track = await getTrackForUser(id, req.user!.id);
+    if (!track) throw new AppError('NOT_FOUND', 'track not found');
+
+    const parsed = lyricTimings.safeParse(req.body);
+    if (!parsed.success) {
+      throw new AppError('VALIDATION_FAILED', 'lyric timings are not in the expected shape');
+    }
+
+    const duration = track.duration_ms / 1000;
+    const lines = parsed.data.lines;
+    // Order and bounds are enforced by the editing helpers, but the request
+    // does not have to have come from them: a timeline that runs backwards or
+    // past the end of the audio would break every reader of it, including the
+    // downloadable .lrc.
+    for (let i = 0; i < lines.length; i += 1) {
+      const line = lines[i]!;
+      if (line.end < line.start || line.start > duration + 1) {
+        throw new AppError('VALIDATION_FAILED', `lyric line ${i} is not inside the song`);
+      }
+      if (i > 0 && line.start < lines[i - 1]!.start) {
+        throw new AppError('VALIDATION_FAILED', `lyric line ${i} starts before the line above it`);
+      }
+    }
+
+    const timings = markCorrected(parsed.data);
+    await setTrackLyricTimings({ trackId: track.id, timings });
+    return { lyricTimings: timings };
+  });
+
   app.post('/v1/tracks/:id/adopted', { preHandler: app.requireAuth }, async (req, reply) => {
     const { id } = req.params as { id: string };
     const track = await getTrackForUser(id, req.user!.id);

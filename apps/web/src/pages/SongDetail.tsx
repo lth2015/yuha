@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import type { ProductView, TrackView } from '@yuha/contracts';
+import type { LyricTimings, ProductView, TrackView } from '@yuha/contracts';
 import { apiFetch, newIdempotencyKey } from '../lib/api';
 import { formatTime, usePlayer } from '../lib/player';
 import { fetchProducts, findLicenceProduct } from '../lib/catalog';
@@ -363,6 +363,17 @@ export default function SongDetail() {
             title={song.title}
             artist={song.artistName}
             onSeek={active ? player.seek : undefined}
+            onSaveTimings={
+              isOwner
+                ? async (timings) => {
+                    const saved = await apiFetch<{ lyricTimings: LyricTimings }>(
+                      `/v1/tracks/${song.trackId}/lyric-timings`,
+                      { method: 'POST', body: timings },
+                    );
+                    setSong((s) => (s ? { ...s, lyricTimings: saved.lyricTimings } : s));
+                  }
+                : undefined
+            }
           />
         </section>
       )}

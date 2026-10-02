@@ -1318,6 +1318,12 @@ tr:last-child td { border-bottom: none; }
 .studio__dial-hint { font-size: 12px; color: var(--muted); }
 .lyrics-sync__head { display: flex; align-items: center; justify-content: space-between; gap: var(--s2); flex-wrap: wrap; }
 .lyrics-sync__note { font-size: 12px; line-height: 1.6; color: var(--muted); margin: var(--s2) 0 0; max-width: 56ch; }
+.lyrics-sync__actions { display: flex; align-items: center; gap: var(--s2); flex-wrap: wrap; }
+.lyrics-sync__offset { font-size: 12px; color: var(--muted); min-width: 4ch; text-align: center; }
+.lyrics-sync__bar { display: flex; align-items: center; gap: var(--s2); flex-wrap: wrap; margin-top: var(--s2); font-size: 13px; color: var(--ink); }
+/* Only on the line being read, so correcting does not turn the lyrics into a
+   wall of buttons; it appears while the song plays and goes when it stops. */
+.lyrics-sync__stamp { margin-top: 4px; }
 /* A creator's own style tag, and the section markers, are added under the
    control they belong to rather than in a dialog: both are things you reach
    for mid-thought, and a dialog would cost the thought. */

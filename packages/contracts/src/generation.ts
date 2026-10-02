@@ -256,7 +256,14 @@ export type JobView = z.infer<typeof jobView>;
  * weighting of lines across the song length. The UI shows which one it has.
  */
 export const lyricTimings = z.object({
-  source: z.enum(['aligned', 'estimated']),
+  /**
+   * Where the numbers came from, best first.
+   *
+   * `corrected` outranks both: a person heard the song and moved the line, so
+   * it is the only one of the three that is not a model's opinion. A
+   * re-alignment must never overwrite it.
+   */
+  source: z.enum(['corrected', 'aligned', 'estimated']),
   lines: z
     .array(
       z.object({
