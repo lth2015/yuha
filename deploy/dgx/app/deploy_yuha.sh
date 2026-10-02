@@ -79,7 +79,8 @@ echo "== 5/6 build and start (first build takes a few minutes)"
 ssh "$DGX" "cd $R && docker compose build api && docker compose up -d mysql && \
   until [ \"\$(docker inspect -f '{{.State.Health.Status}}' \$(docker compose ps -q mysql))\" = healthy ]; do sleep 2; done && \
   docker compose run --rm api pnpm db:migrate && docker compose run --rm api pnpm seed && \
-  docker compose run --rm web-assets && docker compose up -d api worker web stripe"
+  docker compose run --rm web-assets && docker compose up -d api worker web stripe && \
+  docker compose restart web"   # web is unchanged, so `up` leaves it running with the old nginx.conf
 
 echo "== 6/6 shared team account (sign-in limited to: ${ALLOWLIST:-anyone})"
 # The dev sign-in has no password, so no account that can sign in keeps the
