@@ -57,6 +57,22 @@ const TEXT_TOKENS = {
 const SURFACES = ['--bg', '--surface-solid', '--surface-soft'];
 
 /**
+ * Filled controls, which carry one text colour rather than the whole palette.
+ *
+ * These cannot go in SURFACES: that list is crossed with every text token, and
+ * nobody puts `--muted` on a primary button, so it would fail on combinations
+ * that do not exist. Each pair here is one that does.
+ *
+ * The primary is the brand coral with ink on it. White on `--petal` is 2.98:1
+ * and fails; darkening the coral until white passes reaches brown. This pass
+ * exists so that choice cannot be undone by eye — change either token and the
+ * build says so.
+ */
+const FILLED = [
+  { surface: '--petal', text: '--ink', floor: 4.5, what: 'the primary button' },
+];
+
+/**
  * The darkest the backdrop behind a glass panel can get.
  *
  * The light field paints a radial gradient ending at `--bg-deep`, then lays
@@ -493,6 +509,23 @@ if (!famBlock || !indexBlock) {
         );
       }
     }
+  }
+}
+
+console.log('\nfilled controls:');
+for (const f of FILLED) {
+  const bg = readToken(f.surface);
+  const fg = readToken(f.text);
+  if (!bg || !fg) {
+    failures.push(`${f.what}: ${!bg ? f.surface : f.text} is not a hex token in :root`);
+    continue;
+  }
+  const got = ratio(bg, fg);
+  console.log(`  ${f.what.padEnd(24)} ${f.text} on ${f.surface}  ${got.toFixed(2)}  (min ${f.floor})`);
+  if (got < f.floor) {
+    failures.push(
+      `${f.what} renders ${f.text} on ${f.surface} at ${got.toFixed(2)}:1, below ${f.floor}:1`,
+    );
   }
 }
 

@@ -99,6 +99,10 @@
 
   /* brand */
   --petal: #f46b45;
+  /* Hover lifts rather than darkens, matching what the ink primary already did
+     (#3a3d37 is lighter than #20221f). Ink on it is 6.16:1, so the lift never
+     costs legibility. */
+  --petal-lift: #f87d5a;
   --petal-deep: #d9532e;
   --petal-soft: #ffe4d8;
   --lavender: #e8e3f5;
@@ -564,8 +568,25 @@ html:has(.player-bar) { scroll-padding-bottom: 100px; }
 .btn:hover { border-color: var(--ink); }
 .btn:active { transform: scale(0.98); }
 .btn:disabled { opacity: var(--o-disabled); cursor: default; transform: none; }
-.btn--primary { background: var(--ink); border-color: var(--ink); color: #fff; font-weight: 600; }
-.btn--primary:hover:not(:disabled) { background: #3a3d37; border-color: #3a3d37; }
+/*
+ * The primary action is the brand colour, and it carries ink rather than white.
+ *
+ * It was near-black, in two places — here and `.text-action.is-strong` on the
+ * song page — so the most important control in the product had nothing to do
+ * with the product. On the warm field it read as a third visual language
+ * beside the soft chips and the panels.
+ *
+ * Ink on `--petal`, not white: white on #f46b45 is 2.98:1 and fails. Darkening
+ * the coral until white passes reaches #b95134, which is brown — buying the
+ * contrast by throwing away the thing that makes the mark alive. Dark text on
+ * the untouched brand colour is 5.37:1, so the button is the actual logo
+ * colour with margin to spare. check-contrast.mjs holds that number.
+ *
+ * `--petal` keeps its other jobs — focus rings, the playing ring, marks — and
+ * is still not a *text* colour on the light canvas; that is `--link`.
+ */
+.btn--primary { background: var(--petal); border-color: var(--petal); color: var(--ink); font-weight: 600; }
+.btn--primary:hover:not(:disabled) { background: var(--petal-lift); border-color: var(--petal-lift); }
 .btn--primary:disabled { background: var(--surface-soft); border-color: var(--surface-soft); color: var(--muted); }
 .btn--ghost { background: transparent; }
 .btn--secondary { background: transparent; }
@@ -1340,8 +1361,9 @@ textarea.is-full { border-color: var(--danger); }
   border-color: color-mix(in srgb, var(--danger) 45%, transparent);
 }
 .text-action.is-danger:hover:not(:disabled) { border-color: var(--danger); background: color-mix(in srgb, var(--danger) 6%, transparent); box-shadow: none; }
-.text-action.is-strong { background: var(--ink); border-color: var(--ink); color: #fff; }
-.text-action.is-strong:hover:not(:disabled) { background: #3a3d37; border-color: #3a3d37; }
+/* One primary treatment in the product, not two. See `.btn--primary`. */
+.text-action.is-strong { background: var(--petal); border-color: var(--petal); color: var(--ink); }
+.text-action.is-strong:hover:not(:disabled) { background: var(--petal-lift); border-color: var(--petal-lift); }
 
 @media (max-width: 900px) {
   .song-spread { grid-template-columns: minmax(0, 1fr); }
