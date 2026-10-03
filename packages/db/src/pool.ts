@@ -105,6 +105,16 @@ export async function execute(
  * a network call to a provider — GEN-05 requires short transactions so a worker
  * that dies mid-request leaves no long-lived lock behind.
  */
+/**
+ * An open transaction, named so callers outside this package can type one.
+ *
+ * `withTx` hands its callback a `mysql.PoolConnection`, and a service that
+ * wants to factor part of a transactional block into a helper needs to say so
+ * in a signature. Without this the API package would have to depend on mysql2
+ * for a type alone, which is a dependency bought with nothing.
+ */
+export type Tx = mysql.PoolConnection;
+
 export async function withTx<T>(
   fn: (tx: mysql.PoolConnection) => Promise<T>,
   existing?: mysql.PoolConnection,

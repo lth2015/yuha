@@ -1,5 +1,5 @@
 import { describeError, type SubscriptionStatus } from '@yuha/contracts';
-import type { OrderRow } from '@yuha/db';
+import type { OrderRow, Tx } from '@yuha/db';
 import {
   finishWebhookEvent,
   getActiveProduct,
@@ -85,6 +85,11 @@ export async function processWebhookEvent(ctx: AppContext, row: WebhookEventRow)
         await handleRefund(ctx, event);
         break;
       case 'charge.dispute.created':
+      case 'charge.dispute.closed':
+        // `closed` was not routed at all, so the moment the money actually
+        // moved — we lose, Stripe takes it back — nothing happened: no
+        // revocation, and not even the operator signal, which fires on
+        // `created`.
         await handleDispute(ctx, event);
         break;
       default:
@@ -441,6 +446,10 @@ async function handleInvoicePaid(ctx: AppContext, event: StripeEventLike): Promi
           userId,
           kind: 'payment',
           stripeObjectId: charge,
+          // The hop a refund needs. A `refund.created` carries a charge and no
+          // invoice, and the batch this grant creates is keyed on the invoice,
+          // so without this there is no route from the refund to the period.
+          stripeInvoiceId: invoiceId || null,
           amountMinor: Number(invoice['amount_paid'] ?? 0),
           status: 'succeeded',
           occurredAt: new Date(event.created * 1000),
@@ -563,6 +572,191 @@ async function handleSubscriptionChanged(ctx: AppContext, event: StripeEventLike
  * negative. What remains reserved or consumed is reported for manual handling
  * rather than force-revoked.
  */
+/**
+ * What a refund is a refund of, and who is owed the reversal.
+ *
+ * Two subjects, because there are two kinds of thing to sell:
+ *
+ *  - a one-time pack, found by its order, which is how it has always worked;
+ *  - a subscription period, found by its invoice, which is the only key that
+ *    survives. `mode: 'subscription'` never sets `stripe_payment_intent_id`, so
+ *    the old lookup missed the first month, and a renewal has no order at all,
+ *    so no order-keyed lookup could ever have reached month two.
+ *
+ * The invoice is read off the Charge where Stripe puts it, and otherwise from
+ * the payment row written when the period was granted: a `refund.created`
+ * carries a charge and no invoice, which is the hop `payments.stripe_invoice_id`
+ * exists for.
+ *
+ * `amountMinor` is what was paid for the thing being refunded — the order total
+ * or the invoice total — because the proportional revocation is a share of it.
+ */
+type RefundSubject = {
+  userId: string;
+  amountMinor: number;
+  /** Set for a one-time pack; a renewal genuinely has none. */
+  order: { id: string; user_id: string; amount_minor: number } | null;
+  /** Set for a subscription period. */
+  invoiceId: string | null;
+};
+
+async function refundSubject(
+  obj: Record<string, unknown>,
+  chargeId: string,
+  paymentIntent: unknown,
+): Promise<RefundSubject | null> {
+  // The Charge carries its invoice; the Refund does not, so fall back to what
+  // we wrote down when we granted the period.
+  let invoiceId = typeof obj['invoice'] === 'string' ? obj['invoice'] : null;
+  let paid: { user_id: string; amount_minor: number; stripe_invoice_id: string | null } | undefined;
+  if (chargeId) {
+    const rows = await query<{ user_id: string; amount_minor: number; stripe_invoice_id: string | null }>(
+      `SELECT user_id, amount_minor, stripe_invoice_id FROM payments
+        WHERE stripe_object_id = ? AND kind = 'payment' LIMIT 1`,
+      [chargeId],
+    );
+    paid = rows[0];
+    invoiceId ??= paid?.stripe_invoice_id ?? null;
+  }
+
+  const orders = await query<{ id: string; user_id: string; amount_minor: number }>(
+    `SELECT id, user_id, amount_minor FROM orders
+      WHERE stripe_payment_intent_id = ? OR id = ?
+      LIMIT 1`,
+    [typeof paymentIntent === 'string' ? paymentIntent : '', metaString(obj, 'order_id') ?? null],
+  );
+  const order = orders[0] ?? null;
+
+  /*
+   * The invoice wins when both are known, and that is not arbitrary: the
+   * subscription's first month has an order *and* an invoice, but the grant it
+   * produced is a `subscription_period` batch keyed on the invoice. Revoking
+   * against the order would look for a `one_time_order` batch that does not
+   * exist and quietly take nothing — which is the original bug wearing the
+   * fix's clothes.
+   */
+  if (invoiceId) {
+    const userId = paid?.user_id ?? order?.user_id;
+    if (!userId) return null;
+    return {
+      userId,
+      amountMinor: paid?.amount_minor ?? order?.amount_minor ?? 0,
+      order,
+      invoiceId,
+    };
+  }
+  if (!order) return null;
+  return { userId: order.user_id, amountMinor: order.amount_minor, order, invoiceId: null };
+}
+
+/**
+ * Take back what the money no longer pays for.
+ *
+ * Shared by a refund and by a dispute we lost, because they are the same event
+ * seen from two directions: the money has gone back and the goods it bought
+ * have to go with it. Keeping one copy is the point — the refund path was fixed
+ * for subscriptions and renewals, and a second copy in the dispute handler
+ * would have been the old bug, still there, under a different name.
+ */
+async function reverseEntitlements(
+  ctx: AppContext,
+  params: { subject: RefundSubject; reversedMinor: number; reasonTag: 'refund' | 'dispute_lost' },
+  tx: Tx,
+): Promise<void> {
+  /*
+   * The batch this refund reverses.
+   *
+   * A subscription period's business key is `<subscription>:<invoice>`, so it
+   * is matched on the invoice half — the subscription id is not on a refund
+   * event and does not need to be, because an invoice belongs to exactly one.
+   * `SUBSTRING_INDEX` rather than a LIKE, so an invoice id that happens to
+   * contain a wildcard character cannot match a different subscriber's batch.
+   */
+  const batches = params.subject.invoiceId
+    ? await query<{ id: string; granted_units: number }>(
+        `SELECT id, granted_units FROM entitlement_batches
+          WHERE user_id = ? AND source = 'subscription_period'
+            AND SUBSTRING_INDEX(source_ref, ':', -1) = ?`,
+        [params.subject.userId, params.subject.invoiceId],
+        tx,
+      )
+    : await query<{ id: string; granted_units: number }>(
+        `SELECT id, granted_units FROM entitlement_batches
+          WHERE user_id = ? AND source = 'one_time_order' AND source_ref = ?`,
+        [params.subject.order!.user_id, params.subject.order!.id],
+        tx,
+      );
+  for (const b of batches) {
+    /*
+     * How much of the pack the refund actually paid back.
+     *
+     * This used to revoke every unused unit regardless of params.reversedMinor, so a ¥300
+     * refund on a ¥980 DROP took back all five songs: 30% of the money
+     * returned and 100% of the goods gone, leaving the buyer ¥680 down with
+     * nothing. The order was already being written as `partially_refunded`,
+     * so the distinction existed everywhere except here.
+     *
+     * `params.reversedMinor` is the cumulative `amount_refunded` from the charge where
+     * Stripe sends one, so two partial refunds settle against the running
+     * total rather than each taking its own share of the original.
+     *
+     * The batch's `granted_units` shrinks as units are revoked, so the
+     * original size is recovered from the ledger — the ledger is the record,
+     * and reconstructing from it is what keeps a second partial refund from
+     * measuring against an already-reduced pack.
+     */
+    const prior = await queryOne<{ revoked: number }>(
+      `SELECT COALESCE(SUM(units), 0) AS revoked FROM ledger_entries
+        WHERE batch_id = ? AND entry_type = 'revoke'`,
+      [b.id],
+      tx,
+    );
+    const alreadyRevoked = Number(prior?.revoked ?? 0);
+    const originalUnits = b.granted_units + alreadyRevoked;
+  
+    let maxUnits: number | undefined;
+    // The price of the thing refunded: an order total, or an invoice total
+    // for a subscription period. The rule is the same either way.
+    const paidForIt = params.subject.amountMinor;
+    if (paidForIt > 0 && params.reversedMinor > 0 && params.reversedMinor < paidForIt) {
+      // Floored, so rounding leaves the buyer holding slightly more than the
+      // surviving payment strictly buys. The other direction takes songs from
+      // someone who still paid for them.
+      const target = Math.floor((originalUnits * params.reversedMinor) / paidForIt);
+      maxUnits = Math.max(0, target - alreadyRevoked);
+    }
+  
+    const res = await revokeUnusedUnits(
+      {
+        userId: params.subject.userId,
+        batchId: b.id,
+        reason: `${params.reasonTag}:${params.subject.invoiceId ?? params.subject.order!.id}`,
+        maxUnits,
+      },
+      tx,
+    );
+    if (res.remainingReserved > 0 || res.remainingConsumed > 0) {
+      // Already-fulfilled or in-flight units are flagged for a human, not
+      // clawed back automatically.
+      await trackEvent(
+        {
+          name: `${params.reasonTag}_partial_fulfilment`,
+          userRef: params.subject.userId,
+          props: {
+            order_id: params.subject.order?.id ?? null,
+            invoice_id: params.subject.invoiceId,
+            reserved: res.remainingReserved,
+            consumed: res.remainingConsumed,
+          },
+          runMode: ctx.config.mode,
+          isInternal: ctx.config.isDemo,
+        },
+        tx,
+      );
+    }
+  }
+}
+
 async function handleRefund(ctx: AppContext, event: StripeEventLike): Promise<void> {
   const obj = event.data.object;
   const chargeId = String(obj['charge'] ?? obj['id'] ?? '');
@@ -607,14 +801,23 @@ async function handleRefund(ctx: AppContext, event: StripeEventLike): Promise<vo
     }
   }
 
-  const orders = await query<{ id: string; user_id: string; amount_minor: number }>(
-    `SELECT id, user_id, amount_minor FROM orders
-      WHERE stripe_payment_intent_id = ? OR id = ?
-      LIMIT 1`,
-    [typeof paymentIntent === 'string' ? paymentIntent : '', metaString(obj, 'order_id') ?? null],
-  );
-  const order = orders[0];
-  if (!order) return;
+  /*
+   * What this refund is a refund OF.
+   *
+   * A one-time pack is found by its order. A subscription period cannot be: a
+   * `mode: 'subscription'` checkout never sets `stripe_payment_intent_id`, and
+   * a renewal has no order at all — orders are created by the checkout that
+   * opens the subscription, and month two arrives as an invoice and nothing
+   * else. So the subject is the invoice, which is what the batch's business key
+   * `<subscription>:<invoice>` is built from.
+   *
+   * The invoice comes off the Charge where Stripe puts it, and otherwise from
+   * the payment row written when the period was granted — a `refund.created`
+   * carries a charge and no invoice.
+   */
+  const subject = await refundSubject(obj, chargeId, paymentIntent);
+  if (!subject) return;
+  const order = subject.order;
 
   await withTx(async (tx) => {
     const occurredAt = new Date(event.created * 1000);
@@ -622,10 +825,13 @@ async function handleRefund(ctx: AppContext, event: StripeEventLike): Promise<vo
     for (const r of enumerated) {
       const { inserted } = await recordPayment(
         {
-          orderId: order.id,
-          userId: order.user_id,
+          orderId: order?.id ?? null,
+          userId: subject.userId,
           kind: 'refund',
           stripeObjectId: r.id,
+          // Carried onto the refund row so the running total can be summed per
+          // subject: a renewal's rows have no order to group by.
+          stripeInvoiceId: subject.invoiceId,
           amountMinor: -r.amount,
           status: 'succeeded',
           occurredAt,
@@ -636,12 +842,21 @@ async function handleRefund(ctx: AppContext, event: StripeEventLike): Promise<vo
     }
 
     const recordedSoFar = async (): Promise<number> => {
-      const row = await queryOne<{ refunded: number }>(
-        `SELECT COALESCE(-SUM(amount_minor), 0) AS refunded FROM payments
-          WHERE order_id = ? AND kind = 'refund' AND status = 'succeeded'`,
-        [order.id],
-        tx,
-      );
+      // Grouped by whichever key this subject has. A renewal's refunds have no
+      // order id, so summing by order would read zero and revoke nothing.
+      const row = subject.invoiceId
+        ? await queryOne<{ refunded: number }>(
+            `SELECT COALESCE(-SUM(amount_minor), 0) AS refunded FROM payments
+              WHERE stripe_invoice_id = ? AND kind = 'refund' AND status = 'succeeded'`,
+            [subject.invoiceId],
+            tx,
+          )
+        : await queryOne<{ refunded: number }>(
+            `SELECT COALESCE(-SUM(amount_minor), 0) AS refunded FROM payments
+              WHERE order_id = ? AND kind = 'refund' AND status = 'succeeded'`,
+            [order!.id],
+            tx,
+          );
       return Number(row?.refunded ?? 0);
     };
 
@@ -652,10 +867,11 @@ async function handleRefund(ctx: AppContext, event: StripeEventLike): Promise<vo
       // authoritative, so the shortfall is recorded under a key built from it.
       const { inserted } = await recordPayment(
         {
-          orderId: order.id,
-          userId: order.user_id,
+          orderId: order?.id ?? null,
+          userId: subject.userId,
           kind: 'refund',
           stripeObjectId: `${chargeId}:cumulative:${chargeCumulative}`,
+          stripeInvoiceId: subject.invoiceId,
           amountMinor: -(chargeCumulative - recorded),
           status: 'succeeded',
           occurredAt,
@@ -670,124 +886,108 @@ async function handleRefund(ctx: AppContext, event: StripeEventLike): Promise<vo
     if (!wroteSomething) return;
     const amount = Math.max(recorded, chargeCumulative);
 
-    const batches = await query<{ id: string; granted_units: number }>(
-      `SELECT id, granted_units FROM entitlement_batches
-        WHERE user_id = ? AND source = 'one_time_order' AND source_ref = ?`,
-      [order.user_id, order.id],
+    await reverseEntitlements(
+      ctx,
+      { subject, reversedMinor: amount, reasonTag: 'refund' },
       tx,
     );
-    for (const b of batches) {
-      /*
-       * How much of the pack the refund actually paid back.
-       *
-       * This used to revoke every unused unit regardless of amount, so a ¥300
-       * refund on a ¥980 DROP took back all five songs: 30% of the money
-       * returned and 100% of the goods gone, leaving the buyer ¥680 down with
-       * nothing. The order was already being written as `partially_refunded`,
-       * so the distinction existed everywhere except here.
-       *
-       * `amount` is the cumulative `amount_refunded` from the charge where
-       * Stripe sends one, so two partial refunds settle against the running
-       * total rather than each taking its own share of the original.
-       *
-       * The batch's `granted_units` shrinks as units are revoked, so the
-       * original size is recovered from the ledger — the ledger is the record,
-       * and reconstructing from it is what keeps a second partial refund from
-       * measuring against an already-reduced pack.
-       */
-      const prior = await queryOne<{ revoked: number }>(
-        `SELECT COALESCE(SUM(units), 0) AS revoked FROM ledger_entries
-          WHERE batch_id = ? AND entry_type = 'revoke'`,
-        [b.id],
+
+    // Only a one-time pack has an order to mark. A renewal has none, and the
+    // order that opened a subscription is not what this refund was against —
+    // marking it `refunded` because month seven came back would misreport the
+    // purchase that is still perfectly good.
+    if (order && !subject.invoiceId) {
+      await setOrderStatus(
+        {
+          orderId: order.id,
+          status: amount >= order.amount_minor ? 'refunded' : 'partially_refunded',
+          refundedAmountMinor: amount,
+        },
         tx,
       );
-      const alreadyRevoked = Number(prior?.revoked ?? 0);
-      const originalUnits = b.granted_units + alreadyRevoked;
-
-      let maxUnits: number | undefined;
-      if (order.amount_minor > 0 && amount > 0 && amount < order.amount_minor) {
-        // Floored, so rounding leaves the buyer holding slightly more than the
-        // surviving payment strictly buys. The other direction takes songs from
-        // someone who still paid for them.
-        const target = Math.floor((originalUnits * amount) / order.amount_minor);
-        maxUnits = Math.max(0, target - alreadyRevoked);
-      }
-
-      const res = await revokeUnusedUnits(
-        { userId: order.user_id, batchId: b.id, reason: `refund:${order.id}`, maxUnits },
-        tx,
-      );
-      if (res.remainingReserved > 0 || res.remainingConsumed > 0) {
-        // Already-fulfilled or in-flight units are flagged for a human, not
-        // clawed back automatically.
-        await trackEvent(
-          {
-            name: 'refund_partial_fulfilment',
-            userRef: order.user_id,
-            props: {
-              order_id: order.id,
-              reserved: res.remainingReserved,
-              consumed: res.remainingConsumed,
-            },
-            runMode: ctx.config.mode,
-            isInternal: ctx.config.isDemo,
-          },
-          tx,
-        );
-      }
     }
-
-    await setOrderStatus(
-      {
-        orderId: order.id,
-        status: amount >= order.amount_minor ? 'refunded' : 'partially_refunded',
-        refundedAmountMinor: amount,
-      },
-      tx,
-    );
   });
 }
 
+/**
+ * A chargeback, and the one moment it costs something.
+ *
+ * A dispute being *opened* revokes nothing on purpose. We may still win, and
+ * taking someone's credits while that is undecided punishes a customer who
+ * turns out to be owed nothing. An operator is told, because a dispute is the
+ * money movement most likely to need a human.
+ *
+ * A dispute being *lost* is a refund by another name — the money has gone back
+ * and the goods it bought go with it — so it reverses entitlements through the
+ * same function a refund does. One copy: the refund path was taught about
+ * subscriptions and renewals, and a second copy here would have been the old
+ * bug still sitting there under a different name.
+ *
+ * It also used to find the order by `stripe_payment_intent_id` alone, which a
+ * subscription checkout never has, so a disputed subscription produced no row
+ * and no signal whatsoever. `refundSubject` is what the refund path uses, and
+ * it reaches a renewal that has no order at all.
+ */
 async function handleDispute(ctx: AppContext, event: StripeEventLike): Promise<void> {
   const obj = event.data.object;
-  const paymentIntent = obj['payment_intent'];
-  const orders = await query<{ id: string; user_id: string }>(
-    `SELECT id, user_id FROM orders WHERE stripe_payment_intent_id = ? LIMIT 1`,
-    [typeof paymentIntent === 'string' ? paymentIntent : ''],
-  );
-  const order = orders[0];
-  if (!order) return;
-  const { inserted } = await recordPayment({
-    orderId: order.id,
-    userId: order.user_id,
-    kind: 'dispute',
-    stripeObjectId: String(obj['id'] ?? ''),
-    amountMinor: -Number(obj['amount'] ?? 0),
-    status: String(obj['status'] ?? 'needs_response'),
-    occurredAt: new Date(event.created * 1000),
-  });
+  const chargeId = String(obj['charge'] ?? '');
+  const subject = await refundSubject(obj, chargeId, obj['payment_intent']);
+  if (!subject) return;
 
-  /*
-   * Every other handler in this file emits an event; this one wrote a row and
-   * said nothing, so a chargeback — money reversed, credits kept, and unlike a
-   * refund no entitlement touched anywhere — was the one money movement with
-   * no operator signal at all. Whether a disputed period should be clawed back
-   * is a decision for a person, which is exactly why a person has to be told.
-   */
-  if (inserted) {
-    await trackEvent({
-      name: 'payment_disputed',
-      userRef: order.user_id,
-      props: {
-        order_id: order.id,
-        dispute_status: String(obj['status'] ?? 'needs_response'),
-        amount_minor: Number(obj['amount'] ?? 0),
-        reason: String(obj['reason'] ?? 'unknown'),
+  const status = String(obj['status'] ?? 'needs_response');
+  const amountMinor = Math.abs(Number(obj['amount'] ?? 0));
+  const lost = event.type === 'charge.dispute.closed' && status === 'lost';
+
+  await withTx(async (tx) => {
+    const { inserted } = await recordPayment(
+      {
+        orderId: subject.order?.id ?? null,
+        userId: subject.userId,
+        kind: 'dispute',
+        // Keyed on the dispute id plus its status, so the open and the close
+        // are two rows: a redelivery of either is still a no-op, and the
+        // revocation below runs exactly once.
+        stripeObjectId: `${String(obj['id'] ?? '')}:${status}`,
+        stripeInvoiceId: subject.invoiceId,
+        amountMinor: -amountMinor,
+        status,
+        occurredAt: new Date(event.created * 1000),
       },
-      runMode: ctx.config.mode,
-      isInternal: ctx.config.isDemo,
-    });
-  }
+      tx,
+    );
+    if (!inserted) return;
+
+    if (lost) {
+      await reverseEntitlements(
+        ctx,
+        { subject, reversedMinor: amountMinor, reasonTag: 'dispute_lost' },
+        tx,
+      );
+    }
+
+    /*
+     * Every other handler in this file emits an event; this one wrote a row and
+     * said nothing, so a chargeback was the one money movement with no operator
+     * signal at all. Both ends are reported: an opening needs a response, and a
+     * close is when the money settled one way or the other.
+     */
+    await trackEvent(
+      {
+        name: 'payment_disputed',
+        userRef: subject.userId,
+        props: {
+          order_id: subject.order?.id ?? null,
+          invoice_id: subject.invoiceId,
+          dispute_status: status,
+          closed: event.type === 'charge.dispute.closed',
+          entitlements_reversed: lost,
+        },
+        runMode: ctx.config.mode,
+        isInternal: ctx.config.isDemo,
+      },
+      tx,
+    );
+  });
 }
 
 /**

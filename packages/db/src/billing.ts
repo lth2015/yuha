@@ -420,6 +420,15 @@ export async function recordPayment(
     userId: string;
     kind: 'payment' | 'refund' | 'dispute' | 'fee';
     stripeObjectId: string;
+    /**
+     * The invoice this payment settled, when it settled one.
+     *
+     * A refund of a subscription period has to find the batch it granted, and
+     * the batch's business key is `<subscription>:<invoice>`. A `refund.created`
+     * carries only a charge, so without this there is no hop from the refund to
+     * the period — which is how a refunded subscription kept its credits.
+     */
+    stripeInvoiceId?: string | null;
     amountMinor: number;
     feeMinor?: number;
     netMinor?: number;
@@ -432,15 +441,16 @@ export async function recordPayment(
 ): Promise<{ inserted: boolean }> {
   const res = await execute(
     `INSERT IGNORE INTO payments
-       (id, order_id, user_id, kind, stripe_object_id, amount_minor, fee_minor,
-        net_minor, status, payout_id, occurred_at, raw)
-     VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`,
+       (id, order_id, user_id, kind, stripe_object_id, stripe_invoice_id, amount_minor,
+        fee_minor, net_minor, status, payout_id, occurred_at, raw)
+     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`,
     [
       newId(),
       params.orderId ?? null,
       params.userId,
       params.kind,
       params.stripeObjectId,
+      params.stripeInvoiceId ?? null,
       params.amountMinor,
       params.feeMinor ?? 0,
       params.netMinor ?? 0,
