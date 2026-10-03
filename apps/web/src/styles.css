@@ -281,7 +281,9 @@ code { font-family: var(--mono); font-size: 0.86em; background: var(--surface-so
    breathing rather than as anything moving position. */
 .lightfield.is-live .lightfield__lobe {
   scale: calc(1 + var(--energy, 0) * 0.07);
-  transition: scale 120ms linear, opacity var(--t-panel) var(--ease-out);
+  /* 120ms is exactly `--t-press`; it was written out by hand, so the token
+     and its one hard-coded twin could drift apart. */
+  transition: scale var(--t-press) linear, opacity var(--t-panel) var(--ease-out);
 }
 
 @keyframes lobe-a {
@@ -562,6 +564,11 @@ html:has(.player-bar) { scroll-padding-bottom: 100px; }
   background: var(--surface);
   color: var(--ink);
   font: inherit; font-size: var(--t-body); font-weight: 500;
+  /* `.text-action` has always had this and `.btn` did not, so a `.btn` squeezed
+     by a flex row broke its own label: the 添加 button beside the custom-style
+     field was 56px wide and three lines tall. A control that reflows its label
+     to fit is a control that has given up. */
+  white-space: nowrap; flex-shrink: 0;
   cursor: pointer;
   transition: transform var(--t-press) var(--ease-ui), background-color var(--t-ui) var(--ease-ui), border-color var(--t-ui) var(--ease-ui);
 }
@@ -815,7 +822,31 @@ input[type='range'] { width: 100%; accent-color: var(--ink); min-height: var(--t
 .chip--btn:disabled { opacity: var(--o-disabled); cursor: default; border-color: var(--line); }
 .chip--btn:disabled:hover { border-color: var(--line); }
 .chip--btn:disabled:active { transform: none; }
-.chip--btn.is-on, .chip--mood[aria-pressed='true'] { background: var(--ink); color: var(--bg); border-color: var(--ink); }
+/*
+ * Chosen, not commanded.
+ *
+ * This was a solid `--ink` fill: against the panel that is about 16:1, where
+ * the primary button — the only *action* on the page — is about 3:1. The
+ * strongest thing on the composer was a duration chip, five times the weight of
+ * the button it was meant to lead to. Selection is a state; it has to be
+ * unmistakable, not loud.
+ *
+ * It also disagreed with the other selected state on the same screen:
+ * `.seg__btn.is-active` is a white raised pill, which is the right register.
+ * Two answers to "this one is chosen", side by side, is the kind of thing that
+ * reads as unfinished without being nameable.
+ *
+ * Brand tint with a brand edge: ink on `--petal-soft` is 13.24:1, so the label
+ * is more legible than it was on ink, and the chip now belongs to the same
+ * family as the primary rather than outranking it.
+ */
+.chip--btn.is-on, .chip--mood[aria-pressed='true'] {
+  background: var(--petal-soft);
+  color: var(--ink);
+  border-color: var(--petal);
+  font-weight: 600;
+}
+.chip--btn.is-on:hover, .chip--mood[aria-pressed='true']:hover { border-color: var(--petal); }
 
 /* `<Badge>` is rendered on Checkout, Export, Project, Billing and Admin —
    subscription status, licence status, track state, order status, the run
@@ -1434,7 +1465,9 @@ textarea.is-full { border-color: var(--danger); }
 }
 .now-playing__collapse:hover { border-color: var(--ink); }
 .now-playing__collapse:active { transform: scale(0.97); }
-.now-playing__collapse:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
+/* `--focus`, like every other focus ring. A keyboard reader should not have
+   to learn that this one control marks itself differently. */
+.now-playing__collapse:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 .now-playing__now { display: inline-flex; align-items: center; gap: 9px; font-size: var(--t-caption); font-weight: 600; text-transform: uppercase; letter-spacing: 0.18em; color: var(--muted); }
 
 .now-playing__stage {
