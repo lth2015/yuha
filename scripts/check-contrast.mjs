@@ -143,6 +143,12 @@ function readToken(name) {
   return m ? m[1] : null;
 }
 
+/** `readToken` reads colours; this reads a length, for the type scale. */
+function readLengthToken(name) {
+  const m = new RegExp(`${name}:\\s*([\\d.]+)px\\s*;`).exec(src);
+  return m ? Number(m[1]) : null;
+}
+
 function rgb(hex) {
   let h = hex.replace('#', '');
   if (h.length === 3) h = [...h].map((c) => c + c).join('');
@@ -433,7 +439,21 @@ if (!famBlock || !indexBlock) {
   const families = [...famBlock[1].matchAll(/(\w+):\s*\['(#[0-9A-Fa-f]{6})'/g)].map((m) => [m[1], m[2]]);
   const ink = rgbaSpaced(/color:\s*([^;]+);/.exec(indexBlock)?.[1] ?? '');
   const scrim = rgbaSpaced(/background-color:\s*([^;]+);/.exec(indexBlock)?.[1] ?? '');
-  const size = Number(/font-size:\s*([\d.]+)px/.exec(indexBlock)?.[1] ?? 11);
+  /*
+   * The size may be a token now, and a regex that only reads digits quietly
+   * returned its own default — the gate printed "11px" while the stylesheet
+   * said `var(--t-caption)`, which is 12. A check reporting a number it never
+   * read is the failure this file keeps finding elsewhere.
+   */
+  const sizeDecl = /font-size:\s*([^;]+);/.exec(indexBlock)?.[1]?.trim() ?? '';
+  const sizeToken = /^var\((--[\w-]+)\)$/.exec(sizeDecl)?.[1];
+  const size = sizeToken ? readLengthToken(sizeToken) : Number(sizeDecl.replace('px', '').trim());
+  if (!Number.isFinite(size)) {
+    failures.push(
+      `the sleeve reading's font-size reads "${sizeDecl}", which this gate cannot ` +
+        `resolve to a number. It picks the WCAG floor from the size, so it must not guess.`,
+    );
+  }
   const weight = Number(/font-weight:\s*(\d+)/.exec(indexBlock)?.[1] ?? 400);
   // The scale name shares the ink; if it is ever faded, that fade counts.
   const scaleAlpha = Number(/opacity:\s*([\d.]+)/.exec(scaleBlock ?? '')?.[1] ?? 1);
