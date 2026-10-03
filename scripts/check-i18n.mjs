@@ -45,7 +45,14 @@ function block(lang) {
 // Not line-anchored: the ja and en dictionaries put two entries on one
 // line in places, and an anchored pattern silently reported the second of
 // each pair as missing from those two languages.
-const ENTRY = /(?:^|[{,])\s*'([^']+)':\s*(['"])((?:\\.|(?!\2).)*)\2/gm;
+//
+// Either quote around the KEY, which it did not used to accept. The house
+// style is single, but a block of double-quoted keys is valid JavaScript and
+// was simply invisible here: 24 of them were added to all three dictionaries
+// and the count did not move, which would have gone the same way had they been
+// added to only one. A parity check that cannot see an entry reports parity it
+// has not checked, which is worse than reporting a gap.
+const ENTRY = /(?:^|[{,])\s*(['"])((?:(?!\1).)+)\1:\s*(['"])((?:\\.|(?!\3).)*)\3/gm;
 const TOKEN = /\{(\w+)\}/g;
 
 const dicts = new Map();
@@ -55,11 +62,11 @@ for (const lang of LANGS) {
   ENTRY.lastIndex = 0;
   let m;
   while ((m = ENTRY.exec(body)) !== null) {
-    if (d.has(m[1])) {
-      console.log(`✗ ${lang}: duplicate key '${m[1]}' — the later one silently wins`);
+    if (d.has(m[2])) {
+      console.log(`✗ ${lang}: duplicate key '${m[2]}' — the later one silently wins`);
       process.exit(1);
     }
-    d.set(m[1], m[3]);
+    d.set(m[2], m[4]);
   }
   dicts.set(lang, d);
 }

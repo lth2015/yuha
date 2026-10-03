@@ -97,72 +97,78 @@ export function CheckoutConfirm() {
 
   return (
     <div style={{ maxWidth: 620, margin: '0 auto' }} className="stack stack--loose">
-      <h1 style={{ fontSize: 26 }}>ご購入内容の確認</h1>
+      <h1 style={{ fontSize: 26 }}>{t('checkout.title')}</h1>
 
       <ErrorNotice error={error} />
 
       <section className="panel stack">
         <div className="row row--between">
           <h2 style={{ fontSize: 20, margin: 0 }}>{product.displayName}</h2>
-          {product.autoRenew ? <Badge tone="badge--warn">自動更新</Badge> : <Badge>買い切り</Badge>}
+          {product.autoRenew ? (
+            <Badge tone="badge--warn">{t('checkout.badge.autoRenew')}</Badge>
+          ) : (
+            <Badge>{t('checkout.badge.oneTime')}</Badge>
+          )}
         </div>
 
         <div className="table-wrap">
           <table style={{ minWidth: 0 }}>
             <tbody>
               <tr>
-                <th>お支払い金額</th>
+                <th>{t('checkout.label.amount')}</th>
                 <td className="num">
-                  <strong>{formatMoney(product.amountMinor, product.currency, LOCALES[lang])}</strong>（税込）
+                  {/*
+                    The amount is interpolated into the sentence rather than
+                    wrapped in markup with "（税込）" tacked on after it: the
+                    tax note goes before the figure in some languages and after
+                    it in others, and splitting around a tag forces every
+                    language into Japanese word order.
+                  */}
+                  <strong>
+                    {t('checkout.amountWithTax', {
+                      amount: formatMoney(product.amountMinor, product.currency, LOCALES[lang]),
+                    })}
+                  </strong>
                 </td>
               </tr>
               <tr>
-                <th>内容</th>
-                <td>
-                  楽曲生成（30秒〜4分、ボーカルあり／インスト）{' '}
-                  <span className="num">{product.units}</span> 回分
-                </td>
+                <th>{t('checkout.label.contents')}</th>
+                <td>{t('checkout.contents', { units: String(product.units) })}</td>
               </tr>
               <tr>
-                <th>提供時期</th>
-                <td>お支払い確認後ただちに回数が反映されます</td>
+                <th>{t('checkout.label.delivery')}</th>
+                <td>{t('checkout.delivery')}</td>
               </tr>
               <tr>
-                <th>有効期限</th>
+                <th>{t('checkout.label.validity')}</th>
                 <td>
                   {product.validityDays
-                    ? `購入日から ${product.validityDays} 日間`
-                    : '各請求期間内（未使用分の繰り越しはありません）'}
+                    ? t('checkout.validity.days', { days: String(product.validityDays) })
+                    : t('checkout.validity.period')}
                 </td>
               </tr>
               <tr>
-                <th>更新</th>
-                <td>
-                  {product.autoRenew ? (
-                    <>
-                      毎月自動更新（次回請求予定：
-                      <span className="num">{formatJst(nextChargeDate, false)}</span> 頃・
-                      {formatMoney(product.amountMinor, product.currency, LOCALES[lang])}）
-                    </>
-                  ) : (
-                    '自動更新はありません'
-                  )}
-                </td>
-              </tr>
-              <tr>
-                <th>解除方法</th>
+                <th>{t('checkout.label.renewal')}</th>
                 <td>
                   {product.autoRenew
-                    ? '「請求」ページからいつでもオンラインで停止できます。電話は不要です。停止後も当期の終了まで利用できます。'
-                    : '買い切りのため解除手続きは不要です'}
+                    ? t('checkout.renewal.auto', {
+                        date: formatJst(nextChargeDate, false),
+                        amount: formatMoney(product.amountMinor, product.currency, LOCALES[lang]),
+                      })
+                    : t('checkout.renewal.none')}
                 </td>
               </tr>
               <tr>
-                <th>返金</th>
-                <td className="small">
-                  技術的な失敗による消費は返却されます。誤課金は原状回復します。
-                  未使用かつ購入後7日以内のお申し出は個別にご案内します。
+                <th>{t('checkout.label.cancel')}</th>
+                <td>
+                  {product.autoRenew
+                    ? t('checkout.cancel.sub')
+                    : t('checkout.cancel.oneTime')}
                 </td>
+              </tr>
+              <tr>
+                <th>{t('checkout.label.refund')}</th>
+                <td className="small">{t('checkout.refund')}</td>
               </tr>
             </tbody>
           </table>
@@ -172,7 +178,7 @@ export function CheckoutConfirm() {
       {/* SEC-13: the operating entity is disclosed on the payment screen itself. */}
       {disclosure && (
         <section className="panel panel--tight stack stack--tight">
-          <h2 style={{ fontSize: 16, margin: 0 }}>販売事業者</h2>
+          <h2 style={{ fontSize: 16, margin: 0 }}>{t('checkout.seller')}</h2>
           <div className="small muted">
             <div>{disclosure.entityName}</div>
             <div>{disclosure.address}</div>
@@ -181,8 +187,14 @@ export function CheckoutConfirm() {
           {disclosure.isPlaceholder && (
             <div className="alert alert--warn small">{disclosure.notice}</div>
           )}
+          {/*
+            The notice itself stays Japanese wherever it is read — it is the
+            filed statutory document, and Tokushoho.tsx is exempt from the
+            dictionary for that reason. This is the link to it, which is
+            ordinary navigation and reads in the reader's language.
+          */}
           <Link className="small" to="/legal/tokushoho">
-            特定商取引法に基づく表記をすべて見る
+            {t('checkout.tokushohoLink')}
           </Link>
         </section>
       )}
@@ -194,8 +206,22 @@ export function CheckoutConfirm() {
           checked={agreed}
           onChange={(e) => setAgreed(e.target.checked)}
         />
+        {/*
+          Split on the placeholder rather than around the tag, so the link can
+          sit wherever the sentence puts it: Chinese ends with it, Japanese has
+          it in the middle, English ends with it too.
+        */}
         <label htmlFor="agree">
-          上記の内容と <Link to="/legal/terms">利用規約</Link> を確認しました
+          {(() => {
+            const [before, after] = t('checkout.agree').split('{terms}');
+            return (
+              <>
+                {before}
+                <Link to="/legal/terms">{t('checkout.agree.terms')}</Link>
+                {after}
+              </>
+            );
+          })()}
         </label>
       </div>
 
@@ -209,8 +235,8 @@ export function CheckoutConfirm() {
       </button>
 
       <p className="small muted" style={{ margin: 0, textAlign: 'center' }}>
-        カード情報は決済代行（Stripe）の画面で入力します。当社はカード番号・セキュリティコードを保持しません。
-        {runtime?.demo && ' デモモードのため、実際の請求は発生しません。'}
+        {t('checkout.cardNote')}
+        {runtime?.demo && t('checkout.demoNote')}
       </p>
     </div>
   );
@@ -424,7 +450,7 @@ export function CheckoutSimulate() {
   const [params] = useSearchParams();
   const navigate = useNavigate();
   const { runtime } = useSession();
-  const { lang } = useI18n();
+  const { t, lang } = useI18n();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<unknown>(null);
 
@@ -454,7 +480,7 @@ export function CheckoutSimulate() {
   if (!runtime?.demo) {
     return (
       <div className="alert alert--error">
-        この画面はデモモード専用です。実際の決済は決済代行のページで行われます。
+        {t('checkout.sim.onlyDemo')}
       </div>
     );
   }
@@ -462,18 +488,15 @@ export function CheckoutSimulate() {
   return (
     <div style={{ maxWidth: 480, margin: '0 auto' }} className="stack stack--loose">
       <div className="alert alert--warn">
-        <div className="alert__title">擬似決済画面（デモ）</div>
-        <div className="small">
-          実際のカード決済は行われません。本番では決済代行の画面に遷移し、
-          カード情報は当社を経由しません。
-        </div>
+        <div className="alert__title">{t('checkout.sim.title')}</div>
+        <div className="small">{t('checkout.sim.body')}</div>
       </div>
 
       <ErrorNotice error={error} />
 
       <section className="panel stack">
         <div className="row row--between">
-          <span className="muted">お支払い金額</span>
+          <span className="muted">{t('checkout.sim.amount')}</span>
           <strong className="num">{formatMoney(amount, currency, LOCALES[lang])}</strong>
         </div>
         <hr className="divider" />
@@ -483,7 +506,7 @@ export function CheckoutSimulate() {
           disabled={busy}
           onClick={() => void settle('paid')}
         >
-          支払い成功をシミュレート
+          {t('checkout.sim.succeed')}
         </button>
         <button
           type="button"
@@ -491,10 +514,10 @@ export function CheckoutSimulate() {
           disabled={busy}
           onClick={() => void settle('failed')}
         >
-          支払い失敗をシミュレート
+          {t('checkout.sim.fail')}
         </button>
         <Link className="btn btn--ghost btn--block" to="/pricing">
-          キャンセルして戻る
+          {t('checkout.sim.back')}
         </Link>
       </section>
     </div>
