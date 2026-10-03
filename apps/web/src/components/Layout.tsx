@@ -10,6 +10,7 @@ import { BrandLogo, PetalMark } from './Brand';
 import { ErrorBoundary } from './ErrorBoundary';
 import { LightField } from './LightField';
 import { LANGS } from '../lib/i18n';
+import { createInFlightGuard, PENDING_AFTER_MS } from '../lib/in-flight';
 import { NowPlaying } from './NowPlaying';
 import { PlayerBar } from './PlayerBar';
 import { PageTitleContext, pageTitleKey } from '../lib/title';
@@ -88,6 +89,14 @@ export function Layout({ children }: { children: ReactNode }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [titleOverride, setTitleOverride] = useState<string | null>(null);
   const [downloadError, setDownloadError] = useState<unknown>(null);
+  /*
+   * Two halves of the same fix. `downloading` is what the reader sees — the
+   * label changes and the button goes disabled — and the ref is what actually
+   * decides, because React state does not apply until the next render and two
+   * presses inside one frame would both read it as false.
+   */
+  const [downloading, setDownloading] = useState(false);
+  const downloadGuard = useRef(createInFlightGuard());
 
   // See lib/title.ts. Written here, once, so a page's override and the route's
   // default can never race each other on a language switch.
@@ -182,6 +191,16 @@ export function Layout({ children }: { children: ReactNode }) {
 
   const download = useCallback(async () => {
     if (!nowPlaying) return;
+    if (!downloadGuard.current.begin()) return;
+    /*
+     * Deferred, not immediate. The export answers in about 12ms against a
+     * local API, so showing it at once made the label swap and swap back
+     * inside a frame — a flicker reads as a glitch and is worse than
+     * silence. The guard above is already blocking the second press; this
+     * only decides when to say so.
+     */
+    const pendingTimer = window.setTimeout(() => setDownloading(true), PENDING_AFTER_MS);
+    setDownloadError(null);
     try {
       const res = await apiFetch<{ downloadUrl: string }>(`/v1/tracks/${nowPlaying.trackId}/exports`, {
         method: 'POST',
@@ -195,6 +214,12 @@ export function Layout({ children }: { children: ReactNode }) {
        * covering that page, so a failed export showed them nothing at all.
        */
       setDownloadError(err);
+    } finally {
+      // Always, including after a failure: one network blip must not disable
+      // download for the rest of the session.
+      window.clearTimeout(pendingTimer);
+      downloadGuard.current.end();
+      setDownloading(false);
     }
   }, [nowPlaying]);
 
@@ -381,6 +406,7 @@ export function Layout({ children }: { children: ReactNode }) {
           onDownload={
             nowPlaying && (me?.userId === nowPlaying.artistId || nowPlaying.licensedByMe) ? download : undefined
           }
+          downloading={downloading}
           downloadError={downloadError}
           onClose={closeNowPlaying}
         />

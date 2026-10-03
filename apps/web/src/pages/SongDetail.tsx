@@ -3,6 +3,7 @@ import { Link, useNavigate, useParams } from 'react-router-dom';
 import { TITLE_MAX_CODEPOINTS, type LyricTimings, type ProductView, type TrackView } from '@yuha/contracts';
 import { apiFetch, newIdempotencyKey } from '../lib/api';
 import { clampToCodePoints } from '../lib/codepoints';
+import { createInFlightGuard, PENDING_AFTER_MS } from '../lib/in-flight';
 import { formatTime, usePlayer } from '../lib/player';
 import { fetchProducts, findLicenceProduct } from '../lib/catalog';
 import { useI18n } from '../lib/i18n';
@@ -62,6 +63,8 @@ export default function SongDetail() {
   const [draftTitle, setDraftTitle] = useState('');
   const [renameError, setRenameError] = useState<unknown>(null);
   const titleInput = useRef<HTMLInputElement>(null);
+  const [downloading, setDownloading] = useState(false);
+  const downloadGuard = useRef(createInFlightGuard());
   const renameButton = useRef<HTMLButtonElement>(null);
   // `player.currentTime` re-renders this several times a second while the song
   // plays; the score itself only depends on the seed.
@@ -237,7 +240,23 @@ export default function SongDetail() {
   };
 
   const download = async () => {
+    /*
+     * `disabled={busy}` alone lets two presses inside one frame both through:
+     * the flag is React state and does not apply until the next render. The
+     * ref decides at the moment of the press. The full-screen player had
+     * neither, and the song came down several times because of it.
+     */
+    if (!downloadGuard.current.begin()) return;
     setBusy(true);
+    setActionError(null);
+    /*
+     * Deferred, not immediate. The export answers in about 12ms against a
+     * local API, so showing it at once made the label swap and swap back
+     * inside a frame — a flicker reads as a glitch and is worse than silence.
+     * The guard above is already blocking the second press; this only decides
+     * when to say so.
+     */
+    const pendingTimer = window.setTimeout(() => setDownloading(true), PENDING_AFTER_MS);
     try {
       const res = await apiFetch<{ downloadUrl: string }>(`/v1/tracks/${song.trackId}/exports`, {
         method: 'POST',
@@ -247,6 +266,11 @@ export default function SongDetail() {
     } catch (err) {
       setActionError(err);
     } finally {
+      // Always, including after a failure: one network blip must not disable
+      // download for the rest of the session.
+      window.clearTimeout(pendingTimer);
+      downloadGuard.current.end();
+      setDownloading(false);
       setBusy(false);
     }
   };
@@ -375,9 +399,22 @@ export default function SongDetail() {
             {song.styles.length > 0 && <> · {song.styles.join(' / ')}</>}
           </p>
 
-          <div className="song-spread__actions" aria-label={t('song.actions.aria')}>
+          {/*
+            Two groups, not one wrapping row with `margin-left: auto` on the
+            destructive button. That pushed Delete to the right-hand end of
+            *whichever line it happened to land on*, so on a narrow screen it
+            sat wherever the wrap put it. Grouping separates it the same way at
+            every width: beside the others when there is room, on its own line
+            when there is not.
+          */}
+          <div className="song-spread__actions" role="group" aria-label={t('song.actions.aria')}>
+            <div className="song-spread__actions-main">
             {song.visibility === 'public' && (
-              <ShareMenu url={`${window.location.origin}/song/${song.trackId}`} title={song.title} />
+              <ShareMenu
+                url={`${window.location.origin}/song/${song.trackId}`}
+                title={song.title}
+                primary={isOwner}
+              />
             )}
             {isOwner && (
               <>
@@ -400,24 +437,29 @@ export default function SongDetail() {
                 <Link className="text-action" to={`/create?edit=${song.trackId}`}>
                   {t('song.edit')}
                 </Link>
-                <button type="button" className="text-action" onClick={download} disabled={busy}>
-                  {t('song.download')}
-                </button>
                 <button
                   type="button"
                   className="text-action"
+                  onClick={download}
+                  disabled={busy}
+                  aria-busy={downloading}
+                >
+                  {downloading ? t('song.downloading') : t('song.download')}
+                </button>
+                {/*
+                  The one filled action, and only while the song is private:
+                  a finished song nobody can open is a song that is not
+                  finished. Once it is public the primary moves to Share, and
+                  unpublishing goes quiet — taking it back should not be the
+                  most inviting thing on the page.
+                */}
+                <button
+                  type="button"
+                  className={`text-action${song.visibility === 'public' ? '' : ' is-strong'}`}
                   onClick={() => setVisibility(song.visibility === 'public' ? 'private' : 'public')}
                   disabled={busy}
                 >
                   {t(song.visibility === 'public' ? 'song.unpublish' : 'song.publish')}
-                </button>
-                <button
-                  type="button"
-                  className="text-action is-danger"
-                  disabled={busy}
-                  onClick={() => void remove()}
-                >
-                  {t('song.delete')}
                 </button>
               </>
             )}
@@ -431,8 +473,14 @@ export default function SongDetail() {
             )}
             {me && !isOwner && song.visibility === 'public' && song.state === 'deliverable' && (
               song.licensedByMe ? (
-                <button type="button" className="text-action" onClick={download} disabled={busy}>
-                  {t('song.downloadLicensed')}
+                <button
+                  type="button"
+                  className="text-action"
+                  onClick={download}
+                  disabled={busy}
+                  aria-busy={downloading}
+                >
+                  {downloading ? t('song.downloading') : t('song.downloadLicensed')}
                 </button>
               ) : (
                 <button
@@ -461,6 +509,21 @@ export default function SongDetail() {
                       : t('song.license.unavailable')}
                 </button>
               )
+            )}
+            </div>
+            {/* Its own group: separated at every width, never pushed to the
+                right-hand end of whatever line a wrap happened to put it on. */}
+            {isOwner && (
+              <div className="song-spread__actions-end">
+                <button
+                  type="button"
+                  className="text-action is-danger"
+                  disabled={busy}
+                  onClick={() => void remove()}
+                >
+                  {t('song.delete')}
+                </button>
+              </div>
             )}
           </div>
 

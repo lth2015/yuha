@@ -1036,9 +1036,24 @@ export default function Create() {
           being used — and a draft someone spent ten minutes on survives a
           misclick.
         */}
+        {/*
+          A fork, dressed as one.
+          
+          It came out of the drawer and was then still a `studio__dial`: a 12px
+          muted label sitting under a row of 12px muted labels, visually
+          identical to the length knob and the style tags. Right place, wrong
+          clothes — the eye slid straight past the one decision this product is
+          built around, which is why it read as *less* findable than when it
+          was hidden behind a disclosure and at least had a name.
+          
+          So it is its own block, the label is at reading weight rather than
+          caption weight, and the editor opens inside it. The choice and what
+          the choice does are one thing, not a setting somewhere and a textarea
+          somewhere else.
+        */}
         {!draft.instrumental && (
-          <div className="studio__dial studio__dial--lyricsby">
-            <span className="studio__dial-label" id="lyricsby-label">
+          <div className="studio__fork">
+            <span className="studio__fork-label" id="lyricsby-label">
               {t('create.lyricsBy')}
             </span>
             <div className="seg" role="group" aria-labelledby="lyricsby-label">
@@ -1059,18 +1074,16 @@ export default function Create() {
                 {t('create.lyricsBy.me')}
               </button>
             </div>
-            <span className="studio__dial-hint">
+            <span className="studio__fork-hint">
               {draft.lyricsBy === 'ai' && draft.lyrics.trim()
                 ? t('create.lyricsBy.kept')
                 : draft.lyricsBy === 'ai'
                   ? t('create.lyricsBy.aiHint')
                   : t('create.lyrics.hint')}
             </span>
-          </div>
-        )}
 
         {writesOwnLyrics && (
-          <div>
+          <div className="studio__fork-body">
             <label htmlFor="lyrics">{t('create.lyrics')}</label>
             {/*
               The prompt box carries `maxLength` and this one did not, while
@@ -1112,6 +1125,8 @@ export default function Create() {
                 {lyricsLength} / {LYRICS_MAX_CODEPOINTS}
               </span>
             </div>
+          </div>
+        )}
           </div>
         )}
 

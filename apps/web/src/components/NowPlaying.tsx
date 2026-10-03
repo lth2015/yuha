@@ -19,6 +19,7 @@ export function NowPlaying({
   timings,
   onClose,
   onDownload,
+  downloading = false,
   downloadError,
   title,
   artist,
@@ -29,6 +30,8 @@ export function NowPlaying({
   timings?: LyricTimings | null;
   onClose: () => void;
   onDownload?: () => void;
+  /** Pending state for the download, so the press has a visible answer. */
+  downloading?: boolean;
   /** A failed export, shown here because this overlay covers the song page. */
   downloadError?: unknown;
   title: string;
@@ -224,8 +227,21 @@ export function NowPlaying({
 
         <div className="now-playing__dock-actions">
           {onDownload && (
-            <button type="button" className="text-action" onClick={onDownload}>
-              {t('song.download')}
+            /*
+             * The press has to answer immediately. This ends in
+             * `window.location.href = …`, which inside a full-screen overlay
+             * changes nothing on screen, so without a label and a disabled
+             * state it read as a dead button — and the song came down several
+             * times because of it.
+             */
+            <button
+              type="button"
+              className="text-action"
+              onClick={onDownload}
+              disabled={downloading}
+              aria-busy={downloading}
+            >
+              {downloading ? t('song.downloading') : t('song.download')}
             </button>
           )}
           {downloadError !== null && downloadError !== undefined && (

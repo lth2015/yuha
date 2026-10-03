@@ -13,7 +13,20 @@ import { useDismiss } from '../lib/dismiss';
  * intranet address it says so, because a 10.x link posted to X opens for
  * nobody outside the office.
  */
-export function ShareMenu({ url, title }: { url: string; title: string }) {
+export function ShareMenu({
+  url,
+  title,
+  primary = false,
+}: {
+  url: string;
+  title: string;
+  /**
+   * Once a song is public, sharing it is the thing the page is for, so it is
+   * the one filled action in the row. Before that the row has no primary at
+   * all and reads as five equal choices.
+   */
+  primary?: boolean;
+}) {
   const { t, lang } = useI18n();
   const [open, setOpen] = useState(false);
   const [copy, setCopy] = useState<'idle' | 'done' | 'failed'>('idle');
@@ -44,7 +57,7 @@ export function ShareMenu({ url, title }: { url: string; title: string }) {
     <div className="share" ref={root}>
       <button
         type="button"
-        className="text-action"
+        className={`text-action${primary ? ' is-strong' : ''}`}
         aria-haspopup="menu"
         aria-expanded={open}
         onClick={() => {

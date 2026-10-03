@@ -1233,7 +1233,22 @@ textarea.is-full { border-color: var(--danger); }
 }
 
 .song-spread__meta { color: var(--muted); font-size: 15px; margin: 0 0 var(--s6); }
-.song-spread__actions { display: flex; align-items: center; gap: var(--s3); flex-wrap: wrap; margin: 0 0 var(--s4); }
+/*
+ * Two groups, not one row with `margin-left: auto` on the destructive button.
+ *
+ * That auto-margin pushed Delete to the right-hand end of *whichever line the
+ * wrap put it on*, so its position changed with the viewport and with how many
+ * actions the viewer could see. Grouping gives it the same relationship to the
+ * others at every width: at the far end when the row fits, on its own line
+ * when it does not — and starting at the left there, like everything else,
+ * rather than floating.
+ */
+.song-spread__actions {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: var(--s3) var(--s6); flex-wrap: wrap; margin: 0 0 var(--s4);
+}
+.song-spread__actions-main,
+.song-spread__actions-end { display: flex; align-items: center; gap: var(--s3); flex-wrap: wrap; }
 .song-spread__note { font-size: 12px; color: var(--muted); margin: 0 0 var(--s2); }
 .song-spread__player { display: flex; flex-direction: column; align-items: stretch; gap: 6px; margin-top: var(--s6); }
 .song-spread__time { font-size: 12px; color: var(--muted); white-space: nowrap; }
@@ -1274,7 +1289,9 @@ textarea.is-full { border-color: var(--danger); }
 .text-action:active:not(:disabled) { transform: scale(0.98); }
 .text-action:disabled { opacity: var(--o-disabled); cursor: default; }
 .text-action.is-danger {
-  margin-left: auto;
+  /* Separation is the row's job now, not this rule's — see
+     `.song-spread__actions`. Outlined rather than filled on purpose: a
+     destructive action should be findable, not inviting. */
   color: var(--danger); background: transparent; box-shadow: none;
   border-color: color-mix(in srgb, var(--danger) 45%, transparent);
 }
@@ -1576,6 +1593,40 @@ textarea.is-full { border-color: var(--danger); }
 .chips--sections { align-items: center; margin-top: var(--s2); }
 /* The style tags are a dial too, and full width: twelve chips wrap. */
 .studio__dial--styles { width: 100%; margin-top: var(--s4); }
+
+/*
+ * The one fork in the composer, and it has to look like one.
+ *
+ * Who writes the words is not a preference like length or energy — it decides
+ * what the rest of the form is. It was a `studio__dial`: a 12px muted caption
+ * under a row of 12px muted captions, so it read as the fourth knob and the
+ * eye went past it. Reading weight on the label, a rule and a step of space
+ * above to break it off the dials, and the editor opens inside the same block
+ * so the choice and its consequence are one object rather than two.
+ *
+ * No colour is doing this work — size, spacing and a hairline are, so it still
+ * separates with transparency reduced or contrast raised.
+ */
+.studio__fork {
+  display: flex; flex-direction: column; gap: var(--s3);
+  margin-top: var(--s6); padding-top: var(--s5);
+  border-top: 1px solid var(--line);
+}
+.studio__fork-label {
+  font-size: 15px; font-weight: 600; color: var(--ink); letter-spacing: -0.01em;
+}
+.studio__fork-hint { font-size: 13px; color: var(--muted); }
+/* Indented and ruled, so the editor reads as belonging to the choice above it
+   rather than as the next section of the form. */
+.studio__fork-body {
+  margin-top: var(--s2); padding-left: var(--s4);
+  border-left: 2px solid var(--line);
+}
+@media (max-width: 560px) {
+  /* The rail costs more than it says at this width; the grouping is carried
+     by the gap instead. */
+  .studio__fork-body { padding-left: 0; border-left: none; }
+}
 
 /* Progressive disclosure: title, your own lyrics, energy, visibility. */
 .studio__more { border-top: 1px solid var(--line); margin-top: var(--s4); padding-top: var(--s4); }
