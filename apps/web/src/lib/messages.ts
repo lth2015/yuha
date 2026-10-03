@@ -185,13 +185,5 @@ void _exhaustive;
  */
 
 /** Dictionary keys; the text lives in lib/i18n like everything else. */
-export const SCENE_KEY = (scene: string): string => `scene.${scene}`;
-export const TRACK_MOOD_KEY = (mood: string): string => `trackmood.${mood}`;
 
-export const TRACK_STATE_TONES: Record<string, string> = {
-  processing: 'badge--warn',
-  deliverable: 'badge--ok',
-  suspended: 'badge--warn',
-  deleted: '',
-};
 export const TRACK_STATE_KEY = (state: string): string => `track.${state}`;

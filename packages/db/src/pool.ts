@@ -23,7 +23,11 @@ export function newId(): string {
   return randomUUID();
 }
 
-export function createPool(opts: DbOptions): mysql.Pool {
+// Module-private: `db()` below is the only way in, and keeping it exported put
+// a second entry point on the package's surface that nothing ever used. The
+// orphan gate had been unable to see that, because a comment in a test
+// mentions the name and a mention used to count as a reference.
+function createPool(opts: DbOptions): mysql.Pool {
   return mysql.createPool({
     uri: opts.connectionString,
     connectionLimit: opts.max ?? 10,

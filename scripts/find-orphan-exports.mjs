@@ -81,6 +81,30 @@ const sources = new Map(files.map((f) => [f, readFileSync(f, 'utf8')]));
 const VALUE_EXPORT = /^export\s+(?:async\s+)?(?:function|const|let|class)\s+([A-Za-z_$][\w$]*)/gm;
 const TYPE_EXPORT = /^export\s+(?:interface|type)\s+([A-Za-z_$][\w$]*)/gm;
 
+/**
+ * What counts as referring to an export.
+ *
+ * The test was `\bNAME\b` over the raw source, so *mentioning* a name was
+ * enough: `expect(describeError({ code: 'ER_LOCK_DEADLOCK' }))` in a test
+ * un-orphaned the constant of that name, which is still used only inside its
+ * own file. The gate then offered to record it as referenced, which would have
+ * written down something untrue and quietly lost a real orphan.
+ *
+ * Quoted strings and comments are removed first. Template literals are NOT:
+ * `${NAME}` inside one is a genuine reference, and dropping backticks would
+ * invent orphans instead of hiding them — the opposite mistake and the worse
+ * one, since this gate is read as "nothing is dead".
+ */
+function referencable(src) {
+  return src
+    .replace(/\/\*[\s\S]*?\*\//g, ' ')
+    .replace(/(^|[^:])\/\/[^\n]*/g, '$1 ')
+    .replace(/'(?:\\.|[^'\\\n])*'/g, "''")
+    .replace(/"(?:\\.|[^"\\\n])*"/g, '""');
+}
+
+const searchable = new Map([...sources].map(([f, src]) => [f, referencable(src)]));
+
 const findings = [];
 for (const [file, src] of sources) {
   if (ENTRY.test(file) || ROUTE_PAGE.test(file)) continue;
@@ -92,7 +116,7 @@ for (const [file, src] of sources) {
       const name = m[1];
       const word = new RegExp(`\\b${name.replace(/\$/g, '\\$')}\\b`);
       let used = false;
-      for (const [other, otherSrc] of sources) {
+      for (const [other, otherSrc] of searchable) {
         if (other === file) continue;
         if (word.test(otherSrc)) {
           used = true;

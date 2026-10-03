@@ -25,7 +25,6 @@ const ROUTES: Array<[string, string | null]> = [
   ['/song/abc', 'title.song'],
   ['/tracks/abc/export', 'title.export'],
   ['/tracks/abc/license', 'title.license'],
-  ['/projects/abc', 'title.project'],
   ['/checkout/confirm', 'title.checkout'],
   ['/checkout/complete', 'title.checkout'],
   ['/settings/billing', 'account.billing'],

@@ -22,7 +22,6 @@ import { Tokushoho } from './pages/Tokushoho';
 import Library from './pages/Library';
 import NotFound from './pages/NotFound';
 import Pricing from './pages/Pricing';
-import Project from './pages/Project';
 import Rights from './pages/Rights';
 import SongDetail from './pages/SongDetail';
 
@@ -81,14 +80,6 @@ export default function App() {
                 element={
                   <RequireAuth>
                     <Create />
-                  </RequireAuth>
-                }
-              />
-              <Route
-                path="/projects/:id"
-                element={
-                  <RequireAuth>
-                    <Project />
                   </RequireAuth>
                 }
               />
