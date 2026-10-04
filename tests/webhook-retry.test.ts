@@ -21,6 +21,7 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import {
   claimWebhookEvents,
+  query,
   execute,
   finishWebhookEvent,
   query,
@@ -145,5 +146,32 @@ describe('a webhook whose handler threw', () => {
     ]);
     await age(id, 86_400);
     expect((await claim()).map((e) => e.id)).not.toContain(id);
+  });
+});
+
+
+/**
+ * The backoff is written twice, so the two copies have to be held together.
+ *
+ * `webhookRetryDelaySeconds` is the readable one; the claim query computes the
+ * same curve in SQL, because selecting candidates and then discarding some in
+ * the worker would hold locks on rows it had already decided to skip. Two
+ * implementations of one rule drift the moment somebody tunes one of them, and
+ * the drift is invisible: the suite would still pass, and events would simply
+ * be retried on a schedule nobody chose.
+ */
+describe('the SQL backoff and the JS one are the same curve', () => {
+  it('agrees at every attempt the budget allows', async () => {
+    const rows = await query<{ n: number; sql_delay: number }>(
+      `SELECT n, LEAST(30 * POW(2, GREATEST(n, 1) - 1), ?) AS sql_delay
+         FROM (SELECT 1 n UNION SELECT 2 UNION SELECT 3 UNION SELECT 4 UNION SELECT 5
+               UNION SELECT 6 UNION SELECT 7 UNION SELECT 8 UNION SELECT 9) t
+        ORDER BY n`,
+      [1800],
+    );
+    expect(rows).toHaveLength(WEBHOOK_MAX_ATTEMPTS - 1);
+    for (const r of rows) {
+      expect(Number(r.sql_delay), `attempt ${r.n}`).toBe(webhookRetryDelaySeconds(Number(r.n)));
+    }
   });
 });

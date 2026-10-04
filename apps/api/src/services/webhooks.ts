@@ -636,14 +636,36 @@ async function refundSubject(
    * fix's clothes.
    */
   if (invoiceId) {
-    const userId = paid?.user_id ?? order?.user_id;
+    /*
+     * The batch, not the payment row, is who this belongs to.
+     *
+     * Asking Stripe was the mistake. `handleInvoicePaid` writes the payment row
+     * only when the invoice carries a top-level `charge`, and the captured
+     * dahlia payload has no such field — so for a renewal there was no payment
+     * row, no order either, and `refundSubject` returned null. `handleRefund`
+     * then returned on its first check: no revocation, no row, no telemetry. A
+     * refunded renewal kept every credit and left no trace.
+     *
+     * The batch is our own record and its business key already contains the
+     * invoice. It knows the owner, and it knows the product version it was
+     * granted at, which is what the period cost — so the proportional share can
+     * be computed without Stripe telling us anything.
+     */
+    const batch = await queryOne<{ user_id: string; product_key: string | null; price_version: number | null }>(
+      `SELECT user_id, product_key, price_version FROM entitlement_batches
+        WHERE source = 'subscription_period' AND SUBSTRING_INDEX(source_ref, ':', -1) = ?
+        LIMIT 1`,
+      [invoiceId],
+    );
+    const userId = batch?.user_id ?? paid?.user_id ?? order?.user_id;
     if (!userId) return null;
-    return {
-      userId,
-      amountMinor: paid?.amount_minor ?? order?.amount_minor ?? 0,
-      order,
-      invoiceId,
-    };
+
+    let amountMinor = paid?.amount_minor ?? 0;
+    if (!amountMinor && batch?.product_key && batch.price_version !== null) {
+      const product = await getProductVersion(batch.product_key, batch.price_version);
+      amountMinor = product?.amount_minor ?? 0;
+    }
+    return { userId, amountMinor: amountMinor || (order?.amount_minor ?? 0), order, invoiceId };
   }
   if (!order) return null;
   return { userId: order.user_id, amountMinor: order.amount_minor, order, invoiceId: null };
@@ -816,7 +838,25 @@ async function handleRefund(ctx: AppContext, event: StripeEventLike): Promise<vo
    * carries a charge and no invoice.
    */
   const subject = await refundSubject(obj, chargeId, paymentIntent);
-  if (!subject) return;
+  if (!subject) {
+    /*
+     * Money left and we cannot say whose it was. Whatever the cause — an order
+     * we never saw, a payload shape that moved again — the one thing that must
+     * not happen is for it to pass in silence, which is what `return` alone did.
+     */
+    await trackEvent({
+      name: 'refund_unattributed',
+      userRef: null,
+      props: {
+        charge_id: chargeId || null,
+        invoice_id: typeof obj['invoice'] === 'string' ? obj['invoice'] : null,
+        amount_minor: chargeCumulative || enumerated.reduce((a, r) => a + r.amount, 0),
+      },
+      runMode: ctx.config.mode,
+      isInternal: ctx.config.isDemo,
+    }).catch(() => undefined);
+    return;
+  }
   const order = subject.order;
 
   await withTx(async (tx) => {
@@ -932,7 +972,25 @@ async function handleDispute(ctx: AppContext, event: StripeEventLike): Promise<v
   const obj = event.data.object;
   const chargeId = String(obj['charge'] ?? '');
   const subject = await refundSubject(obj, chargeId, obj['payment_intent']);
-  if (!subject) return;
+  if (!subject) {
+    // Same reason as the refund path: a dispute we cannot attribute is still
+    // money moving, and a bare `return` is how it passes unnoticed. A dispute
+    // object carries a charge and no invoice, so this is the likelier of the
+    // two to land here.
+    await trackEvent({
+      name: 'dispute_unattributed',
+      userRef: null,
+      props: {
+        charge_id: chargeId || null,
+        dispute_id: String(obj['id'] ?? '') || null,
+        status: String(obj['status'] ?? ''),
+        amount_minor: Math.abs(Number(obj['amount'] ?? 0)),
+      },
+      runMode: ctx.config.mode,
+      isInternal: ctx.config.isDemo,
+    }).catch(() => undefined);
+    return;
+  }
 
   const status = String(obj['status'] ?? 'needs_response');
   const amountMinor = Math.abs(Number(obj['amount'] ?? 0));

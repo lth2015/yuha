@@ -22,10 +22,22 @@ const CSS = new URL('../apps/web/src/styles.css', import.meta.url);
 const src = readFileSync(CSS, 'utf8');
 const bare = src.replace(/\/\*[\s\S]*?\*\//g, '');
 
-/** The lower bound of "display": above this a raw px size is a one-off title. */
-const UI_MAX_PX = 23;
+/**
+ * Derived from the scale, not written beside it.
+ *
+ * It was 23, which excluded exactly the top of the scale it guards: `--t-heading`
+ * is 24px, so a raw `font-size: 24px` passed and the twelfth size could walk
+ * back in at the top. The bound is the largest token, so every value the scale
+ * actually names is covered and only genuinely larger display type is free.
+ */
+let UI_MAX_PX = 0;
 
-const scale = [...bare.matchAll(/(--t-[\w-]+):\s*([\d.]+)px\s*;/g)].map((m) => `${m[1]} (${m[2]}px)`);
+const tokens = [...bare.matchAll(/(--t-[\w-]+):\s*([\d.]+)px\s*;/g)].map((m) => ({
+  name: m[1],
+  px: Number(m[2]),
+}));
+UI_MAX_PX = Math.max(0, ...tokens.map((t) => t.px));
+const scale = tokens.map((t) => `${t.name} (${t.px}px)`);
 if (scale.length < 4) {
   console.log(`✗ found only ${scale.length} --t-* size token(s); the scale has gone missing`);
   process.exit(1);

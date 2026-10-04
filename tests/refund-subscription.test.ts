@@ -37,12 +37,21 @@ import { balanceOf, createHarness, resetData, teardown, type Harness, type TestU
 let h: Harness;
 let sim: SimulatedPaymentsAdapter;
 let planUnits: number;
-const PERIOD_MINOR = 198_000;
+/*
+ * Read from the catalogue, not written here. The first draft pinned 198_000
+ * while the harness seeds `pro_monthly` at 999 — invisible while a payment row
+ * carried the invented figure, and wrong the moment the price had to come from
+ * the catalogue instead. A fixture that disagrees with the product it is
+ * testing against passes for the wrong reason.
+ */
+let PERIOD_MINOR: number;
 
 beforeAll(async () => {
   h = await createHarness({ FEATURE_SUBSCRIPTIONS_ENABLED: 'true' });
   sim = h.ctx.payments as SimulatedPaymentsAdapter;
-  planUnits = (await getActiveProduct('pro_monthly'))!.units;
+  const plan = (await getActiveProduct('pro_monthly'))!;
+  planUnits = plan.units;
+  PERIOD_MINOR = plan.amount_minor;
 });
 beforeEach(async () => { await resetData(); });
 afterAll(async () => { await h?.close(); await teardown(); });
@@ -136,9 +145,10 @@ describe('refunding a subscription period', () => {
 
     // Half the money back, so half the credits — rounded in the subscriber's
     // favour, the same rule the one-time packs use.
-    await refundCharge(chargeId, invoiceId, PERIOD_MINOR / 2, 'part');
+    const part = Math.floor(PERIOD_MINOR / 2);
+    await refundCharge(chargeId, invoiceId, part, 'part');
     const kept = (await balanceOf(user.id)).available;
-    expect(kept).toBe(planUnits - Math.floor((planUnits * (PERIOD_MINOR / 2)) / PERIOD_MINOR));
+    expect(kept).toBe(planUnits - Math.floor((planUnits * part) / PERIOD_MINOR));
     expect(kept).toBeGreaterThan(0);
   });
 
@@ -198,9 +208,118 @@ describe('refunding a subscription period', () => {
     const { subscriptionId } = await subscribe(user);
     const { invoiceId, chargeId } = await invoicePaid(user, subscriptionId, 'dup');
 
-    await refundCharge(chargeId, invoiceId, PERIOD_MINOR / 2, 'dup');
+    const part = Math.floor(PERIOD_MINOR / 2);
+    await refundCharge(chargeId, invoiceId, part, 'dup');
     const afterFirst = (await balanceOf(user.id)).available;
-    await refundCharge(chargeId, invoiceId, PERIOD_MINOR / 2, 'dup2');
+    await refundCharge(chargeId, invoiceId, part, 'dup2');
     expect((await balanceOf(user.id)).available).toBe(afterFirst);
+  });
+});
+
+
+/**
+ * The invoice the real Stripe sends has no `charge` on it.
+ *
+ * `handleInvoicePaid` writes the payment row — and with it the
+ * `stripe_invoice_id` hop a refund needs — only `if (typeof invoice['charge']
+ * === 'string')`. The captured dahlia payload in stripe-invoice-shape.test.ts
+ * carries no `charge`, no `payments` and no `payment_intent`: that field has
+ * never been seen on a real one. The fixtures above invent it, which is the
+ * same fault that file was opened for — a simulator agreeing with the belief
+ * it was built from.
+ *
+ * Without that row the refund had no user to attribute itself to, so
+ * `refundSubject` returned null and `handleRefund` returned on its first
+ * check: no revocation, no `payments` row, no telemetry. A refunded renewal
+ * kept every credit and left no trace that it had happened.
+ *
+ * The repair is to stop asking Stripe who this belongs to. The batch is our own
+ * record: it is keyed `<subscription>:<invoice>` and it already stores the
+ * owner, the product and the price version it was granted at. The invoice id
+ * alone is enough to reach all of it.
+ */
+describe('a subscription refund when the invoice carried no charge', () => {
+  /** The shape the captured payload actually has: no `charge` anywhere. */
+  async function invoicePaidNoCharge(user: TestUser, subscriptionId: string, tag: string) {
+    const invoiceId = `in_nc_${tag}`;
+    await recordWebhookEvent({
+      provider: 'stripe', eventId: `evt_nc_${tag}`, eventType: 'invoice.paid',
+      signatureVerified: true,
+      payload: {
+        id: `evt_nc_${tag}`, type: 'invoice.paid', created: Math.floor(Date.now() / 1000),
+        data: { object: {
+          id: invoiceId, object: 'invoice', status: 'paid', paid: true, amount_paid: PERIOD_MINOR,
+          parent: { type: 'subscription_details', subscription_details: {
+            subscription: subscriptionId,
+            metadata: { user_id: user.id, price_key: 'pro_monthly' },
+          } },
+        } },
+      },
+    });
+    expect(await drain()).toBe(1);
+    return invoiceId;
+  }
+
+  it('takes a floored share of a renewal, with no payment row to read it from', async () => {
+    const user = await h.createUser();
+    const { subscriptionId } = await subscribe(user);
+    await invoicePaidNoCharge(user, subscriptionId, 'm1');
+    const second = await invoicePaidNoCharge(user, subscriptionId, 'm2');
+    expect((await balanceOf(user.id)).available).toBe(planUnits * 2);
+
+    // Nothing recorded the charge, so the hop that existed before is absent.
+    const rows = await query(`SELECT id FROM payments WHERE stripe_invoice_id = ?`, [second]);
+    expect(rows).toHaveLength(0);
+
+    const part = Math.floor(PERIOD_MINOR / 2);
+    await refundCharge('ch_absent', second, part, 'nc-half');
+    // Month one untouched; the floored share of month two taken.
+    expect((await balanceOf(user.id)).available)
+      .toBe(planUnits + (planUnits - Math.floor((planUnits * part) / PERIOD_MINOR)));
+  });
+
+  it('takes everything unused when the whole renewal is refunded', async () => {
+    const user = await h.createUser();
+    const { subscriptionId } = await subscribe(user);
+    const only = await invoicePaidNoCharge(user, subscriptionId, 'full');
+    await refundCharge('ch_absent2', only, PERIOD_MINOR, 'nc-full');
+    expect((await balanceOf(user.id)).available).toBe(0);
+  });
+
+  it('records the refund even so, instead of leaving no trace', async () => {
+    const user = await h.createUser();
+    const { subscriptionId } = await subscribe(user);
+    const inv = await invoicePaidNoCharge(user, subscriptionId, 'trace');
+    await refundCharge('ch_absent3', inv, PERIOD_MINOR, 'nc-trace');
+    const refunds = await query<{ amount_minor: number }>(
+      `SELECT amount_minor FROM payments WHERE kind = 'refund' AND stripe_invoice_id = ?`, [inv],
+    );
+    expect(refunds).toHaveLength(1);
+    expect(Number(refunds[0]!.amount_minor)).toBe(-PERIOD_MINOR);
+  });
+});
+
+/**
+ * A refund we cannot attribute is still money leaving.
+ *
+ * `handleRefund` returned on `if (!subject) return;` — no row, no event,
+ * nothing. Whatever the cause (an order we never saw, a shape that moved
+ * again), the one thing that must not happen is for it to pass in silence.
+ */
+describe('a refund that belongs to nothing we know about', () => {
+  it('is reported rather than dropped', async () => {
+    await recordWebhookEvent({
+      provider: 'stripe', eventId: 'evt_orphan', eventType: 'charge.refunded',
+      signatureVerified: true,
+      payload: {
+        id: 'evt_orphan', type: 'charge.refunded', created: Math.floor(Date.now() / 1000),
+        data: { object: { id: 'ch_orphan', object: 'charge', amount: 50_000, amount_refunded: 50_000 } },
+      },
+    });
+    await drain();
+    const events = await query<{ name: string }>(
+      `SELECT name FROM analytics_events WHERE name = 'refund_unattributed'`,
+    );
+    expect(events).toHaveLength(1);
   });
 });
