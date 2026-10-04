@@ -132,7 +132,7 @@ module "api_irsa" {
 
   oidc_providers = {
     main = {
-      provider_arn               = module.eks.oidc_provider_arn
+      provider_arn = module.eks.oidc_provider_arn
       # Must equal the ServiceAccount the chart creates, in the namespace the
       # release is installed into. AWS resources stay `loopscene-*`; everything
       # inside the cluster is `yuha` (see infra/helm/loopscene/values.yaml).

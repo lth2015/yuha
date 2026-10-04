@@ -40,7 +40,7 @@ variable "github_oidc_provider_arn" {
 
 locals {
   create_github_oidc = var.github_oidc_provider_arn == ""
-  github_oidc_arn = local.create_github_oidc ? aws_iam_openid_connect_provider.github[0].arn : var.github_oidc_provider_arn
+  github_oidc_arn    = local.create_github_oidc ? aws_iam_openid_connect_provider.github[0].arn : var.github_oidc_provider_arn
 }
 
 resource "aws_iam_openid_connect_provider" "github" {

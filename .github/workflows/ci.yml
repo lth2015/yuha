@@ -342,12 +342,13 @@ jobs:
         # only that something failed, which any missing value would have
         # satisfied — including two that the chart did not check at the time.
         run: |
-          set +e
-          out=$(helm template loopscene infra/helm/loopscene \
+          # `if cmd; then` rather than `$?`: with `set +e` above, any command
+          # between the assignment and the test would overwrite `$?` and the
+          # check would silently pass. Same reason shellcheck asks (SC2181).
+          if out=$(helm template loopscene infra/helm/loopscene \
             --set image.registry=example.dkr.ecr.ap-northeast-1.amazonaws.com \
             --set image.api.repository=loopscene-staging-api \
-            --set image.worker.repository=loopscene-staging-worker 2>&1)
-          if [ $? -eq 0 ]; then
+            --set image.worker.repository=loopscene-staging-worker 2>&1); then
             echo "FAIL: the chart rendered without a digest"
             exit 1
           fi

@@ -67,9 +67,11 @@ jobs:
         run: |
           set -euo pipefail
           ENVIRONMENT="${{ inputs.environment || 'production' }}"
-          echo "environment=$ENVIRONMENT" >> "$GITHUB_OUTPUT"
-          echo "cluster=loopscene-$ENVIRONMENT" >> "$GITHUB_OUTPUT"
-          echo "values=deploy/envs/$ENVIRONMENT.yaml" >> "$GITHUB_OUTPUT"
+          {
+            echo "environment=$ENVIRONMENT"
+            echo "cluster=loopscene-$ENVIRONMENT"
+            echo "values=deploy/envs/$ENVIRONMENT.yaml"
+          } >> "$GITHUB_OUTPUT"
           test -f "deploy/envs/$ENVIRONMENT.yaml"
 
       - name: Production needs a runner inside the VPC
@@ -142,9 +144,11 @@ jobs:
             esac
           done
 
-          echo "registry=$REGISTRY"        >> "$GITHUB_OUTPUT"
-          echo "api_digest=$API_DIGEST"    >> "$GITHUB_OUTPUT"
-          echo "worker_digest=$WORKER_DIGEST" >> "$GITHUB_OUTPUT"
+          {
+            echo "registry=$REGISTRY"
+            echo "api_digest=$API_DIGEST"
+            echo "worker_digest=$WORKER_DIGEST"
+          } >> "$GITHUB_OUTPUT"
 
       - uses: azure/setup-helm@v4
         with:
@@ -192,7 +196,7 @@ jobs:
           kubectl rollout status deploy -n "$NAMESPACE" -l app.kubernetes.io/instance="$RELEASE" --timeout=5m
           # Ask the running pod, rather than trusting that a rollout finishing
           # means the thing it rolled out works.
-          kubectl run deploy-check-${GITHUB_RUN_ID} -n "$NAMESPACE" \
+          kubectl run "deploy-check-${GITHUB_RUN_ID}" -n "$NAMESPACE" \
             --rm -i --restart=Never --image=curlimages/curl:8.11.0 --quiet -- \
             # Port 80 is what the Service publishes; 4000 is the container
             # port behind it. This asked for 4000 and would have failed to
@@ -203,11 +207,13 @@ jobs:
       - name: Report
         if: always()
         run: |
-          echo "### Deploy — ${{ steps.target.outputs.environment }}" >> "$GITHUB_STEP_SUMMARY"
-          echo "" >> "$GITHUB_STEP_SUMMARY"
-          echo "| | |" >> "$GITHUB_STEP_SUMMARY"
-          echo "|---|---|" >> "$GITHUB_STEP_SUMMARY"
-          echo "| commit | \`${GITHUB_SHA}\` |" >> "$GITHUB_STEP_SUMMARY"
-          echo "| cluster | \`${{ steps.target.outputs.cluster }}\` |" >> "$GITHUB_STEP_SUMMARY"
-          echo "| api digest | \`${{ steps.image.outputs.api_digest }}\` |" >> "$GITHUB_STEP_SUMMARY"
-          echo "| result | ${{ job.status }} |" >> "$GITHUB_STEP_SUMMARY"
+          {
+            echo "### Deploy — ${{ steps.target.outputs.environment }}"
+            echo ""
+            echo "| | |"
+            echo "|---|---|"
+            echo "| commit | \`${GITHUB_SHA}\` |"
+            echo "| cluster | \`${{ steps.target.outputs.cluster }}\` |"
+            echo "| api digest | \`${{ steps.image.outputs.api_digest }}\` |"
+            echo "| result | ${{ job.status }} |"
+          } >> "$GITHUB_STEP_SUMMARY"
