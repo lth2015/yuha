@@ -10,8 +10,9 @@ What must be true before LOOPSCENE charges anyone. `PROJECT_TASK.md` §13.
 
 The software is in good shape: the credit ledger, the generation state machine,
 the payment pipeline and the access controls are built and verified against a
-real database (103 automated tests, plus a browser walkthrough). That is an
-engineering result.
+real database (456 automated tests as of 2026-10-04, plus a browser walkthrough
+and a live security pass over authz, session forgery, SSRF, webhook signatures
+and rate limits). That is an engineering result.
 
 It is **not** a commercial one. Charging requires a signed music-provider
 agreement, a legal review of consumer terms, a confirmed operating entity, and
@@ -164,9 +165,15 @@ Stated plainly so the gap above is legible:
 - Rights-complaint handling: free, unauthenticated, suspends distribution,
   preserves evidence, states plainly that suspension is not a finding
 - Operations console with role separation and mandatory audited reasons
-- Japanese responsive UI verified at 320 / 390 / 1440px
-- 103 automated tests against real MySQL; Terraform validates; Helm lints and
-  refuses unpinned images; Docker image builds and its production guard fires
+- Responsive UI in three languages (zh / ja / en, 735 keys at parity) verified
+  at 320 / 390 / 1440px. The statutory 特商法 page stays Japanese by design;
+  the purchase confirmation screen does not, because the law requires six
+  facts the buyer can readily check, not six facts in Japanese
+- 456 automated tests against real MySQL; Terraform validates and is formatted;
+  Helm lints and refuses unpinned images; Docker image builds and its production
+  guard fires; actionlint clean. CI went green for the first time on 2026-10-04 —
+  it had failed on every commit before that, on two lint checks, which meant no
+  deploy could ever have started
 
 ---
 
