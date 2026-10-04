@@ -21,7 +21,7 @@ on:
       environment:
         description: Target environment
         type: choice
-        options: [staging, production]
+        options: [qa, staging, production]
         default: staging
         required: true
   push:

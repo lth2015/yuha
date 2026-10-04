@@ -5,12 +5,12 @@ variable "region" {
 }
 
 variable "environment" {
-  description = "Deployment environment. Only \"production\" enables Multi-AZ, deletion protection and a private EKS endpoint."
+  description = "Deployment environment. Only \"production\" enables Multi-AZ, deletion protection and a private EKS endpoint; dev, qa and staging are identical in shape and differ only by name."
   type        = string
 
   validation {
-    condition     = contains(["dev", "staging", "production"], var.environment)
-    error_message = "environment must be dev, staging or production."
+    condition     = contains(["dev", "qa", "staging", "production"], var.environment)
+    error_message = "environment must be dev, qa, staging or production."
   }
 }
 

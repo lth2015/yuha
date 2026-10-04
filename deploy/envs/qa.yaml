@@ -1,0 +1,160 @@
+# Helm values for QA. Non-secret configuration only.
+#
+# Copied from staging and identical in shape: Terraform treats dev, qa and
+# staging the same and branches only on "production", so this environment is a
+# full-sized rehearsal of the real one, not a reduced version of it.
+#
+# Every empty string below is an output of `terraform apply` in
+# infra/terraform/ run with `-var environment=qa`. The chart fails at render
+# rather than starting half-configured, which is deliberate.
+#
+# The chart fails at render only for what it alone can know — registry,
+# repository, digest and runMode. Every other missing value is reported by the
+# API at startup, by name, before it exits.
+#
+# Every empty string below is an output of `terraform apply` in
+# infra/terraform/, which has never been run against a real account. The chart
+# fails rather than rendering a half-configured release, which is the intended
+# behaviour: a deployment that starts with a blank bucket name is worse than
+# one that refuses to start.
+nameOverride: yuha
+# RUN_MODE is an enum of demo | integration | production. "staging" is not a
+# member: every pod in this environment would have exited at boot with
+# `Invalid enum value`. `integration` is the mode that means "real adapters, not
+# production's guarantees", which is what this environment is.
+runMode: integration
+
+image:
+  # <account>.dkr.ecr.ap-northeast-1.amazonaws.com — from the ECR outputs.
+  registry: ""
+  # Terraform names these `loopscene-<environment>-{api,worker}`. The chart has
+  # no default and fails at render if this is empty.
+  api:
+    repository: loopscene-qa-api
+    digest: ""   # set by the workflow, never committed
+  worker:
+    repository: loopscene-qa-worker
+    digest: ""
+  pullPolicy: IfNotPresent
+
+serviceAccount:
+  api:
+    name: yuha-api
+    roleArn: ""      # terraform output api_role_arn
+  worker:
+    name: yuha-worker
+    roleArn: ""      # terraform output worker_role_arn
+
+envFromSecret: yuha-runtime
+
+api:
+  replicaCount: 2
+  port: 4000
+
+ingress:
+  enabled: true
+  className: alb
+  # Change it if QA is given a different hostname.
+  host: "qa.yuha.studio"
+  certificateArn: "" # ACM certificate in ap-northeast-1
+
+config:
+  publicWebUrl: "https://qa.yuha.studio"
+  publicApiUrl: "https://qa.yuha.studio"
+  logLevel: info
+
+  authAdapter: google
+  google:
+    clientId: ""
+    redirectUri: ""
+  cognito:
+    region: ap-northeast-1
+    userPoolId: ""   # terraform output cognito_user_pool_id
+    appClientId: ""  # terraform output cognito_app_client_id
+
+  storage:
+    region: ap-northeast-1
+    quarantineBucket: ""  # terraform output quarantine_bucket
+    deliveryBucket: ""    # terraform output delivery_bucket
+    kmsKeyId: ""          # terraform output kms_media_key_arn
+    downloadUrlTtlSeconds: 900
+
+  queue:
+    region: ap-northeast-1
+    url: ""               # terraform output sqs_queue_url
+
+  tokenstars:
+    baseUrl: ""
+    modelId: ""
+    chatPath: /v1/chat/completions
+    requestIdHeader: x-request-id
+    structuredOutputs: "true"
+
+  music:
+    adapter: demo
+    providerId: demo-local
+    baseUrl: ""
+    model: ""
+    contractVersion: ""
+    licenseVersion: ""
+    submitPath: ""
+    pollPath: ""
+    cancelPath: ""
+    requestIdField: ""
+    statusField: ""
+    audioUrlField: ""
+    statusMap: '{"pending":[],"completed":[],"failed":[],"rejected":[]}'
+    idempotencyHeader: ""
+    allowedAudioHosts: ""
+    supportsInstrumental: "true"
+    supportsCancel: "false"
+    supportsWebhook: "false"
+    supportsStatusQuery: "true"
+    # No signed agreement with a music provider yet, so staging runs the demo
+    # adapter and the cost figure stays flagged as modelled.
+    commercialDelivery: "false"
+    dataRegion: ap-northeast-1
+    # 45 JPY and "failures are billable" are the figures docs/OPEN_ITEMS.md §4
+    # and §6 record as the deliberate, conservative assumptions. These overrides
+    # quietly said 46 and "false"; assuming failures are free understates cost,
+    # which is the direction that hurts.
+    costMinorPerRequest: "45"
+    billFailedRequests: "true"
+    costIsEstimate: "true"
+
+  stripe:
+    publishableKey: ""
+    priceIdDrop5: ""
+    priceIdProMonthly: ""
+    priceIdPremierMonthly: ""
+
+  features:
+    subscriptionsEnabled: "true"
+    freeTrialEnabled: "true"
+    wavExportEnabled: "false"
+
+  limits:
+    maxConcurrentJobsPerUser: "3"
+    dailyBudgetMinor: "50000"
+    generationRateLimitPerHour: "60"
+    exportRateLimitPerHour: "120"
+
+  # production mode refuses to start unless entityName, address and contact are
+  # all non-empty — the 特定商取引法 disclosure must not be a placeholder. These
+  # overrides used to blank out even the name the chart already knows.
+  #
+  # The operator is a sole proprietor (個人事業主), so 販売業者 and 代表者 are
+  # the same person. <redacted: operator name> is the Japanese-kanji form of the name, which is
+  # what a Japanese statutory page prints.
+  legal:
+    entityName: "<redacted: operator name>"
+    representative: "<redacted: operator name>"
+    # 住所, in the form the operator gave as the registered one. The 〒 is
+    # prefixed because a Japanese statutory disclosure conventionally carries
+    # it; <redacted: operator region> is deliberately NOT, even though convention would add it,
+    # because <redacted: operator region> is a 政令指定都市 and the registered form omits the
+    # prefecture. The registered form wins over the convention.
+    address: "<redacted: operator address>"
+    contact: "redacted-operator@example.invalid"
+    # <redacted: operator phone>, hyphenated the way a Japanese disclosure prints it.
+    phone: "<redacted: operator phone>"
