@@ -18,6 +18,34 @@ const bool = (dflt: boolean) =>
     .optional()
     .transform((v) => (v === undefined || v === '' ? dflt : v === 'true' || v === '1'));
 
+/**
+ * An optional secret. A blank one is absent, not empty.
+ *
+ * `.env` carried `GOOGLE_SESSION_SECRET=` — the key written, the value not —
+ * and the fallback meant to cover that is
+ * `cfg.GOOGLE_SESSION_SECRET ?? cfg.DEV_AUTH_SECRET`. `??` does not catch the
+ * empty string, so the effective session signing key was `''`: every
+ * Google-issued session signed with an empty secret, forgeable by anyone who
+ * knows the token format. The storage signer has the same shape, where an
+ * empty key means a download URL for any object can be minted.
+ *
+ * `bool` and `int` above already treat `''` as unset; plain `z.string()
+ * .optional()` did not, so the two kinds of setting disagreed about what a
+ * blank line in a .env file means. Whitespace counts as blank too — a key
+ * someone "filled in" with a space is the same mistake wearing a coat.
+ *
+ * Production was never exposed: those checks use `!`, which does catch `''`,
+ * and refuse to start. Every other environment was.
+ */
+const secret = () =>
+  z
+    .string()
+    .optional()
+    .transform((v) => {
+      const t = v?.trim();
+      return t ? t : undefined;
+    });
+
 const int = (dflt: number) =>
   z
     .string()
@@ -41,7 +69,7 @@ const envSchema = z.object({
   // --- identity -----------------------------------------------------------
   AUTH_ADAPTER: z.enum(['dev', 'google', 'cognito']).optional(),
   /** Signing secret for the local dev session token. Never valid in production. */
-  DEV_AUTH_SECRET: z.string().optional(),
+  DEV_AUTH_SECRET: secret(),
   /** Restricts the dev sign-in; see auth/allowlist.ts. Empty = unrestricted. */
   DEV_LOGIN_ALLOWLIST: z.string().optional(),
   COGNITO_REGION: z.string().optional(),
@@ -49,19 +77,19 @@ const envSchema = z.object({
   COGNITO_APP_CLIENT_ID: z.string().optional(),
   /** "Sign in with Google" (authorization code + PKCE; see auth/google.ts). */
   GOOGLE_CLIENT_ID: z.string().optional(),
-  GOOGLE_CLIENT_SECRET: z.string().optional(),
+  GOOGLE_CLIENT_SECRET: secret(),
   GOOGLE_REDIRECT_URI: z.string().optional(),
   /** Signing secret for Google-issued sessions; falls back to DEV_AUTH_SECRET outside production. */
-  GOOGLE_SESSION_SECRET: z.string().optional(),
+  GOOGLE_SESSION_SECRET: secret(),
   /** Key material for encrypting TOTP secrets at rest. Falls back outside production. */
-  MFA_ENCRYPTION_SECRET: z.string().optional(),
+  MFA_ENCRYPTION_SECRET: secret(),
   /** Issuer shown in Google Authenticator. */
   MFA_ISSUER: z.string().default('YUHA'),
 
   // --- text model (TokenStars) -------------------------------------------
   TEXT_ADAPTER: z.enum(['local', 'tokenstars']).optional(),
   TOKENSTARS_BASE_URL: z.string().optional(),
-  TOKENSTARS_API_KEY: z.string().optional(),
+  TOKENSTARS_API_KEY: secret(),
   TOKENSTARS_MODEL_ID: z.string().optional(),
   TOKENSTARS_CHAT_PATH: z.string().optional(),
   TOKENSTARS_REQUEST_ID_HEADER: z.string().optional(),
@@ -80,7 +108,7 @@ const envSchema = z.object({
   MUSIC_ADAPTER: z.enum(['demo', 'glm', 'http']).optional(),
   MUSIC_PROVIDER_ID: z.string().optional(),
   MUSIC_BASE_URL: z.string().optional(),
-  MUSIC_API_KEY: z.string().optional(),
+  MUSIC_API_KEY: secret(),
   MUSIC_MODEL: z.string().optional(),
   MUSIC_CONTRACT_VERSION: z.string().optional(),
   MUSIC_LICENSE_VERSION: z.string().optional(),
@@ -127,11 +155,11 @@ const envSchema = z.object({
   // --- storage ------------------------------------------------------------
   STORAGE_ADAPTER: z.enum(['local', 's3']).optional(),
   STORAGE_LOCAL_ROOT: z.string().default('./var/storage'),
-  STORAGE_SIGNING_SECRET: z.string().optional(),
+  STORAGE_SIGNING_SECRET: secret(),
   S3_REGION: z.string().optional(),
   S3_QUARANTINE_BUCKET: z.string().optional(),
   S3_DELIVERY_BUCKET: z.string().optional(),
-  S3_KMS_KEY_ID: z.string().optional(),
+  S3_KMS_KEY_ID: secret(),
   DOWNLOAD_URL_TTL_SECONDS: int(300),
 
   // --- queue --------------------------------------------------------------
@@ -142,9 +170,9 @@ const envSchema = z.object({
 
   // --- payments -----------------------------------------------------------
   PAYMENTS_ADAPTER: z.enum(['simulated', 'stripe']).optional(),
-  STRIPE_SECRET_KEY: z.string().optional(),
-  STRIPE_WEBHOOK_SECRET: z.string().optional(),
-  STRIPE_PUBLISHABLE_KEY: z.string().optional(),
+  STRIPE_SECRET_KEY: secret(),
+  STRIPE_WEBHOOK_SECRET: secret(),
+  STRIPE_PUBLISHABLE_KEY: secret(),
   /** Only set when the account needs a version newer than the SDK's default. */
   STRIPE_API_VERSION: z.string().optional(),
   STRIPE_PRICE_ID_DROP_5: z.string().optional(),
@@ -165,7 +193,7 @@ const envSchema = z.object({
   ALIGNMENT_ADAPTER: z.enum(['estimated', 'http']).optional(),
   ALIGNMENT_PROVIDER_ID: z.string().optional(),
   ALIGNMENT_BASE_URL: z.string().optional(),
-  ALIGNMENT_API_KEY: z.string().optional(),
+  ALIGNMENT_API_KEY: secret(),
   ALIGNMENT_SUBMIT_PATH: z.string().optional(),
   ALIGNMENT_LINES_FIELD: z.string().optional(),
   ALIGNMENT_LINE_TEXT_FIELD: z.string().optional(),

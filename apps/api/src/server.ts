@@ -18,6 +18,8 @@ import rightsRoutes from './routes/rights.js';
 import telemetryRoutes from './routes/telemetry.js';
 import trackRoutes from './routes/tracks.js';
 
+import { redactUrlSecrets } from './log-redaction.js';
+
 export async function buildServer(ctx: AppContext): Promise<FastifyInstance> {
   const app = Fastify({
     logger: {
@@ -34,6 +36,17 @@ export async function buildServer(ctx: AppContext): Promise<FastifyInstance> {
           '*.secret',
         ],
         censor: '[redacted]',
+      },
+      /*
+       * `redact.paths` works on object paths, and the thing that leaked is
+       * inside a string: the signed download url the local storage adapter
+       * serves. Dropping `req.url` wholesale would redact a request log into
+       * uselessness, so the query is cleaned and the route kept.
+       */
+      serializers: {
+        req(request: { method: string; url: string; id?: unknown }) {
+          return { method: request.method, url: redactUrlSecrets(request.url), id: request.id };
+        },
       },
     },
     /*
