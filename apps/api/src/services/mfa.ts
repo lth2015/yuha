@@ -1,9 +1,11 @@
 import { AppError } from '@yuha/contracts';
 import {
+  clearMfaFailures,
   consumeRecoveryCode,
   disableMfaFactor,
   enableMfaFactor,
   getEnabledMfaFactor,
+  recordMfaFailure,
   getMfaFactor,
   getUser,
   redeemChallenge,
@@ -37,6 +39,16 @@ function secretBox(ctx: AppContext): SecretBox {
 }
 
 const CHALLENGE_TTL_SECONDS = 5 * 60;
+/**
+ * Five wrong codes in a row locks the account for fifteen minutes.
+ *
+ * Short on purpose: this is a speed limit, not a punishment. An owner locked
+ * out of their own account is its own kind of failure, and fifteen minutes
+ * takes a six-digit brute force from hours to years without taking the account
+ * away from the person who owns it.
+ */
+const MFA_MAX_FAILED_ATTEMPTS = 5;
+const MFA_LOCK_SECONDS = 15 * 60;
 
 export interface EnrollResult {
   secret: string;
@@ -134,18 +146,51 @@ export async function verifyMfaChallenge(
   const factor = await getEnabledMfaFactor(userId);
   if (!factor) throw new AppError('MFA_NOT_ENROLLED', 'two-factor is not enabled on this account');
 
+  /*
+   * The limit that follows the account rather than the address.
+   *
+   * A challenge token lives five minutes and is only spent on success, so one
+   * can be tried against for its whole life; the per-IP cap of twelve a minute
+   * is multiplied by however many addresses an attacker has, and six digits do
+   * not survive that. This cap cannot be widened by having more of them.
+   *
+   * Checked before the code is compared, so a locked account costs an attacker
+   * a database read and tells them nothing about whether the code was right.
+   */
+  if (factor.locked_until && factor.locked_until.getTime() > Date.now()) {
+    throw new AppError('MFA_INVALID_CODE', 'too many incorrect codes — wait a few minutes and try again');
+  }
+
   const totpSecret = secretBox(ctx).decrypt(factor.secret_encrypted);
-  const codeOk =
-    verifyTotp(totpSecret, params.code) ||
-    (await consumeRecoveryCode({ userId, hash: hashRecoveryCode(params.code) }));
-  if (!codeOk) throw new AppError('MFA_INVALID_CODE', 'the code did not match');
+  // Verified once and remembered: re-running verifyTotp at the end to decide
+  // which factor was used can straddle a 30-second step boundary and report a
+  // TOTP login as a spent recovery code.
+  const totpOk = verifyTotp(totpSecret, params.code);
+  const codeOk = totpOk || (await consumeRecoveryCode({ userId, hash: hashRecoveryCode(params.code) }));
+  if (!codeOk) {
+    const { lockedUntil } = await recordMfaFailure({
+      userId,
+      maxAttempts: MFA_MAX_FAILED_ATTEMPTS,
+      lockSeconds: MFA_LOCK_SECONDS,
+    });
+    // The same message either way: whether the account is now locked is not
+    // something an attacker should learn from a wrong guess.
+    throw new AppError(
+      'MFA_INVALID_CODE',
+      lockedUntil && lockedUntil.getTime() > Date.now()
+        ? 'too many incorrect codes — wait a few minutes and try again'
+        : 'the code did not match',
+    );
+  }
+  // A correct code clears the slate, including a lock already earned.
+  await clearMfaFailures(userId);
 
   // Single use: a redeemed challenge never mints a second session.
   const challengeHash = createHash('sha256').update(params.challengeToken).digest('hex');
   if (!(await redeemChallenge(userId, challengeHash))) {
     throw new AppError('AUTH_EXCHANGE_FAILED', 'this challenge was already used — sign in again');
   }
-  return { userId, usedRecoveryCode: !verifyTotp(totpSecret, params.code) };
+  return { userId, usedRecoveryCode: !totpOk };
 }
 
 /** The session issuer google sessions use (shared with routes/auth.ts). */
