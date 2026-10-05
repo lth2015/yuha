@@ -169,6 +169,16 @@ export async function executeAccountDeletion(
     // A second factor for an account nobody can sign into is a stored secret
     // with no purpose.
     await execute(`DELETE FROM mfa_factors WHERE user_id = ?`, [deletion.user_id]);
+    /*
+     * And the places this account was known to sign in from.
+     *
+     * Explicit, not inherited: `known_sign_in_sources` has ON DELETE CASCADE,
+     * but the user row is anonymised rather than deleted, so the cascade never
+     * fires. A table added later and not listed here is a table that quietly
+     * survives an erasure, which is the shape of defect this list exists to
+     * prevent.
+     */
+    await execute(`DELETE FROM known_sign_in_sources WHERE user_id = ?`, [deletion.user_id]);
 
     await anonymiseUser({ userId: deletion.user_id, tombstone: randomUUID().slice(0, 12) });
     await recordAccountDeletionOutcome({ id: deletion.id, outcome });

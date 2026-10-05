@@ -193,6 +193,7 @@ async function seedCatalogue(): Promise<void> {
  * duration and clears every table explicitly.
  */
 const BUSINESS_TABLES = [
+  'known_sign_in_sources',
   'mfa_factors',
   'track_licenses',
   'auth_codes',

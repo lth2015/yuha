@@ -31,6 +31,7 @@ import {
   sessionIssuerFor,
   verifyMfaChallenge,
 } from '../services/mfa.js';
+import { noticeAccountChange, noticeSignIn } from '../services/notices.js';
 import { devLoginAllowed, parseDevLoginAllowlist } from '../auth/allowlist.js';
 
 const devLoginSchema = z.object({
@@ -179,6 +180,15 @@ export default async function authRoutes(
         return { mfaRequired: true, challengeToken: challenge, demo: ctx.config.isDemo };
       }
       const token = dev.issue({ externalId, email: body.email });
+      // Fire-and-forget: a notice must never delay or fail the sign-in it is
+      // describing, and the send path already refuses to throw.
+      void noticeSignIn(ctx, {
+        userId: user.id,
+        email: body.email,
+        ip: req.ip,
+        userAgent: req.headers['user-agent'] ?? null,
+        at: new Date(),
+      });
       return {
         token: token.token,
         expiresAt: token.expiresAt.toISOString(),
@@ -295,6 +305,13 @@ export default async function authRoutes(
           externalId: user.external_id,
           email: user.email,
         });
+        void noticeSignIn(ctx, {
+          userId: user.id,
+          email: user.email,
+          ip: req.ip,
+          userAgent: req.headers['user-agent'] ?? null,
+          at: new Date(),
+        });
         return {
           token: token.token,
           expiresAt: token.expiresAt.toISOString(),
@@ -348,12 +365,17 @@ export default async function authRoutes(
 
   app.post('/v1/auth/mfa/confirm', { preHandler: app.requireAuth }, async (req) => {
     const body = z.object({ code: z.string().regex(/^\d{6}$/) }).parse(req.body);
-    return confirmMfa(ctx, { userId: req.user!.id, code: body.code });
+    const result = await confirmMfa(ctx, { userId: req.user!.id, code: body.code });
+    void noticeAccountChange(ctx, { email: req.user!.email, change: 'mfa_enabled', at: new Date() });
+    return result;
   });
 
   app.post('/v1/auth/mfa/disable', { preHandler: app.requireAuth }, async (req) => {
     const body = z.object({ code: z.string().min(6).max(16) }).parse(req.body);
     await disableMfa(ctx, { userId: req.user!.id, code: body.code });
+    // The one an attacker performs. Turning a second factor off is the change
+    // most worth telling somebody about.
+    void noticeAccountChange(ctx, { email: req.user!.email, change: 'mfa_disabled', at: new Date() });
     return { disabled: true };
   });
 
@@ -377,6 +399,16 @@ export default async function authRoutes(
         provider: user.auth_provider === 'google' ? 'google' : 'dev',
         externalId: user.external_id,
         email: user.email,
+      });
+      // The third place a session is minted. Missing one of these would mean a
+      // sign-in that is silently never noticed — which is the failure mode
+      // this whole measure is about.
+      void noticeSignIn(ctx, {
+        userId: user.id,
+        email: user.email,
+        ip: req.ip,
+        userAgent: req.headers['user-agent'] ?? null,
+        at: new Date(),
       });
       return {
         token: token.token,
@@ -419,6 +451,9 @@ export default async function authRoutes(
     });
 
     if (created) {
+      // Only on the first ticket: asking twice returns the first one, and a
+      // second notice for the same request would read as a second deletion.
+      void noticeAccountChange(ctx, { email: req.user!.email, change: 'deletion_requested', at: new Date() });
       await trackEvent({
         name: 'account_deletion_requested',
         userRef: req.user!.id,
