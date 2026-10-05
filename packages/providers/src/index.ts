@@ -47,3 +47,4 @@ export * from './chain/tokens.js';
 export * from './chain/erc20.js';
 export * from './chain/verify.js';
 export * from './chain/quote.js';
+export * from './chain/siwe.js';

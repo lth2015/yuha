@@ -35,14 +35,15 @@
     "bootstrap": "pnpm install && pnpm fixtures:audio && pnpm db:up && node --env-file-if-exists=.env scripts/wait-for-db.mjs && node scripts/wait-for-db.mjs mysql://localhost:53307 && pnpm db:migrate && pnpm seed"
   },
   "devDependencies": {
+    "@types/node": "^22.10.2",
     "@yuha/api": "workspace:*",
     "@yuha/contracts": "workspace:*",
     "@yuha/db": "workspace:*",
     "@yuha/providers": "workspace:*",
     "@yuha/worker": "workspace:*",
-    "@types/node": "^22.10.2",
     "concurrently": "^9.1.0",
     "typescript": "^5.7.2",
+    "viem": "2.57.3",
     "vitest": "^2.1.8"
   }
 }

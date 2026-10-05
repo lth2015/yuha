@@ -8,6 +8,7 @@ import errorPlugin from './plugins/errors.js';
 import adminRoutes from './routes/admin.js';
 import authRoutes from './routes/auth.js';
 import billingRoutes from './routes/billing.js';
+import stablecoinRoutes from './routes/stablecoin.js';
 import exploreRoutes from './routes/explore.js';
 import marketRoutes from './routes/market.js';
 import fileRoutes from './routes/files.js';
@@ -126,6 +127,7 @@ export async function buildServer(ctx: AppContext): Promise<FastifyInstance> {
   await app.register(trackRoutes, { ctx });
   await app.register(fileRoutes, { ctx });
   await app.register(billingRoutes, { ctx });
+  await app.register(stablecoinRoutes, { ctx });
   await app.register(rightsRoutes, { ctx });
   await app.register(telemetryRoutes, { ctx });
   await app.register(adminRoutes, { ctx });
