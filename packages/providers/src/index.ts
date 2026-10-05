@@ -42,3 +42,8 @@ export * from './net/fetch-audio.js';
 export * from './payments/types.js';
 export { StripePaymentsAdapter, type StripeOptions } from './payments/stripe.js';
 export { SimulatedPaymentsAdapter } from './payments/simulated.js';
+
+export * from './chain/tokens.js';
+export * from './chain/erc20.js';
+export * from './chain/verify.js';
+export * from './chain/quote.js';
