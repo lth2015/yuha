@@ -9,11 +9,15 @@ import {
   LocalQueueAdapter,
   LocalStorageAdapter,
   LocalTextProvider,
+  LogEmailAdapter,
   S3StorageAdapter,
   SimulatedPaymentsAdapter,
+  SesEmailAdapter,
+  SmtpEmailAdapter,
   SqsQueueAdapter,
   StripePaymentsAdapter,
   TokenStarsTextProvider,
+  type EmailAdapter,
   type MusicProvider,
   type PaymentsAdapter,
   type QueueAdapter,
@@ -32,6 +36,7 @@ export interface AppContext {
   storage: StorageAdapter;
   queue: QueueAdapter;
   payments: PaymentsAdapter;
+  email: EmailAdapter;
   audio: AudioProcessor;
   /** Reads the operator-editable switches on top of the static config. */
   features(): Promise<FeatureFlags>;
@@ -183,6 +188,40 @@ function buildQueue(cfg: AppConfig): QueueAdapter {
   return new SqsQueueAdapter({ region: cfg.SQS_REGION!, queueUrl: cfg.SQS_QUEUE_URL! });
 }
 
+/**
+ * Outbound email.
+ *
+ * `log` is the default outside production and delivers nothing; production
+ * refuses it outright in `loadConfig`, because the sign-in and account-change
+ * notices are a fraud measure this business has declared to its payment
+ * processor, and a measure that cannot leave the building is not one.
+ */
+function buildEmail(cfg: AppConfig): EmailAdapter {
+  const log = (line: Record<string, unknown>) => console.log(JSON.stringify({ component: 'email', ...line }));
+  if (cfg.adapters.email === 'log') return new LogEmailAdapter(log);
+  if (cfg.adapters.email === 'ses') {
+    return new SesEmailAdapter(
+      {
+        region: cfg.SES_REGION!,
+        from: cfg.EMAIL_FROM!,
+        ...(cfg.SES_CONFIGURATION_SET ? { configurationSet: cfg.SES_CONFIGURATION_SET } : {}),
+      },
+      log,
+    );
+  }
+  return new SmtpEmailAdapter(
+    {
+      host: cfg.SMTP_HOST!,
+      port: cfg.SMTP_PORT,
+      secure: cfg.SMTP_SECURE,
+      user: cfg.SMTP_USER!,
+      pass: cfg.SMTP_PASS!,
+      from: cfg.EMAIL_FROM!,
+    },
+    log,
+  );
+}
+
 function buildPayments(cfg: AppConfig): PaymentsAdapter {
   if (cfg.adapters.payments === 'simulated') {
     return new SimulatedPaymentsAdapter({
@@ -221,6 +260,7 @@ export function createContext(config: AppConfig): AppContext {
     storage: buildStorage(config),
     queue: buildQueue(config),
     payments: buildPayments(config),
+    email: buildEmail(config),
     audio: new AudioProcessor(),
     async features(): Promise<FeatureFlags> {
       // Operators may only turn things OFF at runtime. Re-enabling something

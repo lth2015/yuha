@@ -170,6 +170,25 @@ const envSchema = z.object({
 
   // --- payments -----------------------------------------------------------
   PAYMENTS_ADAPTER: z.enum(['simulated', 'stripe']).optional(),
+
+  // ---- outbound email. SES, SendGrid and Resend all speak SMTP, so the
+  // choice between them is an account decision and not one this code makes.
+  EMAIL_ADAPTER: z.enum(['log', 'smtp', 'ses']).optional(),
+  /** The From: header, e.g. `YUHA <no-reply@yuha.studio>`. */
+  EMAIL_FROM: z.string().optional(),
+  SMTP_HOST: z.string().optional(),
+  SMTP_PORT: int(587),
+  /** Implicit TLS (465). Leave false for STARTTLS on 587; never send plaintext. */
+  SMTP_SECURE: bool(false),
+  SMTP_USER: z.string().optional(),
+  SMTP_PASS: z.string().optional(),
+  /**
+   * SES through its own API. No key or secret here on purpose: the cluster has
+   * IRSA, so the pod's role is the credential and there is nothing to store.
+   */
+  SES_REGION: z.string().optional(),
+  /** Optional SES configuration set, for bounce and complaint events. */
+  SES_CONFIGURATION_SET: z.string().optional(),
   STRIPE_SECRET_KEY: secret(),
   STRIPE_WEBHOOK_SECRET: secret(),
   STRIPE_PUBLISHABLE_KEY: secret(),
@@ -287,6 +306,12 @@ export interface AppConfig extends RawEnv {
     storage: 'local' | 's3';
     queue: 'local' | 'sqs';
     payments: 'simulated' | 'stripe';
+    /**
+     * `log` writes the notice and delivers nothing. It is the default
+     * everywhere but production, so eight colleagues testing the office build
+     * cannot be emailed by accident and a deploy needs no mail account.
+     */
+    email: 'log' | 'smtp' | 'ses';
   };
   alignment: 'estimated' | 'http';
   legalEntityConfigured: boolean;
@@ -294,7 +319,7 @@ export interface AppConfig extends RawEnv {
 
 /** Defaults per mode. An explicit env var may narrow these, never widen them. */
 const MODE_DEFAULT_ADAPTERS: Record<RunMode, AppConfig['adapters']> = {
-  demo: { auth: 'dev', text: 'local', music: 'demo', storage: 'local', queue: 'local', payments: 'simulated' },
+  demo: { auth: 'dev', text: 'local', music: 'demo', storage: 'local', queue: 'local', payments: 'simulated', email: 'log' },
   integration: {
     auth: 'dev',
     text: 'local',
@@ -302,6 +327,7 @@ const MODE_DEFAULT_ADAPTERS: Record<RunMode, AppConfig['adapters']> = {
     storage: 'local',
     queue: 'local',
     payments: 'simulated',
+    email: 'log',
   },
   production: {
     auth: 'cognito',
@@ -310,6 +336,7 @@ const MODE_DEFAULT_ADAPTERS: Record<RunMode, AppConfig['adapters']> = {
     storage: 's3',
     queue: 'sqs',
     payments: 'stripe',
+    email: 'ses',
   },
 };
 
@@ -339,6 +366,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     storage: e.STORAGE_ADAPTER ?? defaults.storage,
     queue: e.QUEUE_ADAPTER ?? defaults.queue,
     payments: e.PAYMENTS_ADAPTER ?? defaults.payments,
+    email: e.EMAIL_ADAPTER ?? defaults.email,
   };
 
   const problems: string[] = [];
@@ -348,6 +376,12 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     if (adapters.auth === 'dev') problems.push('production mode cannot use the dev auth adapter');
     if (adapters.music === 'demo') problems.push('production mode cannot use the demo (fake) music adapter');
     if (adapters.payments !== 'stripe') problems.push('production mode cannot use simulated payments');
+    if (adapters.email === 'log') {
+      problems.push(
+        'production mode cannot use the log email adapter: it delivers nothing, and the sign-in ' +
+          'and account-change notices are a fraud measure this business has declared',
+      );
+    }
     if (adapters.storage !== 's3') problems.push('production mode requires S3 storage');
     if (adapters.text !== 'tokenstars') {
       problems.push('production mode requires the TokenStars text adapter (AI-01)');
@@ -386,6 +420,18 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
   }
 
   if (adapters.text === 'tokenstars') {
+  if (adapters.email === 'ses') {
+    if (!e.SES_REGION) problems.push('SES_REGION is required for the ses email adapter');
+    if (!e.EMAIL_FROM) problems.push('EMAIL_FROM is required for the ses email adapter');
+  }
+
+  if (adapters.email === 'smtp') {
+    if (!e.SMTP_HOST) problems.push('SMTP_HOST is required for the smtp email adapter');
+    if (!e.SMTP_USER) problems.push('SMTP_USER is required for the smtp email adapter');
+    if (!e.SMTP_PASS) problems.push('SMTP_PASS is required for the smtp email adapter');
+    if (!e.EMAIL_FROM) problems.push('EMAIL_FROM is required for the smtp email adapter');
+  }
+
     if (!e.TOKENSTARS_BASE_URL) problems.push('TOKENSTARS_BASE_URL is required for the tokenstars adapter');
     if (!e.TOKENSTARS_API_KEY) problems.push('TOKENSTARS_API_KEY is required for the tokenstars adapter');
     if (!e.TOKENSTARS_MODEL_ID) {

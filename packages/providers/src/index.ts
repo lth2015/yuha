@@ -28,6 +28,11 @@ export * from './storage/types.js';
 export { LocalStorageAdapter, type LocalStorageOptions } from './storage/local.js';
 export { S3StorageAdapter, type S3StorageOptions } from './storage/s3.js';
 
+export * from './email/types.js';
+export { LogEmailAdapter } from './email/log.js';
+export { SmtpEmailAdapter, type SmtpEmailOptions } from './email/smtp.js';
+export { SesEmailAdapter, type SesEmailOptions } from './email/ses.js';
+
 export * from './queue/types.js';
 export { LocalQueueAdapter } from './queue/local.js';
 export { SqsQueueAdapter, type SqsOptions } from './queue/sqs.js';

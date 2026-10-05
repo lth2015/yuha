@@ -17,15 +17,18 @@
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.717.0",
+    "@aws-sdk/client-sesv2": "^3.717.0",
     "@aws-sdk/client-sqs": "^3.717.0",
     "@aws-sdk/s3-request-presigner": "^3.717.0",
     "@yuha/contracts": "workspace:*",
     "@yuha/db": "workspace:*",
+    "nodemailer": "^6.9.16",
     "stripe": "^17.5.0",
     "zod": "^3.24.1"
   },
   "devDependencies": {
     "@types/node": "^22.10.2",
+    "@types/nodemailer": "^6.4.17",
     "typescript": "^5.7.2"
   }
 }
