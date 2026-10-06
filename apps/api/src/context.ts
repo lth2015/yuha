@@ -23,6 +23,9 @@ import {
   type QueueAdapter,
   type StorageAdapter,
   type TextProvider,
+  ChainNode,
+  DualChainReader,
+  httpTransport,
 } from '@yuha/providers';
 import { getSetting, initDb } from '@yuha/db';
 import { baseFeatures, type AppConfig, type FeatureFlags } from './config.js';
@@ -36,6 +39,14 @@ export interface AppContext {
   storage: StorageAdapter;
   queue: QueueAdapter;
   payments: PaymentsAdapter;
+  /**
+   * Two Polygon nodes, or undefined when stablecoin payments are off.
+   *
+   * An adapter like the others, so a test can hand in fakes instead of
+   * reaching the network — which is the only way the cases that matter here
+   * (a reorg, a stale receipt, two nodes at odds) can be arranged at all.
+   */
+  chain: DualChainReader | undefined;
   email: EmailAdapter;
   audio: AudioProcessor;
   /** Reads the operator-editable switches on top of the static config. */
@@ -243,6 +254,16 @@ function buildPayments(cfg: AppConfig): PaymentsAdapter {
  * the worker, so both processes resolve identical adapters from identical
  * configuration.
  */
+function buildChainReader(cfg: AppConfig): DualChainReader | undefined {
+  if (!cfg.POLYGON_RPC_PRIMARY_URL || !cfg.POLYGON_RPC_SECONDARY_URL) return undefined;
+  return new DualChainReader(
+    new ChainNode(httpTransport({ label: 'polygon-primary', url: cfg.POLYGON_RPC_PRIMARY_URL })),
+    // The label, never the URL: an alert naming the disagreeing node must not
+    // print an API key.
+    new ChainNode(httpTransport({ label: 'polygon-secondary', url: cfg.POLYGON_RPC_SECONDARY_URL })),
+  );
+}
+
 export function createContext(config: AppConfig): AppContext {
   initDb({
     connectionString: config.DATABASE_URL,
@@ -260,6 +281,7 @@ export function createContext(config: AppConfig): AppContext {
     storage: buildStorage(config),
     queue: buildQueue(config),
     payments: buildPayments(config),
+    chain: buildChainReader(config),
     email: buildEmail(config),
     audio: new AudioProcessor(),
     async features(): Promise<FeatureFlags> {

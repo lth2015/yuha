@@ -162,6 +162,59 @@ function tokensInUse(ctx: AppContext): string[] {
 type Observation = { ok: true; value: ChainObservation } | { ok: false; reason: string };
 
 /**
+ * Settles one transaction the client pointed us at.
+ *
+ * A reported hash says WHERE TO LOOK and nothing else. Everything that decides
+ * whether a payment is real is re-derived from the chain through the same dual
+ * reader the scanner uses, and attribution comes from the open intent of the
+ * transaction's own sender — so a hash copied from a block explorer, or
+ * somebody else's genuine payment, resolves to that sender's order or to
+ * nothing at all. It can never resolve to the person who pasted it.
+ *
+ * This exists for speed, not for authority: the scan finds the same payment
+ * on its next pass regardless.
+ */
+export async function settleReportedTransaction(
+  ctx: AppContext,
+  reader: DualChainReader,
+  txHash: string,
+): Promise<SettleOutcome | { kind: 'not_found'; reason: string }> {
+  const chainId = ctx.config.STABLECOIN_CHAIN_ID;
+  const tx = await reader.primary.transaction(txHash);
+  if (!tx || tx.blockNumber === null) {
+    return { kind: 'not_found', reason: 'that transaction is not in a block yet' };
+  }
+
+  const receiver = ctx.config.STABLECOIN_RECEIVER_ADDRESS;
+  if (!receiver) return { kind: 'not_found', reason: 'no receiving wallet is configured' };
+
+  /*
+   * The primary's receipt, deliberately — this read only LOCATES the transfer,
+   * and `observationFor` below re-reads it from both nodes and judges that.
+   * Asking for agreement here as well was tried and is redundant: removing it
+   * broke no test, because a primary that invents a transfer produces one that
+   * is absent from the agreed receipt and the verifier refuses it as
+   * `no_transfer_log`. A second call that reads like a security check and is
+   * not one is worse than no call.
+   */
+  const located = await reader.primary.receipt(txHash);
+  if (!located) return { kind: 'not_found', reason: 'the primary has no receipt for that transaction' };
+
+  const transfer = located.logs
+    .map((l) => decodeTransferLog(l, chainId))
+    .find((t) => t && t.to.toLowerCase() === receiver.toLowerCase());
+  if (!transfer) {
+    // Not a payment to us. Said plainly rather than treated as an error: a
+    // customer can paste the wrong hash, and that is not a fault condition.
+    return { kind: 'not_found', reason: 'that transaction does not pay this service' };
+  }
+
+  const observation = await observationFor(reader, transfer);
+  if (!observation.ok) return { kind: 'not_found', reason: observation.reason };
+  return settleStablecoinObservation(ctx, observation.value);
+}
+
+/**
  * Assembles the evidence the verifier judges, from both nodes.
  *
  * Everything that can disagree is asked of both: the receipt (status, block,

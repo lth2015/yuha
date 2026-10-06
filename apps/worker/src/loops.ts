@@ -1,6 +1,5 @@
 import type { AppContext } from '@yuha/api';
 import { runStablecoinScanPass } from '@yuha/api';
-import { ChainNode, DualChainReader, httpTransport } from '@yuha/providers';
 import { describeError } from '@yuha/contracts';
 import {
   processWebhookEvent,
@@ -97,19 +96,13 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 export async function stablecoinScanLoop(deps: LoopDeps): Promise<void> {
   const { ctx, log } = deps;
   if (!ctx.config.STABLECOIN_ENABLED) return;
-  const primaryUrl = ctx.config.POLYGON_RPC_PRIMARY_URL;
-  const secondaryUrl = ctx.config.POLYGON_RPC_SECONDARY_URL;
-  if (!primaryUrl || !secondaryUrl) {
-    // Configuration refuses to start without both, so reaching this means the
-    // refusal was bypassed rather than that the URLs are optional.
+  const reader = ctx.chain;
+  if (!reader) {
+    // Configuration refuses to start without both endpoints, so reaching this
+    // means the refusal was bypassed rather than that they are optional.
     log('error', 'stablecoin scan not started: two RPC endpoints are required');
     return;
   }
-
-  const reader = new DualChainReader(
-    new ChainNode(httpTransport({ label: 'polygon-primary', url: primaryUrl })),
-    new ChainNode(httpTransport({ label: 'polygon-secondary', url: secondaryUrl })),
-  );
 
   while (!deps.stopped()) {
     try {

@@ -1,5 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
+import { AppError } from '@yuha/contracts';
 import type { AppContext } from '../context.js';
 import { issueWalletChallenge, verifyWalletChallenge } from '../services/stablecoin-wallet.js';
 import {
@@ -7,6 +8,7 @@ import {
   prepareStablecoinPayment,
   stablecoinPaymentStatus,
 } from '../services/stablecoin.js';
+import { settleReportedTransaction } from '../services/stablecoin-scan.js';
 
 /**
  * Stablecoin payment routes, on /v1 like every other route in this server —
@@ -110,6 +112,38 @@ export default async function stablecoinRoutes(app: FastifyInstance, opts: { ctx
     async (req) => {
       const { id } = req.params as { id: string };
       return prepareStablecoinPayment(ctx, { userId: req.user!.id, orderId: id });
+    },
+  );
+
+  app.post(
+    '/v1/orders/:id/stablecoin-transaction',
+    {
+      preHandler: app.requireAuth,
+      // Each call reads the chain, so it is capped; and there is nothing to
+      // gain by hammering it, since the scanner finds the same payment anyway.
+      config: { rateLimit: { max: 10, timeWindow: '1 minute' } },
+    },
+    async (req, reply) => {
+      const { id } = req.params as { id: string };
+      const body = z.object({ txHash: z.string().regex(/^0x[0-9a-fA-F]{64}$/) }).parse(req.body);
+
+      /*
+       * The order id is checked for ownership and is NOT used to attribute the
+       * payment. Attribution comes from the open intent of the transaction's
+       * own sender, so a hash copied off a block explorer resolves to that
+       * sender's order or to nothing — never to whoever pasted it here.
+       */
+      const status = await stablecoinPaymentStatus({ userId: req.user!.id, orderId: id });
+
+      if (!ctx.chain) throw new AppError('SERVICE_DISABLED', 'stablecoin payments are not available');
+      const outcome = await settleReportedTransaction(ctx, ctx.chain, body.txHash);
+
+      if (outcome.kind === 'not_found') {
+        // 202: we looked, and there is nothing to act on yet. Not an error on
+        // the customer's part, and not a promise that there never will be.
+        return reply.code(202).send({ accepted: true, detail: outcome.reason, orderId: status.orderId });
+      }
+      return reply.send({ accepted: true, outcome: outcome.kind, orderId: status.orderId });
     },
   );
 

@@ -410,3 +410,103 @@ describe('the first pass, with nothing configured', () => {
     }
   });
 });
+
+describe('a customer reporting a transaction hash', () => {
+  /*
+   * A reported hash says WHERE TO LOOK and nothing else. It exists for speed:
+   * the scan finds the same payment on its next pass regardless.
+   */
+  const report = (user: TestUser, orderId: string, txHash: string) =>
+    h.app.inject({
+      method: 'POST',
+      url: `/v1/orders/${orderId}/stablecoin-transaction`,
+      headers: { ...user.authHeader, ...freshIp() },
+      payload: { txHash } as never,
+    });
+
+  it('credits the order without waiting for the next scan', async () => {
+    const { user, orderId } = await quoted('hint-ok@example.jp');
+    h.ctx.chain = pair(good());
+    const res = await report(user, orderId, TX);
+    expect(res.statusCode).toBe(200);
+    expect(res.json().outcome).toBe('fulfilled');
+    expect((await balanceOf(user.id)).available).toBe(5);
+  });
+
+  it('gives a stranger nothing for pasting somebody else\u2019s payment', async () => {
+    /*
+     * The attack the specification names: copy a hash off a block explorer and
+     * claim it. Attribution comes from the open intent of the TRANSACTION'S
+     * OWN sender, so a genuine payment by someone else resolves to their order
+     * or to nothing — never to whoever pasted it. The order id in the URL is
+     * checked for ownership and is not used to attribute anything.
+     */
+    const { user: payer } = await quoted('hint-payer@example.jp');
+    const stranger = await h.createUser({ email: 'hint-stranger@example.jp' });
+    const theirOrder = await h.app.inject({
+      method: 'POST',
+      url: '/v1/checkout',
+      headers: { ...stranger.authHeader, ...freshIp() },
+      payload: { priceKey: 'drop_5', idempotencyKey: 'stranger-order-001' } as never,
+    });
+    expect(theirOrder.statusCode).toBe(200);
+
+    h.ctx.chain = pair(good());
+    const res = await report(stranger, theirOrder.json().orderId, TX);
+    expect(res.statusCode).toBeLessThan(300);
+
+    // The payer is credited, because the chain says the payment is theirs.
+    expect((await balanceOf(payer.id)).available).toBe(5);
+    // The stranger gets nothing at all.
+    expect((await balanceOf(stranger.id)).available).toBe(0);
+  });
+
+  it('will not take one node\u2019s word for it', async () => {
+    // Taking the receipt from the primary alone passed every other test here.
+    // Whether a payment succeeded is not a single node's call to make.
+    const { user, orderId } = await quoted('hint-split@example.jp');
+    h.ctx.chain = pair(good(), good({ transfer: { block: 1_000, amount: AMOUNT, logIndex: 2, status: 0 } }));
+    const res = await report(user, orderId, TX);
+    expect(res.statusCode).toBe(202);
+    expect(res.json().detail).toMatch(/describe receipt .* differently/);
+    expect((await balanceOf(user.id)).available).toBe(0);
+  });
+
+  it('says so plainly when the transaction does not pay this service', async () => {
+    const { user, orderId } = await quoted('hint-elsewhere@example.jp');
+    h.ctx.chain = pair(
+      good({ transfer: { block: 1_000, amount: AMOUNT, logIndex: 2, to: '0x3333333333333333333333333333333333333333' } }),
+    );
+    const res = await report(user, orderId, TX);
+    // Accepted, not an error: a customer can paste the wrong hash, and that is
+    // not a fault condition.
+    expect(res.statusCode).toBe(202);
+    expect(res.json().detail).toMatch(/does not pay this service/);
+    expect((await balanceOf(user.id)).available).toBe(0);
+  });
+
+  it('refuses a hash that is not a hash before touching the chain', async () => {
+    const { user, orderId } = await quoted('hint-garbage@example.jp');
+    h.ctx.chain = pair(good());
+    const res = await report(user, orderId, '0xnot-a-hash');
+    expect(res.statusCode).toBeGreaterThanOrEqual(400);
+  });
+
+  it('is not a way to read somebody else\u2019s order', async () => {
+    const { orderId } = await quoted('hint-owner@example.jp');
+    const nosy = await h.createUser({ email: 'hint-nosy@example.jp' });
+    h.ctx.chain = pair(good());
+    const res = await report(nosy, orderId, TX);
+    expect(res.statusCode).toBe(404);
+  });
+
+  it('does not pay twice when the scan reaches the same payment afterwards', async () => {
+    const { user, orderId } = await quoted('hint-then-scan@example.jp');
+    h.ctx.chain = pair(good());
+    await report(user, orderId, TX);
+    expect((await balanceOf(user.id)).available).toBe(5);
+
+    await runStablecoinScanPass(h.ctx, pair(good()), silent);
+    expect((await balanceOf(user.id)).available).toBe(5);
+  });
+});
