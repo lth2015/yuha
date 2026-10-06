@@ -127,3 +127,39 @@ describing a 499 refund against what is now a 980 order.
 The unit counts in the harness are still not production's (100 and 400 against
 15 and 45). A great many tests assert on credit balances, so that is a separate
 change; it is written down here rather than left implied.
+
+## Choosing the two RPC endpoints
+
+§8 requires two independent nodes and a verified `finalized` tag. Two things
+決めなければならない, and one of them is not a preference:
+
+**The primary and the secondary must be different companies.** Two endpoints
+from one provider usually share a cluster and a view of the chain, so a
+disagreement check between them detects nothing — it looks like a safety
+property and is a formality. This is not about uptime; it is about whether
+"the nodes disagree" can ever be true.
+
+**Every candidate must be probed before use.** `deploy/stablecoin/probe-rpc.sh`
+takes a URL and checks chain id, the `finalized` tag, an `eth_getLogs` range
+and JPYC's on-chain `decimals()`. It never prints the URL.
+
+The check that matters most is one this project nearly shipped without. A
+provider that has not implemented Heimdall v2 milestone finality can answer
+`finalized` with its own `latest`: the call succeeds, the JSON shape is right,
+nothing errors, and settlement then runs on probabilistic confirmations while
+the code believes it has finality. `probeFinality` had three failure cases —
+error, null, above-latest — and not that one, which is the one that actually
+happens. Polygon's documentation puts milestone finality at 2–5 seconds
+against 1–2 second blocks, so a correct node always trails its own head;
+equality is the signature of the silent default.
+
+One operational constraint the scanner inherits: providers cap `eth_getLogs`
+block ranges, and the caps differ by provider and plan (one entry plan
+publishes 500 blocks). `nextScanWindow`'s `maxSpan` has to be set below the
+lower of the two providers' caps, or the first catch-up scan after a gap fails
+on the provider rather than on anything in this code.
+
+No provider is endorsed here, and none has been tested from this repository —
+the container this work was done in cannot reach a Polygon endpoint at all.
+The probe script exists precisely so the claim comes from the endpoint instead
+of from a vendor's documentation.

@@ -21,7 +21,7 @@ const hex = (n: number | bigint) => `0x${BigInt(n).toString(16)}`;
 
 interface NodeState {
   latest: number;
-  finalized: number | 'unsupported' | 'null' | 'above-latest';
+  finalized: number | 'unsupported' | 'null' | 'above-latest' | 'equals-latest';
   /** blockNumber -> hash. Missing means the node has no block there. */
   hashes: Record<number, string>;
   receipts?: Record<string, unknown>;
@@ -40,7 +40,12 @@ function fakeNode(label: string, state: NodeState): ChainNode {
           if (tag === 'finalized') {
             if (state.finalized === 'unsupported') throw new Error('the method does not exist');
             if (state.finalized === 'null') return null;
-            const n = state.finalized === 'above-latest' ? state.latest + 50 : state.finalized;
+            const n =
+              state.finalized === 'above-latest'
+                ? state.latest + 50
+                : state.finalized === 'equals-latest'
+                  ? state.latest
+                  : state.finalized;
             return { number: hex(n), hash: state.hashes[n] ?? `0x${'f'.repeat(64)}`, timestamp: hex(1_700_000_000) };
           }
           if (tag === 'latest') {
@@ -86,6 +91,26 @@ describe('the finality probe', () => {
     // line once the explicit check was removed, so the test passed while the
     // check it was for did not exist.
     expect(p.reason).toBe('the node answered null for the finalized tag');
+  });
+
+  it('refuses a node that serves latest for finalized', async () => {
+    /*
+     * The failure that actually happens: a provider without Heimdall v2
+     * milestone finality answers `finalized` with its own head. The call
+     * succeeds, the shape is right, nothing errors — and every settlement
+     * decision is then made on a probabilistic confirmation while the code
+     * believes it has finality.
+     *
+     * This check was missing. It was found by reading Polygon provider
+     * documentation rather than by testing, which is the uncomfortable part:
+     * the probe had three cases and looked thorough with the likeliest one
+     * absent.
+     */
+    const p = await probeFinality(
+      fakeNode('a', { latest: 200, finalized: 'equals-latest', hashes: { 200: H('2') } }),
+    );
+    expect(p.supported).toBe(false);
+    expect(p.reason).toBe('finalized and latest are both 200, so the node is serving latest for finalized');
   });
 
   it('refuses a finalized height above the node’s own latest', async () => {

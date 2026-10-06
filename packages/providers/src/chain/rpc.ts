@@ -194,10 +194,23 @@ export interface FinalityProbe {
  * Those are not weaker versions of finality; they are a different thing that
  * a reorg goes straight through.
  *
- * A node can fail this three ways, and all three are failures: it errors on
- * the tag, it answers null, or it answers a header at a height above its own
- * latest — which no honest node does, and which means whatever it returned is
- * not what the tag is supposed to mean.
+ * A node can fail this four ways, and all four are failures: it errors on the
+ * tag, it answers null, it answers a header at a height above its own latest
+ * (which no honest node does), or it answers exactly its own latest.
+ *
+ * That last one is the failure that actually happens in the field, and it was
+ * missing here. A provider that has not implemented Heimdall v2 milestone
+ * finality can silently serve `latest` for `finalized` — the call succeeds,
+ * the shape is right, nothing errors, and every settlement decision is then
+ * made on a probabilistic confirmation while the code believes it has
+ * finality. Polygon's own documentation puts milestone finality at 2–5
+ * seconds against 1–2 second blocks, so a correct node is always at least one
+ * block behind its own head; equality is the signature of the silent default,
+ * not a quiet chain.
+ *
+ * Refusing equality is deliberately conservative: a provider whose `latest`
+ * is itself stale could trip it. Stopping automatic confirmation and raising
+ * an alert is the right side to be wrong on.
  */
 export async function probeFinality(node: ChainNode): Promise<FinalityProbe> {
   let latest: bigint;
@@ -213,6 +226,12 @@ export async function probeFinality(node: ChainNode): Promise<FinalityProbe> {
       return {
         supported: false,
         reason: `finalized (${header.number}) is above latest (${latest}), so it is not finality`,
+      };
+    }
+    if (header.number === latest) {
+      return {
+        supported: false,
+        reason: `finalized and latest are both ${latest}, so the node is serving latest for finalized`,
       };
     }
     return { supported: true, height: header.number };
