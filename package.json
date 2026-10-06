@@ -2,7 +2,7 @@
   "name": "yuha",
   "version": "0.1.0",
   "private": true,
-  "description": "YUHA — an AI song studio: describe a feeling, get a finished song",
+  "description": "YUHA \u2014 an AI song studio: describe a feeling, get a finished song",
   "packageManager": "pnpm@11.1.2",
   "engines": {
     "node": ">=22.0.0"
@@ -42,6 +42,8 @@
     "@yuha/providers": "workspace:*",
     "@yuha/worker": "workspace:*",
     "concurrently": "^9.1.0",
+    "ganache": "7.9.2",
+    "solc": "0.8.37",
     "typescript": "^5.7.2",
     "viem": "2.57.3",
     "vitest": "^2.1.8"

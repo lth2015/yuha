@@ -163,3 +163,47 @@ No provider is endorsed here, and none has been tested from this repository —
 the container this work was done in cannot reach a Polygon endpoint at all.
 The probe script exists precisely so the claim comes from the endpoint instead
 of from a vendor's documentation.
+
+## Phase D: what a local chain proved, and what it could not
+
+The suite runs against fake nodes almost everywhere, which is right for
+arranging a reorg or two nodes at odds and wrong for one thing: a fake agrees
+with whatever the code believes about encoding. `tests/stablecoin-local-evm.test.ts`
+runs the path against an actual EVM — a mock ERC-20 compiled from
+`tests/fixtures/evm/MockToken.sol`, deployed on an in-process chain, with real
+calldata execution, real Transfer logs and real receipts.
+
+Three things it established that the fakes could not:
+
+**The local EVM serves `latest` for `finalized`.** Confirmed at block 12, not
+at genesis where equality would prove nothing. That is the silent failure the
+probe had no check for until a provider's documentation was read, and here it
+is a real implementation exhibiting it rather than a fake arranged to. The
+probe refuses it.
+
+**Eighteen decimals and six are different numbers, against two real
+contracts.** Quoting a six-decimal token as eighteen overpays by 10^12 and the
+other way underpays by the same; both are "a number" and both read fine in a
+log line. Each contract was deployed with its own `decimals`, paid, and its
+balance read back.
+
+**A perfect payment of an unwhitelisted token is refused.** This test was
+written expecting `fulfil` and cannot reach it, which is the finding: the
+whitelist is two addresses compiled into the code rather than a runtime input,
+so a mock is refused however correct the payment is — right sender, right
+recipient, right amount, real receipt, real log, matching nonce. Making the
+whitelist injectable would have let the test say `fulfil` and would have
+turned the one thing that cannot be faked into something a configuration
+mistake could widen.
+
+One mechanical note worth keeping: the mock is compiled with `evmVersion:
+'paris'`. Current solc emits `PUSH0`, which the local EVM does not implement,
+and the deployment then consumes exactly its gas limit and reverts — a
+signature that reads like "needs more gas" and is not.
+
+**What phase D does not cover.** Nothing here touches a mainnet address, and
+the mock is a mock: not a stablecoin, not redeemable, not a representation of
+JPYC or USDC. Milestone finality, real provider behaviour under load, and
+`eth_getLogs` range caps are all properties of the production endpoints and are
+established by `deploy/stablecoin/probe-rpc.sh` against those endpoints, not
+here.

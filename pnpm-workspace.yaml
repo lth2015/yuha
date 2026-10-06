@@ -4,5 +4,14 @@ packages:
 
 # esbuild ships a prebuilt binary and needs its install script to place it.
 # Vite/vitest do not work without it.
+#
+# bufferutil and utf-8-validate are optional native accelerators for the
+# websocket library ganache depends on, and ganache is a test-only dependency
+# for the local-EVM suite. They are refused rather than approved: compiling
+# native code at install time to speed up a websocket nothing in this
+# repository opens is a worse trade than the fallback, which the test run
+# announces and which works.
 allowBuilds:
+  bufferutil: false
   esbuild: true
+  utf-8-validate: false
