@@ -77,8 +77,8 @@ describe('checkout', () => {
     expect(res.statusCode).toBe(200);
 
     const order = await getOrder(res.json().orderId);
-    expect(order!.amount_minor).toBe(499);
-    expect(order!.currency).toBe('usd');
+    expect(order!.amount_minor).toBe(980);
+    expect(order!.currency).toBe('jpy');
     expect(order!.price_version).toBe(2);
     expect(order!.status).toBe('pending');
   });
@@ -252,8 +252,8 @@ describe('one-time purchase', () => {
             id: sessionId,
             client_reference_id: orderId,
             payment_status: 'paid',
-            amount_total: 499,
-            currency: 'usd',
+            amount_total: 980,
+            currency: 'jpy',
             metadata: { order_id: orderId, user_id: user.id },
           },
         },
@@ -700,7 +700,7 @@ describe('refunds (PAY-09)', () => {
           id: 're_test_1',
           charge: 'ch_test_1',
           payment_intent: order!.stripe_payment_intent_id,
-          amount_refunded: 499,
+          amount_refunded: 980,
           metadata: { order_id: orderId },
         },
       },
@@ -743,7 +743,7 @@ describe('refunds (PAY-09)', () => {
           id: 're_test_2',
           charge: 'ch_test_2',
           payment_intent: order!.stripe_payment_intent_id,
-          amount_refunded: 499,
+          amount_refunded: 980,
           metadata: { order_id: orderId },
         },
       },

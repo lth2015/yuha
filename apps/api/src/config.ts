@@ -86,6 +86,29 @@ const envSchema = z.object({
   /** Issuer shown in Google Authenticator. */
   MFA_ISSUER: z.string().default('YUHA'),
 
+  /*
+   * Stablecoin payments. Three switches, all off, and they stay off until the
+   * business conclusions in docs/STABLECOIN_V1_PLAN.md are in hand — turning
+   * one on is a decision about licensing, tax and terms, not a deployment
+   * detail. Each currency has its own switch because JPYC and USDC differ in
+   * what still has to be confirmed about them.
+   *
+   * Turning a switch OFF must not stop the scanner, pending fulfilment or
+   * refunds; it closes the door to NEW payments only.
+   */
+  STABLECOIN_ENABLED: bool(false),
+  STABLECOIN_JPYC_ENABLED: bool(false),
+  STABLECOIN_USDC_ENABLED: bool(false),
+  STABLECOIN_CHAIN_ID: z.coerce.number().int().positive().default(137),
+  STABLECOIN_RECEIVER_ADDRESS: z.string().optional(),
+  STABLECOIN_QUOTE_TTL_SECONDS: z.coerce.number().int().min(60).max(3600).default(600),
+  /*
+   * The whitelist/receiver/rule version stamped onto every quote. Bump it when
+   * any of those change, so an existing order keeps being verified against the
+   * rules it was quoted under.
+   */
+  STABLECOIN_CONFIG_VERSION: z.coerce.number().int().positive().default(1),
+
   // --- text model (TokenStars) -------------------------------------------
   TEXT_ADAPTER: z.enum(['local', 'tokenstars']).optional(),
   TOKENSTARS_BASE_URL: z.string().optional(),
@@ -525,6 +548,26 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
         'the demo adapter produces MP3 only',
     );
   }
+  if (e.STABLECOIN_ENABLED) {
+    if (!e.STABLECOIN_RECEIVER_ADDRESS) {
+      problems.push('STABLECOIN_RECEIVER_ADDRESS is required when stablecoin payments are enabled');
+    } else if (!/^0x[0-9a-fA-F]{40}$/.test(e.STABLECOIN_RECEIVER_ADDRESS)) {
+      problems.push('STABLECOIN_RECEIVER_ADDRESS is not an Ethereum address');
+    }
+    if (!e.STABLECOIN_JPYC_ENABLED && !e.STABLECOIN_USDC_ENABLED) {
+      problems.push('stablecoin payments are enabled but no currency is');
+    }
+    /*
+     * USDC needs a rate source and there is no fallback by design: quoting it
+     * from a hardcoded number would charge a customer the wrong amount for a
+     * product priced in yen. Until the provider is implemented and its usage
+     * rights confirmed, enabling USDC is refused rather than approximated.
+     */
+    if (e.STABLECOIN_USDC_ENABLED) {
+      problems.push('USDC is not quotable yet: no rate provider is implemented (see docs/STABLECOIN_V1_PLAN.md)');
+    }
+  }
+
   if (e.FEATURE_FREE_TRIAL_ENABLED && e.FREE_TRIAL_UNITS > 2) {
     problems.push('FREE_TRIAL_UNITS must not exceed 2 (§7)');
   }

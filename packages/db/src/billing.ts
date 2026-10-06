@@ -174,6 +174,8 @@ export interface OrderRow {
   price_key: string;
   price_version: number;
   kind: OrderKind;
+  /** NULL on every order written before stablecoin existed; NULL means card. */
+  payment_method: 'card' | 'stablecoin' | null;
   amount_minor: number;
   currency: string;
   status: OrderStatus;
@@ -190,8 +192,16 @@ export interface OrderRow {
   updated_at: Date;
 }
 
+/*
+ * Named explicitly rather than SELECT *, and so a new column has to be added
+ * here AND to OrderRow. The fourth list of this shape in this repository; the
+ * one in `getMfaFactor` was missing two columns while the row type claimed
+ * they existed, so a lock check read `undefined` and let every attempt
+ * through. Adding a column without adding it here fails the same way, and
+ * silently.
+ */
 const ORDER_COLUMNS = `
-  id, user_id, price_key, price_version, kind, amount_minor, currency, status,
+  id, user_id, price_key, price_version, kind, payment_method, amount_minor, currency, status,
   idempotency_key, stripe_checkout_session_id, stripe_payment_intent_id, stripe_customer_id,
   entitlement_granted_at, paid_at, receipt_url, refunded_amount_minor, metadata, created_at, updated_at
 `;
@@ -218,13 +228,19 @@ export async function insertOrder(
     currency?: string;
     idempotencyKey: string;
     metadata?: Record<string, unknown>;
+    /**
+     * Which channel is paying for this order. Omitted leaves it NULL, which is
+     * what every existing card order reads, so nothing had to be backfilled —
+     * NULL means the card path.
+     */
+    paymentMethod?: 'card' | 'stablecoin';
   },
   tx?: PoolConnection,
 ): Promise<OrderRow> {
   const id = newId();
   await execute(
-    `INSERT INTO orders (id, user_id, price_key, price_version, kind, amount_minor, currency, idempotency_key, metadata)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    `INSERT INTO orders (id, user_id, price_key, price_version, kind, amount_minor, currency, idempotency_key, metadata, payment_method)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       id,
       params.userId,
@@ -235,6 +251,7 @@ export async function insertOrder(
       params.currency ?? 'usd',
       params.idempotencyKey,
       toJson(params.metadata ?? {}),
+      params.paymentMethod ?? null,
     ],
     tx,
   );

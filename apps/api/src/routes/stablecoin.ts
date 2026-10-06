@@ -2,15 +2,24 @@ import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import type { AppContext } from '../context.js';
 import { issueWalletChallenge, verifyWalletChallenge } from '../services/stablecoin-wallet.js';
+import {
+  createStablecoinQuote,
+  prepareStablecoinPayment,
+  stablecoinPaymentStatus,
+} from '../services/stablecoin.js';
 
 /**
  * Stablecoin payment routes, on /v1 like every other route in this server —
  * the specification wrote /api, which this repository has never used.
  *
- * Only the wallet-identity pair exists so far. Quote, prepare, transaction and
- * status arrive with the code behind them; a route that answers before its
- * logic is written is a declared capability with nothing underneath, which is
- * the defect this project keeps catching in its own work.
+ * `stablecoin-transaction` (the client reporting a hash as a discovery hint)
+ * and the admin review and export endpoints are not here yet: they need the
+ * scanner and the RPC client to mean anything, and a route that answers before
+ * its logic exists is a declared capability with nothing underneath.
+ *
+ * Every switch is off by default, so with default configuration all of these
+ * answer SERVICE_DISABLED. That is the intended state until the business
+ * conclusions in docs/STABLECOIN_V1_PLAN.md are in hand.
  */
 export default async function stablecoinRoutes(app: FastifyInstance, opts: { ctx: AppContext }) {
   const { ctx } = opts;
@@ -67,4 +76,45 @@ export default async function stablecoinRoutes(app: FastifyInstance, opts: { ctx
       };
     },
   );
+
+  app.post(
+    '/v1/payments/stablecoin/quote',
+    {
+      preHandler: app.requireAgeConfirmed,
+      config: { rateLimit: { max: 20, timeWindow: '1 minute' } },
+    },
+    async (req) => {
+      const body = z
+        .object({
+          priceKey: z.enum(['drop_5', 'market_license']),
+          idempotencyKey: z.string().min(8).max(128),
+          tokenKey: z.enum(['jpyc', 'usdc']),
+          payer: addressSchema,
+          trackId: z.string().uuid().optional(),
+        })
+        .parse(req.body);
+      return createStablecoinQuote(ctx, {
+        userId: req.user!.id,
+        priceKey: body.priceKey,
+        idempotencyKey: body.idempotencyKey,
+        tokenKey: body.tokenKey,
+        payer: body.payer,
+        ...(body.trackId ? { trackId: body.trackId } : {}),
+      });
+    },
+  );
+
+  app.post(
+    '/v1/orders/:id/stablecoin-prepare',
+    { preHandler: app.requireAuth, config: { rateLimit: { max: 20, timeWindow: '1 minute' } } },
+    async (req) => {
+      const { id } = req.params as { id: string };
+      return prepareStablecoinPayment(ctx, { userId: req.user!.id, orderId: id });
+    },
+  );
+
+  app.get('/v1/orders/:id/payment-status', { preHandler: app.requireAuth }, async (req) => {
+    const { id } = req.params as { id: string };
+    return stablecoinPaymentStatus({ userId: req.user!.id, orderId: id });
+  });
 }

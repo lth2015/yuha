@@ -53,6 +53,25 @@ export async function listProducts(ctx: AppContext): Promise<ProductView[]> {
  * catalogue by price key. Nothing about the money comes from the client, so a
  * tampered request cannot change what is charged.
  */
+/**
+ * §9: one active payment channel per order.
+ *
+ * The stablecoin path refuses an order the card path has claimed; this is the
+ * other direction, and it has to exist here too or an order could carry a live
+ * Stripe session and a live on-chain intent at once. If both then actually
+ * settled, the second becomes a duplicate-payment refund — and the entitlement
+ * must still be granted exactly once, which `entitlement_batches`'
+ * (user, source, source_ref) uniqueness already guarantees.
+ */
+export function assertNotStablecoinClaimed(order: { payment_method: string | null }): void {
+  if (order.payment_method === 'stablecoin') {
+    throw new AppError(
+      'CONFLICT',
+      'this order is being paid in stablecoin; cancel that payment before paying by card',
+    );
+  }
+}
+
 export async function createCheckout(
   ctx: AppContext,
   params: {
@@ -102,6 +121,7 @@ export async function createCheckout(
     );
   }
   if (existing) {
+    assertNotStablecoinClaimed(existing);
     if (existing.stripe_checkout_session_id) {
       const session = await ctx.payments.retrieveCheckoutSession(existing.stripe_checkout_session_id);
       if (session && session.status === 'open') {

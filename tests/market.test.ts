@@ -153,7 +153,7 @@ describe('market licensing', () => {
     // The authorship record is the part that must survive: who made it, who
     // bought it, and what was paid. This is what a later on-chain proof reads.
     expect(license[0]!.creator_id).toBe(creator.id);
-    expect(license[0]!.price_paid).toBe(499);
+    expect(license[0]!.price_paid).toBe(980);
 
     // The buyer can now export the song.
     const exportRes = await h.app.inject({

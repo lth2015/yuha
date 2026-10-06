@@ -13,6 +13,7 @@ import {
   trackEvent,
 } from '@yuha/db';
 import type { AppContext } from '../context.js';
+import { assertNotStablecoinClaimed } from './billing.js';
 
 /**
  * Market monetization: licensing another creator's published song.
@@ -73,6 +74,7 @@ export async function createLicenseCheckout(
     );
   }
   if (existing?.status === 'paid') throw new AppError('CONFLICT', 'this order has already been paid');
+  if (existing) assertNotStablecoinClaimed(existing);
 
   const order =
     existing ??

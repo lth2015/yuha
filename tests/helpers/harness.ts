@@ -80,7 +80,10 @@ export async function createHarness(overrides: Record<string, string> = {}): Pro
   const config = loadConfig(env);
   const ctx = createContext(config);
   await migrate();
-  await seedCatalogue();
+  // resetData rather than seedCatalogue alone: it truncates first, so the
+  // catalogue can be rewritten from scratch below regardless of what a
+  // previous run left behind.
+  await resetData();
 
   const app = await buildServer(ctx);
   await app.ready();
@@ -124,14 +127,40 @@ export async function createHarness(overrides: Record<string, string> = {}): Pro
   };
 }
 
+/*
+ * Priced in JPY, matching apps/api/src/seed.ts.
+ *
+ * This used to seed USD 499/999/2999 while production seeds JPY
+ * 980/1980/3980 — harmless for tests that only care that a number is
+ * consistent, and not harmless at all for anything that converts a price.
+ * A stablecoin quote inheriting this fixture would have had its arithmetic
+ * verified against $4.99.
+ *
+ * The unit counts are deliberately NOT production's (15 and 45): a great many
+ * tests assert on credit balances, and this change is about the prices that
+ * get converted. The mismatch is recorded here rather than left implied.
+ */
 async function seedCatalogue(): Promise<void> {
+  /*
+   * Cleared first, and that is not tidiness.
+   *
+   * `upsertProduct` refuses to redefine an existing version's commercial
+   * terms — correctly, since a version is what an order was placed against.
+   * So a database left holding an older fixture (or one a test mutated) makes
+   * every subsequent `seedCatalogue` throw, and the symptom is 26 unrelated
+   * files failing at once, which reads as deep breakage rather than a stale
+   * row. Rewriting the catalogue from nothing makes the fixtures idempotent
+   * across changes to them. Safe because the callers truncate orders and
+   * subscriptions first, so nothing references these rows.
+   */
+  await query(`DELETE FROM product_catalog`);
   await upsertProduct({
     price_key: 'drop_5',
     version: 2,
     kind: 'one_time',
-    display_name: 'Starter Pack — 5 songs',
-    amount_minor: 499,
-    currency: 'usd',
+    display_name: 'DROP — 5 songs',
+    amount_minor: 980,
+    currency: 'jpy',
     tax_included: true,
     units: 5,
     validity_days: 90,
@@ -144,9 +173,9 @@ async function seedCatalogue(): Promise<void> {
     price_key: 'pro_monthly',
     version: 1,
     kind: 'subscription',
-    display_name: 'Pro — 100 songs / month',
-    amount_minor: 999,
-    currency: 'usd',
+    display_name: 'CREATOR — 15 songs / month',
+    amount_minor: 1980,
+    currency: 'jpy',
     tax_included: true,
     units: 100,
     validity_days: null,
@@ -159,9 +188,9 @@ async function seedCatalogue(): Promise<void> {
     price_key: 'market_license',
     version: 1,
     kind: 'one_time',
-    display_name: 'Market License — one song',
-    amount_minor: 499,
-    currency: 'usd',
+    display_name: 'Licence — one song',
+    amount_minor: 980,
+    currency: 'jpy',
     tax_included: true,
     units: 1,
     validity_days: null,
@@ -174,9 +203,9 @@ async function seedCatalogue(): Promise<void> {
     price_key: 'premier_monthly',
     version: 1,
     kind: 'subscription',
-    display_name: 'Premier — 400 songs / month',
-    amount_minor: 2999,
-    currency: 'usd',
+    display_name: 'STUDIO — 45 songs / month',
+    amount_minor: 3980,
+    currency: 'jpy',
     tax_included: true,
     units: 400,
     validity_days: null,

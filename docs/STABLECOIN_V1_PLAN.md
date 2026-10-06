@@ -99,3 +99,31 @@ auto-renewal. CREATOR and STUDIO stay on Stripe.
 No AI session in this repository initiates a real-funds transaction or asks for
 a seed phrase. Refunds in v1 are drafted by the system and signed by hand on a
 hardware wallet.
+
+## Appendix: deviations taken, with reasons
+
+Recorded as they are made, so the specification can be reconciled against what
+exists rather than against what it asked for.
+
+| Specification | Built | Why |
+| --- | --- | --- |
+| `POST /api/orders/:id/stablecoin-quote` | `POST /v1/payments/stablecoin/quote`, which creates or reuses the order | Routes here are `/v1`. More importantly no order exists before the quote: the card path creates the order and the Stripe session together, so there was nothing to quote against. The quote endpoint takes `priceKey` + `idempotencyKey` and is subject to the same `(user, key)` uniqueness and the same product-mismatch guard as the card path |
+| `(chainId, payer, nonce)` permanently bound to an intent | `(chainId, payer)` bound while open, nonce recorded as evidence | §1 of this document. A nonce in another wallet is predicted, not reserved |
+| `payer_nonce` assigned at prepare time | `predicted_nonce` is NULL until the RPC client exists | Honest null rather than a number nothing read from the chain |
+| `start_block` set when quoting | 0 until the RPC client exists | "Look from the beginning" is slow and correct; an invented height would make the scanner skip a real payment |
+| USDC available behind its own switch | Switch exists, and enabling it is refused at startup | There is no rate provider, and §6 forbids a hardcoded fallback. The switch cannot be turned on into a state that would quote wrongly |
+| Order states `pending_payment → paid → fulfilled` | Existing `pending/paid/...` plus `entitlement_granted_at` | Fulfilment was never a status here; adding a parallel vocabulary would leave two sources of truth |
+
+### Fixtures that did not match production
+
+The test harness seeded the catalogue in USD (499 / 999 / 2999) while
+`apps/api/src/seed.ts` seeds JPY (980 / 1,980 / 3,980). Harmless for tests that
+only need a consistent number, and not harmless at all for anything that
+converts a price — a stablecoin quote inheriting it would have had its
+arithmetic verified against $4.99. The harness now seeds JPY; four assertions
+and two Stripe webhook fixtures moved with it, one of which had been
+describing a 499 refund against what is now a 980 order.
+
+The unit counts in the harness are still not production's (100 and 400 against
+15 and 45). A great many tests assert on credit balances, so that is a separate
+change; it is written down here rather than left implied.
