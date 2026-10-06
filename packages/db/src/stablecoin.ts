@@ -1,5 +1,5 @@
 import type { PoolConnection } from 'mysql2/promise';
-import { execute, newId, queryOne } from './pool.js';
+import { execute, newId, query, queryOne } from './pool.js';
 
 /**
  * Wallet identity storage for stablecoin payments.
@@ -343,6 +343,125 @@ export async function markIntentPrepared(
             updated_at = UTC_TIMESTAMP(3)
       WHERE id = ? AND state IN ('quoted', 'prepared')`,
     [params.predictedNonce, params.intentId],
+    tx,
+  );
+}
+
+// -------------------------------------------------------- payment evidence
+
+export interface TransferEventRow {
+  id: string;
+  chain_id: number;
+  tx_hash: string;
+  log_index: number;
+  token_address: string;
+  from_address: string;
+  to_address: string;
+  amount_atomic: string;
+  block_number: string | number;
+  block_hash: string;
+  canonical: boolean;
+  intent_id: string | null;
+}
+
+/**
+ * Writes one Transfer as evidence, exactly once.
+ *
+ * `chain_transfer_events_evidence_uk` on (chain_id, tx_hash, log_index) is
+ * what stops a copied public hash and stops one transfer being claimed by two
+ * orders. `claimed: false` means this evidence already existed — which is the
+ * normal answer when the scanner re-reads an overlapping block range, and the
+ * answer that must NOT lead to a second fulfilment.
+ *
+ * The insert is attempted rather than preceded by a SELECT: a check-then-act
+ * would let two workers both pass the check.
+ */
+export async function recordTransferEvent(
+  params: {
+    chainId: number;
+    txHash: string;
+    logIndex: number;
+    tokenAddress: string;
+    fromAddress: string;
+    toAddress: string;
+    amountAtomic: string;
+    blockNumber: bigint;
+    blockHash: string;
+    blockTime: Date | null;
+    intentId: string | null;
+  },
+  tx?: PoolConnection,
+): Promise<{ claimed: boolean; row: TransferEventRow }> {
+  const id = newId();
+  const res = await execute(
+    `INSERT IGNORE INTO chain_transfer_events
+       (id, chain_id, tx_hash, log_index, token_address, from_address, to_address,
+        amount_atomic, block_number, block_hash, block_time, intent_id)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    [
+      id,
+      params.chainId,
+      params.txHash.toLowerCase(),
+      params.logIndex,
+      params.tokenAddress.toLowerCase(),
+      params.fromAddress.toLowerCase(),
+      params.toAddress.toLowerCase(),
+      params.amountAtomic,
+      params.blockNumber.toString(),
+      params.blockHash.toLowerCase(),
+      params.blockTime,
+      params.intentId,
+    ],
+    tx,
+  );
+  const row = await queryOne<TransferEventRow>(
+    `SELECT id, chain_id, tx_hash, log_index, token_address, from_address, to_address,
+            amount_atomic, block_number, block_hash, canonical, intent_id
+       FROM chain_transfer_events
+      WHERE chain_id = ? AND tx_hash = ? AND log_index = ?`,
+    [params.chainId, params.txHash.toLowerCase(), params.logIndex],
+    tx,
+  );
+  if (!row) throw new Error('transfer event insert failed to read back');
+  return { claimed: res.affectedRows > 0, row };
+}
+
+/** Records one observed hash against an intent, keeping every earlier one. */
+export async function recordAttempt(
+  params: {
+    intentId: string;
+    txHash: string;
+    nonce: number | null;
+    receiptStatus: number | null;
+    blockNumber: bigint | null;
+    blockHash: string | null;
+    blockTime: Date | null;
+    verdict: string | null;
+  },
+  tx?: PoolConnection,
+): Promise<void> {
+  await execute(
+    `INSERT INTO stablecoin_attempts
+       (id, intent_id, tx_hash, nonce, receipt_status, block_number, block_hash, block_time, verdict)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+     ON DUPLICATE KEY UPDATE
+       receipt_status = VALUES(receipt_status),
+       block_number   = VALUES(block_number),
+       block_hash     = VALUES(block_hash),
+       block_time     = VALUES(block_time),
+       verdict        = VALUES(verdict),
+       finalized_at   = IF(VALUES(verdict) = 'fulfil', UTC_TIMESTAMP(3), finalized_at)`,
+    [
+      newId(),
+      params.intentId,
+      params.txHash.toLowerCase(),
+      params.nonce,
+      params.receiptStatus,
+      params.blockNumber?.toString() ?? null,
+      params.blockHash?.toLowerCase() ?? null,
+      params.blockTime,
+      params.verdict,
+    ],
     tx,
   );
 }

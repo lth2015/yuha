@@ -8,7 +8,14 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { processWebhookEvent } from '../apps/api/src/services/webhooks.js';
 import { claimWebhookEvents, query, withTx } from '@yuha/db';
-import { createHarness, resetData, teardown, type Harness, type TestUser } from './helpers/harness.js';
+import {
+  balanceOf,
+  createHarness,
+  resetData,
+  teardown,
+  type Harness,
+  type TestUser,
+} from './helpers/harness.js';
 import { runJobStep } from '@yuha/worker/pipeline';
 
 let h: Harness;
@@ -119,6 +126,45 @@ describe('lyric alignment provenance', () => {
 });
 
 describe('market licensing', () => {
+
+  it('the recovery sweep gives a licence order its licence, not a credit', async () => {
+    /*
+     * `recoverUngrantedOrders` granted credits inline, filtered on
+     * `product.kind !== 'one_time'` — and `market_license` IS kind
+     * 'one_time'. So a licence order that reached the sweep was handed one
+     * generation credit instead of the licence it paid for, and then marked
+     * granted, so the licence never arrived at all. The sweep now runs the
+     * same `grantEntitlementForOrder` both payment channels run.
+     */
+    const creator = await h.createUser({ credits: 2 });
+    const buyer = await h.createUser({ credits: 0 });
+    const { trackId } = await deliverSong(creator, 'market-song-sweep', true);
+
+    const checkout = await h.app.inject({
+      method: 'POST',
+      url: `/v1/market/tracks/${trackId}/license`,
+      headers: { ...buyer.authHeader, 'idempotency-key': 'market-key-sweep-1' },
+    });
+    expect(checkout.statusCode).toBe(202);
+    const { orderId } = checkout.json();
+
+    // The state a crash between payment and delivery leaves behind.
+    await query(
+      `UPDATE orders SET status = 'paid', paid_at = UTC_TIMESTAMP(3), entitlement_granted_at = NULL WHERE id = ?`,
+      [orderId],
+    );
+
+    const { recoverUngrantedOrders } = await import('@yuha/api');
+    await recoverUngrantedOrders(h.ctx);
+
+    const licences = await query<{ n: number }>(`SELECT COUNT(*) AS n FROM track_licenses WHERE order_id = ?`, [
+      orderId,
+    ]);
+    expect(Number(licences[0]!.n)).toBe(1);
+    // And no credits: a licence is not a generation pack.
+    expect((await balanceOf(buyer.id)).available).toBe(0);
+  });
+
   it('a paid license grants the buyer download rights and records the author', async () => {
     const creator = await h.createUser({ credits: 2 });
     const buyer = await h.createUser({ credits: 0 });

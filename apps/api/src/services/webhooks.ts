@@ -25,6 +25,7 @@ import {
   type WebhookEventRow,
 } from '@yuha/db';
 import type { AppContext } from '../context.js';
+import { grantEntitlementForOrder } from './fulfilment.js';
 
 /**
  * Stripe webhook processing (PROJECT_TASK.md §7).
@@ -211,49 +212,11 @@ async function handleCheckoutCompleted(ctx: AppContext, event: StripeEventLike):
      */
     if (!updated || !changed) return;
 
-    const product = await getProductVersion(updated.price_key, updated.price_version, tx);
-    if (!product) throw new Error(`unknown product version ${updated.price_key}@${updated.price_version}`);
-
-    // A subscription's first period is granted by invoice.paid, keyed on the
-    // invoice, so the checkout event must not also grant one (PAY-06).
-    if (product.price_key === 'market_license') {
-      // Market sale: no credits — the buyer receives a per-track license and
-      // the creator accrues their share, both idempotent on the order id.
-      const trackId = (updated.metadata['track_id'] as string | undefined) ?? null;
-      const creatorId = (updated.metadata['creator_id'] as string | undefined) ?? null;
-      if (!trackId || !creatorId) {
-        throw new Error(`market license order ${updated.id} is missing track/creator metadata`);
-      }
-      await grantLicense(
-        {
-          trackId,
-          buyerId: updated.user_id,
-          creatorId,
-          orderId: updated.id,
-          pricePaid: updated.amount_minor,
-          currency: updated.currency,
-        },
-        tx,
-      );
-      await markEntitlementGranted(updated.id, tx);
-    } else if (product.kind === 'one_time') {
-      await grantUnits(
-        {
-          userId: updated.user_id,
-          source: 'one_time_order',
-          sourceRef: updated.id,
-          units: product.units,
-          productKey: product.price_key,
-          priceVersion: product.version,
-          expiresAt: product.validity_days
-            ? new Date(Date.now() + product.validity_days * 86400_000)
-            : null,
-          reason: `order_paid:${updated.id}`,
-        },
-        tx,
-      );
-      await markEntitlementGranted(updated.id, tx);
-    }
+    // The same code the stablecoin channel runs. Exactly-once lives on the
+    // business key — the order id — not on the event that got us here, which
+    // is what makes a card payment and an on-chain payment for one order
+    // deliver once between them.
+    await grantEntitlementForOrder(updated, tx);
 
     const pi = live?.paymentIntentId ?? (session['payment_intent'] as string | null);
     if (pi) {
@@ -1308,24 +1271,28 @@ export async function recoverUngrantedOrders(ctx: AppContext): Promise<number> {
   const orders = await listUngrantedPaidOrders(50);
   let repaired = 0;
   for (const order of orders) {
+    /*
+     * The same `grantEntitlementForOrder` both payment channels run.
+     *
+     * This used to grant credits inline, filtered on `product.kind !==
+     * 'one_time'` — and `market_license` IS kind 'one_time'. So a licence
+     * order that reached this sweep was given one generation credit instead
+     * of the licence it paid for, and then marked granted, so the licence
+     * never arrived at all. Sharing the fulfilment path removes the second
+     * implementation that could disagree with the first.
+     *
+     * It also means this sweep covers stablecoin settlements for free:
+     * `listUngrantedPaidOrders` does not look at how an order was paid, and a
+     * crash between confirming a payment and handing over what it bought
+     * leaves exactly the row this query selects.
+     */
     const product = await getProductVersion(order.price_key, order.price_version);
-    if (!product || product.kind !== 'one_time') continue;
+    if (!product) continue;
+    if (product.kind !== 'one_time') continue;
     await withTx(async (tx) => {
-      const res = await grantUnits(
-        {
-          userId: order.user_id,
-          source: 'one_time_order',
-          sourceRef: order.id,
-          units: product.units,
-          productKey: product.price_key,
-          priceVersion: product.version,
-          expiresAt: product.validity_days ? new Date(Date.now() + product.validity_days * 86400_000) : null,
-          reason: `order_recovery:${order.id}`,
-        },
-        tx,
-      );
-      await markEntitlementGranted(order.id, tx);
-      if (res.created) repaired += 1;
+      const before = order.entitlement_granted_at;
+      await grantEntitlementForOrder(order, tx);
+      if (!before) repaired += 1;
     });
   }
   return repaired;
