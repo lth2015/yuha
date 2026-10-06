@@ -1,4 +1,6 @@
 import type { AppContext } from '@yuha/api';
+import { runStablecoinScanPass } from '@yuha/api';
+import { ChainNode, DualChainReader, httpTransport } from '@yuha/providers';
 import { describeError } from '@yuha/contracts';
 import {
   processWebhookEvent,
@@ -79,6 +81,56 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
  * delays work — it never loses a reservation. Repeated failures back off and
  * eventually mark the row failed for alerting.
  */
+/**
+ * Watches the chain for incoming stablecoin payments.
+ *
+ * Does nothing at all unless the feature is switched on, which is the shipping
+ * state. The pass itself is a pure-ish function over a `DualChainReader` and
+ * is tested against fake nodes; this is only the thing that calls it on a
+ * timer and builds the reader from configuration.
+ *
+ * The interval is deliberately unhurried. Polygon finality is 2–5 seconds but
+ * nothing here is racing: a customer watching the page sees "waiting for the
+ * network", and a scan every fifteen seconds costs a fraction of a free tier
+ * where every two seconds would not.
+ */
+export async function stablecoinScanLoop(deps: LoopDeps): Promise<void> {
+  const { ctx, log } = deps;
+  if (!ctx.config.STABLECOIN_ENABLED) return;
+  const primaryUrl = ctx.config.POLYGON_RPC_PRIMARY_URL;
+  const secondaryUrl = ctx.config.POLYGON_RPC_SECONDARY_URL;
+  if (!primaryUrl || !secondaryUrl) {
+    // Configuration refuses to start without both, so reaching this means the
+    // refusal was bypassed rather than that the URLs are optional.
+    log('error', 'stablecoin scan not started: two RPC endpoints are required');
+    return;
+  }
+
+  const reader = new DualChainReader(
+    new ChainNode(httpTransport({ label: 'polygon-primary', url: primaryUrl })),
+    new ChainNode(httpTransport({ label: 'polygon-secondary', url: secondaryUrl })),
+  );
+
+  while (!deps.stopped()) {
+    try {
+      const pass = await runStablecoinScanPass(ctx, reader, log);
+      if (pass.found > 0) {
+        log('info', 'stablecoin scan pass', {
+          fromBlock: pass.window?.fromBlock.toString(),
+          toBlock: pass.window?.toBlock.toString(),
+          found: pass.found,
+          settled: pass.settled.map((s) => s.kind),
+        });
+      }
+    } catch (err) {
+      // Never fatal: an RPC outage must not take the worker down, and the
+      // overlap re-read means nothing is lost by missing a pass.
+      log('error', 'stablecoin scan pass failed', { err: describeError(err) });
+    }
+    await sleep(15_000);
+  }
+}
+
 export async function outboxLoop(deps: LoopDeps): Promise<void> {
   const { ctx, log } = deps;
   while (!deps.stopped()) {

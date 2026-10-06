@@ -50,3 +50,4 @@ export * from './chain/quote.js';
 export * from './chain/siwe.js';
 export * from './chain/rpc.js';
 export * from './chain/scanner.js';
+export * from './chain/transport.js';

@@ -465,3 +465,44 @@ export async function recordAttempt(
     tx,
   );
 }
+
+// ------------------------------------------------------------- scan cursors
+
+/**
+ * Where the log scanner got to.
+ *
+ * One row per (chain, stream). A restart resumes from here rather than
+ * rescanning from genesis or, worse, skipping the gap it was away for.
+ */
+export async function getChainCursor(
+  params: { chainId: number; stream: string },
+  tx?: PoolConnection,
+): Promise<bigint | undefined> {
+  const row = await queryOne<{ last_scanned_block: string | number }>(
+    `SELECT last_scanned_block FROM chain_cursors WHERE chain_id = ? AND stream = ?`,
+    [params.chainId, params.stream],
+    tx,
+  );
+  return row ? BigInt(row.last_scanned_block) : undefined;
+}
+
+/**
+ * Moves the cursor forward, and only forward.
+ *
+ * `GREATEST` in the UPDATE means a pass that somehow computed a lower value
+ * cannot rewind the cursor and cause blocks to be re-settled — which would be
+ * harmless today, because settlement is idempotent on the evidence key, and is
+ * not something to rely on being harmless tomorrow.
+ */
+export async function setChainCursor(
+  params: { chainId: number; stream: string; block: bigint },
+  tx?: PoolConnection,
+): Promise<void> {
+  await execute(
+    `INSERT INTO chain_cursors (chain_id, stream, last_scanned_block)
+     VALUES (?, ?, ?)
+     ON DUPLICATE KEY UPDATE last_scanned_block = GREATEST(last_scanned_block, VALUES(last_scanned_block))`,
+    [params.chainId, params.stream, params.block.toString()],
+    tx,
+  );
+}

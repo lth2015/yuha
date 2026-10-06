@@ -7,6 +7,7 @@ import {
   maintenanceLoop,
   makeLogger,
   outboxLoop,
+  stablecoinScanLoop,
   pollingLoop,
   webhookLoop,
   type LoopDeps,
@@ -52,6 +53,7 @@ async function main(): Promise<void> {
     pollingLoop(deps),
     webhookLoop(deps),
     maintenanceLoop(deps),
+    stablecoinScanLoop(deps),
   ];
 
   const shutdown = async (signal: string) => {
