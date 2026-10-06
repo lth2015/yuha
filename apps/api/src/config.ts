@@ -101,6 +101,32 @@ const envSchema = z.object({
   STABLECOIN_USDC_ENABLED: bool(false),
   STABLECOIN_CHAIN_ID: z.coerce.number().int().positive().default(137),
   STABLECOIN_RECEIVER_ADDRESS: z.string().optional(),
+  /*
+   * Two nodes, from two different companies.
+   *
+   * Two endpoints from one provider usually share a cluster and a view of the
+   * chain, so "the nodes disagree" could never be true and the check that
+   * rests on it would be a formality. Config cannot tell whose endpoint a URL
+   * is, so this is enforced by the person setting it and written down in
+   * docs/STABLECOIN_V1_PLAN.md — but identical URLs it CAN catch, and does.
+   *
+   * Secrets: they carry an API key. They belong in the deployment's secret
+   * store and in a local .env, never in git.
+   */
+  POLYGON_RPC_PRIMARY_URL: z.string().optional(),
+  POLYGON_RPC_SECONDARY_URL: z.string().optional(),
+  /*
+   * How far below the finalized head one eth_getLogs call may reach, and how
+   * many blocks each pass re-reads.
+   *
+   * The span default is 450 rather than a round 500 because providers cap
+   * eth_getLogs ranges and the caps differ by plan — one entry plan publishes
+   * 500 — so the default has to sit below the lower of the two in use. Set it
+   * from the actual caps once both providers are known.
+   */
+  STABLECOIN_SCAN_MAX_SPAN: z.coerce.number().int().min(1).max(10_000).default(450),
+  STABLECOIN_SCAN_OVERLAP: z.coerce.number().int().min(0).max(1_000).default(32),
+  STABLECOIN_SCAN_START_BLOCK: z.coerce.number().int().min(0).optional(),
   STABLECOIN_QUOTE_TTL_SECONDS: z.coerce.number().int().min(60).max(3600).default(600),
   /*
    * The whitelist/receiver/rule version stamped onto every quote. Bump it when
@@ -556,6 +582,20 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     }
     if (!e.STABLECOIN_JPYC_ENABLED && !e.STABLECOIN_USDC_ENABLED) {
       problems.push('stablecoin payments are enabled but no currency is');
+    }
+    /*
+     * Both nodes are required, and they must not be the same URL.
+     *
+     * One node cannot disagree with itself, so a single endpoint used twice
+     * turns "hold when the nodes disagree" into a line that always passes —
+     * the exact shape of check this project keeps finding in its own work.
+     * Whether two different URLs are really two different companies is not
+     * something config can see; that one is on the person setting it.
+     */
+    if (!e.POLYGON_RPC_PRIMARY_URL || !e.POLYGON_RPC_SECONDARY_URL) {
+      problems.push('stablecoin payments need POLYGON_RPC_PRIMARY_URL and POLYGON_RPC_SECONDARY_URL');
+    } else if (e.POLYGON_RPC_PRIMARY_URL === e.POLYGON_RPC_SECONDARY_URL) {
+      problems.push('the two Polygon RPC URLs are identical; a node cannot disagree with itself');
     }
     /*
      * USDC needs a rate source and there is no fallback by design: quoting it

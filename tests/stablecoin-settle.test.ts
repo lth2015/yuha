@@ -29,6 +29,12 @@ beforeAll(async () => {
     STABLECOIN_ENABLED: 'true',
     STABLECOIN_JPYC_ENABLED: 'true',
     STABLECOIN_RECEIVER_ADDRESS: RECEIVER,
+    // Two distinct URLs because the configuration requires two, and requires
+    // them to differ: one endpoint behind both names would make "hold when
+    // the nodes disagree" a line that always passes. Nothing here dials them —
+    // quoting and settling read no chain.
+    POLYGON_RPC_PRIMARY_URL: 'https://polygon.primary.invalid/rpc/test',
+    POLYGON_RPC_SECONDARY_URL: 'https://polygon.secondary.invalid/rpc/test',
   });
 });
 beforeEach(async () => {
