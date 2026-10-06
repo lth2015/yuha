@@ -12,6 +12,30 @@ import { RunMode } from '@yuha/contracts';
  * production (SEC-03), or a live Stripe key outside production.
  */
 
+/**
+ * An empty value in a .env file means "not set", the same way `bool` already
+ * treats it.
+ *
+ * `z.coerce.number()` does not: Number('') is 0, so a variable left blank
+ * became zero and then failed a `.positive()` check with a message about the
+ * number being too small — for a line the author had deliberately left empty
+ * to take the default. A blank line in a config file is the most ordinary
+ * thing there is, and it should not be an error about arithmetic.
+ */
+const num = (dflt: number) =>
+  z
+    .string()
+    .optional()
+    .transform((v) => (v === undefined || v === '' ? dflt : Number(v)))
+    .pipe(z.number().int());
+
+const optionalNum = () =>
+  z
+    .string()
+    .optional()
+    .transform((v) => (v === undefined || v === '' ? undefined : Number(v)))
+    .pipe(z.number().int().min(0).optional());
+
 const bool = (dflt: boolean) =>
   z
     .string()
@@ -99,7 +123,7 @@ const envSchema = z.object({
   STABLECOIN_ENABLED: bool(false),
   STABLECOIN_JPYC_ENABLED: bool(false),
   STABLECOIN_USDC_ENABLED: bool(false),
-  STABLECOIN_CHAIN_ID: z.coerce.number().int().positive().default(137),
+  STABLECOIN_CHAIN_ID: num(137).pipe(z.number().int().positive()),
   STABLECOIN_RECEIVER_ADDRESS: z.string().optional(),
   /*
    * Two nodes, from two different companies.
@@ -124,16 +148,16 @@ const envSchema = z.object({
    * 500 — so the default has to sit below the lower of the two in use. Set it
    * from the actual caps once both providers are known.
    */
-  STABLECOIN_SCAN_MAX_SPAN: z.coerce.number().int().min(1).max(10_000).default(450),
-  STABLECOIN_SCAN_OVERLAP: z.coerce.number().int().min(0).max(1_000).default(32),
-  STABLECOIN_SCAN_START_BLOCK: z.coerce.number().int().min(0).optional(),
-  STABLECOIN_QUOTE_TTL_SECONDS: z.coerce.number().int().min(60).max(3600).default(600),
+  STABLECOIN_SCAN_MAX_SPAN: num(450).pipe(z.number().int().min(1).max(10_000)),
+  STABLECOIN_SCAN_OVERLAP: num(32).pipe(z.number().int().min(0).max(1_000)),
+  STABLECOIN_SCAN_START_BLOCK: optionalNum(),
+  STABLECOIN_QUOTE_TTL_SECONDS: num(600).pipe(z.number().int().min(60).max(3600)),
   /*
    * The whitelist/receiver/rule version stamped onto every quote. Bump it when
    * any of those change, so an existing order keeps being verified against the
    * rules it was quoted under.
    */
-  STABLECOIN_CONFIG_VERSION: z.coerce.number().int().positive().default(1),
+  STABLECOIN_CONFIG_VERSION: num(1).pipe(z.number().int().positive()),
 
   // --- text model (TokenStars) -------------------------------------------
   TEXT_ADAPTER: z.enum(['local', 'tokenstars']).optional(),

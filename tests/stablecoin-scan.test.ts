@@ -352,3 +352,61 @@ describe('what the scan asks the chain for', () => {
     expect(pass.window).toBeNull();
   });
 });
+
+describe('the first pass, with nothing configured', () => {
+  it('starts watching from the finalized head rather than from block zero', async () => {
+    /*
+     * Zero reads as "from the beginning" and is not slow but impossible:
+     * Polygon is past seventy million blocks and a pass covers a few hundred,
+     * so the scanner would never reach the present and no payment would ever
+     * be seen. Leaving the start block blank in a .env is an ordinary thing to
+     * do, and it must not produce a scanner that can never work.
+     */
+    const fresh = await createHarness({
+      STABLECOIN_ENABLED: 'true',
+      STABLECOIN_JPYC_ENABLED: 'true',
+      STABLECOIN_RECEIVER_ADDRESS: RECEIVER,
+      POLYGON_RPC_PRIMARY_URL: 'https://primary.invalid/rpc',
+      POLYGON_RPC_SECONDARY_URL: 'https://secondary.invalid/rpc',
+      STABLECOIN_SCAN_START_BLOCK: '',
+      // Stated rather than inherited: the default overlap is 32 and the rest
+      // of this file uses 10, which is how the expectation below came out 22
+      // blocks wrong the first time.
+      STABLECOIN_SCAN_OVERLAP: '10',
+    });
+    try {
+      await query(`DELETE FROM chain_cursors`);
+      const pass = await runStablecoinScanPass(fresh.ctx, pair(good()), silent);
+      expect(pass.window).toBeNull();
+      expect(await getChainCursor({ chainId: 137, stream: SCAN_STREAM })).toBe(1_050n);
+    } finally {
+      await fresh.close();
+    }
+  });
+
+  it('writes that starting point down, so a restart does not skip what arrived', async () => {
+    const fresh = await createHarness({
+      STABLECOIN_ENABLED: 'true',
+      STABLECOIN_JPYC_ENABLED: 'true',
+      STABLECOIN_RECEIVER_ADDRESS: RECEIVER,
+      POLYGON_RPC_PRIMARY_URL: 'https://primary.invalid/rpc',
+      POLYGON_RPC_SECONDARY_URL: 'https://secondary.invalid/rpc',
+      STABLECOIN_SCAN_START_BLOCK: '',
+      // Stated rather than inherited: the default overlap is 32 and the rest
+      // of this file uses 10, which is how the expectation below came out 22
+      // blocks wrong the first time.
+      STABLECOIN_SCAN_OVERLAP: '10',
+    });
+    try {
+      await query(`DELETE FROM chain_cursors`);
+      await runStablecoinScanPass(fresh.ctx, pair(good()), silent);
+      // A later pass with a higher head must resume from the recorded point,
+      // not keep jumping to the newest head and losing the blocks between.
+      const later = good({ latest: 1_200, finalized: 1_150, hashes: { 1_000: H('a'), 1_150: H('d'), 1_200: H('e') } });
+      const pass = await runStablecoinScanPass(fresh.ctx, pair(later), silent);
+      expect(pass.window?.fromBlock).toBe(1_050n - 10n);
+    } finally {
+      await fresh.close();
+    }
+  });
+});

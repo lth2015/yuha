@@ -58,7 +58,31 @@ export async function runStablecoinScanPass(
   }
 
   const stored = await getChainCursor({ chainId, stream: SCAN_STREAM });
-  const cursor = stored ?? BigInt(ctx.config.STABLECOIN_SCAN_START_BLOCK ?? 0);
+  const configured = ctx.config.STABLECOIN_SCAN_START_BLOCK;
+
+  /*
+   * With no cursor and no configured start block, start watching from NOW.
+   *
+   * Defaulting to zero reads honestly — "from the beginning" — and is not slow
+   * but impossible: Polygon is past seventy million blocks and a pass covers a
+   * few hundred, so the scanner would never reach the present and no payment
+   * would ever be seen. The cost of starting at the finalized head is that a
+   * transfer sent before the first run is not picked up by the scan, which is
+   * acceptable precisely because the feature was switched off until then; a
+   * customer reporting the hash still finds it.
+   *
+   * Written down immediately, so a restart does not keep moving the start
+   * forward and skipping whatever arrived in between.
+   */
+  if (stored === undefined && configured === undefined) {
+    await setChainCursor({ chainId, stream: SCAN_STREAM, block: finalized.value });
+    log('info', 'stablecoin scan starting from the current finalized head', {
+      block: finalized.value.toString(),
+    });
+    return { window: null, found: 0, settled: [], cursor: finalized.value };
+  }
+
+  const cursor = stored ?? BigInt(configured!);
   const window = nextScanWindow({
     cursor,
     safeHead: finalized.value,
