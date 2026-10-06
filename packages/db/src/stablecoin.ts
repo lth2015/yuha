@@ -506,3 +506,156 @@ export async function setChainCursor(
     tx,
   );
 }
+
+// ------------------------------------------------------------------- review
+
+export interface ReviewItem {
+  intent_id: string;
+  order_id: string;
+  user_id: string;
+  state: string;
+  payer: string;
+  chain_id: number;
+  token_key: string;
+  /** What the order asked for. */
+  expected_atomic: string;
+  price_jpy: number;
+  quote_expires_at: Date;
+  /** What actually arrived, when something did. */
+  received_atomic: string | null;
+  tx_hash: string | null;
+  log_index: number | null;
+  block_number: string | number | null;
+  block_time: Date | null;
+  order_status: string;
+  created_at: Date;
+}
+
+/**
+ * Payments a person has to look at.
+ *
+ * Short, over, late and unattributed money all land here rather than being
+ * guessed at. The join reaches the evidence so the answer does not need a
+ * second round trip per row — an operator looking at a list of payments is
+ * deciding about money and should see the amounts side by side.
+ */
+export async function listStablecoinReviews(limit = 100): Promise<ReviewItem[]> {
+  return query<ReviewItem>(
+    `SELECT i.id            AS intent_id,
+            i.order_id,
+            q.user_id,
+            i.state,
+            i.payer,
+            i.chain_id,
+            q.token_key,
+            q.amount_atomic AS expected_atomic,
+            q.price_jpy,
+            q.expires_at    AS quote_expires_at,
+            e.amount_atomic AS received_atomic,
+            e.tx_hash,
+            e.log_index,
+            e.block_number,
+            e.block_time,
+            o.status        AS order_status,
+            i.created_at
+       FROM stablecoin_intents i
+       JOIN stablecoin_quotes q ON q.id = i.quote_id
+       JOIN orders o            ON o.id = i.order_id
+       LEFT JOIN chain_transfer_events e ON e.intent_id = i.id
+      WHERE i.state = 'review'
+      ORDER BY i.created_at
+      LIMIT ?`,
+    [limit],
+  );
+}
+
+/** Money that arrived with no intent to attach it to. */
+export async function listUnattributedTransfers(limit = 100): Promise<TransferEventRow[]> {
+  return query<TransferEventRow>(
+    `SELECT id, chain_id, tx_hash, log_index, token_address, from_address, to_address,
+            amount_atomic, block_number, block_hash, canonical, intent_id
+       FROM chain_transfer_events
+      WHERE intent_id IS NULL
+      ORDER BY block_number DESC
+      LIMIT ?`,
+    [limit],
+  );
+}
+
+/** Takes an intent out of review once a person has decided what it was. */
+export async function resolveReview(
+  params: { intentId: string; state: 'confirmed' | 'cancelled' },
+  tx?: PoolConnection,
+): Promise<boolean> {
+  const res = await execute(
+    `UPDATE stablecoin_intents
+        SET state = ?, resolved_at = UTC_TIMESTAMP(3), updated_at = UTC_TIMESTAMP(3)
+      WHERE id = ? AND state = 'review'`,
+    [params.state, params.intentId],
+    tx,
+  );
+  return res.affectedRows > 0;
+}
+
+// -------------------------------------------------------------- accounting
+
+export interface AccountingRow {
+  order_id: string;
+  price_key: string;
+  track_id: string | null;
+  price_jpy: number;
+  token_key: string;
+  chain_id: number;
+  token_address: string;
+  received_atomic: string;
+  payer: string;
+  receiver: string;
+  tx_hash: string;
+  log_index: number;
+  block_time: Date | null;
+  payment_received_at: Date | null;
+  service_delivered_at: Date | null;
+  rate_text: string | null;
+  rate_provider: string | null;
+  rate_observed_at: Date | null;
+}
+
+/**
+ * Settled stablecoin payments, for the monthly reconciliation.
+ *
+ * Deliberately carries payment_received_at and service_delivered_at as
+ * SEPARATE columns and no third one combining them: §13 is explicit that the
+ * revenue-recognition date per SKU is the tax accountant's to set, and this
+ * export must not quietly decide it by emitting one date and calling it
+ * revenue.
+ */
+export async function listStablecoinAccounting(params: { from: Date; to: Date }): Promise<AccountingRow[]> {
+  return query<AccountingRow>(
+    `SELECT o.id                     AS order_id,
+            o.price_key,
+            JSON_UNQUOTE(JSON_EXTRACT(o.metadata, '$.track_id')) AS track_id,
+            q.price_jpy,
+            q.token_key,
+            q.chain_id,
+            q.token_address,
+            e.amount_atomic          AS received_atomic,
+            q.payer,
+            q.receiver,
+            e.tx_hash,
+            e.log_index,
+            e.block_time,
+            o.paid_at                AS payment_received_at,
+            o.entitlement_granted_at AS service_delivered_at,
+            q.rate_text,
+            q.rate_provider,
+            q.rate_observed_at
+       FROM chain_transfer_events e
+       JOIN stablecoin_intents i ON i.id = e.intent_id
+       JOIN stablecoin_quotes q  ON q.id = i.quote_id
+       JOIN orders o             ON o.id = i.order_id
+      WHERE i.state = 'confirmed'
+        AND o.paid_at >= ? AND o.paid_at < ?
+      ORDER BY o.paid_at`,
+    [params.from, params.to],
+  );
+}

@@ -109,6 +109,17 @@ const envSchema = z.object({
   MFA_ENCRYPTION_SECRET: secret(),
   /** Issuer shown in Google Authenticator. */
   MFA_ISSUER: z.string().default('YUHA'),
+  /*
+   * Staff accounts must carry a second factor.
+   *
+   * An operations console can compensate accounts, resolve rights cases and
+   * read other people's orders, so a stolen staff password is a different
+   * class of incident from a stolen customer password. Default on, and
+   * production refuses to start with it off — the switch exists so a local
+   * demo and the existing test suite can run without enrolling an
+   * authenticator, not so it can be turned off where it matters.
+   */
+  ADMIN_MFA_REQUIRED: bool(true),
 
   /*
    * Stablecoin payments. Three switches, all off, and they stay off until the
@@ -449,6 +460,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     if (adapters.auth === 'dev') problems.push('production mode cannot use the dev auth adapter');
     if (adapters.music === 'demo') problems.push('production mode cannot use the demo (fake) music adapter');
     if (adapters.payments !== 'stripe') problems.push('production mode cannot use simulated payments');
+    if (!e.ADMIN_MFA_REQUIRED) problems.push('production mode cannot disable the staff second factor');
     if (adapters.email === 'log') {
       problems.push(
         'production mode cannot use the log email adapter: it delivers nothing, and the sign-in ' +

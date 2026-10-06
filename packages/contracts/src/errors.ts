@@ -12,6 +12,7 @@ export const ERROR_CODES = [
   'AUTH_EXCHANGE_FAILED',
   'MFA_INVALID_CODE',
   'MFA_NOT_ENROLLED',
+  'MFA_REQUIRED',
   'EMAIL_NOT_ALLOWED',
   // request shape
   'VALIDATION_FAILED',
@@ -69,6 +70,8 @@ const STATUS_BY_CODE: Record<ErrorCode, number> = {
   AUTH_EXCHANGE_FAILED: 401,
   MFA_INVALID_CODE: 401,
   MFA_NOT_ENROLLED: 400,
+  // Authenticated, and not allowed through until a second factor exists.
+  MFA_REQUIRED: 403,
   EMAIL_NOT_ALLOWED: 403,
   VALIDATION_FAILED: 400,
   PROMPT_TOO_LONG: 400,

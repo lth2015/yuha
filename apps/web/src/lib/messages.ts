@@ -31,6 +31,7 @@ const msg = (code: string, tone: UserMessage['tone']): UserMessage => ({
 export const ERROR_MESSAGES: Record<ErrorCode, UserMessage> = {
   MFA_INVALID_CODE: msg('MFA_INVALID_CODE', 'error'),
   MFA_NOT_ENROLLED: msg('MFA_NOT_ENROLLED', 'info'),
+  MFA_REQUIRED: msg('MFA_REQUIRED', 'warn'),
   AUTH_EXCHANGE_FAILED: msg('AUTH_EXCHANGE_FAILED', 'error'),
   UNAUTHENTICATED: msg('UNAUTHENTICATED', 'info'),
   FORBIDDEN: msg('FORBIDDEN', 'error'),

@@ -9,6 +9,11 @@ import {
   stablecoinPaymentStatus,
 } from '../services/stablecoin.js';
 import { settleReportedTransaction } from '../services/stablecoin-scan.js';
+import {
+  decideStablecoinReview,
+  stablecoinAccountingCsv,
+  stablecoinReviewQueue,
+} from '../services/stablecoin-admin.js';
 
 /**
  * Stablecoin payment routes, on /v1 like every other route in this server —
@@ -150,5 +155,46 @@ export default async function stablecoinRoutes(app: FastifyInstance, opts: { ctx
   app.get('/v1/orders/:id/payment-status', { preHandler: app.requireAuth }, async (req) => {
     const { id } = req.params as { id: string };
     return stablecoinPaymentStatus({ userId: req.user!.id, orderId: id });
+  });
+
+  // ----------------------------------------------------------------- console
+
+  const staff = app.requireRole(['support', 'admin']);
+  const adminOnly = app.requireRole(['admin']);
+
+  /** Short, over, late and unattributed money, with the amounts side by side. */
+  app.get('/v1/admin/stablecoin-payments', { preHandler: staff }, async () => stablecoinReviewQueue());
+
+  app.post('/v1/admin/stablecoin-payments/:id/review', { preHandler: adminOnly }, async (req) => {
+    const { id } = req.params as { id: string };
+    const body = z
+      .object({
+        decision: z.enum(['accept_as_paid', 'reject']),
+        reason: z.string().min(3).max(500),
+      })
+      .parse(req.body);
+    return decideStablecoinReview({
+      intentId: id,
+      decision: body.decision,
+      reason: body.reason,
+      actorId: req.user!.id,
+      actorRole: req.user!.role,
+    });
+  });
+
+  /**
+   * The monthly reconciliation file. Staff rather than admin-only: reading
+   * what was received is not the same authority as deciding a disputed
+   * payment.
+   */
+  app.get('/v1/admin/accounting/stablecoin-export', { preHandler: staff }, async (req, reply) => {
+    const q = z
+      .object({ from: z.string().datetime(), to: z.string().datetime() })
+      .parse(req.query);
+    const csv = await stablecoinAccountingCsv({ from: new Date(q.from), to: new Date(q.to) });
+    return reply
+      .header('content-type', 'text/csv; charset=utf-8')
+      .header('content-disposition', `attachment; filename="stablecoin-${q.from.slice(0, 10)}.csv"`)
+      .send(csv);
   });
 }

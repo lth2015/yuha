@@ -116,7 +116,7 @@ export async function buildServer(ctx: AppContext): Promise<FastifyInstance> {
   );
 
   const adapter = createAuthAdapter(ctx.config);
-  await app.register(authPlugin, { adapter });
+  await app.register(authPlugin, { adapter, adminMfaRequired: ctx.config.ADMIN_MFA_REQUIRED });
 
   await app.register(publicRoutes, { ctx });
   await app.register(authRoutes, { ctx, adapter });

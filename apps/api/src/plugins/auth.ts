@@ -1,7 +1,7 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import fp from 'fastify-plugin';
 import { AppError, type UserRole } from '@yuha/contracts';
-import type { UserRow } from '@yuha/db';
+import { getEnabledMfaFactor, type UserRow } from '@yuha/db';
 import type { AuthAdapter } from '../auth/index.js';
 
 declare module 'fastify' {
@@ -18,7 +18,10 @@ declare module 'fastify' {
   }
 }
 
-export default fp(async function authPlugin(app: FastifyInstance, opts: { adapter: AuthAdapter }) {
+export default fp(async function authPlugin(
+  app: FastifyInstance,
+  opts: { adapter: AuthAdapter; adminMfaRequired: boolean },
+) {
   const { adapter } = opts;
 
   app.decorateRequest('user', undefined);
@@ -60,6 +63,18 @@ export default fp(async function authPlugin(app: FastifyInstance, opts: { adapte
     await app.requireAuth(req, reply);
     if (!roles.includes(req.user!.role)) {
       throw new AppError('FORBIDDEN', 'insufficient privileges');
+    }
+    /*
+     * A second factor, checked at the gate rather than at sign-in.
+     *
+     * Enforcing it here means an account that is GIVEN a staff role later
+     * cannot use the console until it enrols — where a login-time check would
+     * have let an already-open session straight through. The way out is open:
+     * enrolment is an ordinary authenticated route, so a locked-out admin can
+     * still set up their authenticator and come back.
+     */
+    if (opts.adminMfaRequired && !(await getEnabledMfaFactor(req.user!.id))) {
+      throw new AppError('MFA_REQUIRED', 'staff accounts need two-factor authentication — enrol first');
     }
   });
 

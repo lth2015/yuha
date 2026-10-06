@@ -18,7 +18,13 @@ import { createHarness, resetData, teardown, type Harness, type TestUser } from 
 let h: Harness;
 
 beforeAll(async () => {
-  h = await createHarness();
+  h = await createHarness({
+    // These suites are about account isolation and deletion, not about
+    // staff enrolment, and their operator accounts exist for one request
+    // each. The second-factor requirement is covered by
+    // tests/admin-mfa.test.ts, and production refuses to start with it off.
+    ADMIN_MFA_REQUIRED: 'false',
+  });
 });
 beforeEach(async () => {
   await resetData();
