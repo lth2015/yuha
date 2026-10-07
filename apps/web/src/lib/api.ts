@@ -73,7 +73,15 @@ export interface RequestOptions {
   signal?: AbortSignal;
 }
 
-export async function apiFetch<T>(path: string, opts: RequestOptions = {}): Promise<T> {
+/**
+ * The request itself, and what a failure means — shared by the JSON and the
+ * text callers.
+ *
+ * Split out when the accounting export needed CSV: a second copy of the
+ * authorization header and the 401 handling is a second place for them to
+ * drift, and the one that drifted would be the one nobody tested.
+ */
+async function request(path: string, opts: RequestOptions): Promise<{ res: Response; text: string }> {
   const headers: Record<string, string> = {};
   const token = getToken();
   if (token) headers['authorization'] = `Bearer ${token}`;
@@ -92,10 +100,27 @@ export async function apiFetch<T>(path: string, opts: RequestOptions = {}): Prom
     if ((err as Error).name === 'AbortError') throw err;
     throw new NetworkError(err);
   }
+  return { res, text: res.status === 204 ? '' : await res.text() };
+}
+
+/**
+ * A response that is not JSON — the accounting CSV.
+ *
+ * Deliberately not a plain `<a href>`: the console's endpoints need the
+ * bearer token, and a link cannot carry one. A link would either download an
+ * HTML error page named `.csv` or quietly produce nothing.
+ */
+export async function apiFetchText(path: string): Promise<string> {
+  const { res, text } = await request(path, {});
+  if (!res.ok) throw errorFrom(res, text);
+  return text;
+}
+
+export async function apiFetch<T>(path: string, opts: RequestOptions = {}): Promise<T> {
+  const { res, text } = await request(path, opts);
 
   if (res.status === 204) return undefined as T;
 
-  const text = await res.text();
   let json: unknown = null;
   try {
     json = text ? JSON.parse(text) : null;
@@ -103,31 +128,39 @@ export async function apiFetch<T>(path: string, opts: RequestOptions = {}): Prom
     json = null;
   }
 
-  if (!res.ok) {
-    const body = json as { error?: { code?: ErrorCode; message?: string; details?: unknown } } | null;
-    const code = body?.error?.code ?? 'INTERNAL_ERROR';
-    /*
-     * An expired or revoked session drops the stale token — and says so.
-     *
-     * Dropping it silently was half a sign-out: the token went, but the
-     * session provider still held `me`, so the header kept showing the
-     * person's name and credits, the protected routes kept admitting them, and
-     * every single action failed with "you need to sign in" until they found
-     * Sign out in the menu or reloaded by hand. The event is what turns that
-     * into an actual sign-out.
-     */
-    if (res.status === 401) {
-      setToken(null);
-      try {
-        window.dispatchEvent(new Event(SESSION_EXPIRED_EVENT));
-      } catch {
-        /* no window: nothing is rendering, so nothing needs telling */
-      }
-    }
-    throw new ApiError(code, body?.error?.message ?? res.statusText, res.status, body?.error?.details);
-  }
+  if (!res.ok) throw errorFrom(res, text);
 
   return json as T;
+}
+
+/** The error a failed response becomes, including what a 401 does to the session. */
+function errorFrom(res: Response, text: string): ApiError {
+  let json: unknown = null;
+  try {
+    json = text ? JSON.parse(text) : null;
+  } catch {
+    json = null;
+  }
+  const body = json as { error?: { code?: ErrorCode; message?: string; details?: unknown } } | null;
+  const code = body?.error?.code ?? 'INTERNAL_ERROR';
+  /*
+   * An expired or revoked session drops the stale token — and says so.
+   *
+   * Dropping it silently was half a sign-out: the token went, but the session
+   * provider still held `me`, so the header kept showing the person's name and
+   * credits, the protected routes kept admitting them, and every single action
+   * failed with "you need to sign in" until they found Sign out in the menu or
+   * reloaded by hand. The event is what turns that into an actual sign-out.
+   */
+  if (res.status === 401) {
+    setToken(null);
+    try {
+      window.dispatchEvent(new Event(SESSION_EXPIRED_EVENT));
+    } catch {
+      /* no window: nothing is rendering, so nothing needs telling */
+    }
+  }
+  return new ApiError(code, body?.error?.message ?? res.statusText, res.status, body?.error?.details);
 }
 
 /**

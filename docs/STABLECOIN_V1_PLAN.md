@@ -352,15 +352,52 @@ place that filters the whitelist by chain and by switch, and the switch lookup
 is a `Record` over the key union, so adding a currency fails to compile until
 somebody says whether it has a switch.
 
+### The operations console
+
+Four things an operator can now do, each of which existed only as an endpoint:
+decide a payment in review, attach money that could not be attributed to an
+order (or write it off), see what refunds are owed, and download the monthly
+reconciliation file. For a defect whose whole cost was a stranded payment that
+nobody could repair, "usable but not clickable" was barely better than absent.
+
+Three decisions inside it are worth naming:
+
+- **Precision comes from the runtime descriptor, never from the bundle.** The
+  review rows carry a token key, not a number of decimals, and an operator
+  judging whether a payment is one unit short must not be reading a figure the
+  browser scaled by itself. A currency the page was not told about shows raw
+  atomic units — a long number is obviously raw, where a wrongly scaled one is
+  not.
+- **The month is a JST month.** `paid_at` is stored in UTC, and the month a
+  税理士 reconciles is a Japanese calendar month, so UTC boundaries would put
+  nine hours of 1 October into September's file and leave nine hours of
+  31 October out of October's. Japan has no daylight saving, so the offset is a
+  constant. A mutation that uses UTC boundaries is killed by a test.
+- **The reason is a field in the row, not a `window.prompt`.** The rights-case
+  console asks for its reason through a modal; a mandatory reason typed into a
+  box that cannot be reviewed or corrected is one people learn to type "ok"
+  into, and the audit row is the entire point of asking.
+
+The CSV goes through a fetch and a Blob rather than a link, because the
+endpoint needs the bearer token — a plain `<a href>` would have downloaded an
+HTML error page named `.csv`. That required a text-returning sibling of
+`apiFetch`; both now share one request and one error path, rather than a second
+copy of the authorization header and the 401 handling for the one of them
+nobody tests.
+
 ### Still missing from the front end
 
-- **The operations console has no interface.** The review queue, the
-  attach-unattributed-money action, the refunds-owed list and the accounting
-  export are HTTP endpoints only. The repair path added for the orphaned-money
-  defect is therefore usable but not yet clickable.
 - **Mobile wallets cannot pay.** No `window.ethereum` in a mobile browser, and
   no WalletConnect.
-- **The payment-method choice is not component-tested.** There is no React
-  testing setup in this repository, so the guard that decides whether the
-  choice appears at all is reasoned from one shared expression rather than
-  demonstrated. Said here rather than left to look proven.
+- **Neither page is component-tested.** There is no React testing setup in this
+  repository. The decisions are pure functions with tests and mutation
+  coverage — amount formatting and comparison, the step order, wallet error
+  codes, network parameters, the JST month, who may decide — but the wiring
+  between them and the markup is reasoned, not demonstrated. Where a guard has
+  to hold for both the action and the rendering, it is one shared expression so
+  that there is nothing to keep in step; that is the strongest claim available
+  here, and it is weaker than a test.
+- **Attaching money to an order is done by pasting an order id.** There is no
+  search: an operator finds the order elsewhere in the console and copies it.
+  Deliberate for a first version — the action is rare and the consequence of
+  attaching the wrong order is a wrong delivery — but it is a sharp edge.

@@ -219,3 +219,66 @@ export function pollDelayMs(attempt: number): number {
   if (attempt < 14) return 4000;
   return 8000;
 }
+
+/* -------------------------------------------------- the operations console */
+
+/**
+ * Which way a payment missed, and by how much.
+ *
+ * Both amounts are decimal strings in atomic units, so the comparison is
+ * BigInt and never `Number`: at eighteen decimals, two amounts that differ by
+ * a yen are the same double. An operator deciding whether to accept a payment
+ * is deciding about money, and "short" versus "over" is the whole question.
+ */
+export interface AmountGap {
+  direction: 'exact' | 'short' | 'over';
+  /** The absolute difference, in atomic units, as a string. */
+  magnitude: string;
+}
+
+export function amountGap(expectedAtomic: string, receivedAtomic: string | null): AmountGap | null {
+  if (receivedAtomic === null) return null;
+  if (!/^[0-9]+$/.test(expectedAtomic) || !/^[0-9]+$/.test(receivedAtomic)) return null;
+  const expected = BigInt(expectedAtomic);
+  const received = BigInt(receivedAtomic);
+  if (received === expected) return { direction: 'exact', magnitude: '0' };
+  return received < expected
+    ? { direction: 'short', magnitude: (expected - received).toString() }
+    : { direction: 'over', magnitude: (received - expected).toString() };
+}
+
+/**
+ * The UTC instants bounding one JST calendar month.
+ *
+ * The export filters on `orders.paid_at`, which is stored in UTC, and the
+ * month a 税理士 reconciles is a Japanese calendar month — so asking for
+ * "October" with UTC boundaries would put nine hours of 1 October into
+ * September's file and leave nine hours of 31 October out of October's. Japan
+ * has no daylight saving, so the offset is a constant rather than a lookup.
+ *
+ * Returns null for anything that is not a real month, rather than a range
+ * built from NaN.
+ */
+export function jstMonthRange(month: string): { from: string; to: string } | null {
+  const m = /^(\d{4})-(\d{2})$/.exec(month);
+  if (!m) return null;
+  const year = Number(m[1]);
+  const mon = Number(m[2]);
+  if (mon < 1 || mon > 12) return null;
+  // 00:00 JST is 15:00 UTC the previous day.
+  const from = Date.UTC(year, mon - 1, 1, -9, 0, 0);
+  const to = Date.UTC(mon === 12 ? year + 1 : year, mon === 12 ? 0 : mon, 1, -9, 0, 0);
+  return { from: new Date(from).toISOString(), to: new Date(to).toISOString() };
+}
+
+/**
+ * Who may decide about a payment.
+ *
+ * A function rather than an inline comparison because the console has to use
+ * the same answer for whether to SHOW a button and whether to act on it. A
+ * guard only the renderer consults is how a page ends up doing something it
+ * does not offer.
+ */
+export function mayDecidePayments(role: string | undefined): boolean {
+  return role === 'admin';
+}

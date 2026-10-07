@@ -10,10 +10,13 @@
  */
 import { describe, expect, it } from 'vitest';
 import {
+  amountGap,
   countdown,
   explorerTxUrl,
   formatAtomic,
+  jstMonthRange,
   knownChainParams,
+  mayDecidePayments,
   parseChainId,
   payStep,
   pollDelayMs,
@@ -214,5 +217,59 @@ describe('the quote clock', () => {
     // Monotonic: a later attempt never waits less than an earlier one.
     const delays = Array.from({ length: 25 }, (_, i) => pollDelayMs(i));
     expect(delays.every((d, i) => i === 0 || d >= delays[i - 1]!)).toBe(true);
+  });
+});
+
+describe('the operations console', () => {
+  it('says which way a payment missed, and by how much', () => {
+    const exact = amountGap('980000000000000000000', '980000000000000000000');
+    expect(exact).toEqual({ direction: 'exact', magnitude: '0' });
+
+    // One atomic unit short, at eighteen decimals: the same double, and the
+    // whole question an operator is deciding.
+    const short = amountGap('980000000000000000000', '979999999999999999999');
+    expect(short).toEqual({ direction: 'short', magnitude: '1' });
+
+    const over = amountGap('980000000000000000000', '981000000000000000000');
+    expect(over).toEqual({ direction: 'over', magnitude: '1000000000000000000' });
+  });
+
+  it('has nothing to say when nothing arrived, or when the figures are not figures', () => {
+    expect(amountGap('980000000000000000000', null)).toBeNull();
+    expect(amountGap('980000000000000000000', '98.5')).toBeNull();
+    expect(amountGap('not a number', '1')).toBeNull();
+  });
+
+  it('bounds a month in JST, because that is the month being reconciled', () => {
+    /*
+     * `paid_at` is stored in UTC and the month a tax accountant reconciles is
+     * a Japanese calendar month. UTC boundaries would put nine hours of
+     * 1 October into September's file and leave nine hours of 31 October out
+     * of October's — a reconciliation that does not reconcile.
+     */
+    expect(jstMonthRange('2026-10')).toEqual({
+      from: '2026-09-30T15:00:00.000Z',
+      to: '2026-10-31T15:00:00.000Z',
+    });
+  });
+
+  it('rolls December into the next January', () => {
+    expect(jstMonthRange('2026-12')).toEqual({
+      from: '2026-11-30T15:00:00.000Z',
+      to: '2026-12-31T15:00:00.000Z',
+    });
+  });
+
+  it('refuses anything that is not a month instead of building a range from NaN', () => {
+    for (const bad of ['', '2026', '2026-13', '2026-00', '2026-1', 'october', '2026-10-01']) {
+      expect(jstMonthRange(bad), bad).toBeNull();
+    }
+  });
+
+  it('lets only an admin decide about a payment', () => {
+    expect(mayDecidePayments('admin')).toBe(true);
+    expect(mayDecidePayments('support')).toBe(false);
+    expect(mayDecidePayments('user')).toBe(false);
+    expect(mayDecidePayments(undefined)).toBe(false);
   });
 });

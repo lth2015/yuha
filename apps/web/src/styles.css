@@ -790,7 +790,7 @@ label { display: block; font-size: var(--t-body); font-weight: 600; margin-botto
    type=text but matches no [type='...'] selector: the studio's title field
    rendered at the UA default, 147x22 with a grey 2px border, in the middle
    of the dark studio. Measured, not noticed — it reads as "small field". */
-input:not([type]), input[type='text'], input[type='email'], input[type='search'], input[type='number'], input[type='url'], textarea, select {
+input:not([type]), input[type='text'], input[type='email'], input[type='search'], input[type='number'], input[type='url'], input[type='month'], textarea, select {
   width: 100%; min-height: var(--tap); padding: 10px 14px;
   border-radius: var(--r-control); border: 1px solid var(--line);
   background: var(--surface); color: var(--ink); font: inherit;

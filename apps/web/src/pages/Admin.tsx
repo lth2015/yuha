@@ -3,6 +3,7 @@ import { apiFetch } from '../lib/api';
 import { useI18n } from '../lib/i18n';
 import { formatMoney, formatJst, useSession } from '../lib/session';
 import { Badge, ErrorNotice, Loading } from '../components/common';
+import { StablecoinConsole } from '../components/StablecoinConsole';
 
 interface Measured {
   value: number | null;
@@ -394,6 +395,13 @@ export default function Admin() {
           {t('admin.cases.auditNote')}
         </p>
       </section>
+
+      {/*
+        Its own data, deliberately. A failing stablecoin endpoint must not
+        blank the job queue and the ledger discrepancies above it over a
+        payment channel that is switched off on most deployments.
+      */}
+      <StablecoinConsole />
     </div>
   );
 }
