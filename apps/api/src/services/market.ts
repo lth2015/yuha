@@ -4,7 +4,6 @@ import {
   getPublicTrack,
   getTrackForUser,
   hasLicense,
-  insertOrder,
   findOrderByIdempotencyKey,
   getActiveProduct,
   getActiveSubscription,
@@ -14,6 +13,7 @@ import {
 } from '@yuha/db';
 import type { AppContext } from '../context.js';
 import { assertNotStablecoinClaimed } from './billing.js';
+import { createPurchaseOrder } from './purchase-cap.js';
 
 /**
  * Market monetization: licensing another creator's published song.
@@ -78,7 +78,7 @@ export async function createLicenseCheckout(
 
   const order =
     existing ??
-    (await insertOrder({
+    (await createPurchaseOrder(ctx, {
       userId: params.userId,
       priceKey: product.price_key,
       priceVersion: product.version,

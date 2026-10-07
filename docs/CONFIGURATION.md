@@ -90,6 +90,20 @@ cp .env.example .env   # 然后按需填写下表中的值
   那由 `Legal.tsx` 的 `LEGAL_TEXT_REVIEWED` 常量决定，见 `docs/OPEN_ITEMS.md` §4。
   生产模式在 NAME / ADDRESS / CONTACT 任一为空时拒绝启动（SEC-13）。
 
+**按账号的购买上限**（可选,有默认值,不配也会生效）:
+
+- `PURCHASE_CAP_JPY_PER_DAY`（默认 `50000`）滚动 24 小时内**已付**金额上限
+- `PURCHASE_CAP_ORDERS_PER_DAY`（默认 `20`）滚动 24 小时内**新建**订单数上限
+
+两个数字针对的是两种不同的滥用:盗刷成功是**金额**(单数少、每笔都是真钱),
+测卡是**次数**(大量尝试、几乎都失败,所以金额上限看不到它)。任一设 `0` 即关闭。
+默认值刻意宽松——¥50,000 一天是五十个 DROP 包,真实客户到不了而盗卡者会到;
+挡住真实购买本身也是一种失败。被挡住的真实客户由操作台直接发放次数来补偿,
+那条路径不走订单、因此不受上限约束,且有审计行和经手人。
+实现在 `apps/api/src/services/purchase-cap.ts`,三个下单入口共用;
+`tests/purchase-cap.test.ts` 里有一条脚本化不变量,保证 `apps/api` 里除它之外
+不得直接调用 `insertOrder`——否则新加的购买入口会静默绕过上限。
+
 ---
 
 ## D. 前端（apps/web）

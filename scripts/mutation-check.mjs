@@ -30,7 +30,14 @@ const DB = process.env.TEST_DATABASE_URL ?? 'mysql://loopscene:loopscene_local_t
 const S = 'apps/api/src/services';
 const P = 'packages/providers/src/chain';
 
-/** @type {Array<{name:string,file:string,from:string,to:string,tests:string[]}>} */
+/**
+ * `from`/`to` is one edit; `edits` is several, applied in order, for a defect
+ * that takes more than one line to write back — a bypass that needs an import
+ * as well as a call, say. All of them must match, or the mutation reports
+ * ANCHOR NOT FOUND rather than applying half of itself.
+ *
+ * @type {Array<{name:string,file:string,from?:string,to?:string,edits?:Array<{from:string,to:string}>,tests:string[]}>}
+ */
 const MUTATIONS = [
   {
     name: 'orphan-write-takes-the-anti-replay-key',
@@ -347,6 +354,53 @@ const MUTATIONS = [
     tests: ['tests/stablecoin-pay-ui.test.ts'],
   },
   {
+    name: 'the-purchase-cap-counts-orders-started-as-money-spent',
+    file: 'packages/db/src/billing.ts',
+    from: "       COALESCE(SUM(CASE WHEN paid_at IS NOT NULL AND paid_at >= ? AND currency = 'jpy'\n                         THEN amount_minor ELSE 0 END), 0) AS paid_jpy_minor,",
+    to: "       COALESCE(SUM(CASE WHEN created_at >= ? AND currency = 'jpy'\n                         THEN amount_minor ELSE 0 END), 0) AS paid_jpy_minor,",
+    tests: ['tests/purchase-cap.test.ts'],
+  },
+  {
+    name: 'the-purchase-cap-has-no-count-limit',
+    file: 'apps/api/src/services/purchase-cap.ts',
+    from: '  if (countCap > 0 && activity.createdCount >= countCap) {',
+    to: '  if (false && countCap > 0 && activity.createdCount >= countCap) {',
+    tests: ['tests/purchase-cap.test.ts'],
+  },
+  {
+    name: 'the-purchase-cap-exempts-a-currency-it-cannot-evaluate',
+    file: 'apps/api/src/services/purchase-cap.ts',
+    from: "  if (params.currency !== 'jpy' || activity.paidOtherCurrencyCount > 0) {",
+    to: "  if (false && (params.currency !== 'jpy' || activity.paidOtherCurrencyCount > 0)) {",
+    tests: ['tests/purchase-cap.test.ts'],
+  },
+  {
+    name: 'the-purchase-cap-never-forgets',
+    file: 'apps/api/src/services/purchase-cap.ts',
+    from: '  const since = new Date(Date.now() - 86_400_000);',
+    to: '  const since = new Date(0);',
+    tests: ['tests/purchase-cap.test.ts'],
+  },
+  {
+    name: 'the-purchase-cap-ignores-the-purchase-being-made',
+    file: 'apps/api/src/services/purchase-cap.ts',
+    from: '  if (activity.paidJpyMinor + params.amountMinor > valueCap) {',
+    to: '  if (activity.paidJpyMinor > valueCap) {',
+    tests: ['tests/purchase-cap.test.ts'],
+  },
+  {
+    name: 'a-purchase-path-creates-its-order-uncapped',
+    file: 'apps/api/src/services/market.ts',
+    edits: [
+      {
+        from: "import { createPurchaseOrder } from './purchase-cap.js';",
+        to: "import { createPurchaseOrder } from './purchase-cap.js';\nimport { insertOrder } from '@yuha/db';\nvoid createPurchaseOrder;",
+      },
+      { from: '    (await createPurchaseOrder(ctx, {', to: '    (await insertOrder({' },
+    ],
+    tests: ['tests/purchase-cap.test.ts'],
+  },
+  {
     name: 'a-blank-numeric-config-line-is-zero-again',
     file: 'apps/api/src/config.ts',
     from: "const blank = (v: string | undefined) => v === undefined || v.trim() === '';",
@@ -396,11 +450,14 @@ const results = [];
 for (const m of selected) {
   const path = join(ROOT, m.file);
   const original = readFileSync(path, 'utf8');
-  if (!original.includes(m.from)) {
+  const edits = m.edits ?? [{ from: m.from, to: m.to }];
+  if (!edits.every((e) => original.includes(e.from))) {
     results.push([m.name, 'ANCHOR NOT FOUND']);
     continue;
   }
-  writeFileSync(path, original.replace(m.from, m.to));
+  let mutated = original;
+  for (const e of edits) mutated = mutated.replace(e.from, e.to);
+  writeFileSync(path, mutated);
 
   const buildProblem = buildFor([m.file]);
   let verdict;

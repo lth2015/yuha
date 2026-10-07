@@ -45,6 +45,7 @@ export const ERROR_CODES = [
   'WEBHOOK_SIGNATURE_INVALID',
   // platform
   'BUDGET_EXCEEDED',
+  'PURCHASE_CAP_REACHED',
   'SERVICE_DISABLED',
   'INTERNAL_ERROR',
 ] as const;
@@ -99,6 +100,8 @@ const STATUS_BY_CODE: Record<ErrorCode, number> = {
   SUBSCRIPTIONS_DISABLED: 403,
   WEBHOOK_SIGNATURE_INVALID: 400,
   BUDGET_EXCEEDED: 429,
+  // 429: the request is fine and the account has bought too much too quickly.
+  PURCHASE_CAP_REACHED: 429,
   SERVICE_DISABLED: 503,
   INTERNAL_ERROR: 500,
 };

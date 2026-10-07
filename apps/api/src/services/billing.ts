@@ -8,7 +8,6 @@ import {
   getOrderForUser,
   getUser,
   grantUnits,
-  insertOrder,
   listActiveProducts,
   listBatches,
   getBalance,
@@ -19,6 +18,7 @@ import {
   type ProductRow,
 } from '@yuha/db';
 import type { AppContext } from '../context.js';
+import { createPurchaseOrder } from './purchase-cap.js';
 
 export function toProductView(row: ProductRow, available: boolean): ProductView {
   return {
@@ -145,10 +145,11 @@ export async function createCheckout(
    * two monthly invoices. Stripe creates it happily; nothing downstream
    * merges them.
    *
-   * Placed after the idempotency replay above and before `insertOrder`, so a
+   * Placed after the idempotency replay above and before the order is
+   * created, so a
    * genuinely in-flight session can still be resumed while a new purchase is
    * refused before anything is written. The first draft of this sat below
-   * `insertOrder` with a comment claiming no order row was created — the test
+   * the insert with a comment claiming no order row was created — the test
    * that counts orders is what caught it.
    *
    * Changing plan or stopping goes through the existing management flow at
@@ -165,7 +166,7 @@ export async function createCheckout(
 
   const order =
     existing ??
-    (await insertOrder({
+    (await createPurchaseOrder(ctx, {
       userId: params.userId,
       priceKey: product.price_key,
       priceVersion: product.version,

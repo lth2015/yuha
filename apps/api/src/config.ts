@@ -351,6 +351,32 @@ const envSchema = z.object({
   DAILY_BUDGET_MINOR: int(50_000),
   GENERATION_RATE_LIMIT_PER_HOUR: int(30),
   EXPORT_RATE_LIMIT_PER_HOUR: int(60),
+  /*
+   * How much one account may buy in a rolling day, and how many orders it may
+   * start.
+   *
+   * docs/FRAUD_PREVENTION.md ticked "velocity / amount limits per account" on
+   * the strength of the two limits above, and said so plainly in its own
+   * "what is still not true" section: those cap generation and export, which
+   * protect CAPACITY. A stolen card buying forty DROP packs in an hour met no
+   * limit at all, on the channel that carries every payment today.
+   *
+   * Two numbers because the two abuses look different. A stolen card that
+   * works is VALUE — few orders, each one real money. Card testing is COUNT —
+   * many attempts, most of them declined, which a value cap never sees
+   * because nothing is ever paid.
+   *
+   * The value default is deliberately generous: ¥50,000 a day is fifty DROP
+   * packs, which no real customer reaches and a card thief does. A cap that
+   * stops a genuine purchase is its own kind of failure, so the number is set
+   * where the damage is bounded rather than where abuse begins. Zero switches
+   * either cap off, which is what a deployment with no card channel wants.
+   *
+   * A rolling window, not a calendar day: a cap that resets at midnight is a
+   * cap with a known gap in it.
+   */
+  PURCHASE_CAP_JPY_PER_DAY: int(50_000),
+  PURCHASE_CAP_ORDERS_PER_DAY: int(20),
 
   // --- generation tuning --------------------------------------------------
   JOB_LEASE_SECONDS: int(90),

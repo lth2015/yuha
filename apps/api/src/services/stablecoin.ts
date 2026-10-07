@@ -10,7 +10,6 @@ import {
   getUser,
   getChainCursor,
   getVerifiedWallet,
-  insertOrder,
   insertQuoteWithIntent,
   markIntentPrepared,
   withTx,
@@ -26,6 +25,7 @@ import {
 } from '@yuha/providers';
 import type { AppContext } from '../context.js';
 import { assertConfiguredTokensVerified, SCAN_STREAM } from './stablecoin-scan.js';
+import { createPurchaseOrder } from './purchase-cap.js';
 import { stablecoinTokenFor } from './stablecoin-tokens.js';
 import { getPublicTrack, hasLicense } from '@yuha/db';
 
@@ -226,7 +226,8 @@ export async function createStablecoinQuote(
   return withTx(async (tx) => {
     const order =
       existing ??
-      (await insertOrder(
+      (await createPurchaseOrder(
+        ctx,
         {
           userId: params.userId,
           priceKey: product.price_key,

@@ -218,6 +218,53 @@ export async function findOrderByIdempotencyKey(
   );
 }
 
+/**
+ * What one account has bought lately, for the per-account purchase cap.
+ *
+ * Two different questions, because the two abuses look different:
+ *
+ *   `paidJpyMinor`  — money that actually moved. A stolen card that works.
+ *   `createdCount`  — orders started, paid or not. Card testing, where almost
+ *                     nothing is ever paid and a value cap therefore sees
+ *                     nothing at all.
+ *
+ * `paidOtherCurrencyCount` exists so the caller can refuse rather than
+ * undercount. The catalogue is JPY today; if a second currency appeared,
+ * summing only the JPY rows would let an account buy past a yen cap by
+ * switching currency, and silently. The caller's policy is to refuse a
+ * purchase it cannot evaluate, which is a decision it can only make if it
+ * knows the rows exist.
+ *
+ * A rolling window rather than a calendar day: a cap that resets at midnight
+ * is a cap with a known gap in it.
+ */
+export async function purchaseActivitySince(
+  params: { userId: string; since: Date },
+  tx?: PoolConnection,
+): Promise<{ paidJpyMinor: number; paidOtherCurrencyCount: number; createdCount: number }> {
+  const row = await queryOne<{
+    paid_jpy_minor: string | number | null;
+    paid_other_count: string | number | null;
+    created_count: string | number | null;
+  }>(
+    `SELECT
+       COALESCE(SUM(CASE WHEN paid_at IS NOT NULL AND paid_at >= ? AND currency = 'jpy'
+                         THEN amount_minor ELSE 0 END), 0) AS paid_jpy_minor,
+       SUM(CASE WHEN paid_at IS NOT NULL AND paid_at >= ? AND currency <> 'jpy'
+                THEN 1 ELSE 0 END)                         AS paid_other_count,
+       SUM(CASE WHEN created_at >= ? THEN 1 ELSE 0 END)     AS created_count
+     FROM orders
+     WHERE user_id = ? AND (created_at >= ? OR paid_at >= ?)`,
+    [params.since, params.since, params.since, params.userId, params.since, params.since],
+    tx,
+  );
+  return {
+    paidJpyMinor: Number(row?.paid_jpy_minor ?? 0),
+    paidOtherCurrencyCount: Number(row?.paid_other_count ?? 0),
+    createdCount: Number(row?.created_count ?? 0),
+  };
+}
+
 export async function insertOrder(
   params: {
     userId: string;
