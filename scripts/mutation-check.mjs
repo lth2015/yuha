@@ -250,6 +250,75 @@ const MUTATIONS = [
     tests: ['tests/stablecoin-review-fixes.test.ts'],
   },
   {
+    name: 'the-payment-page-formats-an-amount-through-a-number',
+    file: 'apps/web/src/lib/stablecoin.ts',
+    from: '  const padded = amountAtomic.padStart(decimals + 1, \'0\');',
+    to: '  const padded = (Number(amountAtomic) / 10 ** decimals).toFixed(decimals).replace(\'.\', \'\');',
+    tests: ['tests/stablecoin-pay-ui.test.ts'],
+  },
+  {
+    name: 'the-payment-page-renders-whatever-it-is-given-as-an-amount',
+    file: 'apps/web/src/lib/stablecoin.ts',
+    from: "  if (!/^[0-9]+$/.test(amountAtomic)) throw new Error('an atomic amount is digits only');",
+    to: '  void amountAtomic;',
+    tests: ['tests/stablecoin-pay-ui.test.ts'],
+  },
+  {
+    name: 'the-page-invents-network-parameters-for-any-chain',
+    file: 'apps/web/src/lib/stablecoin.ts',
+    from: '  if (chainId === 137) {\n    return {\n      chainId: toHexChainId(137),',
+    to: '  if (chainId > 0) {\n    return {\n      chainId: toHexChainId(chainId),',
+    tests: ['tests/stablecoin-pay-ui.test.ts'],
+  },
+  {
+    name: 'a-wallet-code-buried-in-data-is-not-read',
+    file: 'apps/web/src/lib/stablecoin.ts',
+    from: '  const code = typeof e.code === \'number\' ? e.code : parseNestedCode(e);',
+    to: '  const code = typeof e.code === \'number\' ? e.code : undefined;',
+    tests: ['tests/stablecoin-pay-ui.test.ts'],
+  },
+  {
+    name: 'the-page-asks-for-a-signature-on-the-wrong-network',
+    file: 'apps/web/src/lib/stablecoin.ts',
+    from: `  if (s.chainId !== null && s.chainId !== s.wantChainId) return 'switch-chain';
+  if (!s.walletVerified) return 'prove';`,
+    to: `  if (!s.walletVerified) return 'prove';
+  if (s.chainId !== null && s.chainId !== s.wantChainId) return 'switch-chain';`,
+    tests: ['tests/stablecoin-pay-ui.test.ts'],
+  },
+  {
+    name: 'the-page-calls-a-sent-transaction-a-finished-purchase',
+    file: 'apps/web/src/lib/stablecoin.ts',
+    from: "  if (s.delivered) return 'done';",
+    to: "  if (s.delivered || s.reported) return 'done';",
+    tests: ['tests/stablecoin-pay-ui.test.ts'],
+  },
+  {
+    name: 'the-page-treats-an-unasked-chain-as-the-wrong-chain',
+    file: 'apps/web/src/lib/stablecoin.ts',
+    from: "  if (s.chainId !== null && s.chainId !== s.wantChainId) return 'switch-chain';",
+    to: "  if (s.chainId !== s.wantChainId) return 'switch-chain';",
+    tests: ['tests/stablecoin-pay-ui.test.ts'],
+  },
+  {
+    name: 'the-browser-is-told-about-currencies-that-are-switched-off',
+    file: 'apps/api/src/services/stablecoin-tokens.ts',
+    from: '  return whitelistedTokens().filter((t) => t.chainId === cfg.STABLECOIN_CHAIN_ID && on[t.key]);',
+    to: '  void on;\n  return [...whitelistedTokens()];',
+    tests: ['tests/stablecoin-quote-intent.test.ts'],
+  },
+  {
+    name: 'a-wallet-listing-shows-everybodys-wallets',
+    file: 'packages/db/src/stablecoin.ts',
+    from: `    \`SELECT user_id, chain_id, address, challenge_id, verified_at, last_used_at
+       FROM verified_wallets WHERE user_id = ? ORDER BY verified_at\`,
+    [userId],`,
+    to: `    \`SELECT user_id, chain_id, address, challenge_id, verified_at, last_used_at
+       FROM verified_wallets ORDER BY verified_at\`,
+    [],`,
+    tests: ['tests/stablecoin-quote-intent.test.ts'],
+  },
+  {
     name: 'a-blank-numeric-config-line-is-zero-again',
     file: 'apps/api/src/config.ts',
     from: "const blank = (v: string | undefined) => v === undefined || v.trim() === '';",

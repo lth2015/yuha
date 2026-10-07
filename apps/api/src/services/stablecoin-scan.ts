@@ -2,7 +2,6 @@ import { closeIntent, findExpiredOpenIntents, getChainCursor, setChainCursor } f
 import {
   DualChainReader,
   decodeTransferLog,
-  tokenByKey,
   verifyChainIds,
   verifyTokenDecimals,
   type TokenShapeProblem,
@@ -14,6 +13,7 @@ import {
 } from '@yuha/providers';
 import { AppError } from '@yuha/contracts';
 import type { AppContext } from '../context.js';
+import { enabledStablecoinTokens } from './stablecoin-tokens.js';
 import { settleStablecoinObservation, type SettleOutcome } from './stablecoin-settle.js';
 
 /**
@@ -206,11 +206,7 @@ function byBlockThenLog(a: IncomingTransfer, b: IncomingTransfer): number {
  * accepting another, silently.
  */
 function tokensInUse(ctx: AppContext): TokenSpec[] {
-  const chainId = ctx.config.STABLECOIN_CHAIN_ID;
-  const out: TokenSpec[] = [];
-  if (ctx.config.STABLECOIN_JPYC_ENABLED) out.push(tokenByKey('jpyc', chainId));
-  if (ctx.config.STABLECOIN_USDC_ENABLED) out.push(tokenByKey('usdc', chainId));
-  return out;
+  return enabledStablecoinTokens(ctx.config);
 }
 
 /**

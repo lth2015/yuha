@@ -129,6 +129,23 @@ export async function recordVerifiedWallet(
   return { row, heldByAnotherAccount: false };
 }
 
+/**
+ * Every wallet this account has proved control of.
+ *
+ * The interface needs it to know whether connecting a wallet should ask for a
+ * signature or go straight to a quote. Without it the page either prompts for
+ * a SIWE signature on every single purchase, or guesses from the text of an
+ * error message.
+ */
+export async function listVerifiedWallets(userId: string, tx?: PoolConnection): Promise<VerifiedWalletRow[]> {
+  return query<VerifiedWalletRow>(
+    `SELECT user_id, chain_id, address, challenge_id, verified_at, last_used_at
+       FROM verified_wallets WHERE user_id = ? ORDER BY verified_at`,
+    [userId],
+    tx,
+  );
+}
+
 export async function getVerifiedWallet(
   params: { userId: string; chainId: number; address: string },
   tx?: PoolConnection,

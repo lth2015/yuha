@@ -301,3 +301,66 @@ Found by writing the test, not by reading the code.
 - `orders.payment_method = 'card'` is never written by anything today, and the
   column's collation accepts `'CARD'` while the JavaScript comparison does not.
   Inert now; a trap if something starts writing it.
+
+## The front end, and what it refuses to do
+
+Until now this channel existed only as HTTP endpoints: the backend could take a
+payment and the browser had no way to make one. `/checkout/stablecoin` is that
+flow, reached from a payment-method choice on the confirmation screen, which
+appears only when `GET /v1/runtime` says the channel is on **and** the product
+is one the quote endpoint accepts (DROP and Licence — a wallet button on a
+subscription would be an offer the next request refuses).
+
+Wallet support is deliberately narrow for a first version: an injected
+EIP-1193 provider, which means a desktop browser extension. WalletConnect
+would add a third-party dependency and a project registration, and the
+manual-transfer fallback cannot stand alone because proving the wallet still
+needs a signature from it. A customer without an extension is told so plainly
+and offered the card path, rather than being walked into a flow that cannot
+finish.
+
+The decisions live in `apps/web/src/lib/stablecoin.ts` as pure functions —
+amount formatting, the step order, wallet error codes, network parameters — and
+are tested without a browser in `tests/stablecoin-pay-ui.test.ts`. The page
+renders them. What that separation buys is that the following are tested rather
+than hoped for:
+
+- **The figure shown is the figure sent.** Atomic units are formatted from the
+  string with the quote's own `tokenDecimals`; 980 JPYC is 980000000000000000000
+  atomic units, which a double cannot hold. A mutation that formats through
+  `Number` is killed by a test, and so is one that renders an amount it was
+  not given.
+- **A sent transaction is not a finished purchase.** `done` is delivery, read
+  back from the server. A transaction can revert, land short, or sit in a block
+  that is not final.
+- **No signature prompt on the wrong network**, because that prompt cannot lead
+  anywhere; and no quote before the wallet is proved, because the server would
+  refuse it. Both would read as a broken page rather than a step out of order.
+- **No invented networks.** `wallet_addEthereumChain` is only offered for a
+  chain whose parameters are checked into the repository. A fabricated RPC URL
+  is a lasting piece of wrong configuration left in somebody's wallet.
+- **No wallet's own English shown to a Japanese customer.** Every provider
+  error becomes a dictionary key, including the one that matters most —
+  `-32002`, a request already waiting in a wallet window behind the browser,
+  which otherwise looks like the page having frozen.
+
+Three currency lists became one while doing this. The quote service had a
+`SUPPORTED` map, the scanner had a pair of `tokenByKey` calls, and the runtime
+descriptor would have been a third — the shape that has produced five defects
+in this codebase. `apps/api/src/services/stablecoin-tokens.ts` is now the only
+place that filters the whitelist by chain and by switch, and the switch lookup
+is a `Record` over the key union, so adding a currency fails to compile until
+somebody says whether it has a switch.
+
+### Still missing from the front end
+
+- **The operations console has no interface.** The review queue, the
+  attach-unattributed-money action, the refunds-owed list and the accounting
+  export are HTTP endpoints only. The repair path added for the orphaned-money
+  defect is therefore usable but not yet clickable.
+- **Mobile wallets cannot pay.** No `window.ethereum` in a mobile browser, and
+  no WalletConnect.
+- **The payment-method choice is not component-tested.** There is no React
+  testing setup in this repository, so the guard that decides whether the
+  choice appears at all is reasoned from one shared expression rather than
+  demonstrated. Said here rather than left to look proven.

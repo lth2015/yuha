@@ -2,6 +2,8 @@ import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { AppError } from '@yuha/contracts';
 import type { AppContext } from '../context.js';
+import { listVerifiedWallets } from '@yuha/db';
+import { toDisplayAddress } from '@yuha/providers';
 import { issueWalletChallenge, verifyWalletChallenge } from '../services/stablecoin-wallet.js';
 import {
   createStablecoinQuote,
@@ -84,6 +86,28 @@ export default async function stablecoinRoutes(app: FastifyInstance, opts: { ctx
       };
     },
   );
+
+  /**
+   * The wallets this account has already proved control of.
+   *
+   * So the interface can tell "connect and pay" from "connect, sign, then
+   * pay". Without it a page either asks for a SIWE signature before every
+   * purchase — a wallet popup for something already established — or decides
+   * by matching the text of an error message, which is not a protocol.
+   *
+   * Only the caller's own wallets, and nothing but what the caller already
+   * told us: an address they signed for, the chain, and when.
+   */
+  app.get('/v1/payments/stablecoin/wallets', { preHandler: app.requireAuth }, async (req) => {
+    const wallets = await listVerifiedWallets(req.user!.id);
+    return {
+      wallets: wallets.map((w) => ({
+        address: toDisplayAddress(w.address),
+        chainId: w.chain_id,
+        verifiedAt: w.verified_at.toISOString(),
+      })),
+    };
+  });
 
   app.post(
     '/v1/payments/stablecoin/quote',

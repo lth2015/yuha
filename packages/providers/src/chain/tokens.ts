@@ -47,8 +47,32 @@ export const USDC_POLYGON: TokenSpec = {
   label: 'USDC (Polygon PoS, native)',
 };
 
-/** Module-private until something outside needs to enumerate it. */
 const WHITELISTED_TOKENS: readonly TokenSpec[] = [JPYC_POLYGON, USDC_POLYGON];
+
+/**
+ * The whole whitelist, for callers that have to enumerate it.
+ *
+ * Exported because three places were enumerating the currencies from their own
+ * literals — the quote service, the scanner, and now the runtime descriptor
+ * the browser reads — and a list repeated three times is the shape of defect
+ * this codebase has shipped five times. Everything downstream filters this
+ * one array.
+ */
+export function whitelistedTokens(): readonly TokenSpec[] {
+  return WHITELISTED_TOKENS;
+}
+
+/*
+ * `tokenByKey(key, chainId)` used to live here and has gone.
+ *
+ * It was a lookup by key that the previous round had to give a `chainId`
+ * parameter precisely because it was narrower than the list it read. With one
+ * place in the API now filtering the whitelist by chain and by switch
+ * (apps/api/src/services/stablecoin-tokens.ts), a second key lookup had no
+ * callers and `check:orphans` said so. `tokenAt(chainId, address)` remains,
+ * because the verifier's question really is "is this address a token we
+ * accept on this chain".
+ */
 
 /**
  * Addresses are compared lowercased, never by string equality on whatever
@@ -67,24 +91,6 @@ export function sameAddress(a: string, b: string): boolean {
 
 export function tokenAt(chainId: number, address: string): TokenSpec | undefined {
   return WHITELISTED_TOKENS.find((t) => t.chainId === chainId && sameAddress(t.address, address));
-}
-
-/**
- * The spec for a currency ON A CHAIN.
- *
- * `chainId` is not optional, and that is the point: this matched on `key`
- * alone while `tokenAt` matched on both, so the scanner's filter and the
- * verifier's lookup could answer about different chains. Today the whitelist
- * holds one chain and the two agree by accident; adding a second chain's JPYC
- * would have made them disagree silently, with the scanner watching one
- * contract and the verifier accepting another. That is the same shape as the
- * five "a list that quietly excludes the new thing" defects in this codebase,
- * inverted — a lookup narrower than the list it reads.
- */
-export function tokenByKey(key: TokenSpec['key'], chainId: number): TokenSpec {
-  const spec = WHITELISTED_TOKENS.find((t) => t.key === key && t.chainId === chainId);
-  if (!spec) throw new Error(`no whitelisted token called ${key} on chain ${chainId}`);
-  return spec;
 }
 
 /** keccak256('decimals()')[0:4] — a constant of the ERC-20 standard. */

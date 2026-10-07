@@ -12,6 +12,7 @@ import Admin from './pages/Admin';
 import Auth from './pages/Auth';
 import Billing from './pages/Billing';
 import { CheckoutComplete, CheckoutConfirm, CheckoutSimulate } from './pages/Checkout';
+import { StablecoinPay } from './pages/StablecoinPay';
 import Create from './pages/Create';
 import Export from './pages/Export';
 import GoogleCallback from './pages/GoogleCallback';
@@ -121,6 +122,20 @@ export default function App() {
                 element={
                   <RequireAuth>
                     <CheckoutComplete />
+                  </RequireAuth>
+                }
+              />
+              {/*
+                Paying from the customer's own wallet. The page refuses to
+                render when the runtime descriptor says the channel is off, so
+                a bookmarked URL cannot offer a payment method this deployment
+                does not have.
+              */}
+              <Route
+                path="/checkout/stablecoin"
+                element={
+                  <RequireAuth>
+                    <StablecoinPay />
                   </RequireAuth>
                 }
               />

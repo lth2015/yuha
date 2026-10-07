@@ -26,6 +26,7 @@ interface Disclosure {
  */
 export function CheckoutConfirm() {
   const [params] = useSearchParams();
+  const navigate = useNavigate();
   const priceKey = params.get('price') ?? 'drop_5';
   const { runtime } = useSession();
   const { t, lang } = useI18n();
@@ -37,6 +38,15 @@ export function CheckoutConfirm() {
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [idempotencyKey] = useState(() => newIdempotencyKey('checkout'));
+  /*
+   * Card unless the customer says otherwise.
+   *
+   * The choice is offered only when the runtime descriptor says the channel is
+   * on AND this product can be paid for that way — DROP and Licence; the two
+   * subscriptions stay on Stripe, so offering a wallet for them would be a
+   * button that leads to a refusal.
+   */
+  const [method, setMethod] = useState<'card' | 'stablecoin'>('card');
 
   useEffect(() => {
     void (async () => {
@@ -65,7 +75,34 @@ export function CheckoutConfirm() {
     })();
   }, [priceKey]);
 
+  /*
+   * Only for what the quote endpoint will actually accept. `QUOTABLE_PRODUCTS`
+   * on the server is DROP and Licence; a wallet button on a subscription would
+   * be an offer the next request refuses, which reads as a broken page rather
+   * than an unavailable option.
+   *
+   * Computed here rather than beside the markup so that the ACTION and the
+   * chooser are decided by the same expression. A guard that only the renderer
+   * can see is how a page ends up doing something it does not offer.
+   */
+  const stablecoinOffered =
+    !!runtime?.stablecoin.enabled &&
+    runtime.stablecoin.tokens.length > 0 &&
+    (priceKey === 'drop_5' || priceKey === 'market_license');
+
   const proceed = async () => {
+    if (method === 'stablecoin' && stablecoinOffered) {
+      /*
+       * The obligation is created on the next page, by asking for a quote —
+       * which is why the amount, the contents, the delivery timing and the
+       * cancellation terms above are shown BEFORE that step and repeated
+       * there. 消費者庁's 最終確認画面 guidance is about the moment the
+       * obligation arises, and for this channel that moment is the quote.
+       */
+      const track = params.get('track');
+      navigate(`/checkout/stablecoin?price=${encodeURIComponent(priceKey)}${track ? `&track=${encodeURIComponent(track)}` : ''}`);
+      return;
+    }
     setSubmitting(true);
     setError(null);
     try {
@@ -199,6 +236,33 @@ export function CheckoutConfirm() {
         </section>
       )}
 
+      {stablecoinOffered && (
+        <section className="panel stack">
+          <h2 style={{ fontSize: 20, margin: 0 }}>{t('checkout.method.title')}</h2>
+          <div className="row">
+            <button
+              type="button"
+              className={method === 'card' ? 'btn btn--primary' : 'btn'}
+              aria-pressed={method === 'card'}
+              onClick={() => setMethod('card')}
+            >
+              {t('checkout.method.card')}
+            </button>
+            <button
+              type="button"
+              className={method === 'stablecoin' ? 'btn btn--primary' : 'btn'}
+              aria-pressed={method === 'stablecoin'}
+              onClick={() => setMethod('stablecoin')}
+            >
+              {t('checkout.method.stablecoin')}
+            </button>
+          </div>
+          <p className="small muted">
+            {method === 'card' ? t('checkout.method.cardNote') : t('checkout.method.stablecoinNote')}
+          </p>
+        </section>
+      )}
+
       <div className="checkbox-row">
         <input
           id="agree"
@@ -231,12 +295,16 @@ export function CheckoutConfirm() {
         disabled={!agreed || submitting || !product.available}
         onClick={() => void proceed()}
       >
-        {submitting ? t('checkout.submitting') : t('checkout.pay', { amount: formatMoney(product.amountMinor, product.currency, LOCALES[lang]) })}
+        {submitting
+          ? t('checkout.submitting')
+          : method === 'stablecoin'
+            ? t('checkout.payStablecoin')
+            : t('checkout.pay', { amount: formatMoney(product.amountMinor, product.currency, LOCALES[lang]) })}
       </button>
 
       <p className="small muted" style={{ margin: 0, textAlign: 'center' }}>
-        {t('checkout.cardNote')}
-        {runtime?.demo && t('checkout.demoNote')}
+        {method === 'stablecoin' ? t('checkout.stablecoinFooter') : t('checkout.cardNote')}
+        {runtime?.demo && method === 'card' && t('checkout.demoNote')}
       </p>
     </div>
   );

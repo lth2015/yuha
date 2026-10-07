@@ -62,6 +62,33 @@ export const runtimeInfo = z.object({
   stripePublishableKey: z.string().nullable(),
   /** Legal entity disclosure state; "placeholder" is not allowed in production. */
   legalEntityConfigured: z.boolean(),
+  /**
+   * The stablecoin channel, as configured.
+   *
+   * The interface must not offer a payment method the running configuration
+   * does not have, and it must not carry its own copy of a chain id or a
+   * token address: both decide where money goes. `tokens` is empty and
+   * `enabled` false on every deployment where the switches are off, which is
+   * all of them until the business conclusions in
+   * docs/STABLECOIN_V1_PLAN.md are in hand.
+   *
+   * `decimals` here is for labels only. The amount a customer is asked to pay
+   * is always rendered from the decimals on the QUOTE, which is the number the
+   * server computed that amount with and which the startup check compared
+   * against the contract itself.
+   */
+  stablecoin: z.object({
+    enabled: z.boolean(),
+    chainId: z.number().int().positive(),
+    tokens: z.array(
+      z.object({
+        key: z.enum(['jpyc', 'usdc']),
+        address: z.string(),
+        decimals: z.number().int().nonnegative(),
+        label: z.string(),
+      }),
+    ),
+  }),
   /** Login methods the web app should render. */
   authMethods: z.object({
     dev: z.boolean(),

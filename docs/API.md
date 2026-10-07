@@ -282,6 +282,42 @@ and never processed.
 
 ---
 
+## Paying from a wallet (stablecoin)
+
+Off by default, on every deployment, until the business conclusions in
+[STABLECOIN_V1_PLAN.md](STABLECOIN_V1_PLAN.md) are in hand. `GET /v1/runtime`
+carries a `stablecoin` block — `enabled`, `chainId`, and the currencies
+actually switched on — and the web app renders nothing for this channel unless
+that block says so.
+
+There is no receiving contract, no allowance, and no server-held key: the only
+thing that moves money is the customer's own wallet signing a plain ERC-20
+`transfer`. Every endpoint below therefore either records what the customer
+told us or reports what we have seen on the chain.
+
+| Endpoint | Purpose |
+| --- | --- |
+| `GET /v1/payments/stablecoin/wallets` | The caller's own verified wallets, so the interface knows whether to ask for a signature |
+| `POST /v1/payments/stablecoin/wallet-challenge` | A SIWE-style message to sign; single-use nonce, short expiry |
+| `POST /v1/payments/stablecoin/wallet-verify` | Recovers the address from the signature and records the wallet. One wallet belongs to one account per chain |
+| `POST /v1/payments/stablecoin/quote` | Creates or reuses the order and issues a priced quote, valid for `STABLECOIN_QUOTE_TTL_SECONDS`. Carries `amountAtomic` as a **string**, with `tokenDecimals` |
+| `POST /v1/orders/:id/stablecoin-prepare` | The `transfer` calldata, built from the stored quote. The amount, token and receiver are the server's |
+| `POST /v1/orders/:id/stablecoin-transaction` | A reported hash. A hint about **where to look**, never an instruction: attribution comes from the open intent of the transaction's own sender, so a hash copied from a block explorer resolves to that sender's order or to nothing. 202 means "we looked and there is nothing to act on yet" |
+| `GET /v1/orders/:id/payment-status` | The order's status, the intent's state, and `entitlementGranted` — which is what "paid" means to a customer |
+
+Two properties worth stating because a client could otherwise assume
+otherwise:
+
+- **`amountAtomic` is a decimal string and never a number.** 980 JPYC is
+  980000000000000000000 atomic units, which a double cannot hold. Render it
+  with the `tokenDecimals` on the same quote.
+- **`orderStatus: 'paid'` is not delivery.** Marking the order paid and handing
+  over what it bought are deliberately separate transactions, so a crash
+  between them leaves a paid order waiting rather than an unpaid order holding
+  delivered goods. Poll `entitlementGranted`.
+
+---
+
 ## Operations console
 
 `GET /v1/admin/*` requires `support` or `admin`; mutations that change licence
@@ -302,6 +338,10 @@ never from a token claim.
 | `POST /v1/admin/deletions/:id/verify` | **admin** | Confirm the requester owns the account |
 | `POST /v1/admin/deletions/:id/execute` | **admin** | Carry out the erasure |
 | `GET /v1/admin/audit-logs` | support | Audit trail |
+| `GET /v1/admin/stablecoin-payments` | support | Payments in review, money with no order to attach it to, and refunds owed |
+| `POST /v1/admin/stablecoin-payments/:id/review` | **admin** | Accept a short, over or late payment, or reject it — reason required |
+| `POST /v1/admin/stablecoin-transfers/:id/decide` | **admin** | Attach an unattributed transfer to an order, or write it off — reason required |
+| `GET /v1/admin/accounting/stablecoin-export` | support | Monthly reconciliation CSV; payment and delivery dates kept apart |
 
 Deletion is two steps on purpose. Verification is a human stating that the
 person asking owns the account, and only a verified request can be executed:

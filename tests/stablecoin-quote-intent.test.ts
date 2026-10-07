@@ -244,6 +244,125 @@ describe('the prepared transfer', () => {
   });
 });
 
+describe('what the browser is told', () => {
+  it('names the channel and the currencies that are actually switched on', async () => {
+    /*
+     * The interface must not offer a payment method the running configuration
+     * does not have, and it must not carry its own copy of a chain id or a
+     * token address — both decide where money goes. Before this, the web app
+     * had no way to know the channel existed at all.
+     */
+    const res = await h.app.inject({ method: 'GET', url: '/v1/runtime' });
+    expect(res.statusCode).toBe(200);
+    const sc = res.json().stablecoin as {
+      enabled: boolean;
+      chainId: number;
+      tokens: Array<{ key: string; address: string; decimals: number }>;
+    };
+    expect(sc.enabled).toBe(true);
+    expect(sc.chainId).toBe(137);
+    // USDC is switched off in this harness, and config validation refuses to
+    // start with it on, so one currency is the only honest answer.
+    expect(sc.tokens.map((x) => x.key)).toEqual(['jpyc']);
+    expect(sc.tokens[0]!.decimals).toBe(18);
+    expect(sc.tokens[0]!.address.toLowerCase()).toBe('0xe7c3d8c9a439fede00d2600032d5db0be71c3c29');
+  });
+
+  it('says the channel is off, with no currencies, when it is off', async () => {
+    // A second harness with no STABLECOIN_* overrides: the default, which is
+    // every deployment until the business conclusions are in hand.
+    const off = await createHarness();
+    try {
+      const res = await off.app.inject({ method: 'GET', url: '/v1/runtime' });
+      const sc = res.json().stablecoin as { enabled: boolean; tokens: unknown[] };
+      expect(sc.enabled).toBe(false);
+      // Empty, not "all of them": a page that read the list without checking
+      // the flag would otherwise render a currency chooser.
+      expect(sc.tokens).toEqual([]);
+    } finally {
+      await off.app.close();
+    }
+  });
+
+  it('tells a signed-in customer which of their wallets are already proved', async () => {
+    /*
+     * So the page can tell "connect and pay" from "connect, sign, then pay".
+     * Without it, it either asks for a SIWE signature before every purchase —
+     * a wallet popup for something already established — or decides by
+     * matching the text of an error message.
+     */
+    const user = await h.createUser({ email: 'wl-mine@example.jp' });
+    const other = await h.createUser({ email: 'wl-other@example.jp' });
+    await linkWallet(user, accountA);
+    await linkWallet(other, accountB);
+
+    const res = await h.app.inject({
+      method: 'GET',
+      url: '/v1/payments/stablecoin/wallets',
+      headers: { ...user.authHeader, ...freshIp() },
+    });
+    expect(res.statusCode).toBe(200);
+    const wallets = res.json().wallets as Array<{ address: string; chainId: number }>;
+    expect(wallets).toHaveLength(1);
+    expect(wallets[0]!.address.toLowerCase()).toBe(accountA.address.toLowerCase());
+    expect(wallets[0]!.chainId).toBe(137);
+    // Somebody else's verified wallet is not ours to list.
+    expect(wallets.some((w) => w.address.toLowerCase() === accountB.address.toLowerCase())).toBe(false);
+  });
+
+  it('needs a session to list wallets at all', async () => {
+    const res = await h.app.inject({ method: 'GET', url: '/v1/payments/stablecoin/wallets', headers: freshIp() });
+    expect(res.statusCode).toBe(401);
+  });
+
+  it('sends the token’s precision with the quote, so the page renders the amount it will send', async () => {
+    /*
+     * 980 JPYC is 980000000000000000000 atomic units, which `Number` cannot
+     * hold. The page formats the string, and the decimals it formats with must
+     * come from the same place the server computed the amount with — not from
+     * a constant in the bundle.
+     */
+    const user = await h.createUser({ email: 'dec@example.jp' });
+    await linkWallet(user, accountA);
+    const res = await quote(user, {
+      priceKey: 'drop_5',
+      idempotencyKey: 'dec-0001',
+      tokenKey: 'jpyc',
+      payer: accountA.address,
+    });
+    expect(res.statusCode).toBe(200);
+    const body = res.json() as { tokenDecimals: number; amountAtomic: string };
+    expect(body.tokenDecimals).toBe(18);
+    expect(body.amountAtomic).toBe((980n * 10n ** 18n).toString());
+  });
+
+  it('says whether what was bought has actually been handed over', async () => {
+    /*
+     * The payment page polls this one endpoint, and what it calls success is
+     * DELIVERY rather than "paid" — the two are deliberately separate
+     * transactions, so a page stopping at `paid` would announce a completed
+     * purchase while the credits were not yet in the account.
+     */
+    const user = await h.createUser({ email: 'deliv@example.jp' });
+    await linkWallet(user, accountA);
+    const q = await quote(user, {
+      priceKey: 'drop_5',
+      idempotencyKey: 'deliv-0001',
+      tokenKey: 'jpyc',
+      payer: accountA.address,
+    });
+    const orderId = q.json().orderId as string;
+    const res = await h.app.inject({
+      method: 'GET',
+      url: `/v1/orders/${orderId}/payment-status`,
+      headers: { ...user.authHeader, ...freshIp() },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().entitlementGranted).toBe(false);
+    expect(res.json().orderStatus).toBe('pending');
+  });
+});
+
 describe('one live payment slot per ORDER, not only per wallet', () => {
   it('supersedes the first wallet’s slot when the same order is quoted from a second', async () => {
     /*

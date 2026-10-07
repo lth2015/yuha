@@ -19,8 +19,6 @@ import {
   type StablecoinQuoteRow,
 } from '@yuha/db';
 import {
-  JPYC_POLYGON,
-  USDC_POLYGON,
   encodeTransferCalldata,
   quoteAmountAtomic,
   toDisplayAddress,
@@ -28,6 +26,7 @@ import {
 } from '@yuha/providers';
 import type { AppContext } from '../context.js';
 import { assertConfiguredTokensVerified, SCAN_STREAM } from './stablecoin-scan.js';
+import { stablecoinTokenFor } from './stablecoin-tokens.js';
 import { getPublicTrack, hasLicense } from '@yuha/db';
 
 /**
@@ -43,23 +42,13 @@ import { getPublicTrack, hasLicense } from '@yuha/db';
  * (user, idempotency key) uniqueness the card path uses.
  */
 
-const SUPPORTED: Record<string, TokenSpec> = { jpyc: JPYC_POLYGON, usdc: USDC_POLYGON };
-
 /** DROP and Licence only. Subscriptions stay on Stripe in v1. */
 const QUOTABLE_PRODUCTS = new Set(['drop_5', 'market_license']);
 
 function tokenFor(ctx: AppContext, key: string): TokenSpec {
-  if (!ctx.config.STABLECOIN_ENABLED) {
-    throw new AppError('SERVICE_DISABLED', 'stablecoin payments are not available');
-  }
-  const token = SUPPORTED[key];
-  if (!token) throw new AppError('VALIDATION_FAILED', 'unknown currency');
-  if (token.chainId !== ctx.config.STABLECOIN_CHAIN_ID) {
-    throw new AppError('SERVICE_DISABLED', 'that currency is not available on the configured chain');
-  }
-  const enabled = key === 'jpyc' ? ctx.config.STABLECOIN_JPYC_ENABLED : ctx.config.STABLECOIN_USDC_ENABLED;
-  if (!enabled) throw new AppError('SERVICE_DISABLED', 'that currency is not available yet');
-  return token;
+  // One list of currencies for the whole deployment — see stablecoin-tokens.ts
+  // for why this is not a local map any more.
+  return stablecoinTokenFor(ctx.config, key);
 }
 
 function receiverFor(ctx: AppContext): string {
@@ -76,6 +65,13 @@ export interface QuoteResult {
   chainId: number;
   tokenKey: string;
   tokenAddress: string;
+  /**
+   * How many decimals that token has, so the interface can render the atomic
+   * amount as a number a person can compare with their wallet balance. Sent
+   * rather than assumed: the whole point of the on-chain check is that a
+   * client must not carry its own copy of this.
+   */
+  tokenDecimals: number;
   /** Atomic units as a decimal string. Never a number: 18 decimals do not fit. */
   amountAtomic: string;
   priceJpy: number;
@@ -92,6 +88,7 @@ function viewQuote(q: StablecoinQuoteRow): QuoteResult {
     chainId: q.chain_id,
     tokenKey: q.token_key,
     tokenAddress: toDisplayAddress(q.token_address),
+    tokenDecimals: q.token_decimals,
     amountAtomic: q.amount_atomic,
     priceJpy: Number(q.price_jpy),
     receiver: toDisplayAddress(q.receiver),
@@ -410,6 +407,16 @@ export interface PaymentStatus {
   orderId: string;
   orderStatus: string;
   paymentMethod: string | null;
+  /**
+   * Whether what was bought has actually been handed over.
+   *
+   * Carried here so the payment page has ONE thing to poll and so that what it
+   * calls success is delivery rather than "paid". The two are deliberately
+   * separate transactions — a crash between them leaves a paid order waiting
+   * for fulfilment — so a page that stopped at `paid` would announce a
+   * completed purchase while the credits were not yet in the account.
+   */
+  entitlementGranted: boolean;
   intent: { state: string; expiresAt: string | null } | null;
 }
 
@@ -424,6 +431,7 @@ export async function stablecoinPaymentStatus(
     orderId: order.id,
     orderStatus: order.status,
     paymentMethod: order.payment_method,
+    entitlementGranted: !!order.entitlement_granted_at,
     intent: intent ? { state: intent.state, expiresAt: quote?.expires_at.toISOString() ?? null } : null,
   };
 }

@@ -4,6 +4,8 @@ import type { RuntimeInfo } from '@yuha/contracts';
 import type { AppContext } from '../context.js';
 import { resolveFromRoot } from '../paths.js';
 import { freeTrialAvailable } from '../services/billing.js';
+import { enabledStablecoinTokens } from '../services/stablecoin-tokens.js';
+import { toDisplayAddress } from '@yuha/providers';
 
 /**
  * Public, unauthenticated endpoints: the runtime descriptor, the sample audio
@@ -54,6 +56,22 @@ export default async function publicRoutes(app: FastifyInstance, opts: { ctx: Ap
         storage: ctx.storage.kind,
         queue: ctx.queue.kind,
         payments: ctx.payments.kind,
+      },
+      stablecoin: {
+        enabled: ctx.config.STABLECOIN_ENABLED,
+        chainId: ctx.config.STABLECOIN_CHAIN_ID,
+        /*
+         * From the whitelist, filtered by the switches — never a literal
+         * written again here. The scanner's filter and the verifier's lookup
+         * drifting apart would mean watching one contract and accepting
+         * another; the same applies to what the browser is told to pay.
+         */
+        tokens: enabledStablecoinTokens(ctx.config).map((t) => ({
+          key: t.key,
+          address: toDisplayAddress(t.address),
+          decimals: t.decimals,
+          label: t.label,
+        })),
       },
       // Publishable key only. A secret key never reaches the browser (SEC-06).
       stripePublishableKey: ctx.config.STRIPE_PUBLISHABLE_KEY ?? null,
