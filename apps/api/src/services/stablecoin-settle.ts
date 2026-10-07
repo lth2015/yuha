@@ -11,12 +11,18 @@ import {
   type StablecoinQuoteRow,
 } from '@yuha/db';
 import {
+  sameAddress,
   verifyStablecoinPayment,
   type ChainObservation,
   type PaymentExpectation,
   type Verdict,
 } from '@yuha/providers';
 import type { AppContext } from '../context.js';
+
+/** The configured receiving wallet, lowercased. */
+function receiverOf(ctx: AppContext): string {
+  return (ctx.config.STABLECOIN_RECEIVER_ADDRESS ?? '').toLowerCase();
+}
 import { grantEntitlementForOrder } from './fulfilment.js';
 
 /**
@@ -82,14 +88,24 @@ export async function settleStablecoinObservation(
      * the address off a block explorer. None of those should be guessed at,
      * and none of them should make the row disappear.
      */
+    /*
+     * The log that paid US, not log zero.
+     *
+     * These fields came from `transferLogs[0]`, and a transaction's first
+     * Transfer is usually not the payment — a hop to a contract, a fee, a
+     * router leg. The operator queue then showed the wrong amount to refund
+     * and the row was keyed on a log index that was not the payment's, so the
+     * real one stayed unclaimed.
+     */
+    const paying = observation.transferLogs.find((l) => sameAddress(l.to, receiverOf(ctx)));
     const { claimed } = await recordTransferEvent({
       chainId,
       txHash: observation.transaction.hash,
-      logIndex: observation.transferLogs[0]?.logIndex ?? 0,
-      tokenAddress: observation.transaction.to ?? '0x',
-      fromAddress: payer,
-      toAddress: observation.transferLogs[0]?.to ?? '0x',
-      amountAtomic: (observation.transferLogs[0]?.value ?? 0n).toString(),
+      logIndex: paying?.logIndex ?? observation.transferLogs[0]?.logIndex ?? 0,
+      tokenAddress: paying?.token ?? observation.transaction.to ?? '0x',
+      fromAddress: paying?.from ?? payer,
+      toAddress: paying?.to ?? observation.transferLogs[0]?.to ?? '0x',
+      amountAtomic: (paying?.value ?? observation.transferLogs[0]?.value ?? 0n).toString(),
       blockNumber: observation.block.number,
       blockHash: observation.block.hash,
       blockTime: new Date(observation.block.timestampMs),
@@ -120,6 +136,34 @@ export async function settleStablecoinObservation(
   });
 
   if (verdict.outcome === 'reject') {
+    /*
+     * Refused, and still written down when money actually moved to us.
+     *
+     * A refusal used to leave only a `stablecoin_attempts` row, which nothing
+     * in the console surfaces — so a customer paying USDC against a JPYC quote
+     * had real money arrive that appeared in neither operator queue. A failed
+     * transaction moved nothing and gets no evidence row; a successful one
+     * that paid our address does, with no intent attached, which is what puts
+     * it in front of a person.
+     */
+    const paid = observation.receipt.status === 1
+      ? observation.transferLogs.find((l) => sameAddress(l.to, receiverOf(ctx)))
+      : undefined;
+    if (paid) {
+      await recordTransferEvent({
+        chainId,
+        txHash: observation.transaction.hash,
+        logIndex: paid.logIndex,
+        tokenAddress: paid.token,
+        fromAddress: paid.from,
+        toAddress: paid.to,
+        amountAtomic: paid.value.toString(),
+        blockNumber: observation.block.number,
+        blockHash: observation.block.hash,
+        blockTime: new Date(observation.block.timestampMs),
+        intentId: null,
+      });
+    }
     // The intent stays open: a rejected transaction is not this order's
     // payment, and closing the slot would strand the customer who is still
     // about to pay properly.
@@ -191,7 +235,14 @@ export async function settleStablecoinObservation(
     if (!claimed) return { already: true as const, orderId: intent.order_id };
 
     await closeIntent({ intentId: intent.id, state: 'confirmed' }, tx);
-    await markOrderPaid(
+    /*
+     * `changed` is the answer to "did this settle anything", and it was
+     * discarded — so a payment against an order already paid or REFUNDED
+     * answered `fulfilled` while moving nothing. `markOrderPaid` only matches
+     * pending/failed/canceled, so a second payment on a refunded order was
+     * taken, delivered nothing, and reported success.
+     */
+    const { changed } = await markOrderPaid(
       {
         orderId: intent.order_id,
         paymentIntentId: null,
@@ -200,10 +251,18 @@ export async function settleStablecoinObservation(
       },
       tx,
     );
+    if (!changed) return { already: true as const, orderId: intent.order_id, unexpected: true as const };
     return { already: false as const, orderId: intent.order_id };
   });
 
-  if (settled.already) return { kind: 'already_settled', orderId: settled.orderId };
+  if (settled.already) {
+    // Money arrived against an order that could not be moved to paid. The
+    // evidence row exists, so it is on the record; a person has to decide.
+    if ('unexpected' in settled) {
+      return { kind: 'review', orderId: settled.orderId, reason: 'payment for an order that is not payable' };
+    }
+    return { kind: 'already_settled', orderId: settled.orderId };
+  }
 
   // Separate transaction, and independently idempotent: `entitlement_batches`
   // is unique on (user, source, order id), so a retry after a crash here hands

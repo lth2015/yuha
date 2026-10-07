@@ -8,6 +8,7 @@ import {
   getOrderForUser,
   getQuote,
   getUser,
+  getChainCursor,
   getVerifiedWallet,
   insertOrder,
   insertQuoteWithIntent,
@@ -26,6 +27,7 @@ import {
   type TokenSpec,
 } from '@yuha/providers';
 import type { AppContext } from '../context.js';
+import { SCAN_STREAM } from './stablecoin-scan.js';
 import { getPublicTrack, hasLicense } from '@yuha/db';
 
 /**
@@ -173,7 +175,16 @@ export async function createStablecoinQuote(
     if (params.trackId && existing.metadata['track_id'] !== params.trackId) {
       throw new AppError('IDEMPOTENCY_KEY_REUSED', 'this idempotency key already belongs to a different song');
     }
-    if (existing.status === 'paid') throw new AppError('CONFLICT', 'this order has already been paid');
+    /*
+     * Paid, refunded or partially refunded all mean "not payable again".
+     *
+     * Only `paid` was refused, so a refunded order could be re-quoted and
+     * re-paid: `markOrderPaid` matches none of those states, so the second
+     * payment was taken, delivered nothing, and answered `fulfilled`.
+     */
+    if (['paid', 'refunded', 'partially_refunded'].includes(existing.status)) {
+      throw new AppError('CONFLICT', 'this order can no longer be paid');
+    }
     assertNotCardClaimed(existing);
   }
 
@@ -186,6 +197,7 @@ export async function createStablecoinQuote(
   });
 
   const expiresAt = new Date(Date.now() + ctx.config.STABLECOIN_QUOTE_TTL_SECONDS * 1000);
+  const scanFrom = (await getChainCursor({ chainId: token.chainId, stream: SCAN_STREAM })) ?? 0n;
 
   return withTx(async (tx) => {
     const order =
@@ -252,11 +264,22 @@ export async function createStablecoinQuote(
         rateSourceAt: null,
         rateObservedAt: null,
         roundedUp: rounded,
-        // Phase C replaces this with the chain head at quote time. Zero means
-        // "look from the beginning", which is correct but slow — and it is
-        // honest, where a made-up height would make the scanner skip a real
-        // payment.
-        startBlock: 0n,
+        /*
+         * Where the scanner has reached, so this quote cannot be settled by a
+         * payment that was already on the chain when it was asked for.
+         *
+         * This was hardcoded to 0, which disabled `before_start_block`
+         * entirely — the verifier bounds inclusion only from above, so an
+         * arbitrarily old transfer could satisfy a brand-new quote. Combined
+         * with a re-quote closing an intent without regard for a payment in
+         * flight, two payments could buy one entitlement.
+         *
+         * The cursor rather than a fresh chain read: it is a database lookup
+         * on the request path, it is what the scanner will actually search
+         * from, and a quote whose start block sat ahead of the cursor would
+         * describe a range nothing ever looks at.
+         */
+        startBlock: scanFrom,
         configVersion: ctx.config.STABLECOIN_CONFIG_VERSION,
         expiresAt,
       },

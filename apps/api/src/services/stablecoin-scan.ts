@@ -1,7 +1,11 @@
-import { getChainCursor, setChainCursor } from '@yuha/db';
+import { closeIntent, findExpiredOpenIntents, getChainCursor, setChainCursor } from '@yuha/db';
 import {
   DualChainReader,
   decodeTransferLog,
+  tokenByKey,
+  verifyTokenDecimals,
+  type TokenShapeProblem,
+  type TokenSpec,
   nextScanWindow,
   scanIncomingTransfers,
   type ChainObservation,
@@ -21,6 +25,26 @@ import { settleStablecoinObservation, type SettleOutcome } from './stablecoin-se
  */
 
 export const SCAN_STREAM = 'stablecoin_incoming';
+
+/**
+ * Frees the slot held by a quote nobody paid.
+ *
+ * One open intent per wallet per chain is what makes an incoming transfer
+ * unambiguous, and nothing ever closed an abandoned one: `expired` was a state
+ * with no caller. A customer who asked for a quote and walked away could not
+ * buy anything else from that wallet, ever.
+ *
+ * A payment that arrives after this runs is not lost — it lands in the
+ * unattributed queue with its evidence row, for a person to attach.
+ */
+export async function expireStaleIntents(limit = 100): Promise<number> {
+  const stale = await findExpiredOpenIntents(limit);
+  let closed = 0;
+  for (const intent of stale) {
+    if (await closeIntent({ intentId: intent.id, state: 'expired' })) closed += 1;
+  }
+  return closed;
+}
 
 export interface ScanPass {
   /** Blocks examined this pass, or null when there was nothing to do. */
@@ -106,7 +130,7 @@ export async function runStablecoinScanPass(
     node: reader.primary,
     chainId,
     receiver,
-    tokenAddresses: tokensInUse(ctx),
+    tokenAddresses: tokensInUse(ctx).map((t) => t.address),
     window,
   });
 
@@ -151,12 +175,32 @@ function byBlockThenLog(a: IncomingTransfer, b: IncomingTransfer): number {
   return a.logIndex - b.logIndex;
 }
 
-/** Only the currencies this deployment has switched on. */
-function tokensInUse(ctx: AppContext): string[] {
-  const out: string[] = [];
-  if (ctx.config.STABLECOIN_JPYC_ENABLED) out.push('0xe7c3d8c9a439fede00d2600032d5db0be71c3c29');
-  if (ctx.config.STABLECOIN_USDC_ENABLED) out.push('0x3c499c542cef5e3811e1192ce70d8cc03d5c3359');
+/**
+ * Only the currencies this deployment has switched on.
+ *
+ * From the whitelist, not from literals written again here: the scanner's
+ * filter and `tokenAt()` drifting apart would mean scanning for one token and
+ * accepting another, silently.
+ */
+function tokensInUse(ctx: AppContext): TokenSpec[] {
+  const out: TokenSpec[] = [];
+  if (ctx.config.STABLECOIN_JPYC_ENABLED) out.push(tokenByKey('jpyc'));
+  if (ctx.config.STABLECOIN_USDC_ENABLED) out.push(tokenByKey('usdc'));
   return out;
+}
+
+/**
+ * Asks each enabled contract how many decimals it has, before any scanning.
+ *
+ * The constant in `tokens.ts` is what every quote is computed from, and a
+ * wrong address or a mistyped digit there is worth a factor of a trillion. The
+ * comment in that file claimed this check existed for a week before it did.
+ */
+export async function verifyConfiguredTokens(
+  ctx: AppContext,
+  reader: DualChainReader,
+): Promise<TokenShapeProblem[]> {
+  return verifyTokenDecimals((params) => reader.primary.call(params), tokensInUse(ctx));
 }
 
 type Observation = { ok: true; value: ChainObservation } | { ok: false; reason: string };

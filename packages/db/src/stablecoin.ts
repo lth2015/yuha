@@ -306,6 +306,31 @@ export async function findOpenIntentForOrder(
   );
 }
 
+/**
+ * Open intents whose quote has run out.
+ *
+ * `closeIntent({ state: 'expired' })` had no caller at all and no sweep called
+ * it, so one abandoned quote held a wallet's only slot forever and every later
+ * quote that wallet made for a different order was refused — permanently, with
+ * the customer's only escape being to re-quote the same order.
+ */
+export async function findExpiredOpenIntents(limit = 100): Promise<StablecoinIntentRow[]> {
+  return query<StablecoinIntentRow>(
+    // Written out with the alias rather than reusing INTENT_COLUMNS: `id` and
+    // `order_id` exist on both tables, so an unqualified list is ambiguous and
+    // a regex that qualified only `id` would have left `order_id` broken.
+    `SELECT i.id, i.quote_id, i.order_id, i.chain_id, i.payer, i.predicted_nonce,
+            i.state, i.open_key, i.prepared_at, i.resolved_at
+       FROM stablecoin_intents i
+       JOIN stablecoin_quotes q ON q.id = i.quote_id
+      WHERE i.open_key IS NOT NULL
+        AND q.expires_at <= UTC_TIMESTAMP(3)
+      ORDER BY q.expires_at
+      LIMIT ?`,
+    [limit],
+  );
+}
+
 export async function getQuote(id: string, tx?: PoolConnection): Promise<StablecoinQuoteRow | undefined> {
   return queryOne<StablecoinQuoteRow>(`SELECT ${QUOTE_COLUMNS} FROM stablecoin_quotes WHERE id = ?`, [id], tx);
 }

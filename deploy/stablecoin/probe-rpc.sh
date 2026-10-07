@@ -82,6 +82,12 @@ else
       fail "finalized tag" "finalized == latest ($FIN) — this endpoint is serving latest for finalized"
     elif [[ "$LAG" -gt 200 ]]; then
       fail "finalized tag" "finalized is $LAG blocks behind latest, which is stale rather than final"
+    elif [[ "$LAG" -le 2 ]]; then
+      # Not a failure: on Polygon a correct node trails its head by about this
+      # much. But a node reporting "one confirmation" looks identical, and no
+      # automated check can tell them apart — so this is said out loud rather
+      # than passed silently.
+      ok "finalized tag" "$FIN, only $LAG block(s) behind — plausible for milestone finality, and also what a node reporting one confirmation looks like. Confirm with the provider that Heimdall v2 milestones are implemented."
     else
       ok "finalized tag" "$FIN, $LAG block(s) behind latest"
     fi

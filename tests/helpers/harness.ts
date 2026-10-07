@@ -222,6 +222,10 @@ async function seedCatalogue(): Promise<void> {
  * duration and clears every table explicitly.
  */
 const BUSINESS_TABLES = [
+  // Not clearing this let a cursor from one file decide another file's
+  // `start_block`, so an observation that was fine became "older than the
+  // quote". The fifth explicit list this work has had to be remembered into.
+  'chain_cursors',
   'chain_transfer_events',
   'stablecoin_attempts',
   'stablecoin_intents',

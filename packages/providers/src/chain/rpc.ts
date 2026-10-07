@@ -172,6 +172,12 @@ export class ChainNode {
     return ((raw as unknown[]) ?? []).map(parseLog);
   }
 
+  /** A read-only contract call at the chain head. */
+  async call(params: { to: string; data: string }): Promise<string> {
+    const raw = await this.transport.request('eth_call', [{ to: params.to, data: params.data }, 'latest']);
+    return str(raw, 'eth_call result');
+  }
+
   /** eth_getTransactionCount at 'latest' — the next nonce, as a prediction. */
   async transactionCount(address: string): Promise<number> {
     return hexToNumber(await this.transport.request('eth_getTransactionCount', [address, 'latest']));
@@ -211,6 +217,17 @@ export interface FinalityProbe {
  * Refusing equality is deliberately conservative: a provider whose `latest`
  * is itself stale could trip it. Stopping automatic confirmation and raising
  * an alert is the right side to be wrong on.
+ *
+ * What this CANNOT establish, and a review was right to say so: a node
+ * answering `latest - 1` passes, and on Polygon that is also what a correct
+ * node looks like, since milestone finality runs two to five seconds behind
+ * one-to-two-second blocks. Lag alone cannot tell milestone finality from a
+ * node that simply reports one confirmation. What it can do is check that the
+ * header it returned is the block really at that height — a node inventing an
+ * answer fails that — and leave the rest to running
+ * deploy/stablecoin/probe-rpc.sh against the real endpoint, where a person
+ * reads the lag and the provider's own documentation. The honest summary is
+ * that this probe refuses the failures it can see and does not prove finality.
  */
 export async function probeFinality(node: ChainNode): Promise<FinalityProbe> {
   let latest: bigint;
@@ -232,6 +249,20 @@ export async function probeFinality(node: ChainNode): Promise<FinalityProbe> {
       return {
         supported: false,
         reason: `finalized and latest are both ${latest}, so the node is serving latest for finalized`,
+      };
+    }
+    /*
+     * The finalized header must be the block at that height.
+     *
+     * A node that answers the tag from somewhere other than its own chain —
+     * a cache, a different network, a fabrication — fails here. It does not
+     * prove finality; it rules out an answer that is not even this chain.
+     */
+    const atHeight = await node.blockAt(header.number);
+    if (!atHeight || atHeight.hash !== header.hash) {
+      return {
+        supported: false,
+        reason: `the finalized header ${header.hash} is not the block at height ${header.number}`,
       };
     }
     return { supported: true, height: header.number };

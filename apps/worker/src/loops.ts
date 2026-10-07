@@ -1,5 +1,5 @@
 import type { AppContext } from '@yuha/api';
-import { runStablecoinScanPass } from '@yuha/api';
+import { expireStaleIntents, runStablecoinScanPass, verifyConfiguredTokens } from '@yuha/api';
 import { describeError } from '@yuha/contracts';
 import {
   processWebhookEvent,
@@ -104,8 +104,27 @@ export async function stablecoinScanLoop(deps: LoopDeps): Promise<void> {
     return;
   }
 
+  /*
+   * Ask the contracts what they are before watching for payments.
+   *
+   * A wrong address or a mistyped `decimals` in the whitelist is worth a
+   * factor of a trillion on every quote, and nothing downstream can notice:
+   * the amount is just a number. Refusing to scan is the right failure — the
+   * money is not lost, it is simply not being collected, and that is visible.
+   */
+  const problems = await verifyConfiguredTokens(ctx, reader).catch((err) => [
+    { token: 'all' as const, reason: describeError(err) },
+  ]);
+  if (problems.length > 0) {
+    for (const p of problems) log('error', 'stablecoin token check failed', { token: p.token, reason: p.reason });
+    log('error', 'stablecoin scan not started: the configured tokens are not what the chain says they are');
+    return;
+  }
+
   while (!deps.stopped()) {
     try {
+      const freed = await expireStaleIntents();
+      if (freed > 0) log('info', 'stablecoin quotes expired', { intents: freed });
       const pass = await runStablecoinScanPass(ctx, reader, log);
       if (pass.found > 0) {
         log('info', 'stablecoin scan pass', {
