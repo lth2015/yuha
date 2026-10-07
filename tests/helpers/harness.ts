@@ -16,12 +16,19 @@ import {
   grantUnits,
   migrate,
   query,
+  setChainCursor,
   setRole,
   truncateAll,
   upsertProduct,
   upsertUser,
   withTx,
 } from '@yuha/db';
+import {
+  ChainNode,
+  DualChainReader,
+  JPYC_POLYGON,
+  USDC_POLYGON,
+} from '@yuha/providers';
 
 /**
  * Test harness.
@@ -227,6 +234,7 @@ const BUSINESS_TABLES = [
   // quote". The fifth explicit list this work has had to be remembered into.
   'chain_cursors',
   'chain_transfer_events',
+  'stablecoin_orphan_transfers',
   'stablecoin_attempts',
   'stablecoin_intents',
   'stablecoin_quotes',
@@ -294,4 +302,55 @@ export async function ledgerFor(jobId: string): Promise<Array<{ entry_type: stri
     `SELECT entry_type, units FROM ledger_entries WHERE job_id = ? ORDER BY created_at, entry_type`,
     [jobId],
   );
+}
+
+/**
+ * A chain reader that answers the two startup questions truthfully.
+ *
+ * Quoting now asks the chain what `decimals()` each configured token reports,
+ * before computing an amount from the constant in `tokens.ts` — the check
+ * existed only in the worker, which does not compute quotes or deliver
+ * anything. Tests that quote therefore need an answer, and giving them a real
+ * `DualChainReader` over a fake transport means the gate itself is exercised
+ * rather than bypassed.
+ *
+ * Anything else it is asked for throws, deliberately: a test that starts
+ * needing block data should say so rather than silently receive zeroes.
+ */
+export function verifiedChainStub(chainId = 137): DualChainReader {
+  const word = (n: number) => `0x${n.toString(16).padStart(64, '0')}`;
+  const decimalsOf = (to: string): number | undefined => {
+    const a = to.toLowerCase();
+    if (a === JPYC_POLYGON.address) return JPYC_POLYGON.decimals;
+    if (a === USDC_POLYGON.address) return USDC_POLYGON.decimals;
+    return undefined;
+  };
+  const node = (label: string) =>
+    new ChainNode({
+      label,
+      async request(method: string, params: readonly unknown[]) {
+        if (method === 'eth_chainId') return `0x${chainId.toString(16)}`;
+        if (method === 'eth_call') {
+          const to = (params[0] as { to: string }).to;
+          const decimals = decimalsOf(to);
+          if (decimals === undefined) throw new Error(`the chain stub was asked about ${to}`);
+          return word(decimals);
+        }
+        throw new Error(`the chain stub was asked for ${method}`);
+      },
+    });
+  return new DualChainReader(node('stub-primary'), node('stub-secondary'));
+}
+
+/**
+ * Puts the scan cursor somewhere, because quoting refuses to price a payment
+ * nothing is watching for.
+ *
+ * `start_block` used to default to zero when no cursor existed, which disabled
+ * the only bound on how OLD a satisfying transfer may be — any historical
+ * transfer from a verified wallet could settle a brand-new quote. The default
+ * is now a refusal, so a test that wants a quote says where the watcher is.
+ */
+export async function seedScanCursor(block: bigint, chainId = 137): Promise<void> {
+  await setChainCursor({ chainId, stream: 'stablecoin_incoming', block });
 }

@@ -33,6 +33,42 @@ const on = (over: Record<string, string> = {}) =>
     ...over,
   });
 
+describe('a blank line in a config file', () => {
+  /*
+   * No test passed `''` to a `num()` field at all, so restoring the old
+   * behaviour — `Number('')` is 0 — survived the whole suite. It is not a
+   * cosmetic defect: `STABLECOIN_SCAN_OVERLAP=` silently becoming 0 turns off
+   * the overlap re-read, which is how a reorg near the head gets noticed, and
+   * `STABLECOIN_QUOTE_TTL_SECONDS=` fails startup with a message about
+   * arithmetic for a line somebody left empty on purpose.
+   */
+  it('means "take the default", not zero', () => {
+    expect(on({ STABLECOIN_QUOTE_TTL_SECONDS: '' }).STABLECOIN_QUOTE_TTL_SECONDS).toBe(600);
+    expect(on({ STABLECOIN_SCAN_OVERLAP: '' }).STABLECOIN_SCAN_OVERLAP).toBe(32);
+    expect(on({ STABLECOIN_SCAN_MAX_SPAN: '' }).STABLECOIN_SCAN_MAX_SPAN).toBe(450);
+    expect(on({ STABLECOIN_CHAIN_ID: '' }).STABLECOIN_CHAIN_ID).toBe(137);
+    expect(on({ STABLECOIN_INTENT_GRACE_SECONDS: '' }).STABLECOIN_INTENT_GRACE_SECONDS).toBe(900);
+  });
+
+  it('is still a blank line when it has a space in it', () => {
+    // `Number(' ')` is 0, so the fix for the empty string stopped one
+    // character short of the thing editors and heredocs actually produce.
+    expect(on({ STABLECOIN_SCAN_OVERLAP: '  ' }).STABLECOIN_SCAN_OVERLAP).toBe(32);
+    expect(on({ STABLECOIN_SCAN_START_BLOCK: ' ' }).STABLECOIN_SCAN_START_BLOCK).toBeUndefined();
+  });
+
+  it('does not stop a real value from being read', () => {
+    expect(on({ STABLECOIN_SCAN_OVERLAP: '7' }).STABLECOIN_SCAN_OVERLAP).toBe(7);
+    expect(on({ STABLECOIN_SCAN_START_BLOCK: '0' }).STABLECOIN_SCAN_START_BLOCK).toBe(0);
+  });
+
+  it('keeps the grace period above one scan interval', () => {
+    // The floor exists because the grace must cover finality plus a pass; a
+    // grace shorter than the interval is the defect it was added to fix.
+    expect(() => on({ STABLECOIN_INTENT_GRACE_SECONDS: '5' })).toThrow();
+  });
+});
+
 describe('stablecoin configuration', () => {
   it('starts when both nodes and a receiver are set', () => {
     const cfg = on();

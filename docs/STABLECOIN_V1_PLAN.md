@@ -207,3 +207,97 @@ JPYC or USDC. Milestone finality, real provider behaviour under load, and
 `eth_getLogs` range caps are all properties of the production endpoints and are
 established by `deploy/stablecoin/probe-rpc.sh` against those endpoints, not
 here.
+
+## The third review, and the defect that produced a table
+
+Four independent adversarial reviews ran against the finished code, in
+parallel, with instructions to verify claims against the source rather than
+against comments and to produce working proofs. They returned 21 findings, six
+of them able to take a customer's money and deliver nothing, permanently and
+silently. 675 tests were green at the time and four gates were clean.
+
+**One design mistake produced the worst six.** `chain_transfer_events` has a
+unique key on `(chain_id, tx_hash, log_index)`, and that key is the anti-replay
+claim for the whole feature: one Transfer pays for one order, once, ever. The
+previous round started writing rows there for money that was *not* being
+attributed — a transfer from a wallet with nothing open, and a transfer the
+verifier refused that nonetheless really paid us. The intention was right: money
+that arrives must be on the record. The place was wrong. Taking the anti-replay
+key for a row that delivers nothing means the real payment can never settle
+afterwards: every later observation answers `already_settled`, the order stays
+pending, and nothing in the console could attach it.
+
+Three ordinary sequences reached that state, none needing an attacker:
+
+- A payment made **inside** the quote window, first seen after it closed —
+  because the scanner reads finalized blocks on an interval — met an intent the
+  new expiry sweep had just closed, and was orphaned.
+- Any refusal computed from the transaction body (`token_not_quoted`,
+  `unexpected_value`, `calldata_not_transfer`) wrote the row and left the
+  intent open, so the customer's correct re-payment of the same transfer could
+  never settle.
+- A compromised RPC endpoint altering **one field** — `from` on
+  `eth_getTransactionByHash` — turned a real payment into unattributable money,
+  because attribution read that field before the verifier ran and nothing
+  compared it with anything.
+
+The record of money arriving and the claim on a payment are two different
+facts. They now live in two tables: `stablecoin_orphan_transfers` holds the
+first and claims nothing, and a transfer may appear there on one pass and
+settle normally on a later one. `POST /v1/admin/stablecoin-transfers/:id/decide`
+is the repair path that did not exist — attach to an order, or write off — and
+it runs the same settlement the scanner does, with a reason and an audit row.
+
+### The rest, in one line each
+
+- Attribution now uses the **agreed Transfer log's** sender, not the
+  transaction's; the transaction body itself is dual-node agreed
+  (`agreedTransaction`), so the refusal reasons are trustworthy too.
+- Discovery takes the **union of both nodes'** `eth_getLogs`. One node omitting
+  a payment from one answer used to lose it with no row anywhere — the only
+  invisible way to lose money in this design.
+- The scan no longer `break`s on a transfer it cannot agree about: it holds the
+  cursor and keeps going, so one fabricated log cannot stop every pass forever.
+- `agreedHeader` compares the block **number**; `agreedReceipt` compares each
+  log's own transaction hash and block, and normalises the order it returns.
+- `eth_chainId` is actually called now, for both endpoints, at startup. A
+  comment claimed that for a week while nothing in the repository called it.
+- The decimals check runs on the **quote path** as well, memoised, because the
+  API is what prices and delivers; a mismatch latches, a timeout retries.
+- Quote expiry holds the wallet slot for `STABLECOIN_INTENT_GRACE_SECONDS`
+  (default 15 minutes) past the deadline, and the sweep runs after the scan.
+- `start_block` with no cursor is a **refusal**, not block zero.
+- One order holds one live payment slot, enforced by `order_open_key`.
+- A rejected review records `refund_owed_at`; a duplicate licence is reported
+  by `grantLicense` instead of being marked delivered.
+- `markOrderPaid`'s `changed` is read in the console too, and a settlement that
+  cannot move an order leaves the intent **in review**, where a person sees it.
+
+### A driver-level trap worth remembering
+
+`grantLicense` decided "did I write a row" from `affectedRows` on an
+`INSERT ... ON DUPLICATE KEY UPDATE id = id`. This driver connects with
+CLIENT_FOUND_ROWS, so that statement reports `affectedRows: 1` when it inserted
+nothing: the flag was **always true**. Nothing noticed while the caller threw it
+away — and the fix for the duplicate-licence defect was built on it, so the
+detection would have detected nothing while looking tested. `INSERT IGNORE`
+does report 0, which is why the evidence key is sound; the two forms differ.
+Found by writing the test, not by reading the code.
+
+### What is still not covered, stated plainly
+
+- There is no automated stablecoin refund. `refund_owed_at` records the
+  obligation; a person signs the transfer on a hardware wallet (§13).
+- `chain_transfer_events.canonical` defaults to 1 and nothing ever sets it to
+  0. Settlement only happens at or below a height both nodes call final, so a
+  reorg deep enough to matter would need manual unwinding.
+- The reject branch's two writes are now in one transaction, but the
+  crash-between-writes property is reasoned, not demonstrated: no test can
+  produce the crash.
+- `probeFinality` rules out answers that are not this chain and cannot prove
+  milestone finality. Lag alone cannot distinguish it from one confirmation —
+  run `deploy/stablecoin/probe-rpc.sh` against the real endpoints and read the
+  provider's documentation.
+- `orders.payment_method = 'card'` is never written by anything today, and the
+  column's collation accepts `'CARD'` while the JavaScript comparison does not.
+  Inert now; a trap if something starts writing it.

@@ -10,7 +10,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { privateKeyToAccount } from 'viem/accounts';
 import { query } from '@yuha/db';
 import { createStablecoinQuote } from '../apps/api/src/services/stablecoin.js';
-import { createHarness, resetData, teardown, type Harness, type TestUser } from './helpers/harness.js';
+import { createHarness, resetData, teardown, type Harness, type TestUser, seedScanCursor, verifiedChainStub } from './helpers/harness.js';
 
 let h: Harness;
 let callNo = 0;
@@ -32,9 +32,27 @@ beforeAll(async () => {
     POLYGON_RPC_PRIMARY_URL: 'https://polygon.primary.invalid/rpc/test',
     POLYGON_RPC_SECONDARY_URL: 'https://polygon.secondary.invalid/rpc/test',
   });
+  /*
+   * The chain reader the quote path now needs.
+   *
+   * Quoting asks each configured token for its own `decimals()` before
+   * computing an amount from the constant in the whitelist — the check that
+   * used to exist only in the worker, which neither quotes nor delivers. A
+   * real `DualChainReader` over a stub transport means the gate is exercised
+   * rather than skipped.
+   */
+  h.ctx.chain = verifiedChainStub();
 });
 beforeEach(async () => {
   await resetData();
+  /*
+   * Quoting refuses when nothing is watching the chain, so a test that quotes
+   * has to say where the watcher is. `start_block` used to default to zero,
+   * which disabled the only bound on how OLD a satisfying transfer may be —
+   * any historical transfer from a verified wallet could settle a brand-new
+   * quote. This is that default becoming explicit.
+   */
+  await seedScanCursor(1n);
 });
 afterAll(async () => {
   await teardown();
@@ -223,6 +241,83 @@ describe('the prepared transfer', () => {
     const q = await quote(owner, { priceKey: 'drop_5', idempotencyKey: 'owner-001', tokenKey: 'jpyc', payer });
     const res = await prepare(stranger, q.json().orderId);
     expect(res.statusCode).toBe(404);
+  });
+});
+
+describe('one live payment slot per ORDER, not only per wallet', () => {
+  it('supersedes the first wallet’s slot when the same order is quoted from a second', async () => {
+    /*
+     * The rule was enforced per wallet only. A customer with two verified
+     * wallets could quote the SAME order twice and hold two live slots, and
+     * paying both took both payments: the first settled, and the second found
+     * an order it could not move — which, before the settle path was fixed,
+     * reported success and appeared in no operator queue at all. Reproduced by
+     * an independent review with no attacker and no unusual timing.
+     *
+     * Migration 0016 makes two open intents for one order impossible in the
+     * database. This is the behaviour that keeps a legitimate re-quote from a
+     * second wallet working: the first slot is superseded, not duplicated.
+     */
+    const user = await h.createUser({ email: 'two-wallets@example.jp' });
+    await linkWallet(user, accountA);
+    await linkWallet(user, accountB);
+
+    const first = await quote(user, {
+      priceKey: 'drop_5',
+      idempotencyKey: 'two-wallets-0001',
+      tokenKey: 'jpyc',
+      payer: accountA.address,
+    });
+    expect(first.statusCode).toBe(200);
+    const orderId = first.json().orderId as string;
+
+    const second = await quote(user, {
+      priceKey: 'drop_5',
+      idempotencyKey: 'two-wallets-0001',
+      tokenKey: 'jpyc',
+      payer: accountB.address,
+    });
+    expect(second.statusCode, second.body).toBe(200);
+    expect(second.json().orderId).toBe(orderId);
+
+    const open = await query<{ payer: string; state: string }>(
+      `SELECT payer, state FROM stablecoin_intents WHERE order_id = ? AND order_open_key IS NOT NULL`,
+      [orderId],
+    );
+    expect(open).toHaveLength(1);
+    expect(open[0]!.payer).toBe(accountB.address.toLowerCase());
+
+    // The first wallet's slot is free again, rather than still held.
+    const closed = await query<{ state: string }>(
+      `SELECT state FROM stablecoin_intents WHERE order_id = ? AND payer = ?`,
+      [orderId, accountA.address.toLowerCase()],
+    );
+    expect(closed[0]!.state).toBe('cancelled');
+  });
+});
+
+describe('an order that can no longer be paid', () => {
+  it('is not handed live transfer calldata', async () => {
+    /*
+     * `prepare` refused only `paid`. An order refunded after its quote was
+     * issued still gave the wallet calldata to send money with, and the
+     * payment that followed landed on an order `markOrderPaid` will not
+     * accept — the feeder for the invisible-review defect.
+     */
+    const user = await h.createUser({ email: 'prep-refunded@example.jp' });
+    await linkWallet(user, accountA);
+    const q = await quote(user, {
+      priceKey: 'drop_5',
+      idempotencyKey: 'prep-refunded-0001',
+      tokenKey: 'jpyc',
+      payer: accountA.address,
+    });
+    const orderId = q.json().orderId as string;
+    await query(`UPDATE orders SET status = 'refunded' WHERE id = ?`, [orderId]);
+
+    const res = await prepare(user, orderId);
+    expect(res.statusCode).toBe(409);
+    expect(res.json().error.message).toMatch(/no longer be paid/);
   });
 });
 

@@ -3,6 +3,7 @@ import {
   DualChainReader,
   decodeTransferLog,
   tokenByKey,
+  verifyChainIds,
   verifyTokenDecimals,
   type TokenShapeProblem,
   type TokenSpec,
@@ -11,6 +12,7 @@ import {
   type ChainObservation,
   type IncomingTransfer,
 } from '@yuha/providers';
+import { AppError } from '@yuha/contracts';
 import type { AppContext } from '../context.js';
 import { settleStablecoinObservation, type SettleOutcome } from './stablecoin-settle.js';
 
@@ -27,18 +29,28 @@ import { settleStablecoinObservation, type SettleOutcome } from './stablecoin-se
 export const SCAN_STREAM = 'stablecoin_incoming';
 
 /**
- * Frees the slot held by a quote nobody paid.
+ * Frees the slot held by a quote nobody paid, once it is safely stale.
  *
  * One open intent per wallet per chain is what makes an incoming transfer
  * unambiguous, and nothing ever closed an abandoned one: `expired` was a state
  * with no caller. A customer who asked for a quote and walked away could not
  * buy anything else from that wallet, ever.
  *
- * A payment that arrives after this runs is not lost — it lands in the
- * unattributed queue with its evidence row, for a person to attach.
+ * Then this ran the instant a quote expired, which was worse. The scanner only
+ * looks at FINALIZED blocks and only every interval, so a payment made inside
+ * the quote window — which the verifier accepts — is routinely first seen a
+ * minute after the window closed. Closing the intent on the deadline turned
+ * those on-time payments into money from a wallet with nothing open: the
+ * customer paid in time and received nothing, with no automatic repair.
+ *
+ * The grace period must cover finality plus the scan interval. It is a held
+ * wallet slot against a lost payment, which is not a close call.
+ *
+ * Money that arrives after the grace has passed is still recorded — in
+ * `stablecoin_orphan_transfers`, where an operator can attach it to the order.
  */
-export async function expireStaleIntents(limit = 100): Promise<number> {
-  const stale = await findExpiredOpenIntents(limit);
+export async function expireStaleIntents(params: { graceSeconds: number; limit?: number }): Promise<number> {
+  const stale = await findExpiredOpenIntents(params);
   let closed = 0;
   for (const intent of stale) {
     if (await closeIntent({ intentId: intent.id, state: 'expired' })) closed += 1;
@@ -116,18 +128,24 @@ export async function runStablecoinScanPass(
   if (!window) return { window: null, found: 0, settled: [], cursor };
 
   /*
-   * Scanned with ONE node and verified with both.
+   * Discovery asks BOTH nodes, and takes the union.
    *
-   * Asking both for the same log range doubles the cost and proves nothing
-   * extra: whatever the primary finds is re-read through `agreedReceipt` and
-   * `canonicalHashAt` before it can settle anything, so a primary that invents
-   * a transfer gets caught there. What a second scan WOULD catch is a primary
-   * that omits one — and that is covered differently, by the overlap re-read
-   * on every pass plus the fact that an unattributed payment can also arrive
-   * by the customer reporting its hash.
+   * This asked the primary alone, and the comment justifying it argued that
+   * anything the primary invents is caught by `agreedReceipt` before it can
+   * settle — which is true, and is the wrong direction. The direction that was
+   * not covered is OMISSION. A node that leaves a payment out of one
+   * `eth_getLogs` answer loses it for good: the cursor advances, and the
+   * overlap re-read asks the same node again, so after `overlap` blocks the
+   * block is never in a window again. That left no row anywhere, not even in
+   * an operator queue — the only invisible way to lose a payment in this
+   * design. One node, one empty answer, once.
+   *
+   * The union is safe because being found is not being believed: every
+   * transfer is re-read through `agreedReceipt` and `agreedTransaction` before
+   * it can settle anything.
    */
   const transfers = await scanIncomingTransfers({
-    node: reader.primary,
+    fetchLogs: (p) => reader.unionLogs(p),
     chainId,
     receiver,
     tokenAddresses: tokensInUse(ctx).map((t) => t.address),
@@ -141,20 +159,25 @@ export async function runStablecoinScanPass(
     const observation = await observationFor(reader, transfer);
     if (!observation.ok) {
       /*
-       * Stop here, and leave the cursor below this block.
+       * Hold the CURSOR below this block, but keep going through the window.
        *
-       * The alternative — note it and carry on — walks the cursor past a
-       * payment the nodes could not agree about, and the overlap re-read is
-       * only tens of blocks, so it would be lost rather than retried. A held
-       * payment must still be there on the next pass.
+       * The loop used to `break`. A node that injects one fabricated log at
+       * the bottom of the window then stops the pass before anything real in
+       * it is reached, every pass, for good — a permanent halt from one node,
+       * wearing the clothes of conservative behaviour. Every transfer is
+       * verified independently, so settling the ones that do agree is sound;
+       * what must not happen is the cursor moving past one that does not, and
+       * that is the line below, not this one.
        */
-      heldAt = { blockNumber: transfer.blockNumber, reason: observation.reason };
+      if (!heldAt || transfer.blockNumber < heldAt.blockNumber) {
+        heldAt = { blockNumber: transfer.blockNumber, reason: observation.reason };
+      }
       log('warn', 'stablecoin scan held', {
         blockNumber: transfer.blockNumber.toString(),
         txHash: transfer.txHash,
         reason: observation.reason,
       });
-      break;
+      continue;
     }
     settled.push(await settleStablecoinObservation(ctx, observation.value));
   }
@@ -183,9 +206,10 @@ function byBlockThenLog(a: IncomingTransfer, b: IncomingTransfer): number {
  * accepting another, silently.
  */
 function tokensInUse(ctx: AppContext): TokenSpec[] {
+  const chainId = ctx.config.STABLECOIN_CHAIN_ID;
   const out: TokenSpec[] = [];
-  if (ctx.config.STABLECOIN_JPYC_ENABLED) out.push(tokenByKey('jpyc'));
-  if (ctx.config.STABLECOIN_USDC_ENABLED) out.push(tokenByKey('usdc'));
+  if (ctx.config.STABLECOIN_JPYC_ENABLED) out.push(tokenByKey('jpyc', chainId));
+  if (ctx.config.STABLECOIN_USDC_ENABLED) out.push(tokenByKey('usdc', chainId));
   return out;
 }
 
@@ -200,7 +224,81 @@ export async function verifyConfiguredTokens(
   ctx: AppContext,
   reader: DualChainReader,
 ): Promise<TokenShapeProblem[]> {
-  return verifyTokenDecimals((params) => reader.primary.call(params), tokensInUse(ctx));
+  /*
+   * Both endpoints are asked, and they must agree.
+   *
+   * This asked `reader.primary` alone — the single-node read in a design where
+   * every other chain read insists on agreement, guarding the one constant
+   * whose being wrong is worth a factor of a trillion. A compromised endpoint
+   * could answer `0x12` for any address and the gate opened.
+   *
+   * A disagreement is reported as `unavailable` rather than `mismatch`: it
+   * means we cannot establish the precision, not that we have established the
+   * wrong one. Either way nothing is quoted, and `unavailable` is retried
+   * instead of latching the process into a permanent stop.
+   */
+  const problems = await verifyTokenDecimals(async (params) => {
+    const answer = await reader.agreedCall(params);
+    if (!answer.agreed) throw new Error(answer.reason);
+    return answer.value;
+  }, tokensInUse(ctx));
+
+  /*
+   * And the endpoints are the chain this build was configured for.
+   *
+   * Nothing in the repository ever called `eth_chainId`, while a comment in
+   * the RPC client claimed the caller compared it. The configuration requires
+   * the two URLs to differ, which two endpoints onto the same wrong chain
+   * satisfy perfectly.
+   */
+  for (const problem of await verifyChainIds(reader, ctx.config.STABLECOIN_CHAIN_ID)) {
+    problems.push({ token: 'chain', kind: 'unavailable', reason: problem });
+  }
+  return problems;
+}
+
+/**
+ * The same check, on the path that actually takes money.
+ *
+ * `verifyConfiguredTokens` had exactly one caller: the worker, once, at
+ * startup. The worker scans. It is the API that computes every quote from
+ * `token.decimals` and the API that settles a reported hash and delivers
+ * against it — so "the scanner refuses to start" was true and beside the
+ * point: a mistyped constant still produced a quote wrong by a factor of a
+ * trillion, still served it to a customer, and still delivered on it.
+ *
+ * Memoised per process on success, because it is one eth_call per currency and
+ * the answer cannot change for a deployed build. A `mismatch` is latched —
+ * that is a wrong build and waiting will not fix it — while `unavailable` is
+ * not, so a timeout refuses this one quote rather than the rest of the day's.
+ */
+const tokenGate = new Map<string, 'verified' | 'mismatch'>();
+
+export function resetTokenGateForTests(): void {
+  tokenGate.clear();
+}
+
+export async function assertConfiguredTokensVerified(ctx: AppContext, reader: DualChainReader): Promise<void> {
+  const key = `${ctx.config.STABLECOIN_CHAIN_ID}:${tokensInUse(ctx)
+    .map((t) => t.address)
+    .sort()
+    .join(',')}`;
+  const known = tokenGate.get(key);
+  if (known === 'verified') return;
+  if (known === 'mismatch') {
+    throw new AppError('SERVICE_DISABLED', 'stablecoin payments are misconfigured and have been stopped');
+  }
+  const problems = await verifyConfiguredTokens(ctx, reader);
+  if (problems.length === 0) {
+    tokenGate.set(key, 'verified');
+    return;
+  }
+  if (problems.some((p) => p.kind === 'mismatch')) tokenGate.set(key, 'mismatch');
+  throw new AppError(
+    'SERVICE_DISABLED',
+    'stablecoin payments are not available right now',
+    { problems: problems.map((p) => `${p.token}: ${p.reason}`) },
+  );
 }
 
 type Observation = { ok: true; value: ChainObservation } | { ok: false; reason: string };
@@ -224,27 +322,24 @@ export async function settleReportedTransaction(
   txHash: string,
 ): Promise<SettleOutcome | { kind: 'not_found'; reason: string }> {
   const chainId = ctx.config.STABLECOIN_CHAIN_ID;
-  const tx = await reader.primary.transaction(txHash);
-  if (!tx || tx.blockNumber === null) {
-    return { kind: 'not_found', reason: 'that transaction is not in a block yet' };
-  }
-
   const receiver = ctx.config.STABLECOIN_RECEIVER_ADDRESS;
   if (!receiver) return { kind: 'not_found', reason: 'no receiving wallet is configured' };
 
   /*
-   * The primary's receipt, deliberately — this read only LOCATES the transfer,
-   * and `observationFor` below re-reads it from both nodes and judges that.
-   * Asking for agreement here as well was tried and is redundant: removing it
-   * broke no test, because a primary that invents a transfer produces one that
-   * is absent from the agreed receipt and the verifier refuses it as
-   * `no_transfer_log`. A second call that reads like a security check and is
-   * not one is worse than no call.
+   * Located through the AGREED receipt, not the primary's.
+   *
+   * The earlier version read the primary alone here and argued the read only
+   * locates the transfer. That is true of what it finds and false of what it
+   * does not: a single node answering with a receipt whose logs do not pay us
+   * turns a real reported payment into "that transaction does not pay this
+   * service", which is the one answer a customer will believe and stop
+   * retrying. One call to both nodes costs nothing here — this is a
+   * request-path operation that happens once per customer click.
    */
-  const located = await reader.primary.receipt(txHash);
-  if (!located) return { kind: 'not_found', reason: 'the primary has no receipt for that transaction' };
+  const located = await reader.agreedReceipt(txHash);
+  if (!located.agreed) return { kind: 'not_found', reason: located.reason };
 
-  const transfer = located.logs
+  const transfer = located.value.logs
     .map((l) => decodeTransferLog(l, chainId))
     .find((t) => t && t.to.toLowerCase() === receiver.toLowerCase());
   if (!transfer) {
@@ -268,10 +363,9 @@ export async function settleReportedTransaction(
 /**
  * Assembles the evidence the verifier judges, from both nodes.
  *
- * Everything that can disagree is asked of both: the receipt (status, block,
- * logs) and the hash at that height. The transaction body comes from the
- * primary, because every field of it that matters — sender, token, calldata,
- * amount — is checked again against the Transfer log in the agreed receipt.
+ * Everything that can disagree is asked of both: the transaction body, the
+ * receipt (status, block, logs) and the header at that height. Nothing in the
+ * returned observation is one node's word.
  */
 async function observationFor(reader: DualChainReader, transfer: IncomingTransfer): Promise<Observation> {
   /*
@@ -315,8 +409,19 @@ async function observationFor(reader: DualChainReader, transfer: IncomingTransfe
     return { ok: false, reason: `no log at index ${transfer.logIndex} in the agreed receipt for ${transfer.txHash}` };
   }
 
-  const tx = await reader.primary.transaction(transfer.txHash);
-  if (!tx) return { ok: false, reason: 'the primary no longer has that transaction' };
+  /*
+   * The transaction body, from BOTH nodes.
+   *
+   * It came from the primary alone, justified by the comment on this function
+   * claiming every field that matters is re-checked against the agreed log.
+   * Two of them are not: `from` is the ATTRIBUTION key, consumed before the
+   * verifier runs, and `to`/`value`/`input` decide REJECTION, which is also a
+   * decision about money that really arrived. One altered field in one
+   * response was a remote kill switch on a real payment.
+   */
+  const agreedTx = await reader.agreedTransaction(transfer.txHash);
+  if (!agreedTx.agreed) return { ok: false, reason: agreedTx.reason };
+  const tx = agreedTx.value;
   if (tx.hash !== transfer.txHash.toLowerCase()) {
     // A node answering about a different transaction than the one asked for.
     return { ok: false, reason: `asked about ${transfer.txHash} and was told about ${tx.hash}` };
@@ -352,9 +457,13 @@ async function observationFor(reader: DualChainReader, transfer: IncomingTransfe
       transaction: {
         // The hash we asked about, not the one we were told.
         hash: transfer.txHash.toLowerCase(),
-        // A node may omit chainId on the transaction; the node's own
-        // eth_chainId is what the scanner was configured against, and the
-        // verifier compares it to the quote.
+        /*
+         * A node may legitimately omit `chainId` on a transaction. The
+         * fallback is the configured chain, which is sound only because
+         * `verifyConfiguredTokens` now really asks both endpoints for
+         * `eth_chainId` and refuses to scan unless both are that chain — the
+         * check this comment used to assert without it existing anywhere.
+         */
         chainId: tx.chainId ?? chainId,
         from: tx.from,
         to: tx.to,

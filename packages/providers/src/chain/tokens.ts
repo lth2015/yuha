@@ -69,9 +69,21 @@ export function tokenAt(chainId: number, address: string): TokenSpec | undefined
   return WHITELISTED_TOKENS.find((t) => t.chainId === chainId && sameAddress(t.address, address));
 }
 
-export function tokenByKey(key: TokenSpec['key']): TokenSpec {
-  const spec = WHITELISTED_TOKENS.find((t) => t.key === key);
-  if (!spec) throw new Error(`no whitelisted token called ${key}`);
+/**
+ * The spec for a currency ON A CHAIN.
+ *
+ * `chainId` is not optional, and that is the point: this matched on `key`
+ * alone while `tokenAt` matched on both, so the scanner's filter and the
+ * verifier's lookup could answer about different chains. Today the whitelist
+ * holds one chain and the two agree by accident; adding a second chain's JPYC
+ * would have made them disagree silently, with the scanner watching one
+ * contract and the verifier accepting another. That is the same shape as the
+ * five "a list that quietly excludes the new thing" defects in this codebase,
+ * inverted — a lookup narrower than the list it reads.
+ */
+export function tokenByKey(key: TokenSpec['key'], chainId: number): TokenSpec {
+  const spec = WHITELISTED_TOKENS.find((t) => t.key === key && t.chainId === chainId);
+  if (!spec) throw new Error(`no whitelisted token called ${key} on chain ${chainId}`);
   return spec;
 }
 
@@ -79,7 +91,22 @@ export function tokenByKey(key: TokenSpec['key']): TokenSpec {
 const DECIMALS_SELECTOR = '0x313ce567';
 
 export interface TokenShapeProblem {
-  token: TokenSpec['key'];
+  /** A currency, or 'chain' for a problem with the endpoint itself. */
+  token: TokenSpec['key'] | 'chain';
+  /**
+   * Which kind of problem, because the two deserve opposite responses.
+   *
+   * `mismatch` is a build that cannot be trusted: the contract says one
+   * precision and this file says another, so every quote is wrong by a power
+   * of ten and the only safe answer is to refuse, permanently, until a person
+   * looks. `unavailable` is not knowing — an RPC timeout, a rate limit, two
+   * nodes disagreeing — which must be RETRIED rather than latched.
+   *
+   * They were one kind, and the only caller latched on both: one 429 at worker
+   * boot permanently stopped the scanner, the quote-expiry sweep and the scan
+   * cursor for the life of the process, while the API went on selling.
+   */
+  kind: 'mismatch' | 'unavailable';
   reason: string;
 }
 
@@ -107,17 +134,35 @@ export async function verifyTokenDecimals(
     try {
       raw = await call({ to: token.address, data: DECIMALS_SELECTOR });
     } catch (e) {
-      problems.push({ token: token.key, reason: `decimals() could not be read: ${(e as Error).message}` });
+      problems.push({
+        token: token.key,
+        kind: 'unavailable',
+        reason: `decimals() could not be read: ${(e as Error).message}`,
+      });
       continue;
     }
-    if (!/^0x[0-9a-fA-F]+$/.test(raw)) {
-      problems.push({ token: token.key, reason: `decimals() answered ${raw}, which is not a number` });
+    /*
+     * One 32-byte word of hex, and nothing else.
+     *
+     * `/^0x[0-9a-fA-F]+$/` accepted any length, and `Number(BigInt(raw))` then
+     * made a number out of whatever arrived — including an address-shaped
+     * answer from a contract that is not a token at all. An EOA answers `0x`,
+     * which this rejects; a contract returning a 20-byte word now fails here
+     * rather than being silently read as an enormous "decimals".
+     */
+    if (!/^0x[0-9a-fA-F]{64}$/.test(raw)) {
+      problems.push({
+        token: token.key,
+        kind: 'mismatch',
+        reason: `decimals() answered ${raw}, which is not a uint256 word`,
+      });
       continue;
     }
     const onChain = Number(BigInt(raw));
     if (onChain !== token.decimals) {
       problems.push({
         token: token.key,
+        kind: 'mismatch',
         reason: `the contract reports ${onChain} decimals and this build is configured for ${token.decimals}`,
       });
     }

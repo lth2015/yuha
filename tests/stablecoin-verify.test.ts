@@ -11,6 +11,7 @@ import { describe, expect, it } from 'vitest';
 import {
   JPYC_POLYGON,
   USDC_POLYGON,
+  USDC_POLYGON,
   encodeTransferCalldata,
   verifyStablecoinPayment,
   type ChainObservation,
@@ -143,6 +144,46 @@ describe('refused outright', () => {
       'a block that is no longer the one at that height',
       { canonicalBlockHashAtHeight: '0xcc' },
       'reorged_out',
+    ],
+    [
+      // Whitelisted and still not this order's currency. No test asserted
+      // this REASON, so ignoring the check entirely survived the whole suite:
+      // the transfer-log search also matches on the expected token, so the
+      // refusal came back as `no_transfer_log` and every assertion held.
+      'a whitelisted currency that is not the one quoted',
+      {
+        transaction: { ...observation().transaction, to: USDC_POLYGON.address, input: encodeTransferCalldata(RECEIVER, AMOUNT) },
+        transferLogs: [{ token: USDC_POLYGON.address, from: PAYER, to: RECEIVER, value: AMOUNT, logIndex: 0, blockNumber: 1_200n }],
+      },
+      'token_not_quoted',
+    ],
+    [
+      // `decodeTransferCalldata`'s own comment calls itself a boundary and
+      // claims to refuse "a longer payload, a different selector, extra
+      // trailing bytes, or a non-zero high word". Only the selector was ever
+      // tested, and the other three mutations all survived.
+      'a transfer call with extra bytes on the end',
+      { transaction: { ...observation().transaction, input: `${encodeTransferCalldata(RECEIVER, AMOUNT)}00` } },
+      'calldata_not_transfer',
+    ],
+    [
+      'a transfer call that is a word short',
+      { transaction: { ...observation().transaction, input: `0xa9059cbb${RECEIVER.slice(2).padStart(64, '0')}` } },
+      'calldata_not_transfer',
+    ],
+    [
+      // The high twelve bytes of the address word must be zero. A node or a
+      // wallet packing anything there is not sending the call we constructed,
+      // and reading the low twenty bytes regardless is how an address gets
+      // silently truncated into a different one.
+      'a transfer call whose address word has rubbish in the high bytes',
+      {
+        transaction: {
+          ...observation().transaction,
+          input: `0xa9059cbb${'ff'.repeat(12)}${RECEIVER.slice(2)}${AMOUNT.toString(16).padStart(64, '0')}`,
+        },
+      },
+      'calldata_not_transfer',
     ],
   ];
 

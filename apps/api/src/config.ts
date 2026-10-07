@@ -22,18 +22,28 @@ import { RunMode } from '@yuha/contracts';
  * to take the default. A blank line in a config file is the most ordinary
  * thing there is, and it should not be an error about arithmetic.
  */
+/*
+ * Trimmed, because `Number(' ')` is 0.
+ *
+ * A line left as `KEY= ` — a space after the equals, which editors and shell
+ * heredocs produce without anybody meaning anything by it — is as empty as a
+ * line with nothing after it, and reading it as zero is the same defect this
+ * helper exists to fix, one character further on.
+ */
+const blank = (v: string | undefined) => v === undefined || v.trim() === '';
+
 const num = (dflt: number) =>
   z
     .string()
     .optional()
-    .transform((v) => (v === undefined || v === '' ? dflt : Number(v)))
+    .transform((v) => (blank(v) ? dflt : Number(v!.trim())))
     .pipe(z.number().int());
 
 const optionalNum = () =>
   z
     .string()
     .optional()
-    .transform((v) => (v === undefined || v === '' ? undefined : Number(v)))
+    .transform((v) => (blank(v) ? undefined : Number(v!.trim())))
     .pipe(z.number().int().min(0).optional());
 
 const bool = (dflt: boolean) =>
@@ -163,6 +173,19 @@ const envSchema = z.object({
   STABLECOIN_SCAN_OVERLAP: num(32).pipe(z.number().int().min(0).max(1_000)),
   STABLECOIN_SCAN_START_BLOCK: optionalNum(),
   STABLECOIN_QUOTE_TTL_SECONDS: num(600).pipe(z.number().int().min(60).max(3600)),
+  /*
+   * How long after a quote expires its payment slot is still held.
+   *
+   * Not a courtesy. A payment is only SEEN once its block is finalized and the
+   * next scan pass reads it, so a payment made inside the quote window is
+   * routinely first observed a minute or two after the window closed. Closing
+   * the intent on the deadline turned those on-time payments into money from a
+   * wallet with nothing open — paid in time, nothing delivered, no automatic
+   * repair. The floor is finality plus one scan interval; the default is fifteen
+   * minutes, because the cost of waiting is a held wallet slot and the cost of
+   * not waiting is somebody's money.
+   */
+  STABLECOIN_INTENT_GRACE_SECONDS: num(900).pipe(z.number().int().min(60).max(86_400)),
   /*
    * The whitelist/receiver/rule version stamped onto every quote. Bump it when
    * any of those change, so an existing order keeps being verified against the

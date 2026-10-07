@@ -130,7 +130,7 @@ describe('scanning a window', () => {
   it('asks the node to filter by token and recipient', async () => {
     const { node, asked } = nodeReturning([]);
     await scanIncomingTransfers({
-      node,
+      fetchLogs: (p) => node.logs(p),
       chainId: 137,
       receiver: RECEIVER,
       tokenAddresses: [JPYC],
@@ -145,7 +145,7 @@ describe('scanning a window', () => {
   it('finds a payment the client never reported', async () => {
     const { node } = nodeReturning([logOf()]);
     const found = await scanIncomingTransfers({
-      node,
+      fetchLogs: (p) => node.logs(p),
       chainId: 137,
       receiver: RECEIVER,
       tokenAddresses: [JPYC],
@@ -161,7 +161,7 @@ describe('scanning a window', () => {
     // evidence.
     const { node } = nodeReturning([logOf({ to: STRANGER })]);
     const found = await scanIncomingTransfers({
-      node,
+      fetchLogs: (p) => node.logs(p),
       chainId: 137,
       receiver: RECEIVER,
       tokenAddresses: [JPYC],
@@ -173,7 +173,7 @@ describe('scanning a window', () => {
   it('drops a same-named token at a different address', async () => {
     const { node } = nodeReturning([logOf({ token: FAKE })]);
     const found = await scanIncomingTransfers({
-      node,
+      fetchLogs: (p) => node.logs(p),
       chainId: 137,
       receiver: RECEIVER,
       tokenAddresses: [JPYC],
@@ -185,7 +185,7 @@ describe('scanning a window', () => {
   it('drops a log from outside the window it asked for', async () => {
     const { node } = nodeReturning([logOf({ block: 5_000 })]);
     const found = await scanIncomingTransfers({
-      node,
+      fetchLogs: (p) => node.logs(p),
       chainId: 137,
       receiver: RECEIVER,
       tokenAddresses: [JPYC],
@@ -197,7 +197,7 @@ describe('scanning a window', () => {
   it('keeps two transfers in one transaction apart by log index', async () => {
     const { node } = nodeReturning([logOf({ index: 0 }), logOf({ index: 4, amount: 1n })]);
     const found = await scanIncomingTransfers({
-      node,
+      fetchLogs: (p) => node.logs(p),
       chainId: 137,
       receiver: RECEIVER,
       tokenAddresses: [JPYC],

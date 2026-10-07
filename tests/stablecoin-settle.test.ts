@@ -12,7 +12,7 @@ import { privateKeyToAccount } from 'viem/accounts';
 import { query } from '@yuha/db';
 import { encodeTransferCalldata, type ChainObservation } from '@yuha/providers';
 import { fulfilStablecoinOrder, settleStablecoinObservation } from '../apps/api/src/services/stablecoin-settle.js';
-import { balanceOf, createHarness, resetData, teardown, type Harness, type TestUser } from './helpers/harness.js';
+import { balanceOf, createHarness, resetData, teardown, type Harness, type TestUser, seedScanCursor, verifiedChainStub } from './helpers/harness.js';
 
 let h: Harness;
 let callNo = 0;
@@ -36,9 +36,27 @@ beforeAll(async () => {
     POLYGON_RPC_PRIMARY_URL: 'https://polygon.primary.invalid/rpc/test',
     POLYGON_RPC_SECONDARY_URL: 'https://polygon.secondary.invalid/rpc/test',
   });
+  /*
+   * The chain reader the quote path now needs.
+   *
+   * Quoting asks each configured token for its own `decimals()` before
+   * computing an amount from the constant in the whitelist — the check that
+   * used to exist only in the worker, which neither quotes nor delivers. A
+   * real `DualChainReader` over a stub transport means the gate is exercised
+   * rather than skipped.
+   */
+  h.ctx.chain = verifiedChainStub();
 });
 beforeEach(async () => {
   await resetData();
+  /*
+   * Quoting refuses when nothing is watching the chain, so a test that quotes
+   * has to say where the watcher is. `start_block` used to default to zero,
+   * which disabled the only bound on how OLD a satisfying transfer may be —
+   * any historical transfer from a verified wallet could settle a brand-new
+   * quote. This is that default becoming explicit.
+   */
+  await seedScanCursor(1n);
 });
 afterAll(async () => {
   await teardown();
@@ -201,15 +219,81 @@ describe('a payment that is not quite right', () => {
 });
 
 describe('money from a wallet with nothing open', () => {
-  it('is written down with no intent, not dropped', async () => {
-    // A late payment on a cancelled quote, a second payment, or somebody who
-    // read the address off a block explorer. None of those should be guessed
-    // at, and none should make the row disappear.
+  it('is recorded as an orphan, and does NOT take the payment’s anti-replay key', async () => {
+    /*
+     * A late payment on an expired quote, a second payment, or somebody who
+     * read the address off a block explorer. None of those should be guessed
+     * at, and none should make the row disappear.
+     *
+     * Where the row goes is the whole lesson of this feature. It used to be
+     * written to `chain_transfer_events`, whose unique key on
+     * (chain, tx, log) is the claim that a payment has been spent — so an
+     * unattributed row CLAIMED a payment it did not deliver, and every later
+     * observation of that same money answered `already_settled` while the
+     * order stayed pending. Three ordinary sequences reached that state and
+     * none of them could be repaired from the console.
+     */
     const out = await settleStablecoinObservation(h.ctx, observe());
     expect(out.kind).toBe('unattributed');
-    const rows = await query<{ intent_id: string | null }>(`SELECT intent_id FROM chain_transfer_events`);
-    expect(rows).toHaveLength(1);
-    expect(rows[0]!.intent_id).toBeNull();
+
+    const evidence = await query<{ n: number }>(`SELECT COUNT(*) AS n FROM chain_transfer_events`);
+    expect(Number(evidence[0]!.n)).toBe(0);
+
+    const orphans = await query<{ reason: string; intent: string | null; amount_atomic: string }>(
+      `SELECT reason, refused_for_intent_id AS intent, amount_atomic FROM stablecoin_orphan_transfers`,
+    );
+    expect(orphans).toHaveLength(1);
+    expect(orphans[0]!.reason).toBe('no_open_intent');
+    expect(orphans[0]!.intent).toBeNull();
+    expect(orphans[0]!.amount_atomic).toBe(AMOUNT.toString());
+  });
+
+  it('can still be settled normally afterwards, which is what the orphan table buys', async () => {
+    // Exactly the sequence that used to be unrecoverable: the money arrives
+    // with nothing open, and the customer then quotes and the scan re-reads
+    // the same block. Nothing must have claimed the key in between.
+    const first = await settleStablecoinObservation(h.ctx, observe());
+    expect(first.kind).toBe('unattributed');
+
+    const { user } = await quotedOrder('late-then-quoted@example.jp');
+    const second = await settleStablecoinObservation(h.ctx, observe());
+    expect(second.kind).toBe('fulfilled');
+    expect((await balanceOf(user.id)).available).toBe(5);
+
+    // And the orphan row is dated rather than deleted: it is the record of
+    // what the system thought at the time.
+    const orphans = await query<{ settled_at: Date | null }>(
+      `SELECT settled_at FROM stablecoin_orphan_transfers`,
+    );
+    expect(orphans).toHaveLength(1);
+    expect(orphans[0]!.settled_at).not.toBeNull();
+  });
+});
+
+describe('delivering against an order that moved underneath us', () => {
+  it('refuses when the order is no longer paid, because the row may be stale', async () => {
+    /*
+     * The recovery sweep listed up to fifty paid-but-undelivered orders and
+     * then trusted each row. A refund arriving mid-sweep sets an order to
+     * `refunded` and revokes nothing — the grant it was selected for had never
+     * landed — and the sweep then granted credits against a refunded order,
+     * with nothing able to take them back. Both channels and the sweep now go
+     * through one function that re-reads the order inside the transaction that
+     * grants.
+     */
+    const { user, orderId } = await quotedOrder('stale-row@example.jp');
+    await query(`UPDATE orders SET status = 'paid', paid_at = UTC_TIMESTAMP(3) WHERE id = ?`, [orderId]);
+    await query(`UPDATE orders SET status = 'refunded' WHERE id = ?`, [orderId]);
+
+    expect(await fulfilStablecoinOrder(orderId)).toBe('nothing_to_do');
+    expect((await balanceOf(user.id)).available).toBe(0);
+  });
+
+  it('refuses a second delivery of an order already delivered', async () => {
+    const { user, orderId } = await quotedOrder('twice-deliver@example.jp');
+    expect((await settleStablecoinObservation(h.ctx, observe())).kind).toBe('fulfilled');
+    expect(await fulfilStablecoinOrder(orderId)).toBe('nothing_to_do');
+    expect((await balanceOf(user.id)).available).toBe(5);
   });
 });
 

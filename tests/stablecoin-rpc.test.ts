@@ -13,6 +13,7 @@ import {
   ChainNode,
   DualChainReader,
   probeFinality,
+  verifyChainIds,
   type JsonRpcParams,
   type JsonRpcTransport,
 } from '@yuha/providers';
@@ -27,6 +28,12 @@ interface NodeState {
   /** Seconds, so one node can be made to disagree about when a block was mined. */
   timestamp?: number;
   receipts?: Record<string, unknown>;
+  txs?: Record<string, unknown>;
+  /** What eth_getLogs answers, so omission by one node can be arranged. */
+  logs?: unknown[];
+  /** What eth_call answers. */
+  callResult?: string;
+  chainId?: number;
 }
 
 /** A node that answers from a plain object, and lies in the ways real ones do. */
@@ -59,6 +66,16 @@ function fakeNode(label: string, state: NodeState): ChainNode {
         }
         case 'eth_getTransactionReceipt':
           return state.receipts?.[params[0] as string] ?? null;
+        case 'eth_getTransactionByHash':
+          return state.txs?.[params[0] as string] ?? null;
+        case 'eth_getLogs':
+          return state.logs ?? [];
+        case 'eth_call':
+          if (state.callResult === undefined) throw new Error('no call result configured');
+          return state.callResult;
+        case 'eth_chainId':
+          if (state.chainId === undefined) throw new Error('this node will not say what chain it is');
+          return hex(state.chainId);
         default:
           throw new Error(`unexpected method ${method}`);
       }
@@ -215,6 +232,25 @@ describe('two nodes on a receipt', () => {
     ],
   });
 
+  const logAt = (logIndex: number, blockNumber: number, blockHash: string, over: Record<string, unknown> = {}) => ({
+    address: '0xe7c3d8c9a439fede00d2600032d5db0be71c3c29',
+    topics: ['0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef'],
+    data: '0x01',
+    blockNumber: hex(blockNumber),
+    blockHash,
+    transactionHash: '0xaa',
+    logIndex: hex(logIndex),
+    ...over,
+  });
+
+  /** A receipt with two logs, in the order given. */
+  const twoLogs = (indices: number[]) => ({
+    status: hex(1),
+    blockNumber: hex(250),
+    blockHash: H('a'),
+    logs: indices.map((i) => logAt(i, 250, H('a'))),
+  });
+
   const pair = (a: unknown, b: unknown) =>
     new DualChainReader(
       fakeNode('primary', { latest: 300, finalized: 280, hashes: { 300: H('2') }, receipts: { '0xaa': a } }),
@@ -246,13 +282,231 @@ describe('two nodes on a receipt', () => {
   });
 
   it('does not hold over log ordering, which nodes may legitimately differ on', async () => {
-    // Failing on a field that does not decide anything would be a halt
-    // dressed up as a check.
-    const a = receipt(1, 250, H('a'));
-    const b = JSON.parse(JSON.stringify(a));
-    b.logs = [...b.logs];
-    const r = pair(a, b);
-    expect((await r.agreedReceipt('0xaa')).agreed).toBe(true);
+    /*
+     * Failing on a field that does not decide anything would be a halt dressed
+     * up as a check.
+     *
+     * The first version of this test built one receipt, deep-copied it, and
+     * reassigned `logs` to a shallow copy IN THE SAME ORDER — so it asserted
+     * that two identical receipts agree, which `agreedReceipt` cannot violate.
+     * Mutation testing confirmed it: removing the normalisation entirely
+     * survived the whole suite. Two logs, served in opposite orders, is the
+     * property.
+     */
+    // The PRIMARY serves them reversed, deliberately: the value handed back is
+    // the primary's object, so normalising only the comparison leaves a caller
+    // searching an array whose order the primary chose. Written this way round
+    // because the first version served them in order from the primary and the
+    // assertion held with the normalisation deleted.
+    const r = pair(twoLogs([3, 0]), twoLogs([0, 3]));
+    const got = await r.agreedReceipt('0xaa');
+    expect(got.agreed).toBe(true);
+    expect(got.agreed && got.value.logs.map((l) => l.logIndex)).toEqual([0, 3]);
+  });
+
+  it('holds when a log claims to belong to a different transaction', async () => {
+    /*
+     * The compared projection was `{address, topics, data, logIndex}`, so each
+     * log's `transactionHash`, `blockNumber` and `blockHash` were the
+     * primary's word alone — and the caller's "is this log in the agreed
+     * receipt, with this transaction hash" check then verified the primary
+     * against itself.
+     */
+    const honest = twoLogs([3]);
+    const lying = { ...twoLogs([3]), logs: [logAt(3, 250, H('a'), { transactionHash: '0xbb' })] };
+    const held = await pair(lying, honest).agreedReceipt('0xaa');
+    expect(held.agreed).toBe(false);
+  });
+
+  it('holds when a log claims a different block from the other node’s copy', async () => {
+    const honest = twoLogs([3]);
+    const lying = { ...twoLogs([3]), logs: [logAt(3, 251, H('a'))] };
+    expect((await pair(lying, honest).agreedReceipt('0xaa')).agreed).toBe(false);
+  });
+});
+
+describe('two nodes on a transaction body', () => {
+  const tx = (over: Record<string, unknown> = {}) => ({
+    hash: '0xaa',
+    from: '0x1111111111111111111111111111111111111111',
+    to: '0xe7c3d8c9a439fede00d2600032d5db0be71c3c29',
+    value: '0x0',
+    input: '0xa9059cbb',
+    nonce: hex(4),
+    blockNumber: hex(250),
+    blockHash: H('a'),
+    chainId: hex(137),
+    ...over,
+  });
+
+  const pair = (a: unknown, b: unknown) =>
+    new DualChainReader(
+      fakeNode('primary', { latest: 300, finalized: 280, hashes: { 300: H('2') }, txs: { '0xaa': a } }),
+      fakeNode('secondary', { latest: 300, finalized: 280, hashes: { 300: H('2') }, txs: { '0xaa': b } }),
+    );
+
+  it('agrees when both describe the same transaction', async () => {
+    const got = await pair(tx(), tx()).agreedTransaction('0xaa');
+    expect(got.agreed).toBe(true);
+    expect(got.agreed && got.value.from).toBe('0x1111111111111111111111111111111111111111');
+  });
+
+  it('holds when they disagree about the SENDER, which decides attribution', async () => {
+    /*
+     * The field that mattered most and was checked least. `from` is the
+     * attribution key — it decides which open intent a payment belongs to —
+     * and that lookup runs before the verifier, so no later check sees it. One
+     * node altering it turned a real payment into unattributable money.
+     */
+    const held = await pair(tx({ from: '0x2222222222222222222222222222222222222222' }), tx()).agreedTransaction('0xaa');
+    expect(held.agreed).toBe(false);
+    expect(!held.agreed && held.reason).toMatch(/describe transaction .* differently/);
+  });
+
+  it('holds when they disagree about the calldata, the token or the value', async () => {
+    // These decide REJECTION, which is also a decision about money that
+    // really arrived: each rejection reason writes a row and refuses a
+    // payment.
+    for (const over of [{ input: '0xdeadbeef' }, { to: '0x5555555555555555555555555555555555555555' }, { value: '0x1' }]) {
+      expect((await pair(tx(over), tx()).agreedTransaction('0xaa')).agreed, JSON.stringify(over)).toBe(false);
+    }
+  });
+
+  it('tolerates one node omitting the chain id, and uses the one that has it', async () => {
+    // Genuinely absent from some nodes' answers; `verifyChainIds` is what
+    // establishes the endpoint is this chain.
+    const got = await pair(tx({ chainId: null }), tx()).agreedTransaction('0xaa');
+    expect(got.agreed).toBe(true);
+    expect(got.agreed && got.value.chainId).toBe(137);
+  });
+
+  it('holds when they disagree about the chain id', async () => {
+    expect((await pair(tx({ chainId: hex(1) }), tx()).agreedTransaction('0xaa')).agreed).toBe(false);
+  });
+
+  it('holds when one node has not seen it', async () => {
+    const held = await pair(null, tx()).agreedTransaction('0xaa');
+    expect(held.agreed).toBe(false);
+    expect(!held.agreed && held.reason).toMatch(/primary has no transaction/);
+  });
+});
+
+describe('the height a header claims to be', () => {
+  it('holds when a node answers about a different block than the one asked for', async () => {
+    /*
+     * `agreedHeader` compared the hash and the timestamp, returned the
+     * primary's object, and never compared `number` with the height asked for
+     * or with the other node. A node answering `eth_getBlockByNumber(250)`
+     * with a truthful hash and timestamp under `number: 0` had that zero
+     * written onto the payment's evidence row — and the operator refund queue
+     * is ordered by that column, so an attacker could bury a row at the
+     * bottom of it.
+     */
+    const liar = new ChainNode({
+      label: 'liar',
+      async request(method: string, params: JsonRpcParams) {
+        if (method === 'eth_getBlockByNumber') {
+          const tag = params[0] as string;
+          if (tag === 'finalized') return { number: hex(280), hash: H('f'), timestamp: hex(1_700_000_000) };
+          return { number: hex(0), hash: H('a'), timestamp: hex(1_700_000_000) };
+        }
+        if (method === 'eth_blockNumber') return hex(300);
+        throw new Error(`unexpected ${method}`);
+      },
+    });
+    const r = new DualChainReader(liar, fakeNode('secondary', { latest: 300, finalized: 280, hashes: { 250: H('a'), 300: H('2') } }));
+    const held = await r.agreedHeader(250n);
+    expect(held.agreed).toBe(false);
+    expect(!held.agreed && held.reason).toMatch(/answered about block 0 when asked for 250/);
+  });
+});
+
+describe('logs from both nodes', () => {
+  const log = (txHash: string, logIndex: number) => ({
+    address: '0xe7c3d8c9a439fede00d2600032d5db0be71c3c29',
+    topics: ['0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef'],
+    data: '0x01',
+    blockNumber: hex(250),
+    blockHash: H('a'),
+    transactionHash: txHash,
+    logIndex: hex(logIndex),
+  });
+  const ask = (r: DualChainReader) =>
+    r.unionLogs({ fromBlock: 200n, toBlock: 300n, address: [], topics: [] });
+
+  it('includes a transfer only one node reported', async () => {
+    /*
+     * The defect this exists for: discovery asked ONE node, so a node that
+     * left a payment out of a single eth_getLogs answer lost it for good — the
+     * cursor advanced, the overlap re-read asked the same node again, and no
+     * row existed anywhere, not even in an operator queue. The only invisible
+     * way to lose a payment in this design.
+     */
+    const r = new DualChainReader(
+      fakeNode('primary', { latest: 300, finalized: 280, hashes: { 300: H('2') }, logs: [] }),
+      fakeNode('secondary', { latest: 300, finalized: 280, hashes: { 300: H('2') }, logs: [log('0xaa', 2)] }),
+    );
+    const found = await ask(r);
+    expect(found.map((l) => l.transactionHash)).toEqual(['0xaa']);
+  });
+
+  it('does not double-count a transfer both reported', async () => {
+    const r = new DualChainReader(
+      fakeNode('primary', { latest: 300, finalized: 280, hashes: { 300: H('2') }, logs: [log('0xaa', 2)] }),
+      fakeNode('secondary', { latest: 300, finalized: 280, hashes: { 300: H('2') }, logs: [log('0xaa', 2)] }),
+    );
+    expect(await ask(r)).toHaveLength(1);
+  });
+
+  it('propagates an error instead of treating one node as having found nothing', async () => {
+    // A node that errors is not a node that found nothing. Swallowing it would
+    // reintroduce the omission defect in a new costume.
+    const broken = new ChainNode({
+      label: 'broken',
+      async request(method: string) {
+        if (method === 'eth_getLogs') throw new Error('rate limited');
+        throw new Error(`unexpected ${method}`);
+      },
+    });
+    const r = new DualChainReader(broken, fakeNode('secondary', { latest: 300, finalized: 280, hashes: {}, logs: [] }));
+    await expect(ask(r)).rejects.toThrow(/rate limited/);
+  });
+});
+
+describe('a contract read, and the chain the endpoints are on', () => {
+  const node = (over: Partial<NodeState>) =>
+    fakeNode('n', { latest: 300, finalized: 280, hashes: { 300: H('2') }, ...over });
+
+  it('agrees only when both nodes answer the same thing', async () => {
+    /*
+     * The decimals check — the one guard between a mistyped constant and a
+     * quote wrong by a factor of a trillion — asked the primary alone, in a
+     * design where every other chain read insists on agreement.
+     */
+    const same = new DualChainReader(node({ callResult: '0x12' }), node({ callResult: '0x12' }));
+    const got = await same.agreedCall({ to: '0xabc', data: '0x313ce567' });
+    expect(got.agreed).toBe(true);
+
+    const different = new DualChainReader(node({ callResult: '0x12' }), node({ callResult: '0x06' }));
+    expect((await different.agreedCall({ to: '0xabc', data: '0x313ce567' })).agreed).toBe(false);
+  });
+
+  it('checks both endpoints really are the configured chain', async () => {
+    /*
+     * `eth_chainId` was never called anywhere in the repository, while a
+     * comment in the RPC client claimed the caller compared it. Nothing
+     * established that either URL pointed at Polygon mainnet: the only thing
+     * holding the pair to the real chain was that they agreed with each other,
+     * which two endpoints onto the same wrong chain satisfy perfectly.
+     */
+    const right = new DualChainReader(node({ chainId: 137 }), node({ chainId: 137 }));
+    expect(await verifyChainIds(right, 137)).toEqual([]);
+
+    const wrong = new DualChainReader(node({ chainId: 137 }), node({ chainId: 80_002 }));
+    expect(await verifyChainIds(wrong, 137)).toEqual(['n is chain 80002, not 137']);
+
+    const silent = new DualChainReader(node({ chainId: 137 }), node({}));
+    expect((await verifyChainIds(silent, 137))[0]).toMatch(/could not be asked for its chain id/);
   });
 });
 

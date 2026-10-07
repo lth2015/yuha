@@ -25,7 +25,7 @@ import {
   type WebhookEventRow,
 } from '@yuha/db';
 import type { AppContext } from '../context.js';
-import { grantEntitlementForOrder } from './fulfilment.js';
+import { fulfilPaidOrder, grantEntitlementForOrder } from './fulfilment.js';
 
 /**
  * Stripe webhook processing (PROJECT_TASK.md §7).
@@ -216,7 +216,19 @@ async function handleCheckoutCompleted(ctx: AppContext, event: StripeEventLike):
     // business key — the order id — not on the event that got us here, which
     // is what makes a card payment and an on-chain payment for one order
     // deliver once between them.
-    await grantEntitlementForOrder(updated, tx);
+    const granted = await grantEntitlementForOrder(updated, tx);
+    if (!granted.delivered) {
+      /*
+       * Paid for something the buyer already holds. The order deliberately
+       * stays ungranted so the recovery sweep and the console keep showing it,
+       * and this throws rather than returning, so the payment row below is not
+       * written as if the sale completed. Stripe retries the event; the state
+       * it finds is the same, and a person has to refund one of the two
+       * orders. The silent version — marking it delivered anyway — is what
+       * this replaces.
+       */
+      throw new Error(`order ${updated.id} paid for an entitlement already held (${granted.reason})`);
+    }
 
     const pi = live?.paymentIntentId ?? (session['payment_intent'] as string | null);
     if (pi) {
@@ -1322,10 +1334,14 @@ async function recoverOneOrder(order: OrderRow): Promise<boolean> {
     const product = await getProductVersion(order.price_key, order.price_version);
     if (!product) return false;
     if (product.kind !== 'one_time') return false;
-    const before = order.entitlement_granted_at;
-    await withTx(async (tx) => {
-      await grantEntitlementForOrder(order, tx);
-    });
-    return !before;
+    /*
+     * The order is re-read inside the granting transaction, by
+     * `fulfilPaidOrder`. It was trusted from the listed row instead, and the
+     * list is read once for a batch of fifty: a refund arriving mid-sweep sets
+     * the order to `refunded` and revokes nothing (the grant it was selected
+     * for never landed), and this then granted credits against a refunded
+     * order with nothing able to take them back.
+     */
+    return (await fulfilPaidOrder(order.id)) === 'delivered';
   }
 }

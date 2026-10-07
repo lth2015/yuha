@@ -33,9 +33,9 @@ export async function grantLicense(
     currency: string;
   },
   tx: PoolConnection,
-): Promise<{ created: boolean }> {
+): Promise<{ created: boolean; heldByOrderId: string }> {
   const licenseId = newId();
-  const res = await execute(
+  await execute(
     `INSERT INTO track_licenses (id, track_id, buyer_id, creator_id, order_id, price_paid, currency)
      VALUES (?, ?, ?, ?, ?, ?, ?)
      ON DUPLICATE KEY UPDATE id = id`,
@@ -50,9 +50,15 @@ export async function grantLicense(
     ],
     tx,
   );
-  if (res.affectedRows === 0) return { created: false };
-
-  return { created: true };
+  const row = await queryOne<{ order_id: string }>(
+    `SELECT order_id FROM track_licenses WHERE track_id = ? AND buyer_id = ?`,
+    [params.trackId, params.buyerId],
+    tx,
+  );
+  if (!row) throw new Error('license insert failed to read back');
+  // Our own order, whether this call wrote the row or an earlier replay did:
+  // the licence this order paid for is in place either way.
+  return { created: row.order_id === params.orderId, heldByOrderId: row.order_id };
 }
 
 /** Ownership OR an active license authorises downloads for this buyer. */

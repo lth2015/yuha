@@ -98,6 +98,14 @@ check was about the rendering.
   `payment_method_types` to Stripe silently opts out of the account's other
   payment methods; the comment above that call confidently asserted the
   opposite.
+- **A driver's "did that work" is not the database's.** mysql2 connects with
+  CLIENT_FOUND_ROWS, so `affectedRows` counts rows MATCHED, not changed: an
+  `INSERT ... ON DUPLICATE KEY UPDATE id = id` reports 1 when it inserted
+  nothing, and an `UPDATE` that changes no value reports 1 too. `INSERT IGNORE`
+  does report 0 for a skipped row. `grantLicense` returned `created: true` for
+  every duplicate for as long as it existed, unnoticed because the caller
+  discarded it — and the fix that started using it would have detected nothing
+  while looking tested. Read the row back when the answer decides money.
 - **Prefer a scripted invariant to an eye.** The ones in this repo — brace
   balance after CSS edits, SQL placeholder counts, contrast maths, dictionary
   key parity, orphaned exports — have each caught real defects. Eyeballing

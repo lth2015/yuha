@@ -10,6 +10,7 @@ import {
 } from '../services/stablecoin.js';
 import { settleReportedTransaction } from '../services/stablecoin-scan.js';
 import {
+  decideOrphanTransfer,
   decideStablecoinReview,
   stablecoinAccountingCsv,
   stablecoinReviewQueue,
@@ -176,6 +177,33 @@ export default async function stablecoinRoutes(app: FastifyInstance, opts: { ctx
     return decideStablecoinReview({
       intentId: id,
       decision: body.decision,
+      reason: body.reason,
+      actorId: req.user!.id,
+      actorRole: req.user!.role,
+    });
+  });
+
+  /**
+   * Attaching unattributed money to an order, or writing it off.
+   *
+   * Admin-only and reason-required, like every other money decision in the
+   * console. This action is the repair path the design was missing: the
+   * unattributed queue existed, with nothing able to act on it, while three
+   * ordinary sequences put real payments in it permanently.
+   */
+  app.post('/v1/admin/stablecoin-transfers/:id/decide', { preHandler: adminOnly }, async (req) => {
+    const { id } = req.params as { id: string };
+    const body = z
+      .object({
+        decision: z.enum(['attach_to_order', 'dismiss']),
+        orderId: z.string().uuid().optional(),
+        reason: z.string().min(3).max(500),
+      })
+      .parse(req.body);
+    return decideOrphanTransfer({
+      orphanId: id,
+      decision: body.decision,
+      ...(body.orderId ? { orderId: body.orderId } : {}),
       reason: body.reason,
       actorId: req.user!.id,
       actorRole: req.user!.role,

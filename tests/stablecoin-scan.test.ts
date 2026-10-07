@@ -20,7 +20,7 @@ import {
   type JsonRpcTransport,
 } from '@yuha/providers';
 import { runStablecoinScanPass, SCAN_STREAM } from '../apps/api/src/services/stablecoin-scan.js';
-import { balanceOf, createHarness, resetData, teardown, type Harness, type TestUser } from './helpers/harness.js';
+import { balanceOf, createHarness, resetData, teardown, type Harness, type TestUser, seedScanCursor, verifiedChainStub } from './helpers/harness.js';
 
 let h: Harness;
 let callNo = 0;
@@ -57,18 +57,39 @@ interface Fake {
   liesAboutBlockTime?: number;
   /** Claims a different log index in eth_getLogs than its receipt contains. */
   liesAboutLogIndex?: number;
+  /**
+   * Omits the transfer from eth_getLogs while still serving its receipt — one
+   * node simply not reporting a payment, which is what used to lose it.
+   */
+  hidesFromLogs?: boolean;
+  /**
+   * A SECOND payment, in a later block, under its own hash — so a pass can
+   * contain one transfer the nodes cannot agree about and one they can.
+   */
+  second?: { block: number; logIndex: number };
+  /** A hash this node has no receipt for, while still reporting its log. */
+  noReceiptFor?: string;
 }
 
+/** The second payment's hash, when a fixture has one. */
+const TX2 = `0x${'cc'.repeat(32)}`;
+
 function node(label: string, f: Fake): ChainNode {
-  const logFor = (t: NonNullable<Fake['transfer']>) => ({
+  const logFor = (t: NonNullable<Fake['transfer']>, hash = TX) => ({
     address: JPYC,
     topics: [TRANSFER_TOPIC, addressTopic(PAYER), addressTopic(t.to ?? RECEIVER)],
     data: hex(t.amount),
     blockNumber: hex(t.block),
     blockHash: f.hashes[t.block]!,
-    transactionHash: TX,
+    transactionHash: hash,
     logIndex: hex(t.logIndex),
   });
+
+  /** The second payment as a transfer, when the fixture has one. */
+  const secondTransfer = () =>
+    f.second && f.transfer
+      ? { ...f.transfer, block: f.second.block, logIndex: f.second.logIndex }
+      : undefined;
 
   const transport: JsonRpcTransport = {
     label,
@@ -76,6 +97,11 @@ function node(label: string, f: Fake): ChainNode {
       switch (method) {
         case 'eth_chainId':
           return hex(137);
+        case 'eth_call':
+          // decimals(), as a uint256 word. Quoting asks the chain this before
+          // it computes an amount from the whitelist constant, so a fake node
+          // that cannot answer it cannot back a quote either.
+          return `0x${(18).toString(16).padStart(64, '0')}`;
         case 'eth_blockNumber':
           return hex(f.latest);
         case 'eth_getBlockByNumber': {
@@ -90,21 +116,41 @@ function node(label: string, f: Fake): ChainNode {
           return hash ? { number: hex(n), hash, timestamp: hex(f.liesAboutBlockTime ?? 1_760_000_000) } : null;
         }
         case 'eth_getLogs': {
-          if (!f.transfer) return [];
+          if (!f.transfer || f.hidesFromLogs) return [];
           const filter = params[0] as { fromBlock: string; toBlock: string };
           const from = Number(BigInt(filter.fromBlock));
           const to = Number(BigInt(filter.toBlock));
           // A real node answers only within the range it was given. A fake
           // that ignores it tests the scanner's own out-of-window filter by
           // accident and hides everything else.
-          if (f.transfer.block < from || f.transfer.block > to) return [];
-          return [
-            f.liesAboutLogIndex === undefined
-              ? logFor(f.transfer)
-              : { ...logFor(f.transfer), logIndex: hex(f.liesAboutLogIndex) },
-          ];
+          const out: unknown[] = [];
+          if (f.transfer.block >= from && f.transfer.block <= to) {
+            out.push(
+              f.liesAboutLogIndex === undefined
+                ? logFor(f.transfer)
+                : { ...logFor(f.transfer), logIndex: hex(f.liesAboutLogIndex) },
+            );
+          }
+          const two = secondTransfer();
+          if (two && two.block >= from && two.block <= to) out.push(logFor(two, TX2));
+          return out;
         }
-        case 'eth_getTransactionByHash':
+        case 'eth_getTransactionByHash': {
+          const asked = params[0] as string;
+          const two = secondTransfer();
+          if (asked === TX2 && two) {
+            return {
+              hash: TX2,
+              from: PAYER,
+              to: JPYC,
+              value: '0x0',
+              input: encodeTransferCalldata(two.to ?? RECEIVER, two.amount),
+              nonce: hex(8),
+              blockNumber: hex(two.block),
+              blockHash: f.hashes[two.block]!,
+              chainId: hex(137),
+            };
+          }
           return f.transfer
             ? {
                 hash: f.liesAboutTxHash ?? TX,
@@ -118,7 +164,19 @@ function node(label: string, f: Fake): ChainNode {
                 chainId: hex(137),
               }
             : null;
-        case 'eth_getTransactionReceipt':
+        }
+        case 'eth_getTransactionReceipt': {
+          const asked = params[0] as string;
+          if (f.noReceiptFor === asked) return null;
+          const two = secondTransfer();
+          if (asked === TX2 && two) {
+            return {
+              status: hex(1),
+              blockNumber: hex(two.block),
+              blockHash: f.hashes[two.block]!,
+              logs: [logFor(two, TX2)],
+            };
+          }
           return f.transfer
             ? {
                 status: hex(f.transfer.status ?? 1),
@@ -127,6 +185,7 @@ function node(label: string, f: Fake): ChainNode {
                 logs: [logFor(f.transfer)],
               }
             : null;
+        }
         default:
           throw new Error(`unexpected ${method}`);
       }
@@ -159,10 +218,23 @@ beforeAll(async () => {
     STABLECOIN_SCAN_OVERLAP: '10',
     STABLECOIN_SCAN_MAX_SPAN: '450',
   });
+  /*
+   * The chain reader the quote path now needs.
+   *
+   * Quoting asks each configured token for its own `decimals()` before
+   * computing an amount from the constant in the whitelist — the check that
+   * used to exist only in the worker, which neither quotes nor delivers. A
+   * real `DualChainReader` over a stub transport means the gate is exercised
+   * rather than skipped.
+   */
+  h.ctx.chain = verifiedChainStub();
 });
 beforeEach(async () => {
   await resetData();
   await query(`DELETE FROM chain_cursors`);
+  // Tests below install lying pairs on the context; without this, the next
+  // test's quote would be priced against the previous test's liar.
+  h.ctx.chain = verifiedChainStub();
 });
 afterAll(async () => {
   await teardown();
@@ -571,11 +643,36 @@ describe('a primary node that lies', () => {
     const renaming = good({ liesAboutTxHash: `0x${'cd'.repeat(32)}` });
     const pass = await runStablecoinScanPass(h.ctx, pair(renaming, good()), silent);
 
-    expect(pass.heldAt?.reason).toMatch(/asked about .* and was told about/);
+    /*
+     * Held by the dual-node comparison, which now covers the transaction body
+     * as well as the receipt: one node renaming the transaction is a
+     * disagreement before it is anything else.
+     */
+    expect(pass.heldAt?.reason).toMatch(/describe transaction .* differently/);
     // Still five: the one real payment bought one order and no more.
     expect((await balanceOf(user.id)).available).toBe(5);
     const evidence = await query<{ n: number }>(`SELECT COUNT(*) AS n FROM chain_transfer_events`);
     expect(Number(evidence[0]!.n)).toBe(1);
+  });
+
+  it('cannot rename it even when BOTH nodes tell the same lie', async () => {
+    /*
+     * The layer behind the agreement check, and the only way to exercise it:
+     * two nodes agreeing about a renamed transaction is not a disagreement, so
+     * the only thing left is that we asked about one hash and were told about
+     * another. Written because the test above now stops at the earlier guard,
+     * which would have left this one proving nothing — the shape that has
+     * already produced two vacuous tests in this work.
+     */
+    const { user } = await quoted('lie-hash-both@example.jp');
+    const renamed = good({ liesAboutTxHash: `0x${'cd'.repeat(32)}` });
+    const pass = await runStablecoinScanPass(h.ctx, pair(renamed), silent);
+
+    expect(pass.heldAt?.reason).toMatch(/asked about .* and was told about/);
+    expect(pass.settled.map((s) => s.kind)).not.toContain('fulfilled');
+    expect((await balanceOf(user.id)).available).toBe(0);
+    const evidence = await query<{ n: number }>(`SELECT COUNT(*) AS n FROM chain_transfer_events`);
+    expect(Number(evidence[0]!.n)).toBe(0);
   });
 
   it('cannot get an unfinalized payment settled by reporting a lower block', async () => {
@@ -591,7 +688,24 @@ describe('a primary node that lies', () => {
      * reintroduced.
      */
     const { user, orderId } = await quoted('lie-block@example.jp');
-    const unfinalized = good({ finalized: 990, transfer: { block: 1_000, amount: AMOUNT, logIndex: 2 } });
+    /*
+     * `hashes` must contain 990, and the first two versions of this test did
+     * not have it.
+     *
+     * `probeFinality` checks that the finalized header really is the block at
+     * that height, so a fixture with no hash at 990 was refused by the probe —
+     * and the refusal satisfied every assertion here. Mutation testing proved
+     * it: taking the agreed receipt's block number back out of the observation
+     * and using the primary's survived the whole suite. That is the third
+     * vacuous regression test in this feature, all three with the same cause —
+     * an earlier guard answering first — so the assertions below now name the
+     * outcome they expect instead of only ruling out 'fulfilled'.
+     */
+    const unfinalized = good({
+      finalized: 990,
+      hashes: { 990: H('f'), 1_000: H('a'), 1_050: H('b'), 1_100: H('c') },
+      transfer: { block: 1_000, amount: AMOUNT, logIndex: 2 },
+    });
 
     // Honest: the payment is above the finalized head, so it waits.
     h.ctx.chain = pair(unfinalized);
@@ -601,7 +715,9 @@ describe('a primary node that lies', () => {
       headers: { ...user.authHeader, ...freshIp() },
       payload: { txHash: TX } as never,
     });
-    expect(honest.json().outcome).not.toBe('fulfilled');
+    // 'waiting', specifically: the gate under test is the finality one, and
+    // any other refusal would mean the test is proving something else.
+    expect(honest.json().outcome).toBe('waiting');
     expect((await balanceOf(user.id)).available).toBe(0);
 
     // Lying: the same payment, reported as if it were in an older block.
@@ -612,7 +728,9 @@ describe('a primary node that lies', () => {
       headers: { ...user.authHeader, ...freshIp() },
       payload: { txHash: TX } as never,
     });
-    expect(lying.json().outcome).not.toBe('fulfilled');
+    // Still waiting, and for the right reason: the block number the gate reads
+    // comes from the receipt both nodes agreed on, so the lie changes nothing.
+    expect(lying.json().outcome).toBe('waiting');
     expect((await balanceOf(user.id)).available).toBe(0);
   });
 
@@ -631,6 +749,39 @@ describe('a primary node that lies', () => {
     expect((await balanceOf(user.id)).available).toBe(0);
   });
 
+  it('keeps scanning past a transfer it cannot agree about, without moving the cursor past it', async () => {
+    /*
+     * The loop used to `break` on the first transfer the nodes could not agree
+     * about. A node that injects one fabricated log at the bottom of the
+     * window then stops the pass before anything real in it is reached — every
+     * pass, for good. A permanent halt from one node, wearing the clothes of
+     * conservative behaviour.
+     *
+     * Holding the cursor is the part that must not change: a held payment has
+     * to still be there next pass.
+     */
+    const { user } = await quoted('held-then-good@example.jp');
+    const withSecond = good({
+      hashes: { 1_000: H('a'), 1_010: H('d'), 1_050: H('b'), 1_100: H('c') },
+      second: { block: 1_010, logIndex: 1 },
+    });
+    // The secondary has no receipt for the FIRST payment, so it cannot be
+    // agreed; the second payment is fine on both.
+    const pass = await runStablecoinScanPass(
+      h.ctx,
+      pair(withSecond, { ...withSecond, noReceiptFor: TX }),
+      silent,
+    );
+
+    expect(pass.found).toBe(2);
+    expect(pass.heldAt?.blockNumber).toBe(1_000n);
+    // Reached, judged and settled despite the earlier hold.
+    expect(pass.settled.map((s) => s.kind)).toContain('fulfilled');
+    expect((await balanceOf(user.id)).available).toBe(5);
+    // And the cursor stays below the held block, so it is re-read next pass.
+    expect(await getChainCursor({ chainId: 137, stream: SCAN_STREAM })).toBe(999n);
+  });
+
   it('cannot point the scanner at a log the agreed receipt does not contain', async () => {
     /*
      * In the scan path the log index comes from the primary's eth_getLogs,
@@ -641,9 +792,32 @@ describe('a primary node that lies', () => {
      */
     const { user } = await quoted('lie-logindex@example.jp');
     const ghost = good({ liesAboutLogIndex: 9 });
-    const pass = await runStablecoinScanPass(h.ctx, pair(ghost, good()), silent);
+    /*
+     * BOTH nodes point at index 9 while the receipt they both serve contains
+     * index 2. One node alone cannot arrange this any more: discovery takes
+     * the union of both nodes' logs, so an honest second node contributes the
+     * real log and the real payment settles — correctly — which would have
+     * made this test assert the opposite of what it means.
+     */
+    const pass = await runStablecoinScanPass(h.ctx, pair(ghost), silent);
     expect(pass.settled.map((s) => s.kind)).not.toContain('fulfilled');
     expect(pass.heldAt?.reason).toMatch(/no log at index 9/);
     expect((await balanceOf(user.id)).available).toBe(0);
+  });
+
+  it('settles the real payment anyway when only ONE node hides the log', async () => {
+    /*
+     * The other half of taking the union, and the defect it fixes: a single
+     * node omitting a payment from eth_getLogs used to lose it permanently —
+     * the cursor moved on, the overlap re-read asked the same node again, and
+     * no row existed anywhere, not even in an operator queue. The honest node
+     * is now enough.
+     */
+    const { user } = await quoted('one-node-blind@example.jp');
+    const blind = good({ hidesFromLogs: true });
+    const pass = await runStablecoinScanPass(h.ctx, pair(blind, good()), silent);
+    expect(pass.found).toBe(1);
+    expect(pass.settled.map((s) => s.kind)).toContain('fulfilled');
+    expect((await balanceOf(user.id)).available).toBe(5);
   });
 });

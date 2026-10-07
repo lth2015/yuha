@@ -27,7 +27,7 @@ import {
   type TokenSpec,
 } from '@yuha/providers';
 import type { AppContext } from '../context.js';
-import { SCAN_STREAM } from './stablecoin-scan.js';
+import { assertConfiguredTokensVerified, SCAN_STREAM } from './stablecoin-scan.js';
 import { getPublicTrack, hasLicense } from '@yuha/db';
 
 /**
@@ -188,6 +188,15 @@ export async function createStablecoinQuote(
     assertNotCardClaimed(existing);
   }
 
+  /*
+   * Before any number is computed from `token.decimals`, the chain is asked
+   * whether that is really this contract's precision. Doing it here and not
+   * only in the worker is the point: this function is where the amount a
+   * customer is asked to pay comes from.
+   */
+  if (!ctx.chain) throw new AppError('SERVICE_DISABLED', 'stablecoin payments are not configured');
+  await assertConfiguredTokensVerified(ctx, ctx.chain);
+
   const { amountAtomic, rounded } = quoteAmountAtomic({
     priceJpy: product.amount_minor,
     token,
@@ -197,7 +206,25 @@ export async function createStablecoinQuote(
   });
 
   const expiresAt = new Date(Date.now() + ctx.config.STABLECOIN_QUOTE_TTL_SECONDS * 1000);
-  const scanFrom = (await getChainCursor({ chainId: token.chainId, stream: SCAN_STREAM })) ?? 0n;
+  /*
+   * No cursor means the watcher has not started, and a quote cannot be made.
+   *
+   * `?? 0n` was here, and zero is not a conservative default: `before_start_block`
+   * is the only bound on how OLD a satisfying transfer may be, so a start block
+   * of zero lets any historical transfer from a verified wallet settle a
+   * brand-new quote — once per (chain, tx, log), which is once per old payment
+   * that wallet ever made to this address. Reachable from the API alone,
+   * through the report endpoint, without the scanner running at all.
+   *
+   * Refusing is the honest answer: the feature is not ready to take money
+   * until something is watching the chain for it.
+   */
+  const cursor = await getChainCursor({ chainId: token.chainId, stream: SCAN_STREAM });
+  const configured = ctx.config.STABLECOIN_SCAN_START_BLOCK;
+  const scanFrom = cursor ?? (configured === undefined ? undefined : BigInt(configured));
+  if (scanFrom === undefined) {
+    throw new AppError('SERVICE_DISABLED', 'stablecoin payments are not being watched for yet — try again shortly');
+  }
 
   return withTx(async (tx) => {
     const order =
@@ -245,6 +272,23 @@ export async function createStablecoinQuote(
         );
       }
       await closeIntent({ intentId: openForPayer.id, state: 'cancelled' }, tx);
+    }
+
+    /*
+     * And the ORDER's own slot, which may be held from a different wallet.
+     *
+     * The rule "one payment at a time" was enforced per wallet only, so a
+     * customer with two verified wallets could quote the same order twice and
+     * hold two live slots. Paying both took both payments: the first settled,
+     * and the second found an order it could not move — which, before the
+     * settle path was fixed, reported success and appeared in no queue. The
+     * unique index added in 0016 now makes two open intents for one order
+     * impossible; this is what makes a legitimate re-quote from a second
+     * wallet still work, by superseding the first.
+     */
+    const openForOrder = await findOpenIntentForOrder(order.id, tx);
+    if (openForOrder && openForOrder.id !== openForPayer?.id) {
+      await closeIntent({ intentId: openForOrder.id, state: 'cancelled' }, tx);
     }
 
     const { quote } = await insertQuoteWithIntent(
@@ -329,7 +373,12 @@ export async function prepareStablecoinPayment(
   }
   const order = await getOrderForUser(params.orderId, params.userId);
   if (!order) throw new AppError('NOT_FOUND', 'order not found');
-  if (order.status === 'paid') throw new AppError('CONFLICT', 'this order has already been paid');
+  // The same set the quote path refuses, and for the same reason: handing a
+  // wallet live transfer calldata for a refunded order invites a payment that
+  // `markOrderPaid` will not accept.
+  if (['paid', 'refunded', 'partially_refunded'].includes(order.status)) {
+    throw new AppError('CONFLICT', 'this order can no longer be paid');
+  }
 
   const intent = await findOpenIntentForOrder(params.orderId);
   if (!intent) throw new AppError('NOT_FOUND', 'no live quote for this order — ask for a new one');

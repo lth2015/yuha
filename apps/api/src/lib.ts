@@ -55,8 +55,11 @@ export { sweepExpiredTrackAudio, type RetentionSweepResult } from './services/re
 export { executeAccountDeletion, type DeletionOutcome } from './services/deletion.js';
 
 export {
+  assertConfiguredTokensVerified,
   expireStaleIntents,
+  resetTokenGateForTests,
   runStablecoinScanPass,
   SCAN_STREAM,
   verifyConfiguredTokens,
 } from './services/stablecoin-scan.js';
+export { needsOperator, type SettleOutcome } from './services/stablecoin-settle.js';

@@ -1,4 +1,4 @@
-import { ChainNode, type RawLog } from './rpc.js';
+import type { RawLog } from './rpc.js';
 import { sameAddress } from './tokens.js';
 
 /**
@@ -107,13 +107,27 @@ export function nextScanWindow(params: {
  * address into our evidence.
  */
 export async function scanIncomingTransfers(params: {
-  node: ChainNode;
+  /**
+   * How to fetch logs — a function, not a node.
+   *
+   * It took a single `ChainNode`, which is what made discovery single-node:
+   * one endpoint omitting a payment from one answer lost that payment
+   * permanently, because the cursor moved on and the overlap re-read asked the
+   * same endpoint again. The caller now passes `DualChainReader.unionLogs`,
+   * and a test can pass anything.
+   */
+  fetchLogs: (params: {
+    fromBlock: bigint;
+    toBlock: bigint;
+    address: string | string[];
+    topics: (string | string[] | null)[];
+  }) => Promise<RawLog[]>;
   chainId: number;
   receiver: string;
   tokenAddresses: string[];
   window: ScanWindow;
 }): Promise<IncomingTransfer[]> {
-  const logs = await params.node.logs({
+  const logs = await params.fetchLogs({
     fromBlock: params.window.fromBlock,
     toBlock: params.window.toBlock,
     address: params.tokenAddresses.map((a) => a.toLowerCase()),

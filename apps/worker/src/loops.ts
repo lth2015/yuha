@@ -1,5 +1,5 @@
 import type { AppContext } from '@yuha/api';
-import { expireStaleIntents, runStablecoinScanPass, verifyConfiguredTokens } from '@yuha/api';
+import { expireStaleIntents, needsOperator, runStablecoinScanPass, verifyConfiguredTokens } from '@yuha/api';
 import { describeError } from '@yuha/contracts';
 import {
   processWebhookEvent,
@@ -111,20 +111,38 @@ export async function stablecoinScanLoop(deps: LoopDeps): Promise<void> {
    * factor of a trillion on every quote, and nothing downstream can notice:
    * the amount is just a number. Refusing to scan is the right failure — the
    * money is not lost, it is simply not being collected, and that is visible.
+   *
+   * Inside the loop, and retried, which it was not. The check ran once before
+   * the loop and `return`ed on ANY problem — including a timeout or a 429 from
+   * a public endpoint at the moment the worker happened to boot. One of those
+   * permanently stopped the scanner, the quote-expiry sweep and the scan
+   * cursor for the life of the process, while the API went on selling. A
+   * build whose constants disagree with the chain is a permanent refusal; not
+   * being able to ask is a retry. They were the same code path.
    */
-  const problems = await verifyConfiguredTokens(ctx, reader).catch((err) => [
-    { token: 'all' as const, reason: describeError(err) },
-  ]);
-  if (problems.length > 0) {
-    for (const p of problems) log('error', 'stablecoin token check failed', { token: p.token, reason: p.reason });
-    log('error', 'stablecoin scan not started: the configured tokens are not what the chain says they are');
-    return;
-  }
+  let tokensVerified = false;
 
   while (!deps.stopped()) {
     try {
-      const freed = await expireStaleIntents();
-      if (freed > 0) log('info', 'stablecoin quotes expired', { intents: freed });
+      if (!tokensVerified) {
+        const problems = await verifyConfiguredTokens(ctx, reader).catch((err) => [
+          { token: 'chain' as const, kind: 'unavailable' as const, reason: describeError(err) },
+        ]);
+        for (const p of problems) {
+          log('error', 'stablecoin token check failed', { token: p.token, kind: p.kind, reason: p.reason });
+        }
+        if (problems.some((p) => p.kind === 'mismatch')) {
+          log('error', 'stablecoin scan not started: the configured tokens are not what the chain says they are');
+          return;
+        }
+        if (problems.length > 0) {
+          log('warn', 'stablecoin scan waiting: the token check could not be completed');
+          await sleep(SCAN_INTERVAL_MS);
+          continue;
+        }
+        tokensVerified = true;
+      }
+
       const pass = await runStablecoinScanPass(ctx, reader, log);
       if (pass.found > 0) {
         log('info', 'stablecoin scan pass', {
@@ -132,16 +150,31 @@ export async function stablecoinScanLoop(deps: LoopDeps): Promise<void> {
           toBlock: pass.window?.toBlock.toString(),
           found: pass.found,
           settled: pass.settled.map((s) => s.kind),
+          needsOperator: pass.settled.filter(needsOperator).length,
         });
       }
+
+      /*
+       * The sweep runs AFTER the scan, not before it.
+       *
+       * Before, it closed the intent of a quote that had just expired and the
+       * scan in the same iteration then found that quote's on-time payment with
+       * nothing open to attribute it to. The grace period is the real fix; the
+       * ordering is free and removes the worst instance of the race.
+       */
+      const freed = await expireStaleIntents({ graceSeconds: ctx.config.STABLECOIN_INTENT_GRACE_SECONDS });
+      if (freed > 0) log('info', 'stablecoin quotes expired', { intents: freed });
     } catch (err) {
       // Never fatal: an RPC outage must not take the worker down, and the
       // overlap re-read means nothing is lost by missing a pass.
       log('error', 'stablecoin scan pass failed', { err: describeError(err) });
     }
-    await sleep(15_000);
+    await sleep(SCAN_INTERVAL_MS);
   }
 }
+
+/** One pass every fifteen seconds; the expiry grace period must exceed it. */
+const SCAN_INTERVAL_MS = 15_000;
 
 export async function outboxLoop(deps: LoopDeps): Promise<void> {
   const { ctx, log } = deps;

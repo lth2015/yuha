@@ -203,7 +203,7 @@ describe('the scanner, against a real log index', () => {
     const to = BigInt(await rpc('eth_blockNumber'));
 
     const found = await scanIncomingTransfers({
-      node,
+      fetchLogs: (p) => node.logs(p),
       chainId: 1337,
       receiver,
       tokenAddresses: [token],

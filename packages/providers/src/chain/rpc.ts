@@ -135,8 +135,17 @@ export class ChainNode {
       nonce: hexToNumber(o['nonce']),
       blockNumber: o['blockNumber'] == null ? null : hexToBigInt(o['blockNumber']),
       blockHash: o['blockHash'] == null ? null : str(o['blockHash'], 'tx block hash').toLowerCase(),
-      // Absent on pre-EIP-155 and on some nodes; the caller compares the
-      // node's own eth_chainId instead of trusting a missing field.
+      /*
+       * Absent on pre-EIP-155 and on some nodes.
+       *
+       * The comment here used to say "the caller compares the node's own
+       * eth_chainId instead of trusting a missing field". Nothing in the
+       * repository called `chainId()` at all — the check was described, never
+       * written, and the caller substituted the CONFIGURED chain id for an
+       * absent field, which made `wrong_chain` unreachable from node-supplied
+       * data. `verifyChainIds` below is that check, and it now exists; both
+       * nodes are asked at startup and a mismatch refuses to scan.
+       */
       chainId: o['chainId'] == null ? null : hexToNumber(o['chainId']),
     };
   }
@@ -319,6 +328,23 @@ export class DualChainReader {
       const missing = !a ? this.primary.label : this.secondary.label;
       return { agreed: false, reason: `${missing} has no block at ${height}` };
     }
+    /*
+     * The header must be the header for the height that was ASKED for.
+     *
+     * Only `hash` and `timestampMs` were compared, and the object returned was
+     * the primary's — so `number` was compared with neither the height nor the
+     * other node, and a node answering `eth_getBlockByNumber(1000)` with a
+     * truthful hash and timestamp under `number: 0` had that zero written onto
+     * the payment's evidence row. Every evidence row's `block_number` comes
+     * from this object, and the operator refund queue is ordered by it.
+     */
+    if (a.number !== height || b.number !== height) {
+      const wrong = a.number !== height ? this.primary.label : this.secondary.label;
+      return {
+        agreed: false,
+        reason: `${wrong} answered about block ${a.number !== height ? a.number : b.number} when asked for ${height}`,
+      };
+    }
     if (a.hash !== b.hash) {
       return {
         agreed: false,
@@ -349,18 +375,164 @@ export class DualChainReader {
       const missing = !a ? this.primary.label : this.secondary.label;
       return { agreed: false, reason: `${missing} has no receipt for ${hash}` };
     }
+    /*
+     * The projection includes each log's OWN identity — which transaction it
+     * belongs to and which block it is in — not only its contents.
+     *
+     * It compared `{address, topics, data, logIndex}` and nothing else, so
+     * `transactionHash`, `blockNumber` and `blockHash` on every log were the
+     * primary's word alone. The caller then checked "is this log in the agreed
+     * receipt, with this transaction hash" against a field only the primary
+     * supplied: the primary verified against itself.
+     */
     const shape = (r: RawReceipt) =>
       JSON.stringify({
         status: r.status,
         blockNumber: r.blockNumber.toString(),
         blockHash: r.blockHash,
-        logs: r.logs
-          .map((l) => ({ a: l.address, t: l.topics, d: l.data, i: l.logIndex }))
-          .sort((x, y) => x.i - y.i),
+        logs: byLogIndex(r.logs).map((l) => ({
+          a: l.address,
+          t: l.topics,
+          d: l.data,
+          i: l.logIndex,
+          h: l.transactionHash,
+          n: l.blockNumber.toString(),
+          b: l.blockHash,
+        })),
       });
     if (shape(a) !== shape(b)) {
       return { agreed: false, reason: `the nodes describe receipt ${hash} differently` };
     }
+    /*
+     * Sorted on the way OUT as well as in the comparison.
+     *
+     * Only the comparison was normalised, so the array handed back kept the
+     * primary's ordering — and a caller picking "the log that paid us" with a
+     * first-match search let the primary choose which of two logs that was.
+     */
+    return { agreed: true, value: { ...a, logs: byLogIndex(a.logs) } };
+  }
+
+  /**
+   * The transaction body, only when both nodes describe it identically.
+   *
+   * This used to come from the primary alone, on the reasoning — written in a
+   * comment — that every field of it that matters is re-checked against the
+   * Transfer log in the agreed receipt. Two of those fields are not.
+   *
+   *   `from` is the ATTRIBUTION key. It decides which open intent this payment
+   *          belongs to, and that lookup happens before the verifier runs, so
+   *          no later check sees it. One altered field in one RPC response
+   *          turned a real payment into unattributed money.
+   *   `to`, `value` and `input` decide REJECTION — `token_not_whitelisted`,
+   *          `unexpected_value`, `calldata_not_transfer`. A refusal is not a
+   *          no-op: it is a decision about money that really arrived.
+   *
+   * `chainId` is compared only when both nodes report it, because it is
+   * genuinely absent from some nodes' answers; `verifyChainIds` covers the
+   * endpoint being the chain we think it is. `blockNumber`/`blockHash` are
+   * deliberately left out of the comparison — the caller takes those from the
+   * agreed receipt and must not be tempted to take them from here.
+   */
+  async agreedTransaction(hash: string): Promise<Agreement<RawTransaction>> {
+    const [a, b] = await Promise.all([this.primary.transaction(hash), this.secondary.transaction(hash)]);
+    if (!a || !b) {
+      const missing = !a ? this.primary.label : this.secondary.label;
+      return { agreed: false, reason: `${missing} has no transaction ${hash}` };
+    }
+    const shape = (t: RawTransaction) =>
+      JSON.stringify({
+        hash: t.hash,
+        from: t.from,
+        to: t.to,
+        value: t.value.toString(),
+        input: t.input,
+        nonce: t.nonce,
+      });
+    if (shape(a) !== shape(b)) {
+      return { agreed: false, reason: `the nodes describe transaction ${hash} differently` };
+    }
+    if (a.chainId !== null && b.chainId !== null && a.chainId !== b.chainId) {
+      return { agreed: false, reason: `the nodes disagree about the chain of ${hash}: ${a.chainId} vs ${b.chainId}` };
+    }
+    // Either node's value when only one reports it; they agree when both do.
+    return { agreed: true, value: { ...a, chainId: a.chainId ?? b.chainId } };
+  }
+
+  /**
+   * A contract read both nodes answer the same way.
+   *
+   * The decimals check — the one thing standing between a mistyped constant
+   * and a quote wrong by a factor of a trillion — asked the primary only,
+   * while every other chain read in this design insists on agreement. A single
+   * compromised endpoint could answer `0x12` for any address and open the gate
+   * it exists to close.
+   */
+  async agreedCall(params: { to: string; data: string }): Promise<Agreement<string>> {
+    const [a, b] = await Promise.all([this.primary.call(params), this.secondary.call(params)]);
+    if (a.toLowerCase() !== b.toLowerCase()) {
+      return {
+        agreed: false,
+        reason: `the nodes answer ${params.data} on ${params.to} differently: ${a} vs ${b}`,
+      };
+    }
     return { agreed: true, value: a };
   }
+
+  /**
+   * Logs from BOTH nodes, unioned.
+   *
+   * Discovery asked one node, justified in a comment by "whatever the primary
+   * finds is re-read through the agreed receipt, so a primary that invents a
+   * transfer gets caught" — which is true, and answers the wrong half. The
+   * direction that is not covered is OMISSION: a node that simply leaves a
+   * payment out of one `eth_getLogs` answer loses it, because the cursor moves
+   * on and the overlap re-read asks the same node again. That left no row
+   * anywhere — not even in an operator queue.
+   *
+   * Union, not intersection: either node reporting a transfer is enough to
+   * look at it, and nothing is fulfilled on the strength of being found. Both
+   * must answer, though — a node that errors is not a node that found nothing,
+   * so the error propagates and the pass is retried.
+   */
+  async unionLogs(params: {
+    fromBlock: bigint;
+    toBlock: bigint;
+    address: string | string[];
+    topics: (string | string[] | null)[];
+  }): Promise<RawLog[]> {
+    const [a, b] = await Promise.all([this.primary.logs(params), this.secondary.logs(params)]);
+    const seen = new Map<string, RawLog>();
+    for (const log of [...a, ...b]) {
+      seen.set(`${log.transactionHash}:${log.logIndex}`, log);
+    }
+    return [...seen.values()];
+  }
+}
+
+/** Log order is not something nodes are required to agree on. */
+function byLogIndex(logs: readonly RawLog[]): RawLog[] {
+  return [...logs].sort((x, y) => x.logIndex - y.logIndex);
+}
+
+/**
+ * Both endpoints are the chain this deployment was configured for.
+ *
+ * `eth_chainId` was never called anywhere in the repository, while a comment
+ * claimed the caller compared it. Nothing established that either URL pointed
+ * at Polygon mainnet; the only thing holding the pair to the real chain was
+ * that they agreed with each other, which two endpoints onto the same wrong
+ * chain also satisfy.
+ */
+export async function verifyChainIds(reader: DualChainReader, expected: number): Promise<string[]> {
+  const problems: string[] = [];
+  for (const node of [reader.primary, reader.secondary]) {
+    try {
+      const id = await node.chainId();
+      if (id !== expected) problems.push(`${node.label} is chain ${id}, not ${expected}`);
+    } catch (e) {
+      problems.push(`${node.label} could not be asked for its chain id: ${(e as Error).message}`);
+    }
+  }
+  return problems;
 }

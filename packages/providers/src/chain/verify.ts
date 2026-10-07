@@ -56,7 +56,11 @@ export interface ChainObservation {
   /** Transfer events decoded from the receipt's logs. */
   transferLogs: ObservedTransferLog[];
   block: { number: bigint; hash: string; timestampMs: number };
-  /** The hash currently at that height, from the same RPC that gave the rest. */
+  /**
+   * The hash currently at that height, read independently of the receipt —
+   * from the agreed header, not from the receipt itself. Comparing it with
+   * something derived from the same read makes the comparison vacuous.
+   */
   canonicalBlockHashAtHeight: string;
   /** Highest block the chain reports as finalized. */
   finalizedBlockNumber: bigint;
@@ -130,9 +134,23 @@ export function verifyStablecoinPayment(exp: PaymentExpectation, obs: ChainObser
 
   if (tx.blockNumber < exp.startBlock) return no('before_start_block');
 
-  // Still the block at that height. Checked before finality is considered,
-  // because a replaced block makes everything above it meaningless.
-  if (!obs.canonicalBlockHashAtHeight || obs.canonicalBlockHashAtHeight !== obs.block.hash) return no('reorged_out');
+  /*
+   * The block the RECEIPT names must still be the block at that height.
+   *
+   * This compared `canonicalBlockHashAtHeight` with `obs.block.hash`, and the
+   * only caller sets both from the same agreed header — so the condition was
+   * structurally false and `reorged_out` could not fire from the production
+   * path at all. It read exactly like a defence and was one of the five
+   * "checks that cannot fail" this codebase has now shipped.
+   *
+   * Comparing the receipt's block hash against the hash at that height is the
+   * real property: after a reorg a node can keep serving the old receipt —
+   * same status, same logs, same height, a block hash no longer on the chain —
+   * and both nodes agreeing on that stale copy is not reassurance. The scan
+   * path checks the same thing before building the observation, deliberately:
+   * there it stops the pass, here it is a verdict a unit test can produce.
+   */
+  if (obs.receipt.blockHash !== obs.canonicalBlockHashAtHeight) return no('reorged_out');
 
   const evidence = { chainId: tx.chainId, txHash: tx.hash, logIndex: log.logIndex };
   const held = (reason: ReviewReason): Verdict => ({ outcome: 'review', reason, evidence, nonceMatched });

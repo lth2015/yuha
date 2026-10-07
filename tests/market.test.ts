@@ -15,6 +15,8 @@ import {
   teardown,
   type Harness,
   type TestUser,
+  seedScanCursor,
+  verifiedChainStub,
 } from './helpers/harness.js';
 import { runJobStep } from '@yuha/worker/pipeline';
 
@@ -135,6 +137,11 @@ describe('market licensing', () => {
   const stablecoinCtx = () =>
     ({
       ...h.ctx,
+      // Quoting asks the chain what decimals each token really has before
+      // computing an amount from the constant in the whitelist, so a context
+      // that quotes needs a reader. The stub answers that one question
+      // truthfully and throws for anything else.
+      chain: verifiedChainStub(),
       config: {
         ...h.ctx.config,
         STABLECOIN_ENABLED: true,
@@ -160,6 +167,7 @@ describe('market licensing', () => {
     await query(`INSERT INTO verified_wallets (user_id, chain_id, address) VALUES (?, 137, ?)`, [buyer.id, wallet]);
 
     const { createStablecoinQuote } = await import('../apps/api/src/services/stablecoin.js');
+    await seedScanCursor(1n);
     const quote = await createStablecoinQuote(stablecoinCtx(), {
       userId: buyer.id,
       priceKey: 'market_license',
@@ -196,6 +204,7 @@ describe('market licensing', () => {
       '0x3333333333333333333333333333333333333333',
     ]);
     const { createStablecoinQuote } = await import('../apps/api/src/services/stablecoin.js');
+    await seedScanCursor(1n);
     await expect(
       createStablecoinQuote(stablecoinCtx(), {
         userId: creator.id,
@@ -208,6 +217,189 @@ describe('market licensing', () => {
     ).rejects.toThrow(/your own song/);
   });
 
+
+  it('refuses a stablecoin licence for a song the buyer already holds', async () => {
+    /*
+     * The guard existed; nothing tested it, and mutation testing showed the
+     * suite could not tell whether it was there. With it gone the order is
+     * created and `markOrderPaid` succeeds, and then `grantLicense` hits the
+     * unique key on (track, buyer): money taken, order paid, delivery
+     * impossible, and the recovery sweep re-running it forever.
+     */
+    const creator = await h.createUser({ credits: 2, email: 'sc-held-creator@example.jp' });
+    const buyer = await h.createUser({ credits: 0, email: 'sc-held-buyer@example.jp' });
+    const { trackId } = await deliverSong(creator, 'market-song-held', true);
+    const wallet = '0x4444444444444444444444444444444444444444';
+    await query(`INSERT INTO verified_wallets (user_id, chain_id, address) VALUES (?, 137, ?)`, [buyer.id, wallet]);
+    await seedScanCursor(1n);
+
+    const { createStablecoinQuote } = await import('../apps/api/src/services/stablecoin.js');
+    const { getOrder, grantLicense } = await import('@yuha/db');
+    const first = await createStablecoinQuote(stablecoinCtx(), {
+      userId: buyer.id,
+      priceKey: 'market_license',
+      idempotencyKey: 'sc-held-0001',
+      tokenKey: 'jpyc',
+      payer: wallet,
+      trackId,
+    });
+    await withTx(async (tx) => {
+      const row = (await getOrder(first.orderId, tx))!;
+      await grantLicense(
+        {
+          trackId,
+          buyerId: buyer.id,
+          creatorId: creator.id,
+          orderId: row.id,
+          pricePaid: row.amount_minor,
+          currency: row.currency,
+        },
+        tx,
+      );
+    });
+
+    await expect(
+      createStablecoinQuote(stablecoinCtx(), {
+        userId: buyer.id,
+        priceKey: 'market_license',
+        idempotencyKey: 'sc-held-0002',
+        tokenKey: 'jpyc',
+        payer: wallet,
+        trackId,
+      }),
+    ).rejects.toThrow(/already hold a license/);
+  });
+
+  it('does not mark a second licence order delivered when the licence is already held', async () => {
+    /*
+     * The pre-flight check above is not a lock: two orders for one song can
+     * both be created before either is paid. `grantLicense` reports that it
+     * wrote nothing, and `grantEntitlementForOrder` DISCARDED that and called
+     * `markEntitlementGranted` anyway — so the buyer paid twice, held one
+     * licence, and both orders read as delivered, which also hid the second
+     * from the sweep that looks for paid orders with nothing granted.
+     */
+    const creator = await h.createUser({ credits: 2, email: 'sc-dup-creator@example.jp' });
+    const buyer = await h.createUser({ credits: 0, email: 'sc-dup-buyer@example.jp' });
+    const { trackId } = await deliverSong(creator, 'market-song-dup', true);
+    const wallet = '0x5555555555555555555555555555555555555555';
+    // Two wallets, because one wallet holds one open payment at a time — the
+    // rule that makes an incoming transfer unambiguous. Two orders for one
+    // song is reachable from two wallets, and that is the window.
+    const wallet2 = '0x6666666666666666666666666666666666666666';
+    for (const w of [wallet, wallet2]) {
+      await query(`INSERT INTO verified_wallets (user_id, chain_id, address) VALUES (?, 137, ?)`, [buyer.id, w]);
+    }
+    await seedScanCursor(1n);
+
+    const { createStablecoinQuote } = await import('../apps/api/src/services/stablecoin.js');
+    const { grantEntitlementForOrder } = await import('../apps/api/src/services/fulfilment.js');
+    const { getOrder } = await import('@yuha/db');
+
+    const a = await createStablecoinQuote(stablecoinCtx(), {
+      userId: buyer.id,
+      priceKey: 'market_license',
+      idempotencyKey: 'sc-dup-0001',
+      tokenKey: 'jpyc',
+      payer: wallet,
+      trackId,
+    });
+    // A second order for the same song, created before the first delivers —
+    // the window the pre-flight check cannot close.
+    const b = await createStablecoinQuote(stablecoinCtx(), {
+      userId: buyer.id,
+      priceKey: 'market_license',
+      idempotencyKey: 'sc-dup-0002',
+      tokenKey: 'jpyc',
+      payer: wallet2,
+      trackId,
+    });
+
+    const deliver = (orderId: string) =>
+      withTx(async (tx) => grantEntitlementForOrder((await getOrder(orderId, tx))!, tx));
+
+    expect((await deliver(a.orderId)).delivered).toBe(true);
+    const second = await deliver(b.orderId);
+    expect(second.delivered).toBe(false);
+    expect(second.reason).toBe('already_licensed');
+
+    const licences = await query<{ n: number }>(`SELECT COUNT(*) AS n FROM track_licenses WHERE track_id = ?`, [trackId]);
+    expect(Number(licences[0]!.n)).toBe(1);
+    // The one that delivered nothing must NOT read as delivered.
+    const orders = await query<{ id: string; granted: Date | null }>(
+      `SELECT id, entitlement_granted_at AS granted FROM orders WHERE id IN (?, ?)`,
+      [a.orderId, b.orderId],
+    );
+    expect(orders.find((o) => o.id === a.orderId)!.granted).not.toBeNull();
+    expect(orders.find((o) => o.id === b.orderId)!.granted).toBeNull();
+  });
+
+  it('reports a duplicate licence truthfully, which affectedRows cannot', async () => {
+    /*
+     * A driver-level trap worth a test of its own.
+     *
+     * `grantLicense` decided `created` from `affectedRows` on an
+     * `INSERT ... ON DUPLICATE KEY UPDATE id = id`. This driver connects with
+     * CLIENT_FOUND_ROWS, so that statement reports `affectedRows: 1` when it
+     * inserted NOTHING — the flag was always true. Nothing noticed while the
+     * caller discarded it; the moment it was used to detect "already
+     * licensed", the detection would have detected nothing and would have
+     * looked tested. (`INSERT IGNORE` does report 0, which is why the
+     * anti-replay key on the evidence table is sound. The two forms differ,
+     * and a comment claiming "the unique key makes a replay a no-op" was true
+     * of the row and false of the return value.)
+     */
+    const creator = await h.createUser({ credits: 2, email: 'lic-flag-creator@example.jp' });
+    const buyer = await h.createUser({ credits: 0, email: 'lic-flag-buyer@example.jp' });
+    const { trackId } = await deliverSong(creator, 'market-song-flag', true);
+    const { grantLicense, insertOrder, getActiveProduct } = await import('@yuha/db');
+    const product = (await getActiveProduct('market_license'))!;
+
+    const order = (key: string) =>
+      withTx(async (tx) =>
+        insertOrder(
+          {
+            userId: buyer.id,
+            priceKey: product.price_key,
+            priceVersion: product.version,
+            kind: product.kind,
+            amountMinor: product.amount_minor,
+            currency: product.currency,
+            idempotencyKey: key,
+            metadata: { track_id: trackId, creator_id: creator.id },
+            paymentMethod: 'stablecoin',
+          },
+          tx,
+        ),
+      );
+    const insert = (orderId: string) =>
+      withTx(async (tx) =>
+        grantLicense(
+          { trackId, buyerId: buyer.id, creatorId: creator.id, orderId, pricePaid: 980, currency: 'jpy' },
+          tx,
+        ),
+      );
+
+    const first = await order('lic-flag-1');
+    const second = await order('lic-flag-2');
+
+    const a = await insert(first.id);
+    expect(a.created).toBe(true);
+    expect(a.heldByOrderId).toBe(first.id);
+
+    // The same (track, buyer) under a different order: nothing is written,
+    // and that has to be what comes back.
+    const b = await insert(second.id);
+    expect(b.created).toBe(false);
+    expect(b.heldByOrderId).toBe(first.id);
+
+    // A replay of the FIRST order is still "in place", not a duplicate.
+    const replay = await insert(first.id);
+    expect(replay.created).toBe(true);
+
+    const licences = await query<{ n: number }>(`SELECT COUNT(*) AS n FROM track_licenses WHERE track_id = ?`, [trackId]);
+    expect(Number(licences[0]!.n)).toBe(1);
+  });
 
   it('the recovery sweep gives a licence order its licence, not a credit', async () => {
     /*
