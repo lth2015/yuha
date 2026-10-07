@@ -24,6 +24,8 @@ interface NodeState {
   finalized: number | 'unsupported' | 'null' | 'above-latest' | 'equals-latest';
   /** blockNumber -> hash. Missing means the node has no block there. */
   hashes: Record<number, string>;
+  /** Seconds, so one node can be made to disagree about when a block was mined. */
+  timestamp?: number;
   receipts?: Record<string, unknown>;
 }
 
@@ -46,14 +48,14 @@ function fakeNode(label: string, state: NodeState): ChainNode {
                 : state.finalized === 'equals-latest'
                   ? state.latest
                   : state.finalized;
-            return { number: hex(n), hash: state.hashes[n] ?? `0x${'f'.repeat(64)}`, timestamp: hex(1_700_000_000) };
+            return { number: hex(n), hash: state.hashes[n] ?? `0x${'f'.repeat(64)}`, timestamp: hex(state.timestamp ?? 1_700_000_000) };
           }
           if (tag === 'latest') {
-            return { number: hex(state.latest), hash: state.hashes[state.latest]!, timestamp: hex(1_700_000_000) };
+            return { number: hex(state.latest), hash: state.hashes[state.latest]!, timestamp: hex(state.timestamp ?? 1_700_000_000) };
           }
           const n = Number(BigInt(tag));
           const h = state.hashes[n];
-          return h ? { number: hex(n), hash: h, timestamp: hex(1_700_000_000) } : null;
+          return h ? { number: hex(n), hash: h, timestamp: hex(state.timestamp ?? 1_700_000_000) } : null;
         }
         case 'eth_getTransactionReceipt':
           return state.receipts?.[params[0] as string] ?? null;
@@ -145,14 +147,14 @@ describe('two nodes on finality', () => {
   });
 });
 
-describe('two nodes on a block hash', () => {
+describe('two nodes on a block header', () => {
   it('agrees when they are on the same chain', async () => {
     const r = new DualChainReader(
       fakeNode('primary', { latest: 300, finalized: 280, hashes: { 250: H('a'), 300: H('2') } }),
       fakeNode('secondary', { latest: 300, finalized: 280, hashes: { 250: H('a'), 300: H('2') } }),
     );
-    const a = await r.canonicalHashAt(250n);
-    expect(a.agreed && a.value).toBe(H('a'));
+    const a = await r.agreedHeader(250n);
+    expect(a.agreed && a.value.hash).toBe(H('a'));
   });
 
   it('holds on disagreement — this one IS equality, because it is not timing', async () => {
@@ -162,9 +164,26 @@ describe('two nodes on a block hash', () => {
       fakeNode('primary', { latest: 300, finalized: 280, hashes: { 250: H('a'), 300: H('2') } }),
       fakeNode('secondary', { latest: 300, finalized: 280, hashes: { 250: H('b'), 300: H('2') } }),
     );
-    const held = await r.canonicalHashAt(250n);
+    const held = await r.agreedHeader(250n);
     expect(held.agreed).toBe(false);
     expect(!held.agreed && held.reason).toMatch(/disagree about block 250/);
+  });
+
+  it('holds when they disagree about WHEN the block was mined', async () => {
+    /*
+     * The timestamp is not decoration: a quote's expiry is judged on the
+     * inclusion block's time, so a node able to backdate a header could turn a
+     * late payment into a fulfilled one. This method returned only the hash
+     * until an adversarial review demonstrated exactly that, with the header
+     * the caller then used coming from one node.
+     */
+    const r = new DualChainReader(
+      fakeNode('primary', { latest: 300, finalized: 280, hashes: { 250: H('a'), 300: H('2') } }),
+      fakeNode('secondary', { latest: 300, finalized: 280, hashes: { 250: H('a'), 300: H('2') }, timestamp: 1_500_000_000 }),
+    );
+    const held = await r.agreedHeader(250n);
+    expect(held.agreed).toBe(false);
+    expect(!held.agreed && held.reason).toMatch(/disagree about when block 250 was mined/);
   });
 
   it('holds when one node has no block at that height', async () => {
@@ -172,7 +191,7 @@ describe('two nodes on a block hash', () => {
       fakeNode('primary', { latest: 300, finalized: 280, hashes: { 250: H('a'), 300: H('2') } }),
       fakeNode('secondary', { latest: 240, finalized: 230, hashes: { 240: H('c') } }),
     );
-    const held = await r.canonicalHashAt(250n);
+    const held = await r.agreedHeader(250n);
     expect(held.agreed).toBe(false);
     expect(!held.agreed && held.reason).toMatch(/no block at 250/);
   });

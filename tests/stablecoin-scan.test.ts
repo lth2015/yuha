@@ -49,6 +49,14 @@ interface Fake {
    * receipts say. One node reorged and the other has not yet.
    */
   indexHash?: Record<number, string>;
+  /** Answers eth_getTransactionByHash with a different hash than asked for. */
+  liesAboutTxHash?: string;
+  /** Answers eth_getTransactionByHash with a block number that is not real. */
+  liesAboutTxBlock?: number;
+  /** Backdates the header it serves, to make an expired quote look live. */
+  liesAboutBlockTime?: number;
+  /** Claims a different log index in eth_getLogs than its receipt contains. */
+  liesAboutLogIndex?: number;
 }
 
 function node(label: string, f: Fake): ChainNode {
@@ -79,7 +87,7 @@ function node(label: string, f: Fake): ChainNode {
           }
           const n = tag === 'latest' ? f.latest : Number(BigInt(tag));
           const hash = f.indexHash?.[n] ?? f.hashes[n];
-          return hash ? { number: hex(n), hash, timestamp: hex(1_760_000_000) } : null;
+          return hash ? { number: hex(n), hash, timestamp: hex(f.liesAboutBlockTime ?? 1_760_000_000) } : null;
         }
         case 'eth_getLogs': {
           if (!f.transfer) return [];
@@ -89,18 +97,23 @@ function node(label: string, f: Fake): ChainNode {
           // A real node answers only within the range it was given. A fake
           // that ignores it tests the scanner's own out-of-window filter by
           // accident and hides everything else.
-          return f.transfer.block >= from && f.transfer.block <= to ? [logFor(f.transfer)] : [];
+          if (f.transfer.block < from || f.transfer.block > to) return [];
+          return [
+            f.liesAboutLogIndex === undefined
+              ? logFor(f.transfer)
+              : { ...logFor(f.transfer), logIndex: hex(f.liesAboutLogIndex) },
+          ];
         }
         case 'eth_getTransactionByHash':
           return f.transfer
             ? {
-                hash: TX,
+                hash: f.liesAboutTxHash ?? TX,
                 from: PAYER,
                 to: JPYC,
                 value: '0x0',
                 input: encodeTransferCalldata(f.transfer.to ?? RECEIVER, f.transfer.amount),
                 nonce: hex(7),
-                blockNumber: hex(f.transfer.block),
+                blockNumber: hex(f.liesAboutTxBlock ?? f.transfer.block),
                 blockHash: f.hashes[f.transfer.block]!,
                 chainId: hex(137),
               }
@@ -508,5 +521,129 @@ describe('a customer reporting a transaction hash', () => {
 
     await runStablecoinScanPass(h.ctx, pair(good()), silent);
     expect((await balanceOf(user.id)).available).toBe(5);
+  });
+});
+
+describe('a primary node that lies', () => {
+  /*
+   * Every case here came from an independent adversarial review with a working
+   * proof of concept, not from imagining what might go wrong. All three were
+   * real: the suite was fully green while each of them worked.
+   *
+   * The common root was one function taking the whole transaction body from
+   * the primary and passing it through, while its own comment said every field
+   * that mattered was re-checked against the agreed receipt.
+   */
+  it('cannot make one payment pay for a second order by renaming it', async () => {
+    /*
+     * `(chain_id, tx_hash, log_index)` is the only thing stopping one transfer
+     * being claimed twice. Two parts were agreed between the nodes; the hash
+     * came from the primary's response body and was never compared with the
+     * hash that had been asked about. One real payment bought three orders in
+     * the reviewer's proof.
+     *
+     * One wallet throughout, because a wallet belongs to one account and
+     * holds one open intent — which is the shape the attack had to work in.
+     */
+    const { user } = await quoted('lie-hash@example.jp');
+    await runStablecoinScanPass(h.ctx, pair(good()), silent);
+    expect((await balanceOf(user.id)).available).toBe(5);
+
+    // The same wallet, a second order; its intent is open again because the
+    // first one closed on settlement.
+    const second = await h.app.inject({
+      method: 'POST',
+      url: '/v1/payments/stablecoin/quote',
+      headers: { ...user.authHeader, ...freshIp() },
+      payload: {
+        priceKey: 'drop_5',
+        idempotencyKey: 'lie-hash-second-order',
+        tokenKey: 'jpyc',
+        payer: accountA.address,
+      } as never,
+    });
+    expect(second.statusCode).toBe(200);
+
+    // The cursor has moved past that block, so it is wound back: re-reading a
+    // range already scanned is what the overlap and every restart do, and it
+    // is the situation the attack needs — the same real transfer seen again.
+    await query(`DELETE FROM chain_cursors`);
+    const renaming = good({ liesAboutTxHash: `0x${'cd'.repeat(32)}` });
+    const pass = await runStablecoinScanPass(h.ctx, pair(renaming, good()), silent);
+
+    expect(pass.heldAt?.reason).toMatch(/asked about .* and was told about/);
+    // Still five: the one real payment bought one order and no more.
+    expect((await balanceOf(user.id)).available).toBe(5);
+    const evidence = await query<{ n: number }>(`SELECT COUNT(*) AS n FROM chain_transfer_events`);
+    expect(Number(evidence[0]!.n)).toBe(1);
+  });
+
+  it('cannot get an unfinalized payment settled by reporting a lower block', async () => {
+    /*
+     * The finality gate compared `tx.blockNumber`, which was the primary's
+     * word, while the agreed receipt's block number went unread. The whole
+     * reorg defence is "only settle finalized blocks"; this went around it.
+     *
+     * Through the REPORT endpoint, not the scan: the scan's window is itself
+     * bounded by the finalized head, so it never looks at an unfinalized
+     * block and the attack cannot reach it there. The first version of this
+     * test used the scan and proved nothing — it passed with the defect
+     * reintroduced.
+     */
+    const { user, orderId } = await quoted('lie-block@example.jp');
+    const unfinalized = good({ finalized: 990, transfer: { block: 1_000, amount: AMOUNT, logIndex: 2 } });
+
+    // Honest: the payment is above the finalized head, so it waits.
+    h.ctx.chain = pair(unfinalized);
+    const honest = await h.app.inject({
+      method: 'POST',
+      url: `/v1/orders/${orderId}/stablecoin-transaction`,
+      headers: { ...user.authHeader, ...freshIp() },
+      payload: { txHash: TX } as never,
+    });
+    expect(honest.json().outcome).not.toBe('fulfilled');
+    expect((await balanceOf(user.id)).available).toBe(0);
+
+    // Lying: the same payment, reported as if it were in an older block.
+    h.ctx.chain = pair(good({ ...unfinalized, liesAboutTxBlock: 900 }), unfinalized);
+    const lying = await h.app.inject({
+      method: 'POST',
+      url: `/v1/orders/${orderId}/stablecoin-transaction`,
+      headers: { ...user.authHeader, ...freshIp() },
+      payload: { txHash: TX } as never,
+    });
+    expect(lying.json().outcome).not.toBe('fulfilled');
+    expect((await balanceOf(user.id)).available).toBe(0);
+  });
+
+  it('cannot revive an expired quote by backdating the block it was mined in', async () => {
+    /*
+     * Expiry is judged on the inclusion block's timestamp, and the header came
+     * from the primary alone. `agreedHeader` now compares the timestamp as
+     * well as the hash, because the timestamp is not decoration here.
+     */
+    const { user, orderId } = await quoted('lie-time@example.jp');
+    await query(`UPDATE stablecoin_quotes SET expires_at = '2020-01-01 00:00:00' WHERE order_id = ?`, [orderId]);
+
+    const backdating = good({ liesAboutBlockTime: 1_500_000_000 });
+    const pass = await runStablecoinScanPass(h.ctx, pair(backdating, good()), silent);
+    expect(pass.settled.map((s) => s.kind)).not.toContain('fulfilled');
+    expect((await balanceOf(user.id)).available).toBe(0);
+  });
+
+  it('cannot point the scanner at a log the agreed receipt does not contain', async () => {
+    /*
+     * In the scan path the log index comes from the primary's eth_getLogs,
+     * while the receipt both nodes agree on contains a different one. The
+     * first version of this test changed the index in the receipt too, so
+     * `agreedReceipt` refused it and the scanner's own tie-back was never
+     * exercised — it passed with the tie-back deleted.
+     */
+    const { user } = await quoted('lie-logindex@example.jp');
+    const ghost = good({ liesAboutLogIndex: 9 });
+    const pass = await runStablecoinScanPass(h.ctx, pair(ghost, good()), silent);
+    expect(pass.settled.map((s) => s.kind)).not.toContain('fulfilled');
+    expect(pass.heldAt?.reason).toMatch(/no log at index 9/);
+    expect((await balanceOf(user.id)).available).toBe(0);
   });
 });

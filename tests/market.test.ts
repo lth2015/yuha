@@ -127,6 +127,88 @@ describe('lyric alignment provenance', () => {
 
 describe('market licensing', () => {
 
+  /**
+   * The quote service reads only `ctx.config`, so this is a context with the
+   * stablecoin switches on rather than a second server — one server per file
+   * is enough, and the wallet-verification route is not what is under test.
+   */
+  const stablecoinCtx = () =>
+    ({
+      ...h.ctx,
+      config: {
+        ...h.ctx.config,
+        STABLECOIN_ENABLED: true,
+        STABLECOIN_JPYC_ENABLED: true,
+        STABLECOIN_RECEIVER_ADDRESS: '0x9999999999999999999999999999999999999999',
+      },
+    }) as typeof h.ctx;
+
+  it('a licence bought in stablecoin carries the author, so delivery does not throw', async () => {
+    /*
+     * The stablecoin quote wrote `track_id` and not `creator_id`, and
+     * `grantEntitlementForOrder` throws without both. A licence bought in
+     * JPYC took the money, confirmed the intent, marked the order paid, and
+     * threw on delivery — and the recovery sweep re-ran the same code and
+     * threw again, forever. Found by an adversarial review with a working
+     * proof while the whole suite was green.
+     */
+    const creator = await h.createUser({ credits: 2 });
+    const buyer = await h.createUser({ credits: 0, email: 'sc-licence-buyer@example.jp' });
+    const { trackId } = await deliverSong(creator, 'market-song-sc', true);
+
+    const wallet = '0x2222222222222222222222222222222222222222';
+    await query(`INSERT INTO verified_wallets (user_id, chain_id, address) VALUES (?, 137, ?)`, [buyer.id, wallet]);
+
+    const { createStablecoinQuote } = await import('../apps/api/src/services/stablecoin.js');
+    const quote = await createStablecoinQuote(stablecoinCtx(), {
+      userId: buyer.id,
+      priceKey: 'market_license',
+      idempotencyKey: 'sc-licence-0001',
+      tokenKey: 'jpyc',
+      payer: wallet,
+      trackId,
+    });
+
+    const order = await query<{ metadata: Record<string, unknown> }>(`SELECT metadata FROM orders WHERE id = ?`, [
+      quote.orderId,
+    ]);
+    expect(order[0]!.metadata['track_id']).toBe(trackId);
+    expect(order[0]!.metadata['creator_id']).toBe(creator.id);
+
+    // And delivery actually works, which is the thing that did not.
+    const { grantEntitlementForOrder } = await import('../apps/api/src/services/fulfilment.js');
+    const { getOrder } = await import('@yuha/db');
+    await withTx(async (tx) => {
+      const row = (await getOrder(quote.orderId, tx))!;
+      await grantEntitlementForOrder(row, tx);
+    });
+    const licences = await query<{ n: number }>(`SELECT COUNT(*) AS n FROM track_licenses WHERE order_id = ?`, [
+      quote.orderId,
+    ]);
+    expect(Number(licences[0]!.n)).toBe(1);
+  });
+
+  it('refuses a stablecoin licence for your own song, like the card path', async () => {
+    const creator = await h.createUser({ credits: 2, email: 'sc-own-song@example.jp' });
+    const { trackId } = await deliverSong(creator, 'market-song-own', true);
+    await query(`INSERT INTO verified_wallets (user_id, chain_id, address) VALUES (?, 137, ?)`, [
+      creator.id,
+      '0x3333333333333333333333333333333333333333',
+    ]);
+    const { createStablecoinQuote } = await import('../apps/api/src/services/stablecoin.js');
+    await expect(
+      createStablecoinQuote(stablecoinCtx(), {
+        userId: creator.id,
+        priceKey: 'market_license',
+        idempotencyKey: 'sc-own-0001',
+        tokenKey: 'jpyc',
+        payer: '0x3333333333333333333333333333333333333333',
+        trackId,
+      }),
+    ).rejects.toThrow(/your own song/);
+  });
+
+
   it('the recovery sweep gives a licence order its licence, not a credit', async () => {
     /*
      * `recoverUngrantedOrders` granted credits inline, filtered on

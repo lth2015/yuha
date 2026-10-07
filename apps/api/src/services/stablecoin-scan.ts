@@ -209,7 +209,14 @@ export async function settleReportedTransaction(
     return { kind: 'not_found', reason: 'that transaction does not pay this service' };
   }
 
-  const observation = await observationFor(reader, transfer);
+  /*
+   * The hash the customer reported, not the one the primary put in the log it
+   * returned. `observationFor` keys the evidence on `transfer.txHash`, and a
+   * primary free to choose it could have one real payment claimed by any
+   * number of orders — the evidence unique key is the only thing stopping
+   * that, and two of its three parts are agreed while this one was not.
+   */
+  const observation = await observationFor(reader, { ...transfer, txHash: txHash.toLowerCase() });
   if (!observation.ok) return { kind: 'not_found', reason: observation.reason };
   return settleStablecoinObservation(ctx, observation.value);
 }
@@ -223,37 +230,73 @@ export async function settleReportedTransaction(
  * amount — is checked again against the Transfer log in the agreed receipt.
  */
 async function observationFor(reader: DualChainReader, transfer: IncomingTransfer): Promise<Observation> {
-  const tx = await reader.primary.transaction(transfer.txHash);
-  if (!tx) return { ok: false, reason: 'the primary no longer has that transaction' };
-  if (tx.blockNumber === null || tx.blockHash === null) {
-    return { ok: false, reason: 'the transaction is no longer in a block' };
-  }
-
+  /*
+   * The receipt first, because it is the only thing here both nodes agree on
+   * that also names a block — and everything else is pinned to it.
+   *
+   * What this function used to do: take the whole transaction body from the
+   * primary and pass it through untouched. Three fields of that body decide
+   * money, and none of them were checked against anything.
+   *
+   *   `hash`        is two thirds of the evidence unique key, so a primary
+   *                 returning a different hash for the same transaction made
+   *                 one real payment claimable by unlimited orders.
+   *   `blockNumber` is what the finality gate compares against, so a primary
+   *                 reporting a lower number had an unfinalized payment
+   *                 fulfilled — defeating the entire reorg defence, which is
+   *                 "only settle finalized blocks" and nothing else.
+   *   `blockHash`   was likewise unchecked.
+   *
+   * The comment on this function claimed every field that matters was checked
+   * again against the agreed receipt. It was not; two independent reviews
+   * demonstrated both with working proofs. They are taken from the agreed
+   * receipt now, and the primary's body is used only for the fields the
+   * verifier re-derives from the agreed log anyway.
+   */
   const receipt = await reader.agreedReceipt(transfer.txHash);
   if (!receipt.agreed) return { ok: false, reason: receipt.reason };
 
-  const canonical = await reader.canonicalHashAt(receipt.value.blockNumber);
-  if (!canonical.agreed) return { ok: false, reason: canonical.reason };
+  /*
+   * The evidence log must be IN the agreed receipt, at the index claimed.
+   *
+   * In the scan path `transfer` comes from the primary's eth_getLogs, so its
+   * hash and log index are the primary's word. Both nodes being asked for the
+   * receipt of that hash is what makes the content agreed — but nothing tied
+   * the log the scanner found to a log the receipt actually contains.
+   */
+  const inReceipt = receipt.value.logs.some(
+    (l) => l.logIndex === transfer.logIndex && l.transactionHash === transfer.txHash.toLowerCase(),
+  );
+  if (!inReceipt) {
+    return { ok: false, reason: `no log at index ${transfer.logIndex} in the agreed receipt for ${transfer.txHash}` };
+  }
+
+  const tx = await reader.primary.transaction(transfer.txHash);
+  if (!tx) return { ok: false, reason: 'the primary no longer has that transaction' };
+  if (tx.hash !== transfer.txHash.toLowerCase()) {
+    // A node answering about a different transaction than the one asked for.
+    return { ok: false, reason: `asked about ${transfer.txHash} and was told about ${tx.hash}` };
+  }
+
+  // The whole header, agreed: the hash because a reorg moves it, the
+  // timestamp because quote expiry is judged on it.
+  const header = await reader.agreedHeader(receipt.value.blockNumber);
+  if (!header.agreed) return { ok: false, reason: header.reason };
+
   /*
    * The receipt's block must still BE the block at that height.
    *
    * After a reorg a node can keep serving the old receipt — same status, same
    * logs, same block number, and a block hash that is no longer on the chain.
    * Both nodes agreeing on that stale receipt is not reassurance; they can
-   * both be serving the same stale copy. Without this comparison the evidence
-   * reaching the verifier is internally consistent and historically wrong:
-   * `block` and `canonicalBlockHashAtHeight` would both be the NEW hash, so
-   * the verifier's own reorg check sees them agree and passes the payment.
+   * both be serving the same stale copy.
    */
-  if (receipt.value.blockHash !== canonical.value) {
+  if (receipt.value.blockHash !== header.value.hash) {
     return {
       ok: false,
-      reason: `the receipt names block ${receipt.value.blockHash}, but ${canonical.value} is at that height now`,
+      reason: `the receipt names block ${receipt.value.blockHash}, but ${header.value.hash} is at that height now`,
     };
   }
-
-  const header = await reader.primary.blockAt(receipt.value.blockNumber);
-  if (!header) return { ok: false, reason: 'the primary has no header for that block' };
 
   const finalized = await reader.finalizedHeight();
   if (!finalized.agreed) return { ok: false, reason: finalized.reason };
@@ -263,7 +306,8 @@ async function observationFor(reader: DualChainReader, transfer: IncomingTransfe
     ok: true,
     value: {
       transaction: {
-        hash: tx.hash,
+        // The hash we asked about, not the one we were told.
+        hash: transfer.txHash.toLowerCase(),
         // A node may omit chainId on the transaction; the node's own
         // eth_chainId is what the scanner was configured against, and the
         // verifier compares it to the quote.
@@ -273,8 +317,10 @@ async function observationFor(reader: DualChainReader, transfer: IncomingTransfe
         value: tx.value,
         input: tx.input,
         nonce: tx.nonce,
-        blockNumber: tx.blockNumber,
-        blockHash: tx.blockHash,
+        // From the AGREED receipt. These decide finality and the start-block
+        // bound; the primary does not get to choose them.
+        blockNumber: receipt.value.blockNumber,
+        blockHash: receipt.value.blockHash,
       },
       receipt: {
         status: receipt.value.status,
@@ -292,8 +338,8 @@ async function observationFor(reader: DualChainReader, transfer: IncomingTransfe
           logIndex: t.logIndex,
           blockNumber: t.blockNumber,
         })),
-      block: { number: header.number, hash: header.hash, timestampMs: header.timestampMs },
-      canonicalBlockHashAtHeight: canonical.value,
+      block: header.value,
+      canonicalBlockHashAtHeight: header.value.hash,
       finalizedBlockNumber: finalized.value,
     },
   };

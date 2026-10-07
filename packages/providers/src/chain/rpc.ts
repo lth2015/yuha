@@ -273,8 +273,16 @@ export class DualChainReader {
     return { agreed: true, value: a.height < b.height ? a.height : b.height };
   }
 
-  /** The hash at a height, only when both nodes say the same thing. */
-  async canonicalHashAt(height: bigint): Promise<Agreement<string>> {
+  /**
+   * The whole header at a height, only when both nodes say the same thing.
+   *
+   * The TIMESTAMP is compared as well as the hash, because it is not
+   * decoration: a quote's expiry is judged on the inclusion block's time, so a
+   * single node able to backdate a header could turn a late payment into a
+   * fulfilled one. This used to return only the hash, and the header the
+   * caller then used came from the primary alone.
+   */
+  async agreedHeader(height: bigint): Promise<Agreement<BlockHeader>> {
     const [a, b] = await Promise.all([this.primary.blockAt(height), this.secondary.blockAt(height)]);
     if (!a || !b) {
       const missing = !a ? this.primary.label : this.secondary.label;
@@ -286,7 +294,13 @@ export class DualChainReader {
         reason: `the nodes disagree about block ${height}: ${this.primary.label} ${a.hash}, ${this.secondary.label} ${b.hash}`,
       };
     }
-    return { agreed: true, value: a.hash };
+    if (a.timestampMs !== b.timestampMs) {
+      return {
+        agreed: false,
+        reason: `the nodes disagree about when block ${height} was mined: ${a.timestampMs} vs ${b.timestampMs}`,
+      };
+    }
+    return { agreed: true, value: a };
   }
 
   /**

@@ -26,6 +26,7 @@ import {
   type TokenSpec,
 } from '@yuha/providers';
 import type { AppContext } from '../context.js';
+import { getPublicTrack, hasLicense } from '@yuha/db';
 
 /**
  * Quoting a stablecoin payment, and handing the wallet the exact transfer to
@@ -125,6 +126,34 @@ export async function createStablecoinQuote(
   if (!QUOTABLE_PRODUCTS.has(params.priceKey)) {
     throw new AppError('VALIDATION_FAILED', 'that product cannot be paid for in stablecoin yet');
   }
+
+  /*
+   * A licence sale needs the track AND its author on the order.
+   *
+   * This path wrote neither `creator_id` nor any of the checks the card path
+   * makes, and `grantEntitlementForOrder` throws without both — so a licence
+   * bought in JPYC took the money, confirmed the intent, marked the order
+   * paid, and then threw on delivery. Nothing retried it: the recovery sweep
+   * re-ran the same code and threw again.
+   *
+   * The checks are the card path's, for the same reasons: a track that does
+   * not exist cannot be licensed, your own song is not a purchase, and a
+   * second licence for a song you already hold would be money taken for a row
+   * `track_licenses` refuses to write twice.
+   */
+  let licensedTrack: { id: string; ownerId: string } | undefined;
+  if (params.priceKey === 'market_license') {
+    if (!params.trackId) throw new AppError('VALIDATION_FAILED', 'a licence needs a song');
+    const track = await getPublicTrack(params.trackId);
+    if (!track) throw new AppError('NOT_FOUND', 'song not found on the market');
+    if (track.owner_id === params.userId) {
+      throw new AppError('CONFLICT', 'this is your own song — creators license their work to others');
+    }
+    if (await hasLicense(params.trackId, params.userId)) {
+      throw new AppError('CONFLICT', 'you already hold a license for this song');
+    }
+    licensedTrack = { id: track.id, ownerId: track.owner_id };
+  }
   const product = await getActiveProduct(params.priceKey);
   if (!product || !product.active) throw new AppError('NOT_FOUND', 'that product is not available');
   if (product.currency !== 'jpy') {
@@ -173,7 +202,10 @@ export async function createStablecoinQuote(
           metadata: {
             units: product.units,
             validity_days: product.validity_days,
-            ...(params.trackId ? { track_id: params.trackId } : {}),
+            // Both, or neither: `grantEntitlementForOrder` refuses a licence
+            // order carrying only one of them, and that refusal arrives after
+            // the money has already been taken.
+            ...(licensedTrack ? { track_id: licensedTrack.id, creator_id: licensedTrack.ownerId } : {}),
           },
           paymentMethod: 'stablecoin',
         },

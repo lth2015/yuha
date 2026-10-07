@@ -1272,6 +1272,39 @@ export async function recoverUngrantedOrders(ctx: AppContext): Promise<number> {
   let repaired = 0;
   for (const order of orders) {
     /*
+     * One order's failure must not end the sweep — the same rule the two
+     * loops above state, and the one this loop did not follow.
+     *
+     * A stablecoin licence order was written without `creator_id`, so
+     * `grantEntitlementForOrder` threw for it; with no guard here that single
+     * row stopped the sweep for every other paid-but-undelivered order, card
+     * and chain alike, on every run, for good. The metadata bug is fixed, and
+     * this is the reason it could not have been contained.
+     */
+    try {
+      repaired += (await recoverOneOrder(order)) ? 1 : 0;
+    } catch (err) {
+      /*
+       * `.catch(() => undefined)` for the same reason the sibling sweep gives:
+       * a reporter that throws here would propagate out of the per-order try
+       * and silence the sweep for every order behind this one — the error path
+       * reintroducing the failure the isolation exists to contain.
+       */
+      await trackEvent({
+        name: 'order_recovery_failed',
+        userRef: order.user_id,
+        props: { order_id: order.id, price_key: order.price_key, error: describeError(err) },
+        runMode: ctx.config.mode,
+        isInternal: ctx.config.isDemo,
+      }).catch(() => undefined);
+    }
+  }
+  return repaired;
+}
+
+async function recoverOneOrder(order: OrderRow): Promise<boolean> {
+  {
+    /*
      * The same `grantEntitlementForOrder` both payment channels run.
      *
      * This used to grant credits inline, filtered on `product.kind !==
@@ -1287,13 +1320,12 @@ export async function recoverUngrantedOrders(ctx: AppContext): Promise<number> {
      * leaves exactly the row this query selects.
      */
     const product = await getProductVersion(order.price_key, order.price_version);
-    if (!product) continue;
-    if (product.kind !== 'one_time') continue;
+    if (!product) return false;
+    if (product.kind !== 'one_time') return false;
+    const before = order.entitlement_granted_at;
     await withTx(async (tx) => {
-      const before = order.entitlement_granted_at;
       await grantEntitlementForOrder(order, tx);
-      if (!before) repaired += 1;
     });
+    return !before;
   }
-  return repaired;
 }
