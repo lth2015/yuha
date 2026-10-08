@@ -457,6 +457,52 @@ const envSchema = z.object({
   AUDIO_MIN_BYTES: int(8_000),
   EXPIRED_BATCH_COMPENSATION_DAYS: int(30),
 
+  // --- credits an operator gives away -----------------------------------
+  /*
+   * A credit is a generation, and a generation is provider cost. So an
+   * operator who can gift without limit can spend real money without limit,
+   * and the three numbers below are what bounds that rather than trust.
+   *
+   * The per-gift cap is the typing-mistake guard: 500 instead of 50 is one
+   * keystroke. The daily cap is the account-compromise guard, and it is the
+   * one that matters — a per-gift cap alone bounds nothing, because fifty
+   * gifts of fifty is still two and a half thousand. The validity is so a
+   * giveaway clears off the books instead of sitting there as a liability
+   * nobody remembers agreeing to.
+   */
+  /** Most units one gift may carry. **0 switches gifting off entirely.** */
+  ADMIN_GRANT_MAX_UNITS: int(100),
+  /**
+   * Most units one operator may give away in a rolling day.
+   *
+   * **0 means NO DAILY LIMIT**, not "no gifting" — the opposite of the zero
+   * above it, which is why this says so twice. The two were documented with
+   * the same four words ("0 disables"), and `docs/OPERATIONS.md` calls this
+   * the limit that matters if an operator account is compromised: the one
+   * setting somebody would reach for to tighten it instead removed it.
+   * Negative values are refused in `validate` rather than quietly meaning the
+   * same thing.
+   */
+  ADMIN_GRANT_MAX_UNITS_PER_DAY: int(500),
+  /**
+   * How long gifted credits last, in days, and the ceiling an operator may
+   * narrow to. Must be at least 1: zero made every gift fail with "validity
+   * must be between 1 and 0 days".
+   */
+  ADMIN_GRANT_VALIDITY_DAYS: int(90),
+  /**
+   * Most units one operator may compensate in a rolling day. 0 means no daily
+   * limit, as above.
+   *
+   * Compensation is capped at 20 per call and was capped at nothing per day,
+   * while the gift path's daily cap was described as the protection against a
+   * compromised operator account. Bounded per call is not bounded: twenty at a
+   * time, repeated, is unbounded, and compensation is open to `support` where
+   * gifting is not. Set higher than the gift allowance because a real outage
+   * means compensating many people at once.
+   */
+  ADMIN_COMPENSATION_MAX_UNITS_PER_DAY: int(2000),
+
   // --- legal disclosure (SEC-13) -----------------------------------------
   LEGAL_ENTITY_NAME: z.string().optional(),
   LEGAL_ENTITY_REPRESENTATIVE: z.string().optional(),
@@ -681,8 +727,15 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
      * tried to buy a licence first. All four products are live in the Stripe
      * dashboard (DROP, Licence, CREATOR, STUDIO); the list below is the same
      * four, and `tests/stripe-webhook-path.test.ts` holds a scripted
-     * invariant that `seed.ts` and this list name the same set, because the
-     * next product added is the next one to be missing here.
+     * invariant that `catalogue.ts` and this list name the same set, because
+     * the next product added is the next one to be missing here.
+     *
+     * Note what is NOT required unconditionally: the two subscription ids are
+     * needed only when `FEATURE_SUBSCRIPTIONS_ENABLED`, because a deployment
+     * with subscriptions closed cannot sell them. Anything that checks these
+     * ids has to know that — the Stripe price check in `seed.ts` treated a
+     * missing id as fatal and so refused to seed the documented
+     * stripe-with-subscriptions-off configuration.
      */
     if (!e.STRIPE_PRICE_ID_DROP_5) problems.push('STRIPE_PRICE_ID_DROP_5 is required for the stripe payments adapter');
     if (!e.STRIPE_PRICE_ID_MARKET_LICENSE) {
@@ -769,6 +822,25 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
         'the demo adapter produces MP3 only',
     );
   }
+  /*
+   * A negative limit is not a smaller limit.
+   *
+   * `int()` accepts any integer, and every one of these is compared with
+   * `> 0` to decide whether it applies — so `-1` reads as "no limit", which
+   * is the opposite of what anybody typing a minus sign intends. Refused by
+   * name rather than clamped, because clamping would hide the typo.
+   */
+  for (const key of [
+    'ADMIN_GRANT_MAX_UNITS',
+    'ADMIN_GRANT_MAX_UNITS_PER_DAY',
+    'ADMIN_COMPENSATION_MAX_UNITS_PER_DAY',
+  ] as const) {
+    if (e[key] < 0) problems.push(`${key} cannot be negative (0 is the documented way to switch it off)`);
+  }
+  if (e.ADMIN_GRANT_VALIDITY_DAYS < 1) {
+    problems.push('ADMIN_GRANT_VALIDITY_DAYS must be at least 1 — zero makes every gift impossible rather than permanent');
+  }
+
   if (e.STABLECOIN_ENABLED) {
     if (!e.STABLECOIN_RECEIVER_ADDRESS) {
       problems.push('STABLECOIN_RECEIVER_ADDRESS is required when stablecoin payments are enabled');

@@ -230,6 +230,53 @@ export class StripePaymentsAdapter implements PaymentsAdapter {
     };
   }
 
+  /**
+   * Reads a configured Price back, so somebody can check it is the one they
+   * meant.
+   *
+   * The product is expanded because the useful error is "that id is CREATOR,
+   * and you put it in the STUDIO slot", not "amount 1980 != 3980". Our
+   * environment variable names come from internal price keys
+   * (STRIPE_PRICE_ID_PRO_MONTHLY) and the dashboard shows marketing names
+   * (CREATOR), so the two are easy to pair up wrongly and the name is what
+   * makes the mismatch obvious.
+   */
+  async retrievePrice(priceId: string) {
+    try {
+      const p = await this.stripe.prices.retrieve(priceId, { expand: ['product'] });
+      const product = p.product;
+      return {
+        id: p.id,
+        active: p.active,
+        // `unit_amount` is null for tiered or metered Prices, which this
+        // catalogue cannot express. Reported as null and treated as a
+        // mismatch rather than skipped.
+        amountMinor: p.unit_amount ?? null,
+        currency: p.currency,
+        interval: p.recurring?.interval ?? null,
+        intervalCount: p.recurring?.interval_count ?? null,
+        taxBehavior: p.tax_behavior ?? null,
+        productId: typeof product === 'string' ? product : (product?.id ?? null),
+        productName:
+          typeof product === 'string' || !product || product.deleted ? null : product.name,
+      };
+    } catch (err) {
+      /*
+       * `null` means "Stripe says there is no such Price", and nothing else.
+       *
+       * A bare `catch { return null }` turned a network error, an expired key,
+       * a 429 and a Stripe outage into the same answer — which the caller
+       * renders as "wrong account, wrong mode, or a deleted Price" and the
+       * seed then exits on, telling an operator to fix four ids that are
+       * perfectly correct. Only `invalid_request_error` is actually about the
+       * id; everything else is rethrown so the caller can say it could not
+       * check rather than inventing a diagnosis.
+       */
+      if ((err as { type?: string }).type === 'StripeInvalidRequestError') return null;
+      throw err;
+    }
+  }
+
   async retrieveBalanceTransaction(id: string) {
     try {
       const bt = await this.stripe.balanceTransactions.retrieve(id);

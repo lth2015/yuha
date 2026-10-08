@@ -193,6 +193,64 @@ after state.
 Most cases need no intervention: technical failure, provider rejection, failed
 output checks and verification timeouts all release the credit automatically.
 
+### Compensation is not a gift
+
+Compensation says, in the ledger, that we broke something and are putting it
+right. It is capped at 20 units per call, at
+`ADMIN_COMPENSATION_MAX_UNITS_PER_DAY` per operator per rolling day, and dated
+by `EXPIRED_BATCH_COMPENSATION_DAYS`. The daily total was added late: capped
+per call is not capped, and this route is open to `support`, which is the
+wider of the two doors. If what you actually want is to **give**
+somebody credits — a friend trying the product, an apology that is not for a
+technical failure, a small giveaway — use §6a instead. Routing a giveaway
+through this endpoint would say in the books that a failure happened, and
+"how much have we given away" would stop having an answer.
+
+---
+
+## 6a. Giving credits to somebody
+
+In the console: the **Customers and credits** panel on `/admin`, below the
+overview, cost, revenue and rights-case sections. Search by email, open the
+account, read where the credits they already hold came from and when they
+expire, then enter a number and a reason.
+
+This screen exists because none of it did. The only route that granted units
+took a user UUID in its path, there was no way anywhere in the product to turn
+an email address into that UUID, and `services/purchase-cap.ts` meanwhile
+assured the reader that an operator "can issue credits directly from the
+console" — offering that as the reason not to worry about the purchase cap
+stopping a real customer. The escape hatch was not there.
+
+By API, if you have the account id already:
+
+```bash
+curl -X POST https://$HOST/v1/admin/users/$USER_ID/grant \
+  -H "Authorization: Bearer $ADMIN" -H 'content-type: application/json' \
+  -d '{"units": 50, "reason": "friend trying the product"}'
+```
+
+What it will refuse, and why each one exists:
+
+| Refusal | Reason |
+| --- | --- |
+| more than `ADMIN_GRANT_MAX_UNITS` (100) in one gift | 500 instead of 50 is one keystroke |
+| more than `ADMIN_GRANT_MAX_UNITS_PER_DAY` (500) **per operator** | the per-gift cap bounds nothing on its own — fifty gifts of fifty is still two and a half thousand generations of provider cost. This is the limit that matters if an operator account is compromised |
+| a validity longer than `ADMIN_GRANT_VALIDITY_DAYS` (90) | a giveaway that never expires is a liability nobody remembers agreeing to. You may shorten it per gift, never lengthen it |
+| a suspended account | somebody decided to stop serving it |
+| a deleted account | granting credits to the row an executed erasure left behind would quietly undo the erasure |
+| no reason | the audit row is the only record of why, and the column is NOT NULL |
+| `support` calling it at all | a credit is a generation and a generation is provider cost, so this spends money. Support can compensate — an apology for a failure of ours, 20 per call and now a daily total of its own (`ADMIN_COMPENSATION_MAX_UNITS_PER_DAY`) — but giving credits away is a different authority |
+
+Asking twice gives twice — each gift is its own batch. That is the opposite of
+the order and invoice paths, which key on a business reference so a replayed
+webhook grants once, and it is right here: a person clicking "Give 50" twice
+meant it twice.
+
+Credits given this way appear in the ledger as `operator_gift`, which is what
+makes the question answerable later. `GET /v1/admin/audit-logs` carries the
+operator, the reason and the expiry for each one.
+
 ---
 
 ## 7. Rights complaints

@@ -3,6 +3,8 @@ import { z } from 'zod';
 import { AppError } from '@yuha/contracts';
 import {
   compensateUnits,
+  lockUser,
+  unitsGrantedByActorSince,
   getAccountDeletion,
   getRightsCase,
   listAccountDeletions,
@@ -23,6 +25,7 @@ import {
 import type { AppContext } from '../context.js';
 import { executeAccountDeletion } from '../services/deletion.js';
 import { decideHeldOrder, heldOrderQueue } from '../services/order-review.js';
+import { findCustomers, getCustomer, giftCredits } from '../services/operator-grant.js';
 
 /**
  * Operations console API (UI-15).
@@ -97,6 +100,67 @@ export default async function adminRoutes(app: FastifyInstance, opts: { ctx: App
     return { items: rows };
   });
 
+  // ----------------------------------------------------------- customers
+
+  /**
+   * GET /v1/admin/users?email=…
+   *
+   * The thing that was missing. Every user-facing admin route took a UUID in
+   * its path and nothing could produce one from an email address, so giving a
+   * customer credits meant reading `users.id` out of a SQL client. The search
+   * is email-only and prefix-only on purpose — see `findUsersByEmail` — since
+   * a support tool that takes any fragment of anything is a people search.
+   */
+  app.get('/v1/admin/users', { preHandler: staff }, async (req) => {
+    // Trimmed BEFORE the length check: `?email=%20%20a%20%20` passed a
+    // `min(3)` applied to the raw string and then arrived at the lookup as one
+    // character, which answered "no accounts" rather than "that is not a
+    // search".
+    const { email } = z
+      .object({ email: z.string().trim().min(3).max(320) })
+      .parse(req.query);
+    return findCustomers({ email });
+  });
+
+  /** One account: balance, where each batch of credits came from, and orders. */
+  app.get('/v1/admin/users/:id', { preHandler: staff }, async (req) => {
+    const { id } = z.object({ id: z.string().uuid() }).parse(req.params);
+    return getCustomer(id);
+  });
+
+  /**
+   * POST /v1/admin/users/:id/grant
+   *
+   * Gives credits away. `admin` only, and deliberately not `support`: a credit
+   * is a generation and a generation is provider cost, so this spends money,
+   * which is a different authority from looking at a queue. Compensation below
+   * stays open to support — that one is an apology for a failure, bounded at
+   * twenty, and refusing it would make support unable to do its job.
+   */
+  app.post('/v1/admin/users/:id/grant', { preHandler: adminOnly }, async (req) => {
+    const { id } = z.object({ id: z.string().uuid() }).parse(req.params);
+    const body = reasoned
+      .extend({
+        units: z.number().int().min(1).max(10_000),
+        validityDays: z.number().int().min(1).max(3650).optional(),
+      })
+      .parse(req.body);
+    /*
+     * The schema's bounds are a sanity filter, not the policy. The real caps
+     * are configuration and live in the service, so the refusal names the
+     * actual limit and the daily total — `max(100)` here would have reported
+     * "expected <= 100" for a deployment whose limit is 20.
+     */
+    return giftCredits(ctx, {
+      userId: id,
+      units: body.units,
+      reason: body.reason,
+      ...(body.validityDays !== undefined ? { validityDays: body.validityDays } : {}),
+      actorId: req.user!.id,
+      actorRole: req.user!.role,
+    });
+  });
+
   // -------------------------------------------------------- compensation
 
   /**
@@ -108,6 +172,37 @@ export default async function adminRoutes(app: FastifyInstance, opts: { ctx: App
     const body = reasoned.extend({ units: z.number().int().min(1).max(20), jobId: z.string().uuid().optional() }).parse(req.body);
 
     const result = await withTx(async (tx) => {
+      /*
+       * The operator's own row first, then the day's total — the same shape
+       * the gift path uses, and for the same reason.
+       *
+       * This route is capped at 20 units per call and was capped at nothing
+       * per day, while the gift path's daily cap was being described as the
+       * protection against a compromised operator account. Twenty at a time,
+       * repeated, is unbounded; and this one is open to `support`, which is
+       * the wider door of the two. The allowance is its own
+       * (`ADMIN_COMPENSATION_MAX_UNITS_PER_DAY`) and larger, because a real
+       * outage means compensating many people at once.
+       */
+      await lockUser(req.user!.id, tx);
+      const perDay = ctx.config.ADMIN_COMPENSATION_MAX_UNITS_PER_DAY;
+      if (perDay > 0) {
+        const already = await unitsGrantedByActorSince(
+          {
+            actorId: req.user!.id,
+            sources: ['compensation'],
+            since: new Date(Date.now() - 86_400_000),
+          },
+          tx,
+        );
+        if (already + body.units > perDay) {
+          throw new AppError('VALIDATION_FAILED', 'this would pass your daily compensation limit', {
+            limitPerDay: perDay,
+            alreadyToday: already,
+          });
+        }
+      }
+
       const res = await compensateUnits(
         {
           userId: id,

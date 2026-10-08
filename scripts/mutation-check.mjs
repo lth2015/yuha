@@ -17,10 +17,29 @@
  *     verbatim before the run and copied back after, and the tree is required
  *     to be clean between mutations.
  *
- * Usage: node scripts/mutation-check.mjs [name-substring]
+ * A third, found while writing round 5: `if (…) {` → `if (false) {` is the
+ * obvious way to write a guard out, and inside statically unreachable code
+ * TypeScript gives DECLARED rather than narrowed types — so a `user` or
+ * `remote` that an earlier guard proved non-null becomes possibly undefined
+ * and the build fails. That shows up here as a survival, which is the first
+ * trap above wearing a different hat. Where the block below depends on
+ * narrowing, use a comparison the compiler cannot fold: `x !== x`.
+ *
+ * A fourth, and this one cost real time: a run KILLED PARTWAY leaves its
+ * defect in the working tree. Each mutation is restored after its own suite,
+ * so a Ctrl-C or a timeout between the write and the restore leaves exactly
+ * one file defective, with no "tree clean after restore" line printed because
+ * the script never reached the end. Two such defects — a stablecoin scan
+ * start block and an agreed-receipt log ordering — sat in the tree after two
+ * interrupted full runs and were found only because a separate check noticed
+ * their mutation anchors no longer matched. So: a marker file records what is
+ * currently mutated, and the next run restores it before doing anything else.
+ * Run `node scripts/mutation-check.mjs --repair` to do only that.
+ *
+ * Usage: node scripts/mutation-check.mjs [name-substring | --repair | --anchors]
  */
 import { execFileSync } from 'node:child_process';
-import { copyFileSync, readFileSync, writeFileSync, mkdirSync } from 'node:fs';
+import { copyFileSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 const ROOT = process.cwd();
@@ -592,6 +611,218 @@ const MUTATIONS = [
     to: '    units: 400,',
     tests: ['tests/stripe-webhook-path.test.ts'],
   },
+  /* ---- the customer console and the gift (round 5) --------------------- */
+  {
+    // `LIKE '%x%'` turns support tooling into a people search, and two
+    // characters of a common domain returns the customer list.
+    name: 'the-customer-search-matches-any-substring',
+    file: 'packages/db/src/users.ts',
+    from: '        AND email_active LIKE ?',
+    to: "        AND email_active LIKE CONCAT('%', ?, '%')",
+    tests: ['tests/operator-grant.test.ts'],
+  },
+  {
+    // Unescaped, `_` is LIKE's single-character wildcard: a search for a real
+    // address returns an account that is not the one the operator meant.
+    name: 'an-underscore-in-an-address-is-a-wildcard',
+    file: 'packages/db/src/users.ts',
+    from: '    [`${escapeLike(needle)}%`, limit + 1],',
+    to: '    [`${needle}%`, limit + 1],',
+    tests: ['tests/operator-grant.test.ts'],
+  },
+  {
+    // Granting credits to the row an executed deletion left behind quietly
+    // undoes the deletion.
+    name: 'a-deleted-account-is-still-findable',
+    file: 'packages/db/src/users.ts',
+    from: "      WHERE status <> 'deleted'\n        AND email_active LIKE ?",
+    to: '      WHERE 1 = 1\n        AND email LIKE ?',
+    tests: ['tests/operator-grant.test.ts'],
+  },
+  {
+    // The per-gift cap bounds nothing on its own: fifty gifts of fifty is
+    // still two and a half thousand generations of provider cost.
+    name: 'the-daily-giving-limit-is-not-enforced',
+    file: 'apps/api/src/services/operator-grant.ts',
+    from: '    if (perDay > 0 && already + params.units > perDay) {',
+    to: '    if (false) {',
+    tests: ['tests/operator-grant.test.ts'],
+  },
+  {
+    name: 'one-gift-may-carry-any-number-of-credits',
+    file: 'apps/api/src/services/operator-grant.ts',
+    from: '  if (params.units > perGift) {',
+    to: '  if (false) {',
+    tests: ['tests/operator-grant.test.ts'],
+  },
+  {
+    // A giveaway recorded as `compensation` says in the books that we broke
+    // something, and leaves "how much have we given away" unanswerable.
+    name: 'a-gift-is-booked-as-an-apology',
+    file: 'packages/db/src/ledger.ts',
+    from: "      source: 'operator_gift',\n      sourceRef: `gift:${newId()}`,",
+    to: "      source: 'compensation',\n      sourceRef: `gift:${newId()}`,",
+    tests: ['tests/operator-grant.test.ts'],
+  },
+  {
+    // Support can compensate — an apology, capped at twenty. Giving credits
+    // away spends money, which is a different authority.
+    name: 'support-can-give-credits-away',
+    file: 'apps/api/src/routes/admin.ts',
+    from: "  app.post('/v1/admin/users/:id/grant', { preHandler: adminOnly }",
+    to: "  app.post('/v1/admin/users/:id/grant', { preHandler: staff }",
+    tests: ['tests/operator-grant.test.ts'],
+  },
+  {
+    name: 'a-suspended-account-can-still-be-given-credits',
+    file: 'apps/api/src/services/operator-grant.ts',
+    from: "  if (user.status !== 'active') {",
+    // `if (false)` would be the obvious write-back and it does not compile:
+    // TypeScript gives declared rather than narrowed types inside statically
+    // unreachable code, so `user.status` in the throw below becomes possibly
+    // undefined. A comparison it cannot fold keeps the narrowing and still
+    // never fires.
+    to: '  if (user.status !== user.status) {',
+    tests: ['tests/operator-grant.test.ts'],
+  },
+  {
+    // An archived Price agrees on every other field and Checkout refuses it,
+    // so the first symptom without this is a customer who cannot buy.
+    name: 'an-archived-stripe-price-passes-the-check',
+    file: 'apps/api/src/services/stripe-catalogue.ts',
+    from: "  if (!remote.active) mismatch('active', 'active', 'archived');",
+    to: '  void 0;',
+    tests: ['tests/stripe-catalogue.test.ts'],
+  },
+  {
+    // A one-off configured as recurring bills the customer every month for
+    // ever. Worse than a wrong amount.
+    name: 'the-billing-interval-is-not-compared',
+    file: 'apps/api/src/services/stripe-catalogue.ts',
+    from: '  if ((remote.interval ?? null) !== row.interval) {',
+    // Not `if (false)`: inside statically unreachable code TypeScript drops
+    // the narrowing from the `if (!remote) return` above, and the build fails
+    // instead of the test. A comparison it cannot fold keeps it.
+    to: '  if (row.interval !== row.interval) {',
+    tests: ['tests/stripe-catalogue.test.ts'],
+  },
+  {
+    // A tiered Price reports null, and skipping it reports agreement about a
+    // price we cannot read.
+    name: 'a-tiered-price-is-skipped-rather-than-refused',
+    file: 'apps/api/src/services/stripe-catalogue.ts',
+    from: '  if (remote.amountMinor !== row.amountMinor) {',
+    to: '  if (remote.amountMinor !== null && remote.amountMinor !== row.amountMinor) {',
+    tests: ['tests/stripe-catalogue.test.ts'],
+  },
+  {
+    // "Could not check" reported as "nothing is wrong".
+    name: 'an-uncheckable-catalogue-reports-agreement',
+    file: 'apps/api/src/services/stripe-catalogue.ts',
+    from: '  if (!retrieve) return null;',
+    to: '  if (!retrieve) return [];',
+    tests: ['tests/stripe-catalogue.test.ts'],
+  },
+  {
+    // The mismatch report without the Stripe product name reads as "somebody
+    // mistyped a price" rather than "these two are the wrong way round".
+    name: 'the-mismatch-does-not-name-the-stripe-product',
+    file: 'apps/api/src/services/stripe-catalogue.ts',
+    from: "  const who = p.stripeProduct ? ` (Stripe calls it \"${p.stripeProduct}\")` : '';",
+    to: "  const who = '';",
+    tests: ['tests/stripe-catalogue.test.ts'],
+  },
+  {
+    // Two variables holding one id: every row agrees with the Price it
+    // matches and the other reports a wrong amount, which sends the operator
+    // to fix the amount instead of the id.
+    name: 'one-price-id-used-twice-is-not-reported-as-such',
+    file: 'apps/api/src/services/stripe-catalogue.ts',
+    from: '    if (group.length < 2) continue;',
+    to: '    if (true) continue;',
+    tests: ['tests/stripe-catalogue.test.ts'],
+  },
+  /* ---- round 5, second pass: what the independent review found --------- */
+  {
+    // The gift's daily cap without a lock on the operator's own row is a
+    // suggestion: two requests to two recipients take two different recipient
+    // locks, both read the same stale total, and both commit. Measured at 50
+    // parallel requests writing 5,000 units against a 500-a-day limit.
+    name: 'the-daily-cap-is-read-without-locking-the-operator',
+    file: 'apps/api/src/services/operator-grant.ts',
+    from: '    await lockUser(params.actorId, tx);',
+    to: '',
+    tests: ['tests/operator-grant.test.ts'],
+  },
+  {
+    // Compensation is 20 per call and was unbounded per day, while the gift
+    // cap was being documented as the compromised-account protection.
+    name: 'compensation-has-no-daily-limit',
+    file: 'apps/api/src/routes/admin.ts',
+    from: '      const perDay = ctx.config.ADMIN_COMPENSATION_MAX_UNITS_PER_DAY;',
+    to: '      const perDay = 0;',
+    tests: ['tests/operator-grant.test.ts'],
+  },
+  {
+    // A Price billed every second month agrees on every other field and bills
+    // half as often as the catalogue says.
+    name: 'a-price-billed-every-second-month-passes',
+    file: 'apps/api/src/services/stripe-catalogue.ts',
+    from: '  if (row.interval !== null && (remote.intervalCount ?? 1) !== 1) {',
+    // `&& false` makes the block unreachable and TypeScript then drops the
+    // narrowing from the `if (!remote) return` above — the trap in this file's
+    // header. A comparison it cannot fold keeps it.
+    to: '  if (row.interval !== null && row.interval !== row.interval) {',
+    tests: ['tests/stripe-catalogue.test.ts'],
+  },
+  {
+    // tax_behavior: exclusive charges tax on top of the ¥980 the page promised.
+    name: 'a-price-that-adds-tax-on-top-passes',
+    file: 'apps/api/src/services/stripe-catalogue.ts',
+    from: "  if (remote.taxBehavior === 'exclusive') {",
+    to: "  if (remote.taxBehavior === 'never-this') {",
+    tests: ['tests/stripe-catalogue.test.ts'],
+  },
+  {
+    // A 429 or an outage reported as "that id does not exist", which the seed
+    // then exits on with four accusations about correct values.
+    name: 'a-stripe-outage-is-reported-as-a-wrong-id',
+    file: 'packages/providers/src/payments/stripe.ts',
+    from: "      if ((err as { type?: string }).type === 'StripeInvalidRequestError') return null;\n      throw err;",
+    to: '      void err;\n      return null;',
+    tests: ['tests/stripe-catalogue.test.ts'],
+  },
+  {
+    // "Could not check" and "nothing is wrong" are different answers.
+    name: 'an-unset-price-id-blocks-a-seed-that-does-not-sell-it',
+    file: 'apps/api/src/services/stripe-catalogue.ts',
+    from: "  return p.kind === 'mismatch' || p.kind === 'unreadable' || p.kind === 'duplicate';",
+    to: "  return p.kind !== 'unavailable';",
+    tests: ['tests/stripe-catalogue.test.ts'],
+  },
+  {
+    // Two Prices under one Stripe product: two different ids, so comparing
+    // ids sees nothing. This is what "I made a new CREATOR Price and pasted
+    // it into the STUDIO slot" looks like.
+    name: 'two-prices-of-one-stripe-product-are-not-noticed',
+    file: 'apps/api/src/services/stripe-catalogue.ts',
+    from: "    ...shared(rows, (row) => fetched.get(row.envVar)?.productId ?? null, 'product').filter(",
+    // Grouping on the Price id instead of the product id: the pass still
+    // runs, and can then only ever restate what the price pass already found,
+    // so two DISTINCT ids under one product go unnoticed.
+    to: "    ...shared(rows, (row) => fetched.get(row.envVar)?.id ?? null, 'product').filter(",
+    tests: ['tests/stripe-catalogue.test.ts'],
+  },
+  {
+    // The search was a full table scan with a filesort because it matched
+    // `email`, which has no index; `email_active` is the indexed column and
+    // excludes deleted rows by construction.
+    name: 'the-customer-search-stops-using-the-index',
+    file: 'packages/db/src/users.ts',
+    from: "        AND email_active LIKE ?\n      ORDER BY email_active ASC",
+    to: "        AND email LIKE ?\n      ORDER BY email ASC",
+    tests: ['tests/operator-grant.test.ts'],
+  },
   {
     name: 'a-blank-numeric-config-line-is-zero-again',
     file: 'apps/api/src/config.ts',
@@ -631,10 +862,73 @@ function buildFor(files) {
   return null;
 }
 
-const only = process.argv[2];
+/*
+ * `--anchors`: check that every mutation's `from` text still exists in its
+ * file, and nothing else. Fast, no build, no database.
+ *
+ * This exists because four mutations in this file had silently stopped
+ * testing anything. A refactor moves the line a mutation was written against,
+ * the `from` no longer matches, and the run prints ANCHOR NOT FOUND — which
+ * is easy to miss in a list of ninety, and invisible if nobody runs the full
+ * set. A dead mutation reads exactly like a passing one.
+ *
+ * It also found two defects sitting in the working tree, left there by
+ * interrupted runs (see the fourth trap in the header): their anchors no
+ * longer matched because the files held the mutated form.
+ * `tests/mutation-anchors.test.ts` runs this on every `pnpm test`.
+ */
+if (process.argv[2] === '--anchors') {
+  let missing = 0;
+  for (const m of MUTATIONS) {
+    const text = readFileSync(join(ROOT, m.file), 'utf8');
+    for (const e of m.edits ?? [{ from: m.from }]) {
+      if (!e.from || !text.includes(e.from)) {
+        console.error(`ANCHOR NOT FOUND  ${m.name}\n  ${m.file}\n  looked for: ${JSON.stringify(e.from)}`);
+        missing += 1;
+      }
+    }
+  }
+  if (missing > 0) {
+    console.error(`\n${missing} mutation(s) no longer apply. Each one is a test nobody is running.`);
+    process.exit(1);
+  }
+  console.log(`✓ ${MUTATIONS.length} mutation anchors all still match their files`);
+  process.exit(0);
+}
+
+const only = process.argv[2] === '--repair' ? undefined : process.argv[2];
+const repairOnly = process.argv[2] === '--repair';
 const selected = only ? MUTATIONS.filter((m) => m.name.includes(only)) : MUTATIONS;
 
 mkdirSync(PRISTINE, { recursive: true });
+
+/*
+ * Put back whatever an interrupted run left behind, before anything else.
+ *
+ * `IN_FLIGHT` names the mutation currently written into the tree. It is
+ * created before the file is modified and removed after the file is restored,
+ * so its presence means a previous process died in between — and the pristine
+ * copy beside it is the file as it was.
+ */
+const IN_FLIGHT = join(PRISTINE, 'in-flight.json');
+if (existsSync(IN_FLIGHT)) {
+  const stale = JSON.parse(readFileSync(IN_FLIGHT, 'utf8'));
+  const backup = join(PRISTINE, stale.file.replaceAll('/', '_'));
+  if (existsSync(backup)) {
+    copyFileSync(backup, join(ROOT, stale.file));
+    console.log(`repaired: ${stale.file} was left mutated by "${stale.name}" and has been restored`);
+    const problem = buildFor([stale.file]);
+    if (problem) console.log(`  rebuild after repair: ${problem}`);
+  } else {
+    console.log(
+      `WARNING: "${stale.name}" was interrupted and no pristine copy of ${stale.file} survives.\n` +
+        `  Check it against git before trusting this tree.`,
+    );
+  }
+  rmSync(IN_FLIGHT, { force: true });
+}
+if (repairOnly) process.exit(0);
+
 const touched = [...new Set(selected.map((m) => m.file))];
 for (const f of touched) copyFileSync(join(ROOT, f), join(PRISTINE, f.replaceAll('/', '_')));
 
@@ -649,6 +943,8 @@ for (const m of selected) {
   }
   let mutated = original;
   for (const e of edits) mutated = mutated.replace(e.from, e.to);
+  // Written BEFORE the file, so an interruption is always recoverable.
+  writeFileSync(IN_FLIGHT, JSON.stringify({ name: m.name, file: m.file }));
   writeFileSync(path, mutated);
 
   const buildProblem = buildFor([m.file]);
@@ -667,6 +963,7 @@ for (const m of selected) {
   }
   // Restored from the pristine copy, never with git checkout.
   copyFileSync(join(PRISTINE, m.file.replaceAll('/', '_')), path);
+  rmSync(IN_FLIGHT, { force: true });
   results.push([m.name, verdict]);
   console.log(`${verdict.startsWith('KILLED') ? 'ok  ' : 'FAIL'} ${m.name}\n     ${verdict}`);
 }

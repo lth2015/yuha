@@ -24,6 +24,37 @@ export interface CheckoutSession {
   simulated: boolean;
 }
 
+/**
+ * A Price as the provider holds it.
+ *
+ * `amountMinor` is null for a Price that is not a simple fixed amount — tiered
+ * or usage-based — which is a mismatch with this catalogue rather than a
+ * missing value, and the comparison says so instead of skipping it.
+ */
+export interface RemotePrice {
+  id: string;
+  active: boolean;
+  amountMinor: number | null;
+  currency: string;
+  /** 'month' | 'year' | … for a recurring Price; null for a one-off. */
+  interval: string | null;
+  /**
+   * How many intervals between charges. 1 for monthly; 2 is "every two
+   * months", which agrees with every other field and bills half as often.
+   * Null for a one-off.
+   */
+  intervalCount: number | null;
+  /**
+   * 'inclusive' | 'exclusive' | 'unspecified'. The catalogue is
+   * tax-inclusive, as Japanese consumer law expects, so an `exclusive` Price
+   * charges tax on top of the ¥980 the page promised.
+   */
+  taxBehavior: string | null;
+  /** The Price's own product id: two different Prices under one product. */
+  productId: string | null;
+  productName: string | null;
+}
+
 /** Normalised webhook event, independent of the payment vendor. */
 export interface NormalisedEvent {
   id: string;
@@ -73,6 +104,15 @@ export interface PaymentsAdapter {
     cancelAtPeriodEnd: boolean;
     effectiveAt: Date | null;
   }>;
+  /**
+   * What a configured Price actually says, for checking it against the
+   * catalogue before anything is sold.
+   *
+   * Optional, because the simulated adapter has no Prices to read. A caller
+   * that cannot reach this cannot verify, and must say so rather than report
+   * that everything agrees.
+   */
+  retrievePrice?(priceId: string): Promise<RemotePrice | null>;
   /** Balance-transaction details for reconciliation (PAY-11). */
   retrieveBalanceTransaction?(id: string): Promise<{
     amount: number;

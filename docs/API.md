@@ -343,7 +343,6 @@ never from a token claim.
 | `GET /v1/admin/overview` | support | Operations, cost, revenue, funnel |
 | `GET /v1/admin/jobs` | support | Job search |
 | `GET /v1/admin/jobs/:id/costs` | support | Per-job upstream cost trail |
-| `POST /v1/admin/users/:id/compensate` | support | Issue make-good credits |
 | `GET /v1/admin/rights-cases` | support | Case queue (reporter email masked below admin) |
 | `POST /v1/admin/rights-cases/:id/resolve` | **admin** | Dismiss / uphold / restore |
 | `GET /v1/admin/settings` · `PUT /v1/admin/settings/:key` | **admin** | Runtime switches |
@@ -353,6 +352,10 @@ never from a token claim.
 | `POST /v1/admin/deletions/:id/execute` | **admin** | Carry out the erasure |
 | `GET /v1/admin/audit-logs` | support | Audit trail |
 | `GET /v1/admin/order-reviews` | support | Card orders whose delivery is held pending a person (⑥) |
+| `GET /v1/admin/users?email=…` | support / admin | Accounts matching an email. **Prefix only**, three characters minimum, deleted accounts excluded — see `findUsersByEmail` for why it is not a substring search |
+| `GET /v1/admin/users/:id` | support / admin | One account: balance, every batch of credits with its source and expiry, and orders |
+| `POST /v1/admin/users/:id/grant` | **admin** | Gives credits away. Reason required. Capped per gift and per operator per rolling day (`ADMIN_GRANT_MAX_UNITS`, `ADMIN_GRANT_MAX_UNITS_PER_DAY`); recorded as `operator_gift`, never as `compensation` |
+| `POST /v1/admin/users/:id/compensate` | support / admin | A make-good for a failure of ours. Capped at 20, recorded as `compensation`. Unchanged, and deliberately open to support where `grant` is not |
 | `POST /v1/admin/order-reviews/:id/decide` | **admin** | Release and deliver, or refuse — reason required. Refusing does not refund; that happens in Stripe |
 | `GET /v1/admin/stablecoin-payments` | support | Payments in review, money with no order to attach it to, and refunds owed |
 | `POST /v1/admin/stablecoin-payments/:id/review` | **admin** | Accept a short, over or late payment, or reject it — reason required |

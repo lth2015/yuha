@@ -22,9 +22,16 @@ import type { AppContext } from '../context.js';
  * so, and the defaults are set where the damage is bounded rather than where
  * abuse begins, because a cap that stops a genuine purchase is its own kind of
  * failure. An operator who needs to let a real customer through can raise the
- * configuration, or issue credits directly from the console — which does not
- * create an order and is therefore not capped, deliberately: that path has an
- * audit row and a person behind it.
+ * configuration, or give them credits from the console — which does not create
+ * an order and is therefore not capped here, deliberately: that path has its
+ * own caps, an audit row and a person behind it.
+ *
+ * That second sentence used to say an operator "can issue credits directly
+ * from the console", and there was no such thing: the only route that granted
+ * units took a user UUID in its path, had no interface anywhere, and nothing
+ * in the product could turn an email address into that UUID. The escape hatch
+ * this comment offered as a reason not to worry about the cap did not exist.
+ * `services/operator-grant.ts` and the console's customer panel are it now.
  */
 export async function assertWithinPurchaseCap(
   ctx: AppContext,

@@ -23,7 +23,13 @@ import {
 } from '@yuha/db';
 import { loadConfig } from './config.js';
 import { resolveFromRoot } from './paths.js';
+import { catalogue, cataloguePrices } from './catalogue.js';
 import { createContext } from './context.js';
+import {
+  blocksSelling,
+  describePriceProblem,
+  verifyStripeCatalogue,
+} from './services/stripe-catalogue.js';
 
 const config = loadConfig();
 const ctx = createContext(config);
@@ -46,83 +52,76 @@ await migrate();
 //
 // Orders keep the catalogue version they were bought at, so re-pricing never
 // rewrites an existing receipt.
-await upsertProduct({
-  price_key: 'drop_5',
-  version: 2,
-  kind: 'one_time',
-  display_name: 'DROP — 5 songs',
-  amount_minor: 980,
-  currency: 'jpy',
-  tax_included: true,
-  units: 5,
-  validity_days: 90,
-  auto_renew: false,
-  billing_interval: null,
-  stripe_price_id: config.STRIPE_PRICE_ID_DROP_5 ?? null,
-  active: true,
-});
-
-await upsertProduct({
-  price_key: 'pro_monthly',
-  version: 2,
-  kind: 'subscription',
-  display_name: 'CREATOR — 15 songs / month',
-  amount_minor: 1980,
-  currency: 'jpy',
-  tax_included: true,
-  // 15, not the 20 the original spec named: the difference absorbs billable
-  // failures without pushing the margin under 60%.
-  units: 15,
-  validity_days: null,
-  auto_renew: true,
-  billing_interval: 'month',
-  stripe_price_id: config.STRIPE_PRICE_ID_PRO_MONTHLY ?? null,
-  active: true,
-});
-
 /*
- * PREMIER moved to 3,980 as catalogue v3.
+ * Ask Stripe whether those four ids are the ones we meant — BEFORE writing
+ * them.
  *
- * A new version rather than an edit: `subscriptions` and `orders` carry the
- * `price_version` they were sold at, and `getProductVersion` resolves by
- * (price_key, version) without filtering on `active`. So a subscriber on v2
- * keeps renewing at the price they agreed to, while v2 is no longer offered.
- * Editing the v2 row in place would silently reprice existing subscriptions.
+ * This ran after the upsert loop, which made the refusal a statement about
+ * rows the same script had just made sellable: `upsertProduct` overwrites
+ * `stripe_price_id`, so a database that was correct a minute ago now carries
+ * the swapped id, and an API serving it will build Checkout sessions against
+ * it. "Nothing may be sold against these" was printed about exactly that.
+ * The check needs only `config`, so there was never a reason for it to be
+ * second.
  *
- * Stripe Prices are immutable for the same reason; the v3 row carries a new
- * price id and the old Price is left alone.
+ * The mistake it catches is a quiet one: the variable names come from internal
+ * price keys (`STRIPE_PRICE_ID_PRO_MONTHLY`) while the dashboard shows CREATOR
+ * and STUDIO, and the two subscriptions differ only in price. Swap them and
+ * Checkout charges what the Stripe Price says while the order row carries the
+ * catalogue amount — so a STUDIO buyer is charged ¥1,980 and the webhook's
+ * amount guard throws afterwards, with the card already charged.
+ *
+ * What is fatal and what is not:
+ *
+ *   - a wrong, archived, duplicated or unreadable id → fatal;
+ *   - an id that is simply NOT SET → reported, not fatal. Two of the four are
+ *     required only when `FEATURE_SUBSCRIPTIONS_ENABLED`, and `config.ts`
+ *     already refuses the ones that matter with the feature flag in hand.
+ *     Treating a missing id as fatal here made `pnpm seed` and `pnpm
+ *     bootstrap` refuse the stripe-with-subscriptions-off configuration that
+ *     docs/CONFIGURATION.md tells people to use;
+ *   - Stripe not answering → reported, not fatal. A 429 or an outage says
+ *     nothing about whether an id is right, and failing a seed with four
+ *     accusations about correct values is worse than not checking.
  */
-await upsertProduct({
-  price_key: 'premier_monthly',
-  version: 3,
-  kind: 'subscription',
-  display_name: 'STUDIO — 45 songs / month',
-  amount_minor: 3980,
-  currency: 'jpy',
-  tax_included: true,
-  units: 45,
-  validity_days: null,
-  auto_renew: true,
-  billing_interval: 'month',
-  stripe_price_id: config.STRIPE_PRICE_ID_PREMIER_MONTHLY ?? null,
-  active: true,
-});
+const priceProblems = await verifyStripeCatalogue(ctx, cataloguePrices(config));
+if (priceProblems === null) {
+  console.log('• Stripe prices not checked: this deployment uses the simulated payments adapter');
+} else {
+  const blocking = priceProblems.filter(blocksSelling);
+  for (const problem of priceProblems.filter((p) => !blocksSelling(p))) {
+    console.log(`• ${describePriceProblem(problem)}`);
+  }
+  if (blocking.length > 0) {
+    console.error('\n✗ the configured Stripe prices do not match the catalogue:\n');
+    for (const problem of blocking) console.error(`  - ${describePriceProblem(problem)}`);
+    console.error('\nNothing has been written. Fix the ids in the deployment configuration;');
+    console.error('docs/CONFIGURATION.md lists which Stripe product belongs in which variable.');
+    await closeDb();
+    process.exit(1);
+  }
+  console.log(`✓ Stripe prices agree with the catalogue (amount, currency, interval, tax, active)`);
+}
 
-await upsertProduct({
-  price_key: 'market_license',
-  version: 2,
-  kind: 'one_time',
-  display_name: 'Licence — one song',
-  amount_minor: 980,
-  currency: 'jpy',
-  tax_included: true,
-  units: 1,
-  validity_days: null,
-  auto_renew: false,
-  billing_interval: null,
-  stripe_price_id: config.STRIPE_PRICE_ID_MARKET_LICENSE ?? null,
-  active: true,
-});
+const CATALOGUE = catalogue(config);
+
+for (const row of CATALOGUE) {
+  await upsertProduct({
+    price_key: row.price_key,
+    version: row.version,
+    kind: row.kind,
+    display_name: row.display_name,
+    amount_minor: row.amount_minor,
+    currency: 'jpy',
+    tax_included: true,
+    units: row.units,
+    validity_days: row.validity_days,
+    auto_renew: row.auto_renew,
+    billing_interval: row.billing_interval,
+    stripe_price_id: row.stripe_price_id,
+    active: true,
+  });
+}
 
 console.log('✓ product catalogue seeded v2 (DROP / CREATOR / STUDIO / licence — JPY, tax-inclusive)');
 

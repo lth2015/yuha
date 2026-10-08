@@ -190,10 +190,17 @@ config:
 
   stripe:
     publishableKey: ""
-    priceIdDrop5: ""
-    priceIdProMonthly: ""
-    priceIdPremierMonthly: ""
-    priceIdMarketLicense: ""
+    # Each key is named for our internal price key; the comment is the Stripe
+    # dashboard's name for the same product. They do not match, and the two
+    # monthly plans differ only in price. After changing any of these, run
+    # `pnpm check:stripe-prices` against the same configuration: it reads each
+    # Price back from Stripe and refuses a swap — but it is a command somebody
+    # runs, not part of the rollout, so these comments and that command are
+    # both the protection.
+    priceIdDrop5: ""           # DROP — 5 songs, ¥980 one-off
+    priceIdProMonthly: ""      # CREATOR — 15 songs / month, ¥1,980
+    priceIdPremierMonthly: ""  # STUDIO — 45 songs / month, ¥3,980
+    priceIdMarketLicense: ""   # Licence — one song, ¥980 one-off
     # The version this code is written against: an Invoice's subscription under
     # `parent.subscription_details`, a Subscription's period on its items, and
     # the minimum an account with Managed Payments accepts. Not a secret, and

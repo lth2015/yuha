@@ -93,7 +93,7 @@ excludes internal rows, so an acceptance pass run in demo mode is invisible to
 it. The payments adapter itself is chosen by `PAYMENTS_ADAPTER`, not by
 `RUN_MODE`, so Stripe is real either way.
 
-The prices must match `apps/api/src/seed.ts` — ¥980, ¥1,980, ¥4,980,
+The prices must match `apps/api/src/catalogue.ts` — ¥980, ¥1,980, ¥3,980,
 tax-inclusive — or the confirmation screen states a price the buyer is not
 charged, which is the 特定商取引法 problem this product has already had once.
 

@@ -134,8 +134,14 @@ export const EntitlementSource = z.enum([
   'one_time_order',
   'subscription_period',
   'promo_trial',
+  // A make-good: we failed, the customer gets the songs back. A cost we caused.
   'compensation',
+  // The seed's demo accounts, and any ad-hoc repair.
   'manual_adjustment',
+  // Deliberately given away by an operator. Kept apart from both of the above
+  // so "how much have we given away" is a query and not a guess — see
+  // migration 0018, whose CHECK carries the same six values.
+  'operator_gift',
 ]);
 export type EntitlementSource = z.infer<typeof EntitlementSource>;
 

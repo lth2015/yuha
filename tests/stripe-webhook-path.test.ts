@@ -21,6 +21,8 @@ import { readFileSync } from 'node:fs';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { STRIPE_WEBHOOK_PATHS, STRIPE_WEBHOOK_PRIMARY_PATH, keepsRawBody } from '@yuha/api';
 import { ConfigError, loadConfig } from '../apps/api/src/config.js';
+import { catalogue, cataloguePrices } from '../apps/api/src/catalogue.js';
+import type { AppConfig } from '../apps/api/src/config.js';
 import { query } from '@yuha/db';
 import { SimulatedPaymentsAdapter } from '@yuha/providers';
 import { createHarness, resetData, teardown, type Harness } from './helpers/harness.js';
@@ -180,31 +182,29 @@ describe('the webhook path is one decision, in one place', () => {
   it('the test catalogue is the product catalogue', () => {
     /*
      * The harness seeded CREATOR with 100 credits and STUDIO with 400 —
-     * leftovers from the "100 songs a month" pivot that `seed.ts` re-priced
-     * away months ago. Every billing test therefore ran against two products
-     * that do not exist, and nothing noticed because no test asserted either
-     * number. The first one to assert a STUDIO grant would have written 400
-     * into itself and looked correct.
+     * leftovers from the "100 songs a month" pivot that the catalogue
+     * re-priced away months ago. Every billing test therefore ran against two
+     * products that do not exist, and nothing noticed because no test
+     * asserted either number. The first one to assert a STUDIO grant would
+     * have written 400 into itself and looked right.
      *
-     * Versions are deliberately NOT compared: the harness seeds v1 and the
-     * catalogue has re-priced past it, which is the mechanism that keeps an
-     * existing subscriber on the price they agreed to.
+     * The product side is the real `catalogue()`; only the harness side is
+     * parsed, because it is a literal with no export to call. Versions are
+     * deliberately NOT compared: the harness seeds v1 and the catalogue has
+     * re-priced past it, which is the mechanism that keeps an existing
+     * subscriber on the price they agreed to.
      */
-    const seed = read('apps/api/src/seed.ts');
     const harness = read('tests/helpers/harness.ts');
-    const fields = (src: string, key: string) => {
-      const at = src.indexOf(`price_key: '${key}'`);
-      expect(at, `${key} is missing`).toBeGreaterThan(-1);
-      const block = src.slice(at, src.indexOf('});', at));
-      /*
-       * Throws rather than returning undefined. `toEqual` is happy to compare
-       * `{display_name: undefined}` with `{display_name: undefined}`, so a
-       * rename on both sides — or a typo in these regexes — would make this
-       * test pass while comparing nothing at all.
-       */
+    const fromHarness = (key: string) => {
+      const at = harness.indexOf(`price_key: '${key}'`);
+      expect(at, `${key} is missing from the harness`).toBeGreaterThan(-1);
+      const block = harness.slice(at, harness.indexOf('});', at));
       const field = (name: string) => {
         const m = new RegExp(`(?:^|\\s)${name}: ('[^']*'|[^,\\n]+),`).exec(block);
-        if (!m) throw new Error(`${key}: no ${name} in ${src === seed ? 'seed.ts' : 'harness.ts'}`);
+        // Throws rather than returning undefined: `toEqual` is happy to
+        // compare two undefineds, so a rename on both sides would make this
+        // pass while comparing nothing at all.
+        if (!m) throw new Error(`${key}: no ${name} in the harness`);
         return m[1]!;
       };
       return {
@@ -213,10 +213,13 @@ describe('the webhook path is one decision, in one place', () => {
         units: field('units'),
       };
     };
-    for (const key of ['drop_5', 'pro_monthly', 'premier_monthly', 'market_license']) {
-      expect(fields(harness, key), `the harness's ${key} is not the catalogue's`).toEqual(
-        fields(seed, key),
-      );
+
+    for (const row of catalogue({} as AppConfig)) {
+      expect(fromHarness(row.price_key), `the harness's ${row.price_key} is not the catalogue's`).toEqual({
+        display_name: `'${row.display_name}'`,
+        amount_minor: String(row.amount_minor),
+        units: String(row.units),
+      });
     }
   });
 
@@ -228,16 +231,25 @@ describe('the webhook path is one decision, in one place', () => {
    * price id configured", so the failure was a 500 on the one page that takes
    * money, discovered by whoever tried to buy a licence first.
    *
-   * The product list is derived from `seed.ts` rather than written here, so a
+   * The product list is derived from `catalogue.ts` rather than written here, so a
    * fifth product is covered the day it is added. Deriving it from the
    * `stripe_price_id: config.…` lines was the first attempt and was wrong: a
    * product seeded with `stripe_price_id: null` produces no such line, so the
    * one case the comment above names would have slipped straight through.
    */
-  const catalogueKeys = [...read('apps/api/src/seed.ts').matchAll(/^  price_key: '([a-z0-9_]+)',$/gm)].map(
-    (m) => m[1]!,
-  );
-  const envKeyFor = (priceKey: string) => `STRIPE_PRICE_ID_${priceKey.toUpperCase()}`;
+  /*
+   * Taken from the catalogue FUNCTION, not from a regex over the file that
+   * happens to call it.
+   *
+   * This read `apps/api/src/seed.ts` until the rows moved into
+   * `apps/api/src/catalogue.ts`, and it failed loudly when they did — which is
+   * the behaviour you want from an invariant, and also the sign that it was
+   * anchored to a filename rather than to the thing it cares about. Calling
+   * the export cannot drift on indentation, a move, or a reformat.
+   */
+  const priceRows = cataloguePrices({} as AppConfig);
+  const catalogueKeys = priceRows.map((r) => r.priceKey);
+  const envKeyFor = (priceKey: string) => priceRows.find((r) => r.priceKey === priceKey)!.envVar;
 
   it('seeds a catalogue at all, so the loop below is not empty', () => {
     expect(catalogueKeys.sort()).toEqual(['drop_5', 'market_license', 'premier_monthly', 'pro_monthly']);

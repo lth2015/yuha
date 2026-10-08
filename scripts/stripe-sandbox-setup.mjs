@@ -197,5 +197,5 @@ console.log('\nPaste into .env:\n');
 for (const r of results) {
   if (ENV_NAME[r.price_key]) console.log(`${ENV_NAME[r.price_key]}=${r.price_id}`);
 }
-console.log('\nRe-run `pnpm seed` afterwards: seed.ts copies these into product_catalog.stripe_price_id,');
+console.log('\nRe-run `pnpm seed` afterwards: it copies these into product_catalog.stripe_price_id,');
 console.log('which is the column checkout actually reads.');

@@ -33,6 +33,11 @@ const ALREADY_THERE_ERRNOS = new Set([
   1060, // ER_DUP_FIELDNAME
   1061, // ER_DUP_KEYNAME
   1091, // ER_CANT_DROP_FIELD_OR_KEY — the same story, told by a DROP statement
+  // ER_CHECK_CONSTRAINT_NOT_FOUND. The CHECK-constraint telling of 1091: a
+  // migration that rewrites a CHECK does DROP then ADD, and if the ADD fails
+  // the re-run cannot find the constraint its own earlier pass removed. 0018
+  // has this shape; 0005, 0006 and 0008 already did.
+  3940,
   1359, // ER_TRG_ALREADY_EXISTS
   1826, // ER_FK_DUP_NAME
 ]);

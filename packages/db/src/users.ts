@@ -28,6 +28,79 @@ export async function getUser(id: string, tx?: PoolConnection): Promise<UserRow 
   return queryOne<UserRow>(`SELECT ${USER_COLUMNS} FROM users WHERE id = ?`, [id], tx);
 }
 
+/**
+ * Finds the accounts an operator might mean, by email.
+ *
+ * There was no way to look a person up at all: the only user-facing admin
+ * route took a UUID in its path, and nothing in the console or the API could
+ * turn an email address into one. "Give my friend fifty credits" therefore
+ * meant opening a SQL client, which is not a feature — it is the absence of
+ * one, dressed as a workaround.
+ *
+ * Deliberately narrow, because this reads other people's email addresses:
+ *
+ *  - Email only. Not display name, not a free-text sweep over songs or
+ *    prompts. An operator looking somebody up already knows their address;
+ *    anything broader turns support tooling into a people search.
+ *  - A prefix, not a substring. `LIKE '%ab%'` lets two characters of a common
+ *    domain return the whole customer list, and no index can serve it.
+ *    Matched against `email_active`, which is the column that actually
+ *    carries the unique index — this said "the unique index on email", and
+ *    there is no such index: `users_email_active_uk` is on a generated column
+ *    that is `email` while `deleted_at IS NULL` and NULL otherwise. Using it
+ *    is what makes the lookup indexed, and it excludes deleted accounts by
+ *    construction rather than by a predicate somebody has to remember.
+ *  - Deleted accounts are therefore excluded. A deletion that was executed
+ *    must not be undone by granting credits to the row it left behind. The
+ *    `status` filter stays as a second expression of the same rule, because a
+ *    row marked deleted without `deleted_at` set would otherwise be findable.
+ *  - Capped, and the cap is the caller's business: `limit` rows come back and
+ *    `more` says the query was too loose, so the interface can ask for a
+ *    fuller address instead of paginating through everybody.
+ *
+ * It is not an anti-enumeration measure and should not be read as one. A
+ * prefix search ordered by address, with a flag saying "there are more", is a
+ * usable prefix-descent oracle over the customer base — three characters
+ * narrows what two characters opened, it does not close it. What keeps this
+ * closed is that the route is staff-only.
+ */
+export async function findUsersByEmail(
+  params: { email: string; limit?: number },
+  tx?: PoolConnection,
+): Promise<{ items: UserRow[]; more: boolean }> {
+  const needle = params.email.trim().toLowerCase();
+  // Two characters is not a search, it is a listing. The caller gets nothing
+  // rather than the first page of the customer base.
+  if (needle.length < 3) return { items: [], more: false };
+  const limit = Math.min(Math.max(params.limit ?? 10, 1), 50);
+
+  const rows = await query<UserRow>(
+    `SELECT ${USER_COLUMNS} FROM users
+      WHERE status <> 'deleted'
+        AND email_active LIKE ?
+      ORDER BY email_active ASC
+      LIMIT ?`,
+    // The escape is not decoration: an operator pasting an address with an
+    // underscore in it — which is most addresses that have one — would
+    // otherwise have it read as LIKE's single-character wildcard and match
+    // accounts that are not the one they meant.
+    //
+    // No `email = ? OR` and no `ORDER BY email = ? DESC`: under `LIKE
+    // 'needle%'` an exact match is already the shortest match and therefore
+    // sorts first, so both were redundant — and the ranking term forced a
+    // filesort on every search to re-derive something the index ordering
+    // already gave.
+    [`${escapeLike(needle)}%`, limit + 1],
+    tx,
+  );
+  return { items: rows.slice(0, limit), more: rows.length > limit };
+}
+
+/** `\`, `%` and `_` are LIKE metacharacters; MySQL's default escape is `\`. */
+function escapeLike(v: string): string {
+  return v.replace(/[\\%_]/g, (c) => `\\${c}`);
+}
+
 export async function findByExternalId(
   authProvider: string,
   externalId: string,

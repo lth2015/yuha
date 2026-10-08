@@ -151,8 +151,21 @@ export async function withTx<T>(
  * transaction rather than needing an explicit RELEASE_LOCK. The CHECK
  * constraints on entitlement_batches remain the hard backstop.
  */
-export async function lockUserEntitlements(userId: string, tx: mysql.PoolConnection): Promise<void> {
+export async function lockUser(userId: string, tx: mysql.PoolConnection): Promise<void> {
   await tx.query('SELECT id FROM users WHERE id = ? FOR UPDATE', [userId]);
+}
+
+/**
+ * The same row lock, named for the thing most callers are protecting.
+ *
+ * `lockUser` exists separately because the operator-gift path locks the
+ * ACTOR's row rather than the recipient's — a per-actor daily limit read
+ * without that lock is not a limit, since two of the operator's own requests
+ * to two different recipients take two different locks, both read the same
+ * stale total, and both commit.
+ */
+export async function lockUserEntitlements(userId: string, tx: mysql.PoolConnection): Promise<void> {
+  await lockUser(userId, tx);
 }
 
 /** MySQL error numbers we branch on. */

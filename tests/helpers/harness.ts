@@ -135,7 +135,8 @@ export async function createHarness(overrides: Record<string, string> = {}): Pro
 }
 
 /*
- * Priced in JPY, matching apps/api/src/seed.ts.
+ * Priced in JPY, matching apps/api/src/catalogue.ts (which `seed.ts` writes
+ * from). `tests/stripe-webhook-path.test.ts` compares the two.
  *
  * This used to seed USD 499/999/2999 while production seeds JPY
  * 980/1980/3980 — harmless for tests that only care that a number is
@@ -188,7 +189,7 @@ async function seedCatalogue(): Promise<void> {
      * 15 and 45, the numbers the catalogue and the live Stripe products carry.
      *
      * These said 100 and 400 — leftovers from the "100 songs a month" pivot
-     * that `seed.ts` re-priced away. No test asserted either number, which is
+     * that the catalogue re-priced away. No test asserted either number, which is
      * exactly why it survived: the fixture products were ones that do not
      * exist, and the first test to assert a STUDIO grant would have written
      * 400 into it and looked right.

@@ -55,6 +55,37 @@ export async function getBalance(userId: string, tx?: PoolConnection): Promise<B
   return { granted, reserved, consumed, available: granted - reserved - consumed };
 }
 
+/**
+ * Available balances for several accounts in one query.
+ *
+ * The same arithmetic as `getBalance`, grouped. The console's customer search
+ * returns up to ten rows and wants a balance beside each one; a `getBalance`
+ * per row is ten round trips on every press of a button.
+ *
+ * Accounts with no active batch are absent from the map rather than zero, so
+ * the caller decides what "no credits" renders as.
+ */
+export async function balancesFor(
+  userIds: string[],
+  tx?: PoolConnection,
+): Promise<Map<string, number>> {
+  if (userIds.length === 0) return new Map();
+  const rows = await query<{ user_id: string; available: number }>(
+    `SELECT user_id,
+            COALESCE(SUM(granted_units), 0) - COALESCE(SUM(reserved_units), 0)
+              - COALESCE(SUM(consumed_units), 0) AS available
+       FROM entitlement_batches
+      WHERE user_id IN (${userIds.map(() => '?').join(', ')})
+        AND status = 'active'
+        AND effective_from <= UTC_TIMESTAMP(3)
+        AND (expires_at IS NULL OR expires_at > UTC_TIMESTAMP(3))
+      GROUP BY user_id`,
+    userIds,
+    tx,
+  );
+  return new Map(rows.map((r) => [r.user_id, Number(r.available)]));
+}
+
 export async function listBatches(userId: string, tx?: PoolConnection): Promise<EntitlementBatchRow[]> {
   return query<EntitlementBatchRow>(
     `SELECT ${BATCH_COLUMNS} FROM entitlement_batches
@@ -410,6 +441,93 @@ export async function compensateUnits(
     );
   }
   return result;
+}
+
+/**
+ * Credits an operator gives away.
+ *
+ * Mechanically `grantUnits` with a source of its own, and that source is the
+ * whole point: `compensation` says in the books that we broke something, and
+ * `manual_adjustment` is what the seed writes for demo accounts. A deliberate
+ * giveaway is neither, and the question it has to be able to answer later —
+ * how much have we given away, and who gave it — cannot be answered by
+ * grepping reasons.
+ *
+ * `source_ref` is a fresh id per gift, so two gifts to the same person are two
+ * batches rather than one silently ignored by the uniqueness on
+ * (user, source, source_ref). That is the opposite of what the order and
+ * invoice paths want, and it is correct here: an operator giving fifty credits
+ * twice means a hundred credits, and a repeat is a decision somebody made
+ * twice, not a retry to swallow.
+ */
+export async function giftUnits(
+  params: {
+    userId: string;
+    units: number;
+    reason: string;
+    actorId: string;
+    validityDays: number;
+  },
+  tx: PoolConnection,
+): Promise<GrantResult> {
+  return grantUnits(
+    {
+      userId: params.userId,
+      source: 'operator_gift',
+      sourceRef: `gift:${newId()}`,
+      units: params.units,
+      expiresAt: new Date(Date.now() + params.validityDays * 24 * 3600 * 1000),
+      reason: params.reason,
+      actorId: params.actorId,
+    },
+    tx,
+  );
+}
+
+/**
+ * How many units one operator has handed out since a moment.
+ *
+ * Credits are provider cost, so an operator account that can grant without
+ * limit can spend real money without limit. The per-grant cap alone does not
+ * bound that — fifty grants of fifty is still fifty grants of fifty — so both
+ * operator-facing paths read this before writing and refuse past the day's
+ * total.
+ *
+ * `sources` is the caller's, so the gift path and the compensation path keep
+ * separate allowances: they answer to different limits and one must not eat
+ * the other's budget.
+ *
+ * Counted from the LEDGER rather than from the batches, because the ledger is
+ * append-only and carries the actor. A revoked or expired batch still counts
+ * against the day — the question is how much this operator handed out, not how
+ * much of it survives — and there is no way to reset the total: revocation and
+ * expiry leave both rows intact, and an account deletion anonymises the user
+ * rather than removing the row, so the `ON DELETE CASCADE` never fires.
+ *
+ * **Read this under a lock on the actor's own row** (`lockUser`), inside the
+ * transaction that writes. It is a plain read: without that lock two requests
+ * from one operator to two different recipients take two different recipient
+ * locks, both see the same stale total, and both commit — which is not a
+ * limit, it is a suggestion. Measured: 50 parallel requests wrote 5,000 units
+ * against a 500-a-day cap.
+ */
+export async function unitsGrantedByActorSince(
+  params: { actorId: string; sources: EntitlementSource[]; since: Date },
+  tx?: PoolConnection,
+): Promise<number> {
+  if (params.sources.length === 0) return 0;
+  const row = await queryOne<{ units: number }>(
+    `SELECT COALESCE(SUM(l.units), 0) AS units
+       FROM ledger_entries l
+       JOIN entitlement_batches b ON b.id = l.batch_id
+      WHERE l.actor_id = ?
+        AND l.entry_type = 'grant'
+        AND b.source IN (${params.sources.map(() => '?').join(', ')})
+        AND l.created_at >= ?`,
+    [params.actorId, ...params.sources, params.since],
+    tx,
+  );
+  return Number(row?.units ?? 0);
 }
 
 /**

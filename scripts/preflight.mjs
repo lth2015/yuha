@@ -119,7 +119,22 @@ let env = {};
 if (existsSync(envPath)) {
   for (const line of readFileSync(envPath, 'utf8').split('\n')) {
     const m = /^([A-Z0-9_]+)=(.*)$/.exec(line.trim());
-    if (m) env[m[1]] = m[2];
+    if (!m) continue;
+    /*
+     * An unquoted `#` starts a comment, so it is not part of the value.
+     *
+     * Node's own `--env-file` parser does this and the one here did not, so
+     * `KEY=   # a note` read as the value `"# a note"` — non-empty, therefore
+     * "configured". A block of four price ids written that way had this file
+     * reporting all four as set while none were, which is the opposite of what
+     * it exists for. The `.env.example` that caused it no longer writes inline
+     * comments either; both ends are fixed, because either alone would leave
+     * the trap for a hand-edited `.env`.
+     */
+    let value = m[2];
+    const quoted = /^\s*(['"])(.*)\1\s*$/.exec(value);
+    value = quoted ? quoted[2] : value.replace(/\s+#.*$/, '').trim();
+    env[m[1]] = value;
   }
   pass('.env present', `${Object.keys(env).length} keys`);
 } else {

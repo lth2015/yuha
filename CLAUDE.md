@@ -117,8 +117,20 @@ check was about the rendering.
   with one that 200 proves nothing about.
 - **Prefer a scripted invariant to an eye.** The ones in this repo — brace
   balance after CSS edits, SQL placeholder counts, contrast maths, dictionary
-  key parity, orphaned exports — have each caught real defects. Eyeballing
-  caught none of them.
+  key parity, orphaned exports, mutation anchors — have each caught real
+  defects. Eyeballing caught none of them.
+- **A mutation run that is interrupted leaves its defect in the tree, and a
+  mutation whose anchor has moved tests nothing.** `scripts/mutation-check.mjs`
+  writes each defect, runs a suite, then restores — so a Ctrl-C or a timeout in
+  between leaves one file wrong, and the closing "tree clean" line never
+  prints. Two such defects (a scan start block, an agreed-receipt log order)
+  sat in the tree after two interrupted runs. Separately, four mutations had
+  silently died when the SQL they were written against was rewritten; a dead
+  mutation reads exactly like a passing one. Both are now caught: the script
+  repairs an interrupted run on its next start (`--repair`), and
+  `tests/mutation-anchors.test.ts` fails if any `from` text no longer matches.
+  After interrupting a mutation run, check `git diff` before believing a green
+  suite.
 - **Before declaring yourself blocked, look.** "The tests cannot run here" was
   repeated for fourteen commits on the strength of `node -v` printing v20 and
   Docker not being up. nvm had Node 24 installed the whole time and Docker

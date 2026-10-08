@@ -65,8 +65,19 @@ cp .env.example .env   # 然后按需填写下表中的值
 | `STRIPE_SECRET_KEY` | [Stripe Dashboard](https://dashboard.stripe.com/test/apikeys) → Secret key（`sk_test_…`） |
 | `STRIPE_WEBHOOK_SECRET` | Stripe CLI：`stripe listen --forward-to localhost:4000/api/webhooks/stripe` 输出的 `whsec_…`。必须是 `whsec_` 开头的 endpoint signing secret，启动时会校验前缀（不会打印值） |
 | `STRIPE_PUBLISHABLE_KEY` | 同页 Publishable key（`pk_test_…`） |
-| `STRIPE_PRICE_ID_DROP_5` / `_PRO_MONTHLY` / `_PREMIER_MONTHLY` / `_MARKET_LICENSE` | 在 Stripe 后台建 4 个价格，金额与 `apps/api/src/seed.ts` 的目录一致：DROP ¥980 一次性 / CREATOR（`pro_monthly`）¥1,980 月 / STUDIO（`premier_monthly`）¥3,980 月 / Licence ¥980 一次性。JPY 是零小数货币，Stripe 的 `unit_amount` 直接写 980，不要乘 100。把 `price_…` 填进来 |
+| `STRIPE_PRICE_ID_DROP_5` | Stripe 里的 **「DROP — 5 songs」**，¥980 一次性 |
+| `STRIPE_PRICE_ID_PRO_MONTHLY` | Stripe 里的 **「CREATOR — 15 songs / month」**，¥1,980 每月。注意变量名是内部 price key（`pro_monthly`），和控制台显示的 CREATOR 不是一个词 |
+| `STRIPE_PRICE_ID_PREMIER_MONTHLY` | Stripe 里的 **「STUDIO — 45 songs / month」**，¥3,980 每月。同上，内部叫 `premier_monthly` |
+| `STRIPE_PRICE_ID_MARKET_LICENSE` | Stripe 里的 **「Licence — one song」**，¥980 一次性 |
 | `STRIPE_API_VERSION` | 固定为 `2025-03-31.basil`。不填时用 SDK 自带的版本（现为 `2025-02-24.acacia`），而 webhook 的 payload 形状依赖它——升一次依赖就会悄悄改变线上事件的结构。启动时校验格式，低于 `2025-03-31` 直接拒绝；生产模式不填也拒绝 |
+
+JPY 是零小数货币，Stripe 的 `unit_amount` 直接写 980，不要乘 100。
+
+**命名对不上这件事，靠校验而不是靠记性。** 变量名来自内部 price key，Stripe 控制台显示的是营销名，两套词不一样，而 CREATOR 和 STUDIO 又只差价格——填反是很自然的手误，代价是客户买 STUDIO 被扣 ¥1,980（Checkout 按 Stripe 的 Price 收，订单行里记的是目录金额，webhook 的金额校验会在**扣款之后**才抛错）。所以 `pnpm seed` 和 `pnpm check:stripe-prices` 会把每个 Price 读回来，比对金额、币种、计费周期（含 `interval_count`）、含税方式和是否 active，不一致就拒绝；两个变量填了同一个 id、或两个 id 其实属于 Stripe 里同一个 product，也会单独点出来。
+
+**但要说清楚它到底保证了什么。** 这两个都是**人去跑的命令**：CI 不跑（CI 没有线上 Stripe key），pod 启动也故意不跑（第三方超时不该拦住一个本来正常的部署），而改价格 id 的实际发布路径是「改 ConfigMap、滚 pod」——两个都不经过。所以这是一道**有人跑就能抓住**的检查，不是「填反了发不出去」。改价格 id 之后请手动跑一次 `pnpm check:stripe-prices`。
+
+内部 price key 没有跟着改名，因为它是 `product_catalog` 的主键、也是 `orders` / `subscriptions` 的外键——那是一次数据迁移，而且改完也只是降低手误概率。
 
 启用：`PAYMENTS_ADAPTER=stripe`、`RUN_MODE=integration`。Webhook 的路径、要勾的 14 个事件、payload 格式与 API 版本见 [STRIPE_WEBHOOK.md](STRIPE_WEBHOOK.md)——那份是唯一的清单，这里不再抄一份会和它漂移的短名单。
 
