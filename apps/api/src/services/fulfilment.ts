@@ -1,6 +1,7 @@
 import {
   getOrder,
   getProductVersion,
+  openOrderReview,
   grantLicense,
   grantUnits,
   markEntitlementGranted,
@@ -40,10 +41,25 @@ export interface GrantResult {
    * sweep that looks for paid orders with nothing granted.
    */
   delivered: boolean;
-  reason?: 'already_licensed';
+  reason?: 'already_licensed' | 'held_for_review';
 }
 
 export async function grantEntitlementForOrder(order: OrderRow, tx: Tx): Promise<GrantResult> {
+  /*
+   * A card order a person is still looking at delivers nothing yet.
+   *
+   * The check lives HERE, in the one function both payment channels and the
+   * recovery sweep run, and not at the place that decides to hold. Anywhere
+   * else and the hold would be cosmetic: `listUngrantedPaidOrders` selects
+   * exactly "paid and not granted", which is what a held order looks like, so
+   * the sweep would have delivered every one of them on its next pass. That is
+   * the same mistake as the stablecoin round's review state, which was set
+   * correctly and reached nobody.
+   */
+  if (await openOrderReview(order.id, tx)) {
+    return { delivered: false, reason: 'held_for_review' };
+  }
+
   const product = await getProductVersion(order.price_key, order.price_version, tx);
   if (!product) throw new Error(`unknown product version ${order.price_key}@${order.price_version}`);
 
@@ -93,7 +109,7 @@ export async function grantEntitlementForOrder(order: OrderRow, tx: Tx): Promise
   return { delivered: true };
 }
 
-export type FulfilResult = 'delivered' | 'nothing_to_do' | 'duplicate_entitlement';
+export type FulfilResult = 'delivered' | 'nothing_to_do' | 'duplicate_entitlement' | 'held_for_review';
 
 /**
  * Hands over what a paid order bought, re-reading the order inside the
@@ -114,6 +130,9 @@ export async function fulfilPaidOrder(orderId: string): Promise<FulfilResult> {
     const order = await getOrder(orderId, tx);
     if (!order || order.status !== 'paid' || order.entitlement_granted_at) return 'nothing_to_do';
     const result = await grantEntitlementForOrder(order, tx);
-    return result.delivered ? 'delivered' : 'duplicate_entitlement';
+    if (result.delivered) return 'delivered';
+    // Two different non-deliveries, and the caller must not treat a hold as a
+    // duplicate: one needs a refund, the other needs a person to look.
+    return result.reason === 'held_for_review' ? 'held_for_review' : 'duplicate_entitlement';
   });
 }

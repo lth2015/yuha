@@ -385,6 +385,15 @@ export function CheckoutComplete() {
           if (!cancelled) setWaiting(false);
           return;
         }
+        /*
+         * A hold is a decision, not a delay: nothing will arrive until a
+         * person acts, so the clock stops rather than counting down to "this
+         * is taking a while".
+         */
+        if (res.heldForReview) {
+          setWaiting(false);
+          return;
+        }
       } catch (err) {
         if (cancelled) return;
         setError(err);
@@ -449,11 +458,20 @@ export function CheckoutComplete() {
   }
 
   const granted = order?.entitlementGranted === true;
-  const stillWaiting = !granted && waiting;
+  /*
+   * A payment that went through and is being looked at by a person.
+   *
+   * Without this the page polls for a grant that is not coming, gives up, and
+   * says "this is taking a while" — true, and useless to somebody whose money
+   * has been taken. The hold is a deliberate decision on our side, so the
+   * honest thing is to name it and stop the clock.
+   */
+  const held = order?.heldForReview === true && !granted;
+  const stillWaiting = !granted && !held && waiting;
 
   return (
     <div className="stack stack--loose checkout-return">
-      <h1>{granted ? t('pay.doneTitle') : t('pay.waitTitle')}</h1>
+      <h1>{granted ? t('pay.doneTitle') : held ? t('pay.heldTitle') : t('pay.waitTitle')}</h1>
 
       <ErrorNotice error={error} />
 
@@ -476,6 +494,27 @@ export function CheckoutComplete() {
             <Link className="btn btn--primary" to={returnTo ?? '/create'}>
               {returnTo ? t('pay.backToWork') : t('pay.goCreate')}
             </Link>
+          </>
+        ) : held ? (
+          <>
+            <Badge tone="badge--warn">{t('pay.held')}</Badge>
+            <p style={{ margin: 0 }}>
+              {order && (
+                <>
+                  {t('pay.paid', { amount: formatMoney(order.amountMinor, order.currency, LOCALES[lang]) })}
+                  <br />
+                </>
+              )}
+              {t('pay.heldBody')}
+            </p>
+            <p className="small muted" style={{ margin: 0 }}>
+              {t('pay.heldNext')}
+            </p>
+            <div className="row" style={{ flexWrap: 'wrap' }}>
+              <Link className="btn btn--secondary" to="/settings/billing">
+                {t('pay.seeBilling')}
+              </Link>
+            </div>
           </>
         ) : (
           <>

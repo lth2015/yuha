@@ -22,6 +22,7 @@ import {
 } from '@yuha/db';
 import type { AppContext } from '../context.js';
 import { executeAccountDeletion } from '../services/deletion.js';
+import { decideHeldOrder, heldOrderQueue } from '../services/order-review.js';
 
 /**
  * Operations console API (UI-15).
@@ -365,6 +366,32 @@ export default async function adminRoutes(app: FastifyInstance, opts: { ctx: App
     });
 
     return { id, status: 'executed', outcome };
+  });
+
+  /**
+   * Card orders held before delivery (⑥ in docs/FRAUD_PREVENTION.md).
+   *
+   * Staff can see the queue; only an admin decides, like every other action
+   * about money. Releasing hands over what was bought; refusing delivers
+   * nothing and leaves the refund to a person in Stripe, which is said
+   * plainly rather than implied by a button.
+   */
+  app.get('/v1/admin/order-reviews', { preHandler: staff }, async () => ({
+    items: await heldOrderQueue(),
+  }));
+
+  app.post('/v1/admin/order-reviews/:id/decide', { preHandler: adminOnly }, async (req) => {
+    const { id } = req.params as { id: string };
+    const body = z
+      .object({ decision: z.enum(['release', 'refuse']), reason: z.string().min(3).max(500) })
+      .parse(req.body);
+    return decideHeldOrder({
+      reviewId: id,
+      decision: body.decision,
+      reason: body.reason,
+      actorId: req.user!.id,
+      actorRole: req.user!.role,
+    });
   });
 
   app.get('/v1/admin/audit-logs', { preHandler: staff }, async (req) => {

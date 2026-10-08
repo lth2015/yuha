@@ -338,6 +338,8 @@ never from a token claim.
 | `POST /v1/admin/deletions/:id/verify` | **admin** | Confirm the requester owns the account |
 | `POST /v1/admin/deletions/:id/execute` | **admin** | Carry out the erasure |
 | `GET /v1/admin/audit-logs` | support | Audit trail |
+| `GET /v1/admin/order-reviews` | support | Card orders whose delivery is held pending a person (⑥) |
+| `POST /v1/admin/order-reviews/:id/decide` | **admin** | Release and deliver, or refuse — reason required. Refusing does not refund; that happens in Stripe |
 | `GET /v1/admin/stablecoin-payments` | support | Payments in review, money with no order to attach it to, and refunds owed |
 | `POST /v1/admin/stablecoin-payments/:id/review` | **admin** | Accept a short, over or late payment, or reject it — reason required |
 | `POST /v1/admin/stablecoin-transfers/:id/decide` | **admin** | Attach an unattributed transfer to an order, or write it off — reason required |

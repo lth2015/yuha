@@ -88,6 +88,16 @@ export const orderView = z.object({
    * the browser landing on the success page.
    */
   entitlementGranted: z.boolean(),
+  /**
+   * The payment went through and a person is checking the order before it is
+   * delivered (⑥ in docs/FRAUD_PREVENTION.md).
+   *
+   * Carried to the client because the alternative is a page that polls for a
+   * grant that is not coming and eventually says "this is taking a while" —
+   * which is true and useless. A customer whose money has been taken is owed
+   * the actual reason.
+   */
+  heldForReview: z.boolean(),
   createdAt: z.string(),
   paidAt: z.string().nullable(),
   receiptUrl: z.string().nullable(),

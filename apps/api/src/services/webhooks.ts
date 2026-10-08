@@ -4,6 +4,7 @@ import {
   finishWebhookEvent,
   getActiveProduct,
   getOrder,
+  getUser,
   getProductVersion,
   inferredPeriodDays,
   grantLicense,
@@ -26,6 +27,7 @@ import {
 } from '@yuha/db';
 import type { AppContext } from '../context.js';
 import { fulfilPaidOrder, grantEntitlementForOrder } from './fulfilment.js';
+import { reviewPaidCardOrder } from './order-review.js';
 
 /**
  * Stripe webhook processing (PROJECT_TASK.md §7).
@@ -216,8 +218,34 @@ async function handleCheckoutCompleted(ctx: AppContext, event: StripeEventLike):
     // business key — the order id — not on the event that got us here, which
     // is what makes a card payment and an on-chain payment for one order
     // deliver once between them.
+    /*
+     * Assessed before delivery is attempted, in this same transaction.
+     *
+     * The review row has to exist by the time `grantEntitlementForOrder` looks
+     * for it, or the hold is a note written after the goods have gone. ⑥ in
+     * docs/FRAUD_PREVENTION.md; what is held is delivery and never the
+     * payment, because a chargeback can take money back and nothing takes back
+     * a downloaded song.
+     */
+    const buyer = await getUser(updated.user_id, tx);
+    const held = buyer ? await reviewPaidCardOrder(ctx, { order: updated, user: buyer }, tx) : [];
+
     const granted = await grantEntitlementForOrder(updated, tx);
-    if (!granted.delivered) {
+    if (!granted.delivered && granted.reason === 'held_for_review') {
+      /*
+       * Expected, and not an error: the payment happened and is recorded
+       * below, and the order stays paid-and-undelivered until a person
+       * decides. Throwing here would make Stripe retry an event whose outcome
+       * is already correct.
+       */
+      await trackEvent({
+        name: 'card_order_held_for_review',
+        userRef: updated.user_id,
+        props: { order_id: updated.id, reasons: held, amount_minor: updated.amount_minor },
+        runMode: ctx.config.mode,
+        isInternal: ctx.config.isDemo,
+      }).catch(() => undefined);
+    } else if (!granted.delivered) {
       /*
        * Paid for something the buyer already holds. The order deliberately
        * stays ungranted so the recovery sweep and the console keep showing it,

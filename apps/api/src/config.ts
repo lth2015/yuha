@@ -377,6 +377,28 @@ const envSchema = z.object({
    */
   PURCHASE_CAP_JPY_PER_DAY: int(50_000),
   PURCHASE_CAP_ORDERS_PER_DAY: int(20),
+  /*
+   * Holding a paid card order until a person has looked at it.
+   *
+   * ⑥ in docs/FRAUD_PREVENTION.md was real for the stablecoin channel and
+   * absent for the card one. What is held is DELIVERY, never the payment:
+   * Stripe has taken it already, and the thing that cannot be undone is the
+   * song someone downloaded, not the charge.
+   *
+   * The thresholds are set so that almost nothing is held, because a hold on a
+   * legitimate purchase is a customer who paid and got nothing — at this scale
+   * the worse of the two failures. A brand-new account spending ¥5,000 in its
+   * first hour is roughly five DROP packs before anything has been listened
+   * to; ten orders started in a day is where a person would have begun to
+   * wonder, while the purchase cap stops the twentieth.
+   *
+   * Zero switches a signal off individually; CARD_REVIEW_ENABLED=false stops
+   * all of it, which is what a deployment with no card channel wants.
+   */
+  CARD_REVIEW_ENABLED: bool(true),
+  CARD_REVIEW_NEW_ACCOUNT_MINUTES: int(60),
+  CARD_REVIEW_NEW_ACCOUNT_VALUE_MINOR: int(5_000),
+  CARD_REVIEW_VELOCITY_ORDERS: int(10),
 
   // --- generation tuning --------------------------------------------------
   JOB_LEASE_SECONDS: int(90),

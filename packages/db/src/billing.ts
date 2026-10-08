@@ -335,24 +335,38 @@ export async function findOrderBySession(
 export async function listOrders(
   userId: string,
   limit = 50,
-): Promise<Array<OrderRow & { display_name: string | null }>> {
+): Promise<Array<OrderRow & { display_name: string | null; held_for_review: boolean }>> {
   // Joined on (price_key, version): the catalogue row as it was when bought,
   // so renaming or repricing a plan never rewrites an existing receipt.
-  return query<OrderRow & { display_name: string | null }>(
+  //
+  // `held_for_review` comes from a join rather than a lookup per row: the
+  // history page shows fifty orders, and a customer whose purchase is being
+  // checked should see that on the list as well as on the order itself.
+  //
+  // Coerced to a boolean below, once. `r.id IS NOT NULL` arrives as 0 or 1 and
+  // the driver's typeCast only converts TINYINT(1), so handing the row
+  // straight out would put a 1 into a field the contract calls a boolean —
+  // which zod does not police at this edge and a later `=== true` would read
+  // as false.
+  const rows = await query<OrderRow & { display_name: string | null; held_for_review: number }>(
     `SELECT ${ORDER_COLUMNS.split(',')
       .map((c) => c.trim())
       .filter(Boolean)
       .map((c) => `o.${c}`)
       .join(', ')},
-            pc.display_name
+            pc.display_name,
+            r.id IS NOT NULL AS held_for_review
        FROM orders o
        LEFT JOIN product_catalog pc
               ON pc.price_key = o.price_key AND pc.version = o.price_version
+       LEFT JOIN order_reviews r
+              ON r.order_id = o.id AND r.decided_at IS NULL
       WHERE o.user_id = ?
       ORDER BY o.created_at DESC
       LIMIT ?`,
     [userId, limit],
   );
+  return rows.map((r) => ({ ...r, held_for_review: !!r.held_for_review }));
 }
 
 export async function attachCheckoutSession(
@@ -694,4 +708,123 @@ export async function setCancelAtPeriodEnd(
     [params.subscriptionId],
     tx,
   );
+}
+
+// --------------------------------------------- card orders held for review
+
+export interface OrderReviewRow {
+  id: string;
+  order_id: string;
+  user_id: string;
+  reasons: string[];
+  amount_minor: number;
+  currency: string;
+  held_at: Date;
+  decided_at: Date | null;
+  decided_by: string | null;
+  decision: string | null;
+  decision_reason: string | null;
+}
+
+const REVIEW_COLUMNS = `id, order_id, user_id, reasons, amount_minor, currency, held_at,
+  decided_at, decided_by, decision, decision_reason`;
+
+/**
+ * Holds one paid card order, once.
+ *
+ * The guarantee is `order_reviews_order_uk`, not this function's return value:
+ * a replayed `checkout.session.completed` cannot open a second review because
+ * the database will not have two rows for one order. It returns nothing on
+ * purpose — the first draft returned `{ held: boolean }` from `affectedRows`,
+ * nothing read it, and a mutation that swapped `INSERT IGNORE` for
+ * `ON DUPLICATE KEY UPDATE` survived the suite precisely because the flag was
+ * unobserved. A flag nobody reads is a flag nobody notices lying, and under
+ * this driver's CLIENT_FOUND_ROWS that second form would have lied (see
+ * CLAUDE.md). `INSERT IGNORE` stays because it says what it means.
+ */
+export async function holdOrderForReview(
+  params: {
+    orderId: string;
+    userId: string;
+    reasons: string[];
+    amountMinor: number;
+    currency: string;
+  },
+  tx?: PoolConnection,
+): Promise<void> {
+  await execute(
+    `INSERT IGNORE INTO order_reviews (id, order_id, user_id, reasons, amount_minor, currency)
+     VALUES (?, ?, ?, ?, ?, ?)`,
+    [
+      newId(),
+      params.orderId,
+      params.userId,
+      JSON.stringify(params.reasons),
+      params.amountMinor,
+      params.currency,
+    ],
+    tx,
+  );
+}
+
+/**
+ * The open review for an order, if it has one.
+ *
+ * Consulted by `grantEntitlementForOrder` — the one function both payment
+ * channels and the recovery sweep run — so a hold cannot be cosmetic. A check
+ * placed anywhere else would have left `listUngrantedPaidOrders` happily
+ * delivering every held order on its next pass, which is precisely how the
+ * stablecoin round's review state turned out to reach nobody.
+ */
+export async function openOrderReview(
+  orderId: string,
+  tx?: PoolConnection,
+): Promise<OrderReviewRow | undefined> {
+  return queryOne<OrderReviewRow>(
+    `SELECT ${REVIEW_COLUMNS} FROM order_reviews WHERE order_id = ? AND decided_at IS NULL`,
+    [orderId],
+    tx,
+  );
+}
+
+export async function getOrderReview(id: string, tx?: PoolConnection): Promise<OrderReviewRow | undefined> {
+  return queryOne<OrderReviewRow>(`SELECT ${REVIEW_COLUMNS} FROM order_reviews WHERE id = ?`, [id], tx);
+}
+
+export async function listOpenOrderReviews(limit = 100): Promise<OrderReviewRow[]> {
+  return query<OrderReviewRow>(
+    `SELECT ${REVIEW_COLUMNS} FROM order_reviews WHERE decided_at IS NULL ORDER BY held_at LIMIT ?`,
+    [limit],
+  );
+}
+
+/**
+ * Records a decision, once.
+ *
+ * The UPDATE matches only an undecided row, so two operators acting at the
+ * same instant cannot both win, and the caller must treat `false` as "already
+ * decided" rather than retrying.
+ */
+export async function decideOrderReview(
+  params: { id: string; decision: 'release' | 'refuse'; actorId: string; reason: string },
+  tx?: PoolConnection,
+): Promise<boolean> {
+  const res = await execute(
+    `UPDATE order_reviews
+        SET decision = ?, decision_reason = ?, decided_by = ?, decided_at = UTC_TIMESTAMP(3)
+      WHERE id = ? AND decided_at IS NULL`,
+    [params.decision, params.reason, params.actorId, params.id],
+    tx,
+  );
+  return res.affectedRows > 0;
+}
+
+/** How many disputes this account has ever had, as a risk signal. */
+export async function disputeCountForUser(userId: string, tx?: PoolConnection): Promise<number> {
+  const row = await queryOne<{ n: string | number }>(
+    `SELECT COUNT(*) AS n FROM payments WHERE user_id = ? AND kind = 'dispute'`,
+    [userId],
+    tx,
+  );
+  return Number(row?.n ?? 0);
 }

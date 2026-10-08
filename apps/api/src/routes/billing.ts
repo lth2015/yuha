@@ -52,6 +52,7 @@ export default async function billingRoutes(app: FastifyInstance, opts: { ctx: A
         currency: o.currency,
         status: o.status,
         entitlementGranted: o.entitlement_granted_at !== null,
+        heldForReview: o.held_for_review,
         createdAt: o.created_at.toISOString(),
         createdAtJst: toJst(o.created_at),
         paidAt: o.paid_at?.toISOString() ?? null,

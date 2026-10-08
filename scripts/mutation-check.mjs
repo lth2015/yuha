@@ -401,6 +401,58 @@ const MUTATIONS = [
     tests: ['tests/purchase-cap.test.ts'],
   },
   {
+    name: 'a-held-order-is-delivered-by-the-recovery-sweep',
+    file: 'apps/api/src/services/fulfilment.ts',
+    from: '  if (await openOrderReview(order.id, tx)) {\n    return { delivered: false, reason: \'held_for_review\' };\n  }',
+    to: '  void openOrderReview;',
+    tests: ['tests/card-order-review.test.ts'],
+  },
+  {
+    name: 'the-new-account-signal-needs-only-one-half',
+    file: 'apps/api/src/services/order-review.ts',
+    from: '    facts.accountAgeMs < limits.newAccountMinutes * 60_000 &&\n    facts.amountMinor >= limits.newAccountValueMinor',
+    to: '    (facts.accountAgeMs < limits.newAccountMinutes * 60_000 ||\n      facts.amountMinor >= limits.newAccountValueMinor)',
+    tests: ['tests/card-order-review.test.ts'],
+  },
+  {
+    name: 'the-velocity-signal-is-off-by-one',
+    file: 'apps/api/src/services/order-review.ts',
+    from: '  if (limits.velocityOrders > 0 && facts.ordersStartedInWindow >= limits.velocityOrders) {',
+    to: '  if (limits.velocityOrders > 0 && facts.ordersStartedInWindow > limits.velocityOrders) {',
+    tests: ['tests/card-order-review.test.ts'],
+  },
+  {
+    name: 'a-stablecoin-order-is-assessed-for-card-risk',
+    file: 'apps/api/src/services/order-review.ts',
+    from: "  if (params.order.payment_method === 'stablecoin') return [];",
+    to: '  void params;',
+    tests: ['tests/card-order-review.test.ts'],
+  },
+  /*
+   * There was a mutation here that swapped `INSERT IGNORE` for
+   * `ON DUPLICATE KEY UPDATE` in `holdOrderForReview`, and it SURVIVED — which
+   * was the correct answer. The unique key, not the statement form, is what
+   * stops a replayed webhook opening a second review, and the `{ held }` flag
+   * the function used to return from `affectedRows` was read by nobody. The
+   * fix was to delete the flag rather than to write a test for a difference
+   * that does not exist; a surviving mutation is sometimes a question about
+   * the code and not about the tests.
+   */
+  {
+    name: 'a-held-order-is-not-reported-to-the-customer',
+    file: 'apps/api/src/services/billing.ts',
+    from: '    heldForReview: !!(await openOrderReview(order.id)),',
+    to: '    heldForReview: false,',
+    tests: ['tests/card-order-review.test.ts'],
+  },
+  {
+    name: 'the-held-order-decision-can-be-taken-twice',
+    file: 'packages/db/src/billing.ts',
+    from: '      WHERE id = ? AND decided_at IS NULL`,\n    [params.decision, params.reason, params.actorId, params.id],',
+    to: '      WHERE id = ?`,\n    [params.decision, params.reason, params.actorId, params.id],',
+    tests: ['tests/card-order-review.test.ts'],
+  },
+  {
     name: 'a-blank-numeric-config-line-is-zero-again',
     file: 'apps/api/src/config.ts',
     from: "const blank = (v: string | undefined) => v === undefined || v.trim() === '';",

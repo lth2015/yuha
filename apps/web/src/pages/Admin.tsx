@@ -3,6 +3,7 @@ import { apiFetch } from '../lib/api';
 import { useI18n } from '../lib/i18n';
 import { formatMoney, formatJst, useSession } from '../lib/session';
 import { Badge, ErrorNotice, Loading } from '../components/common';
+import { HeldOrderConsole } from '../components/HeldOrderConsole';
 import { StablecoinConsole } from '../components/StablecoinConsole';
 
 interface Measured {
@@ -397,10 +398,11 @@ export default function Admin() {
       </section>
 
       {/*
-        Its own data, deliberately. A failing stablecoin endpoint must not
-        blank the job queue and the ledger discrepancies above it over a
-        payment channel that is switched off on most deployments.
+        Both load their own data, deliberately. A failing payment endpoint
+        must not blank the job queue and the ledger discrepancies above it —
+        and the stablecoin channel is switched off on most deployments.
       */}
+      <HeldOrderConsole />
       <StablecoinConsole />
     </div>
   );

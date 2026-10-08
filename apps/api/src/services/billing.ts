@@ -16,6 +16,7 @@ import {
   trackEvent,
   withTx,
   type ProductRow,
+  openOrderReview,
 } from '@yuha/db';
 import type { AppContext } from '../context.js';
 import { createPurchaseOrder } from './purchase-cap.js';
@@ -233,6 +234,7 @@ export async function getOrderView(userId: string, orderId: string): Promise<Ord
     currency: order.currency,
     status: order.status,
     entitlementGranted: order.entitlement_granted_at !== null,
+    heldForReview: !!(await openOrderReview(order.id)),
     createdAt: order.created_at.toISOString(),
     paidAt: order.paid_at?.toISOString() ?? null,
     receiptUrl: order.receipt_url,
