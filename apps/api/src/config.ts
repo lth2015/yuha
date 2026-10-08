@@ -32,6 +32,17 @@ import { RunMode } from '@yuha/contracts';
  */
 const blank = (v: string | undefined) => v === undefined || v.trim() === '';
 
+/**
+ * The oldest Stripe API version this code is written for.
+ *
+ * Two separate reasons, both discovered the expensive way: an account with
+ * Managed Payments refuses a Checkout Session on anything older, and the
+ * webhook payload shape this version introduced is what
+ * `services/webhooks.ts` reads — an Invoice's subscription under
+ * `parent.subscription_details`, a Subscription's period on its items.
+ */
+export const STRIPE_API_VERSION_FLOOR = '2025-03-31.basil';
+
 const num = (dflt: number) =>
   z
     .string()
@@ -299,7 +310,12 @@ const envSchema = z.object({
   STRIPE_SECRET_KEY: secret(),
   STRIPE_WEBHOOK_SECRET: secret(),
   STRIPE_PUBLISHABLE_KEY: secret(),
-  /** Only set when the account needs a version newer than the SDK's default. */
+  /**
+   * The Stripe API version every request and every webhook payload is pinned
+   * to. Checked for shape and floor against `STRIPE_API_VERSION_FLOOR`. Required in production — see the check in `validate`. Unset falls back
+   * to whatever the installed SDK pins, which is a dependency bump away from
+   * changing the shape of live events.
+   */
   STRIPE_API_VERSION: z.string().optional(),
   STRIPE_PRICE_ID_DROP_5: z.string().optional(),
   /**
@@ -656,9 +672,81 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
   if (adapters.payments === 'stripe') {
     if (!e.STRIPE_SECRET_KEY) problems.push('STRIPE_SECRET_KEY is required for the stripe payments adapter');
     if (!e.STRIPE_WEBHOOK_SECRET) problems.push('STRIPE_WEBHOOK_SECRET is required for webhook verification');
+    /*
+     * Every product in the catalogue, not the two somebody remembered.
+     *
+     * `createCheckout` throws "product X has no Stripe price id configured" at
+     * the moment a customer clicks buy — so a missing id was not a boot
+     * failure but a 500 on the one page that takes money, found by whoever
+     * tried to buy a licence first. All four products are live in the Stripe
+     * dashboard (DROP, Licence, CREATOR, STUDIO); the list below is the same
+     * four, and `tests/stripe-webhook-path.test.ts` holds a scripted
+     * invariant that `seed.ts` and this list name the same set, because the
+     * next product added is the next one to be missing here.
+     */
     if (!e.STRIPE_PRICE_ID_DROP_5) problems.push('STRIPE_PRICE_ID_DROP_5 is required for the stripe payments adapter');
+    if (!e.STRIPE_PRICE_ID_MARKET_LICENSE) {
+      problems.push('STRIPE_PRICE_ID_MARKET_LICENSE is required for the stripe payments adapter (the market licence is on sale and has no feature switch)');
+    }
     if (e.FEATURE_SUBSCRIPTIONS_ENABLED && !e.STRIPE_PRICE_ID_PRO_MONTHLY) {
       problems.push('STRIPE_PRICE_ID_PRO_MONTHLY is required when subscriptions are enabled');
+    }
+    if (e.FEATURE_SUBSCRIPTIONS_ENABLED && !e.STRIPE_PRICE_ID_PREMIER_MONTHLY) {
+      problems.push('STRIPE_PRICE_ID_PREMIER_MONTHLY is required when subscriptions are enabled');
+    }
+    /*
+     * The webhook secret is a shape we can check without knowing the value.
+     *
+     * Endpoint secrets are `whsec_...`. The two things most easily pasted into
+     * this variable instead are the restricted API key (`rk_...`) and the
+     * secret key (`sk_...`), and both produce a signature that never verifies
+     * — which surfaces as every event rejected with 400 and looks, from the
+     * Stripe dashboard, exactly like our server being broken. Checking the
+     * prefix costs nothing and never reveals the secret: no value is pushed
+     * into the problem text here or anywhere else.
+     */
+    if (e.STRIPE_WEBHOOK_SECRET && !e.STRIPE_WEBHOOK_SECRET.startsWith('whsec_')) {
+      problems.push('STRIPE_WEBHOOK_SECRET does not look like a Stripe endpoint signing secret (expected a whsec_ prefix)');
+    }
+    /*
+     * The API version is a deployment decision in production, not a default.
+     *
+     * The event payloads this code reads depend on it: an Invoice's
+     * subscription moved under `parent.subscription_details` and a
+     * Subscription's period moved onto its items, both handled in
+     * services/webhooks.ts, both version-dependent. Left unset, the version is
+     * whatever this SDK happens to pin — 2025-02-24.acacia today — so a
+     * routine `stripe` bump would silently change the shape of every live
+     * event. It also has to be 2025-03-31.basil or greater for an account with
+     * Managed Payments, which is only discovered by a failing live checkout.
+     */
+    if (mode === 'production' && !e.STRIPE_API_VERSION) {
+      problems.push('STRIPE_API_VERSION must be set explicitly in production (the webhook payload shape depends on it; 2025-03-31.basil is the version this code is written against)');
+    }
+    /*
+     * And it has to be a version, not a string.
+     *
+     * Requiring only that the variable is non-empty would accept `basil`, or
+     * `2024-06-20` — a version older than the Checkout minimum, which fails at
+     * the first live purchase and nowhere earlier. Stripe's versions are
+     * date-ordered with a codename suffix, so the date compares
+     * lexicographically and `STRIPE_API_VERSION_FLOOR` is the one this code is
+     * written against. Newer is allowed and unverified: the SDK's types are
+     * generated against its own version, so a newer account version is a
+     * deliberate choice somebody makes, not an accident this check should
+     * block.
+     */
+    if (e.STRIPE_API_VERSION) {
+      const shape = /^(\d{4}-\d{2}-\d{2})(\.[a-z]+)?$/.exec(e.STRIPE_API_VERSION.trim());
+      if (!shape) {
+        problems.push(
+          `STRIPE_API_VERSION is not a Stripe API version (expected YYYY-MM-DD or YYYY-MM-DD.codename, e.g. ${STRIPE_API_VERSION_FLOOR})`,
+        );
+      } else if (shape[1]! < STRIPE_API_VERSION_FLOOR.slice(0, 10)) {
+        problems.push(
+          `STRIPE_API_VERSION ${e.STRIPE_API_VERSION} is older than ${STRIPE_API_VERSION_FLOOR}, which Checkout requires on an account with Managed Payments and which this code's webhook handling is written against`,
+        );
+      }
     }
     if (e.STRIPE_SECRET_KEY?.startsWith('sk_live_') && mode !== 'production') {
       problems.push(`a live Stripe key cannot be used in ${mode} mode`);

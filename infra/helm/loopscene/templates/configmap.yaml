@@ -69,6 +69,13 @@ data:
   STRIPE_PRICE_ID_DROP_5: {{ .Values.config.stripe.priceIdDrop5 | quote }}
   STRIPE_PRICE_ID_PRO_MONTHLY: {{ .Values.config.stripe.priceIdProMonthly | quote }}
   STRIPE_PRICE_ID_PREMIER_MONTHLY: {{ .Values.config.stripe.priceIdPremierMonthly | quote }}
+  # The market licence was live in Stripe and reached no pod: this key was
+  # missing from the ConfigMap entirely, so `stripe_price_id` seeded as NULL
+  # and buying a licence 500'd on the checkout call.
+  STRIPE_PRICE_ID_MARKET_LICENSE: {{ .Values.config.stripe.priceIdMarketLicense | quote }}
+  # Pinned, not inherited from the SDK. The API refuses to start in production
+  # without it, because the webhook payload shape depends on it.
+  STRIPE_API_VERSION: {{ .Values.config.stripe.apiVersion | quote }}
 
   FEATURE_SUBSCRIPTIONS_ENABLED: {{ .Values.config.features.subscriptionsEnabled | quote }}
   FEATURE_FREE_TRIAL_ENABLED: {{ .Values.config.features.freeTrialEnabled | quote }}

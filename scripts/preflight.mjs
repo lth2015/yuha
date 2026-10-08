@@ -206,6 +206,38 @@ if (stripe && !env.STRIPE_SECRET_KEY.startsWith('sk_test_')) {
   fail('STRIPE_SECRET_KEY', 'not a test key', 'acceptance must never run against a live key');
 }
 if (!stripe) notes.push('payments are simulated: checkout completes without leaving the machine');
+/*
+ * The price ids too, and all four of them.
+ *
+ * This file promises it "says exactly what is missing", and for Stripe it
+ * checked the key and the webhook secret only — while the API refuses to start
+ * without an id for every product in the catalogue. So the thing meant to
+ * predict the failure could not see it, and the failure itself arrives either
+ * at boot or, for a product that was not checked at boot either, as a 500 on
+ * the one page that takes money.
+ */
+if (stripe) {
+  const priceKeys = [
+    'STRIPE_PRICE_ID_DROP_5',
+    'STRIPE_PRICE_ID_PRO_MONTHLY',
+    'STRIPE_PRICE_ID_PREMIER_MONTHLY',
+    'STRIPE_PRICE_ID_MARKET_LICENSE',
+  ];
+  const missing = priceKeys.filter((k) => !has(k));
+  if (missing.length) {
+    fail(
+      missing.join(' / '),
+      'no price id',
+      'PAYMENTS_ADAPTER=stripe needs one live/test price id per catalogue row — `pnpm stripe:setup --apply` prints them',
+    );
+  }
+  if (!has('STRIPE_API_VERSION')) {
+    notes.push(
+      'STRIPE_API_VERSION is unset: requests use whatever version the installed SDK pins. ' +
+        'Fine locally, refused in production — 2025-03-31.basil is the version this code reads.',
+    );
+  }
+}
 
 const musicAdapter = env.MUSIC_ADAPTER ?? 'demo';
 console.log(`  ${musicAdapter === 'demo' ? 'off' : 'on '}   real music provider — adapter is "${musicAdapter}"`);

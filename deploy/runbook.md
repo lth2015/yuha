@@ -66,6 +66,20 @@ records that as BLOCKED_EXTERNAL, and this runbook does not pretend otherwise.
    property until they are added, which is the correct failure — Google sign-in
    cannot work without them, and a silently absent key looks like a login bug.
 
+6. **Register the Stripe webhook endpoint, and fill the price ids.** The
+   endpoint is `POST https://yuha.studio/api/webhooks/stripe`, format
+   **Snapshot**, API version **2025-03-31.basil**, with the fourteen events
+   listed in [`docs/STRIPE_WEBHOOK.md`](../docs/STRIPE_WEBHOOK.md). The
+   `whsec_…` the dashboard shows once goes into the Secrets Manager JSON above
+   as `STRIPE_WEBHOOK_SECRET`; the API checks the prefix at start-up and never
+   prints the value.
+
+   Then fill `config.stripe` in `deploy/envs/<env>.yaml` with the four **live**
+   `price_…` ids and the live `pk_live_…`. All four are now required at
+   start-up: the licence and STUDIO ids were not, and a missing one is a 500 on
+   the checkout call rather than a boot failure — found by whoever tries to buy
+   first. Nothing in this repository generates or guesses an id or a secret.
+
 ## Deploying
 
 Actions → Deploy → Run workflow, pick the environment. A `v*` tag deploys
@@ -94,6 +108,26 @@ kubectl run check --rm -i --restart=Never -n yuha \
 
 A finished rollout is not evidence that the thing it rolled out works. Ask the
 pod.
+
+And ask the **front door** about the webhook, from outside the cluster:
+
+```bash
+curl -i -X POST https://yuha.studio/api/webhooks/stripe \
+  -H 'content-type: application/json' --data '{}'
+```
+
+`400` with `{"error":{"code":"WEBHOOK_SIGNATURE_INVALID","message":"signature
+verification failed"}}` is the pass. Unsigned on purpose: the API is the only
+thing that can answer 400, so this proves the request reached it.
+
+Read the **message**, not just the code. `raw body was not preserved` is the
+same 400 from a route that is served but whose body is no longer handed through
+as bytes — in that state every real Stripe event is refused as well, and it
+looks identical to a wrong signing secret. A `200` carrying HTML means the path
+is being served by something that is not the API, and Stripe would acknowledge
+and discard every real event — a customer charged with nothing granted and no
+error anywhere. A `3xx` is also a failure; a Stripe endpoint must answer
+directly. `deploy/dgx/update.sh` runs the same check for the intranet stack.
 
 ## Rolling back
 

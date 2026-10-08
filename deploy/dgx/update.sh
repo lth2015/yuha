@@ -184,6 +184,43 @@ ssh "$DGX" "curl -fsS -o /dev/null --max-time 10 'http://127.0.0.1:$APP_PORT$ASS
   || die "index.html points at $ASSET, which 404s — the build and the page disagree"
 echo "   web  ok ($ASSET)"
 
+# The Stripe webhook path, which is the one failure here that is silent.
+#
+# `/api/` is a separate nginx location from `/v1/`. If it is missing, this POST
+# falls through to `try_files $uri /index.html` and nginx answers 200 with the
+# page shell — to a POST, carrying a Stripe signature. Stripe reads 200 as
+# delivered and never retries, so a real payment would be acknowledged and
+# dropped with nothing anywhere saying so.
+#
+# Unsigned on purpose: the API must answer 400, which the SPA cannot do and the
+# api container can only do if the request reached it.
+#
+# The MESSAGE is checked and not only the code, because 400
+# WEBHOOK_SIGNATURE_INVALID has two causes and only one of them is healthy.
+# "signature verification failed" means the bytes arrived and the signature was
+# absent — correct. "raw body was not preserved" means the route is served but
+# the content-type parser no longer hands the buffer through, in which case
+# every real event is refused too, and a check that accepted any 400 would
+# print ok while the endpoint rejected Stripe all day.
+WEBHOOK=$(ssh "$DGX" "curl -s -o /tmp/wh.out -w '%{http_code}' --max-time 10 \
+  -X POST -H 'content-type: application/json' --data '{}' \
+  'http://127.0.0.1:$APP_PORT/api/webhooks/stripe'; cat /tmp/wh.out; rm -f /tmp/wh.out" 2>/dev/null || true)
+case "$WEBHOOK" in
+  400*'signature verification failed'*) echo "   hook ok (400, unsigned refused)" ;;
+  *)
+    # A run that deployed nothing cannot be blamed for the box's routing, and
+    # the first SKIP_APP=1 run after this check was added would otherwise fail
+    # on a box that has not yet received the nginx change.
+    MSG="POST /api/webhooks/stripe answered '$WEBHOOK' — expected 400 with \"signature verification failed\". A 200 carrying HTML means nginx has no /api/ location and Stripe events are being swallowed; a 400 saying \"raw body was not preserved\" means the route is served but the raw body is gone."
+    if [[ "${SKIP_APP:-}" == "1" ]]; then
+      echo "   !! $MSG"
+      echo "      (SKIP_APP=1: this run deployed no app, so this is not fatal — re-run without SKIP_APP.)"
+    else
+      die "$MSG"
+    fi
+    ;;
+esac
+
 ssh "$DGX" "echo '$SHA' > $AR/.deployed"
 
 # ----------------------------------------------------------- 4. what to look at

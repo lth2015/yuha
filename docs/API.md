@@ -274,11 +274,25 @@ Sets cancel-at-period-end **server-side first**; success is reported only after
 the provider confirms. Idempotent. A failure leaves the subscription untouched
 and returns an error rather than an optimistic success (PAY-08).
 
-### `POST /v1/webhooks/stripe`
+### `POST /api/webhooks/stripe` (also `POST /v1/webhooks/stripe`)
 Signature verified over the **raw body** with the endpoint's own secret. Verified
 events are persisted and acknowledged immediately; the worker processes them
 asynchronously. A forged, stale or malformed signature is recorded as unverified
-and never processed.
+and never processed, and answered **400**.
+
+Two paths, one handler, one `webhook_events` table — so an event forwarded to
+one and delivered to the other is stored and processed once. `/api/...` is what
+the live endpoint posts to; `/v1/...` stays because the Stripe CLI forwarder and
+any endpoint registered earlier still use it. Neither redirects to the other.
+
+Both are unauthenticated by design: the signature is the authentication. There
+is nothing to exempt them from — authentication in this API is a `Bearer` token
+in the `Authorization` header, there is no cookie session (`@fastify/cookie` is
+not a dependency) and so no CSRF middleware exists to make an exception in.
+
+See [STRIPE_WEBHOOK.md](STRIPE_WEBHOOK.md) for the exact event list to tick in
+the dashboard, the payload format and API version, and where the signing secret
+is configured.
 
 ---
 

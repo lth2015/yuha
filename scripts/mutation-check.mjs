@@ -452,6 +452,146 @@ const MUTATIONS = [
     to: '      WHERE id = ?`,\n    [params.decision, params.reason, params.actorId, params.id],',
     tests: ['tests/card-order-review.test.ts'],
   },
+  /* ---- the Stripe webhook's public path (round 4) ---------------------- */
+  {
+    // The failure that makes this round worth testing: a path served as a
+    // route but missed by the raw-body parser rejects every real delivery as
+    // unsigned, which reads exactly like a wrong secret.
+    name: 'the-new-webhook-path-loses-its-raw-body',
+    file: 'apps/api/src/webhook-paths.ts',
+    from: "const RAW_BODY_PREFIXES = ['/api/webhooks/', '/v1/webhooks/'] as const;",
+    to: "const RAW_BODY_PREFIXES = ['/v1/webhooks/'] as const;",
+    tests: ['tests/stripe-webhook-path.test.ts'],
+  },
+  {
+    // nginx without an /api/ location answers the SPA, with 200, to a signed
+    // POST — and Stripe never retries a 200.
+    name: 'nginx-answers-the-spa-to-the-webhook',
+    file: 'deploy/dgx/app/nginx.conf',
+    from: '  location /api/ {',
+    to: '  location /api-disabled/ {',
+    tests: ['tests/stripe-webhook-path.test.ts'],
+  },
+  {
+    name: 'the-ingress-leaves-api-to-the-catch-all',
+    file: 'infra/helm/loopscene/templates/api.yaml',
+    from: '          - path: /api\n            pathType: Prefix\n',
+    to: '',
+    tests: ['tests/stripe-webhook-path.test.ts'],
+  },
+  /*
+   * There was a mutation here that moved the `/` catch-all to the top of the
+   * ingress path list, on the belief that the ALB controller takes list order
+   * as rule priority. It does not: the AWS Load Balancer Controller sorts an
+   * Ingress's paths before assigning priorities (Exact first, then Prefix
+   * longest first), which is also what the Ingress spec says. So that
+   * mutation produces an identical ALB and would have SURVIVED correctly. The
+   * comment in the chart and the assertion in the test both claimed the wrong
+   * mechanism and were fixed; what actually decides it is below.
+   */
+  {
+    // `Exact` on /api routes /api and sends /api/webhooks/stripe to the
+    // catch-all — the silent failure, reachable through a one-word edit that a
+    // test reading only path strings cannot see.
+    name: 'the-ingress-matches-api-exactly',
+    file: 'infra/helm/loopscene/templates/api.yaml',
+    from: '          - path: /api\n            pathType: Prefix',
+    to: '          - path: /api\n            pathType: Exact',
+    tests: ['tests/stripe-webhook-path.test.ts'],
+  },
+  {
+    // proxy_pass with a URI part replaces the matched prefix, so the api is
+    // asked for /webhooks/stripe — a route it does not register. Routed, and
+    // still a 404.
+    name: 'nginx-rewrites-the-webhook-uri',
+    file: 'deploy/dgx/app/nginx.conf',
+    from: `  location /api/ {
+    set $api_upstream http://api:4000;
+    proxy_pass $api_upstream;`,
+    to: `  location /api/ {
+    set $api_upstream http://api:4000;
+    proxy_pass $api_upstream/;`,
+    tests: ['tests/stripe-webhook-path.test.ts'],
+  },
+  {
+    // The second copy of the event list, in the file the local-dev flow tells
+    // you to fill in. Three of the four copies were missing this event.
+    name: 'the-env-example-event-list-drifts',
+    file: '.env.example',
+    from: ',charge.dispute.closed',
+    to: '',
+    tests: ['tests/stripe-webhook-path.test.ts'],
+  },
+  {
+    // Present but wrong is the case that matters: 2024-06-20 is a real Stripe
+    // version, older than the Checkout minimum, and discovered only by a
+    // failing live purchase.
+    name: 'the-api-version-floor-is-not-checked',
+    file: 'apps/api/src/config.ts',
+    from: "      } else if (shape[1]! < STRIPE_API_VERSION_FLOOR.slice(0, 10)) {",
+    to: "      } else if (false) {",
+    tests: ['tests/stripe-webhook-path.test.ts'],
+  },
+  {
+    // A secret key pasted into the signing-secret variable verifies nothing,
+    // and looks from the dashboard like our server being broken.
+    name: 'any-string-is-accepted-as-the-signing-secret',
+    file: 'apps/api/src/config.ts',
+    from: "    if (e.STRIPE_WEBHOOK_SECRET && !e.STRIPE_WEBHOOK_SECRET.startsWith('whsec_')) {",
+    to: "    if (false) {",
+    tests: ['tests/stripe-webhook-path.test.ts'],
+  },
+  {
+    // charge.dispute.closed is the moment a dispute is lost and the money is
+    // actually gone. Handled in code, forwarded by nothing.
+    name: 'the-forwarder-never-delivers-a-lost-dispute',
+    file: 'deploy/dgx/app/docker-compose.yml',
+    from: ',charge.dispute.closed',
+    to: '',
+    tests: ['tests/stripe-webhook-path.test.ts'],
+  },
+  {
+    name: 'the-licence-price-id-is-not-required-at-startup',
+    file: 'apps/api/src/config.ts',
+    from: '    if (!e.STRIPE_PRICE_ID_MARKET_LICENSE) {',
+    to: '    if (false) {',
+    tests: ['tests/stripe-webhook-path.test.ts'],
+  },
+  {
+    name: 'the-licence-price-id-reaches-no-pod',
+    file: 'infra/helm/loopscene/templates/configmap.yaml',
+    from: '  STRIPE_PRICE_ID_MARKET_LICENSE: {{ .Values.config.stripe.priceIdMarketLicense | quote }}\n',
+    to: '',
+    tests: ['tests/stripe-webhook-path.test.ts'],
+  },
+  {
+    // A 200 that does not mean "saved" turns a transient database error into a
+    // permanently lost payment: Stripe's three days of retries are the only
+    // recovery there is.
+    name: 'the-webhook-is-acknowledged-even-when-it-cannot-be-stored',
+    file: 'apps/api/src/routes/billing.ts',
+    from: `      payload: result.event.raw,
+    });`,
+    to: `      payload: result.event.raw,
+    }).catch(() => ({ duplicate: false }));`,
+    tests: ['tests/stripe-webhook-path.test.ts'],
+  },
+  {
+    // Two paths, one endpoint. Keyed per path, an event forwarded to /v1 and
+    // delivered to /api would be processed twice.
+    name: 'the-event-dedupe-is-keyed-on-the-path',
+    file: 'apps/api/src/routes/billing.ts',
+    from: '      eventId: result.event.id,',
+    to: '      eventId: `${req.url}:${result.event.id}`,',
+    tests: ['tests/stripe-webhook-path.test.ts'],
+  },
+  {
+    name: 'the-test-catalogue-drifts-from-the-product-catalogue',
+    file: 'tests/helpers/harness.ts',
+    from: "    units: 45,",
+    to: '    units: 400,',
+    tests: ['tests/stripe-webhook-path.test.ts'],
+  },
   {
     name: 'a-blank-numeric-config-line-is-zero-again',
     file: 'apps/api/src/config.ts',

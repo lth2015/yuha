@@ -63,11 +63,12 @@ cp .env.example .env   # 然后按需填写下表中的值
 | 变量 | 从哪里拿 |
 |---|---|
 | `STRIPE_SECRET_KEY` | [Stripe Dashboard](https://dashboard.stripe.com/test/apikeys) → Secret key（`sk_test_…`） |
-| `STRIPE_WEBHOOK_SECRET` | Stripe CLI：`stripe listen --forward-to localhost:4000/v1/webhooks/stripe` 输出的 `whsec_…` |
+| `STRIPE_WEBHOOK_SECRET` | Stripe CLI：`stripe listen --forward-to localhost:4000/api/webhooks/stripe` 输出的 `whsec_…`。必须是 `whsec_` 开头的 endpoint signing secret，启动时会校验前缀（不会打印值） |
 | `STRIPE_PUBLISHABLE_KEY` | 同页 Publishable key（`pk_test_…`） |
 | `STRIPE_PRICE_ID_DROP_5` / `_PRO_MONTHLY` / `_PREMIER_MONTHLY` / `_MARKET_LICENSE` | 在 Stripe 后台建 4 个价格，金额与 `apps/api/src/seed.ts` 的目录一致：DROP ¥980 一次性 / CREATOR（`pro_monthly`）¥1,980 月 / STUDIO（`premier_monthly`）¥3,980 月 / Licence ¥980 一次性。JPY 是零小数货币，Stripe 的 `unit_amount` 直接写 980，不要乘 100。把 `price_…` 填进来 |
+| `STRIPE_API_VERSION` | 固定为 `2025-03-31.basil`。不填时用 SDK 自带的版本（现为 `2025-02-24.acacia`），而 webhook 的 payload 形状依赖它——升一次依赖就会悄悄改变线上事件的结构。启动时校验格式，低于 `2025-03-31` 直接拒绝；生产模式不填也拒绝 |
 
-启用：`PAYMENTS_ADAPTER=stripe`、`RUN_MODE=integration`。Webhook 事件至少订阅：`checkout.session.completed`、`invoice.paid`、`customer.subscription.updated`、`customer.subscription.deleted`、`charge.refunded`。
+启用：`PAYMENTS_ADAPTER=stripe`、`RUN_MODE=integration`。Webhook 的路径、要勾的 14 个事件、payload 格式与 API 版本见 [STRIPE_WEBHOOK.md](STRIPE_WEBHOOK.md)——那份是唯一的清单，这里不再抄一份会和它漂移的短名单。
 
 ---
 

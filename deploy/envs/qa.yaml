@@ -127,6 +127,8 @@ config:
     priceIdDrop5: ""
     priceIdProMonthly: ""
     priceIdPremierMonthly: ""
+    priceIdMarketLicense: ""
+    apiVersion: "2025-03-31.basil"
 
   features:
     subscriptionsEnabled: "true"

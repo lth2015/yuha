@@ -233,6 +233,7 @@ alerts, rollback and recovery.
 | [`docs/OPERATIONS.md`](docs/OPERATIONS.md) | Deploy, refund, compensate, reconcile, alert, roll back, recover |
 | [`docs/ACCEPTANCE.md`](docs/ACCEPTANCE.md) | Every UI/GEN/PAY/AI/SEC item with a result and evidence |
 | [`docs/ACCEPTANCE_PAYMENTS.md`](docs/ACCEPTANCE_PAYMENTS.md) | What the Stripe sandbox has actually been made to do, and what is still only argued |
+| [`docs/STRIPE_WEBHOOK.md`](docs/STRIPE_WEBHOOK.md) | The live webhook endpoint: path, the fourteen events to tick, payload format and API version, where the signing secret lives |
 | [`docs/CONFIGURATION.md`](docs/CONFIGURATION.md) | Every environment variable, and which run modes refuse which values |
 | [`docs/DEPLOY_AWS.md`](docs/DEPLOY_AWS.md) | The AWS deployment path, none of which has been applied |
 | [`docs/UI_CRAFT.md`](docs/UI_CRAFT.md) | The detail rules the interface is held to |

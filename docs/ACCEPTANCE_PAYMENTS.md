@@ -101,7 +101,7 @@ charged, which is the 特定商取引法 problem this product has already had on
 
 ```bash
 stripe login   # or skip it and pass the key you already have, below
-stripe listen --forward-to localhost:4000/v1/webhooks/stripe
+stripe listen --forward-to localhost:4000/api/webhooks/stripe
 ```
 
 `stripe login` pairs through a browser. If the sandbox secret key is already in
@@ -109,7 +109,7 @@ stripe listen --forward-to localhost:4000/v1/webhooks/stripe
 
 ```bash
 export $(grep '^STRIPE_SECRET_KEY=' .env | xargs)
-stripe listen --api-key "$STRIPE_SECRET_KEY" --forward-to localhost:4000/v1/webhooks/stripe
+stripe listen --api-key "$STRIPE_SECRET_KEY" --forward-to localhost:4000/api/webhooks/stripe
 ```
 
 Either way, compare the `whsec_` it prints against `STRIPE_WEBHOOK_SECRET` in

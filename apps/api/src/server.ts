@@ -20,6 +20,7 @@ import telemetryRoutes from './routes/telemetry.js';
 import trackRoutes from './routes/tracks.js';
 
 import { redactUrlSecrets } from './log-redaction.js';
+import { keepsRawBody } from './webhook-paths.js';
 
 export async function buildServer(ctx: AppContext): Promise<FastifyInstance> {
   const app = Fastify({
@@ -91,14 +92,20 @@ export async function buildServer(ctx: AppContext): Promise<FastifyInstance> {
 
   /**
    * Stripe signature verification needs the exact bytes that were sent, so the
-   * webhook route keeps its raw body instead of being parsed to an object
+   * webhook routes keep their raw body instead of being parsed to an object
    * (PAY-04). Every other JSON route uses the normal parser.
+   *
+   * Which paths those are is `webhook-paths.ts`'s to say, not this file's. The
+   * predicate used to be an inline `/v1/webhooks/` prefix, which meant adding
+   * the second path registered a route whose every delivery would be rejected
+   * as unsigned — the body arrives parsed, the bytes are gone, and the symptom
+   * is indistinguishable from a wrong secret.
    */
   app.addContentTypeParser(
     'application/json',
     { parseAs: 'buffer' },
     (req, body: Buffer, done) => {
-      if (req.url.startsWith('/v1/webhooks/')) {
+      if (keepsRawBody(req.url)) {
         done(null, body);
         return;
       }

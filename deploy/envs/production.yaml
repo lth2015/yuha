@@ -53,7 +53,16 @@ ingress:
   certificateArn: "" # ACM certificate in ap-northeast-1
 
 config:
-  # One host serves both; the ALB Ingress routes /v1 to the api service. The
+  # One host, and today the ALB Ingress routes EVERY path on it to the api
+  # service — `/` is a catch-all, with /api, /v1, /health and /ready listed
+  # ahead of it. So nothing serves the SPA on this name yet: the web bundle
+  # goes to the S3 + CloudFront distribution in infra/terraform/compute.tf,
+  # which has its own domain. Pointing publicWebUrl here is the intended end
+  # state, not a description of what a browser gets today, and closing that
+  # gap means giving the SPA a path rule or putting CloudFront in front. This
+  # comment claimed "/v1 is routed to the api" while the chart routed
+  # everything; the four explicit paths exist so that, whichever way it is
+  # closed, /api/webhooks/stripe still reaches the backend. The
   # DNS record and the ACM certificate for this name are SRE's to create —
   # `certificateArn` above is still empty and the chart renders without it, so
   # that is worth checking before the first real deploy.
@@ -128,10 +137,17 @@ config:
     costIsEstimate: "true"
 
   stripe:
-    publishableKey: ""
-    priceIdDrop5: ""
-    priceIdProMonthly: ""
-    priceIdPremierMonthly: ""
+    # Four live Prices, one per catalogue row, all `price_...` ids from the
+    # LIVE dashboard — a test-mode id here is a checkout that 400s on every
+    # purchase. SRE fills these in; nothing in this repo generates or guesses
+    # one, and the secret key and the endpoint signing secret are not here at
+    # all (they come from the `yuha-runtime` Secret, see deploy/cluster).
+    publishableKey: ""        # pk_live_...
+    priceIdDrop5: ""          # DROP — 5 songs, ¥980
+    priceIdProMonthly: ""     # CREATOR — 15 songs / month, ¥1,980
+    priceIdPremierMonthly: "" # STUDIO — 45 songs / month, ¥3,980
+    priceIdMarketLicense: ""  # Licence — one song, ¥980
+    apiVersion: "2025-03-31.basil"
 
   features:
     subscriptionsEnabled: "true"

@@ -57,6 +57,18 @@ services:
 
   # Stripe cannot reach a LAN address, so the CLI pulls test-mode events and
   # forwards them to the api — the same thing `stripe listen` did on the Mac.
+  #
+  # Forwarded to the /api path, which is what the live endpoint is configured
+  # with: the CLI should exercise the URL production uses, not the older one.
+  #
+  # The event list is the fourteen `processWebhookEvent` routes, and
+  # `tests/stripe-webhook-path.test.ts` fails if the two stop agreeing.
+  # `refund.created` and `charge.dispute.closed` were both missing: the first
+  # is how a refund issued from the dashboard arrives when no charge object is
+  # updated, and the second is the moment a dispute is actually lost and the
+  # money is gone — the one that revokes credits. Both were handled in code and
+  # never delivered here, which is the shape of a protection that exists only
+  # in the branch nothing reaches.
   stripe:
     image: stripe/stripe-cli:latest
     restart: unless-stopped
@@ -64,9 +76,9 @@ services:
     command:
       - listen
       - --forward-to
-      - api:4000/v1/webhooks/stripe
+      - api:4000/api/webhooks/stripe
       - --events
-      - checkout.session.completed,checkout.session.expired,checkout.session.async_payment_succeeded,checkout.session.async_payment_failed,customer.subscription.created,customer.subscription.updated,customer.subscription.deleted,invoice.paid,invoice.payment_succeeded,invoice.payment_failed,charge.refunded,charge.dispute.created
+      - checkout.session.completed,checkout.session.async_payment_succeeded,checkout.session.async_payment_failed,checkout.session.expired,invoice.paid,invoice.payment_succeeded,invoice.payment_failed,customer.subscription.created,customer.subscription.updated,customer.subscription.deleted,charge.refunded,refund.created,charge.dispute.created,charge.dispute.closed
     environment:
       STRIPE_API_KEY: ${STRIPE_SECRET_KEY}
     depends_on: [ api ]

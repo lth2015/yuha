@@ -34,9 +34,16 @@ What it does that doing it by hand did not:
   `/v1/auth/config` through nginx (not the api's own port, where the failure
   is invisible) and fetches the script `index.html` actually references, so a
   build that did not happen cannot pass.
-  Note it does **not** use `/health`: nginx proxies only `/v1/`, so `/health`
-  falls through to the SPA and answers 200 with the page shell. A check that
-  cannot fail is not a check.
+  Note it does **not** use `/health`: nginx proxies `/v1/` and `/api/` only, so
+  `/health` falls through to the SPA and answers 200 with the page shell. A
+  check that cannot fail is not a check.
+- **Checks that the Stripe webhook path is not the SPA.** Same shape as
+  `/health`, with money behind it: a POST to a path nginx does not proxy comes
+  back 200 with the page, Stripe reads 200 as delivered, and a real payment is
+  acknowledged and dropped. The check POSTs unsigned and requires
+  `400 WEBHOOK_SIGNATURE_INVALID` with the message `signature verification
+  failed` — the message matters, because a routed path whose raw body was lost
+  answers the same 400 with a different message.
 - **Records the deployed commit** in `~/yuha-app/.deployed`, and on the next
   run prints the commits since it — which is the list of things to accept.
 

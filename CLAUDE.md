@@ -106,6 +106,15 @@ check was about the rendering.
   every duplicate for as long as it existed, unnoticed because the caller
   discarded it — and the fix that started using it would have detected nothing
   while looking tested. Read the row back when the answer decides money.
+- **An unrouted path does not 404 — it answers the SPA, with 200.** In front of
+  the api sits `location / { try_files $uri /index.html; }`, so a POST to a
+  path the proxy does not forward comes back 200 with the page shell. Stripe
+  reads 200 as delivered and never retries, so a webhook on a path nobody
+  routed is a customer charged, an event acknowledged, nothing granted, and no
+  error in any log. `/health` has the same shape and is already noted in
+  `deploy/dgx/README.md`. Check a new public path with a request only the API
+  can answer correctly — an unsigned webhook POST must come back 400 — never
+  with one that 200 proves nothing about.
 - **Prefer a scripted invariant to an eye.** The ones in this repo — brace
   balance after CSS edits, SQL placeholder counts, contrast maths, dictionary
   key parity, orphaned exports — have each caught real defects. Eyeballing

@@ -189,7 +189,7 @@ QA 是一次足尺彩排，不是缩水版。
       而不只是 rollout 成功
 - [ ] 8.3 浏览器打开 `https://qa.yuha.studio`，走一遍：
       登录 → 创作 → 生成 → 播放 → 下载
-- [ ] 8.4 Stripe webhook 指向 `https://qa.yuha.studio/v1/webhooks/stripe`，
+- [ ] 8.4 Stripe webhook 指向 `https://qa.yuha.studio/api/webhooks/stripe`（`/v1/webhooks/stripe` 同样可用，是同一个处理器），格式 Snapshot、API 版本 `2025-03-31.basil`、勾 docs/STRIPE_WEBHOOK.md 列的 14 个事件，
       用 Stripe CLI 发一个测试事件，确认返回 200
 - [ ] 8.5 详细冒烟项见 [DEPLOY_AWS.md](DEPLOY_AWS.md) 第 7 节
 

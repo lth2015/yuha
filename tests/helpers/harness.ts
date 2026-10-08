@@ -184,7 +184,16 @@ async function seedCatalogue(): Promise<void> {
     amount_minor: 1980,
     currency: 'jpy',
     tax_included: true,
-    units: 100,
+    /*
+     * 15 and 45, the numbers the catalogue and the live Stripe products carry.
+     *
+     * These said 100 and 400 — leftovers from the "100 songs a month" pivot
+     * that `seed.ts` re-priced away. No test asserted either number, which is
+     * exactly why it survived: the fixture products were ones that do not
+     * exist, and the first test to assert a STUDIO grant would have written
+     * 400 into it and looked right.
+     */
+    units: 15,
     validity_days: null,
     auto_renew: true,
     billing_interval: 'month',
@@ -214,7 +223,7 @@ async function seedCatalogue(): Promise<void> {
     amount_minor: 3980,
     currency: 'jpy',
     tax_included: true,
-    units: 400,
+    units: 45,
     validity_days: null,
     auto_renew: true,
     billing_interval: 'month',

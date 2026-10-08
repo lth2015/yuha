@@ -155,6 +155,61 @@ spec:
     - host: {{ .Values.ingress.host | quote }}
       http:
         paths:
+          # The API's own namespaces, named explicitly rather than left to the
+          # catch-all below.
+          #
+          # `/` alone already routed everything here, so these four changed
+          # nothing on the day they were written — which is the point. The
+          # moment anything else is put behind this host (a CloudFront origin
+          # for the SPA is already built in infra/terraform/compute.tf, and
+          # production.yaml points publicWebUrl at this same name), a catch-all
+          # is the only rule and the first path to lose is whichever one
+          # somebody forgets. `/api` carries the Stripe webhook: losing it
+          # means the SPA answers 200 to a signed event and Stripe never
+          # retries.
+          #
+          # What makes them win over `/` is the LENGTH, not this ordering. The
+          # AWS Load Balancer Controller sorts an Ingress's paths before it
+          # assigns ALB rule priorities — Exact first, then Prefix longest
+          # first — which is also what the Ingress spec itself says ("the
+          # longest matching path"). So the order here is for a reader, and
+          # `pathType: Prefix` is load-bearing: `Exact` on `/api` would route
+          # `/api` and send `/api/webhooks/stripe` to the catch-all, which is
+          # precisely the silent failure these lines exist to prevent.
+          # tests/stripe-webhook-path.test.ts checks the pathType, not the
+          # order.
+          #
+          # `/v1` is the rest of the API and the path the CLI forwarder uses;
+          # `/health` and `/ready` are the probes, which answer 200 from a page
+          # shell too and so cannot be left to the catch-all either.
+          - path: /api
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ include "loopscene.name" . }}-api
+                port:
+                  number: 80
+          - path: /v1
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ include "loopscene.name" . }}-api
+                port:
+                  number: 80
+          - path: /health
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ include "loopscene.name" . }}-api
+                port:
+                  number: 80
+          - path: /ready
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ include "loopscene.name" . }}-api
+                port:
+                  number: 80
           - path: /
             pathType: Prefix
             backend:
