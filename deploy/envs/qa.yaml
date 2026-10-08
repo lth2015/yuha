@@ -65,7 +65,11 @@ config:
 
   authAdapter: google
   google:
+    # <id>.apps.googleusercontent.com — not a secret.
     clientId: ""
+    # `https://<this environment's API host>/v1/auth/google/callback`, byte-
+    # identical to the Cloud Console entry. The API host, not the web app's
+    # /auth/google/callback. Checked at start-up against PUBLIC_API_URL.
     redirectUri: ""
   cognito:
     region: ap-northeast-1

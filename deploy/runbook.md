@@ -80,6 +80,36 @@ records that as BLOCKED_EXTERNAL, and this runbook does not pretend otherwise.
    the checkout call rather than a boot failure — found by whoever tries to buy
    first. Nothing in this repository generates or guesses an id or a secret.
 
+7. **Point the Google sign-in at this environment.** Google compares the
+   redirect URI byte for byte and refuses on its own page, so a stale one
+   leaves no trace on our side — no log line, no failed sign-in, just an error
+   in the address bar. Three things have to agree:
+
+   | Where | Value |
+   | --- | --- |
+   | Google Cloud Console → Credentials → the OAuth 2.0 **Web application** client → *Authorized redirect URIs* | `https://yuha.studio/v1/auth/google/callback` |
+   | `deploy/envs/<env>.yaml` → `config.google.redirectUri` | the same string, byte for byte |
+   | `deploy/envs/<env>.yaml` → `config.publicApiUrl` | `https://yuha.studio` |
+
+   **It is the API's path, not the web app's.** `/auth/google/callback` also
+   exists — it is where the API sends the browser *afterwards*, carrying a
+   one-time code — which is exactly why it gets registered by mistake. Google
+   must never be given it, and the API refuses to start if the path or the
+   origin is wrong (`apps/api/src/auth/google-paths.ts`).
+
+   Add rather than replace while migrating: an OAuth client may hold several
+   redirect URIs, so leaving the old one in place keeps the previous
+   deployment signing people in until it is switched off, and nobody is locked
+   out during the cutover. Remove it afterwards.
+
+   No *Authorized JavaScript origin* is needed — this is the server-side code
+   flow and no Google script runs in the browser. `config.google.clientId` is
+   not a secret and lives in the same file; `GOOGLE_CLIENT_SECRET` and
+   `GOOGLE_SESSION_SECRET` go into the Secrets Manager JSON in step 5. If
+   `GOOGLE_SESSION_SECRET` changes, every sign-in already in flight fails
+   once — the `state` parameter is signed with it — which is a rolling-restart
+   nuisance and nothing worse.
+
 ## Deploying
 
 Actions → Deploy → Run workflow, pick the environment. A `v*` tag deploys
@@ -115,6 +145,20 @@ And ask the **front door** about the webhook, from outside the cluster:
 curl -i -X POST https://yuha.studio/api/webhooks/stripe \
   -H 'content-type: application/json' --data '{}'
 ```
+
+And ask it about the Google sign-in, which has no logs to check:
+
+```bash
+curl -si "https://yuha.studio/v1/auth/google/start" | grep -i '^location:'
+```
+
+The `Location` must be `accounts.google.com/o/oauth2/v2/auth?...` carrying
+`redirect_uri=https%3A%2F%2Fyuha.studio%2Fv1%2Fauth%2Fgoogle%2Fcallback`.
+Compare that string against the Cloud Console entry character by character —
+that comparison is the whole test, because Google's is byte for byte. If
+`/v1/auth/google/start` 404s, the sign-in button will not even appear:
+`GET /v1/auth/config` reports `googleConfigured: false` whenever any of the
+three settings is missing.
 
 `400` with `{"error":{"code":"WEBHOOK_SIGNATURE_INVALID","message":"signature
 verification failed"}}` is the pass. Unsigned on purpose: the API is the only

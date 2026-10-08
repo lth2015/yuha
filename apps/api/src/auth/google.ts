@@ -2,6 +2,7 @@ import { createRemoteJWKSet, jwtVerify } from 'jose';
 import { AppError } from '@yuha/contracts';
 import { findByExternalId, upsertUser, type UserRow } from '@yuha/db';
 import type { AuthAdapter } from './index.js';
+import { GOOGLE_WEB_RETURN_PATH } from './google-paths.js';
 
 /**
  * "Sign in with Google" adapter (SEC-02 heritage).
@@ -68,7 +69,8 @@ export class GoogleAuthAdapter implements AuthAdapter {
   }
 
   callbackRedirect(oneTimeCode: string): string {
-    const url = new URL('/auth/google/callback', this.opts.webOrigin);
+    // The SPA's path, not the one Google was given. See google-paths.ts.
+    const url = new URL(GOOGLE_WEB_RETURN_PATH, this.opts.webOrigin);
     url.searchParams.set('code', oneTimeCode);
     return url.toString();
   }

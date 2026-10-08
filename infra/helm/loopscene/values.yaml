@@ -130,6 +130,9 @@ config:
   authAdapter: google
   google:
     clientId: ""
+    # `https://<api host>/v1/auth/google/callback`. Byte-identical to the
+    # Google Cloud Console entry, and the API's path rather than the web app's
+    # — see apps/api/src/auth/google-paths.ts.
     redirectUri: ""
   cognito:
     region: ap-northeast-1

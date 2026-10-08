@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { GOOGLE_CALLBACK_PATH, GOOGLE_WEB_RETURN_PATH } from './auth/google-paths.js';
 import { RunMode } from '@yuha/contracts';
 
 /**
@@ -629,7 +630,60 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
   } else if (adapters.auth === 'google') {
     if (!e.GOOGLE_CLIENT_ID) problems.push('GOOGLE_CLIENT_ID is required for the google auth adapter');
     if (!e.GOOGLE_CLIENT_SECRET) problems.push('GOOGLE_CLIENT_SECRET is required for the google auth adapter');
-    if (!e.GOOGLE_REDIRECT_URI) problems.push('GOOGLE_REDIRECT_URI is required for the google auth adapter');
+    if (!e.GOOGLE_REDIRECT_URI) {
+      problems.push('GOOGLE_REDIRECT_URI is required for the google auth adapter');
+    } else {
+      /*
+       * Checked for shape, not just presence — because the failure mode has
+       * no logs.
+       *
+       * Google compares `redirect_uri` against its registered list byte for
+       * byte and answers `redirect_uri_mismatch` on its own page, before the
+       * request reaches us. Nothing is written anywhere on our side; the only
+       * evidence is the address bar. So the two plausible mistakes are worth
+       * refusing at start-up, where the message can name them:
+       *
+       *   - the SPA's path (`/auth/google/callback`) instead of the API's.
+       *     That route exists and is part of the flow — it is where we send
+       *     the browser afterwards with a one-time code — so it reads like
+       *     the callback;
+       *   - a host carried over from the previous deployment. The variable is
+       *     an absolute URL because Google needs the origin, so moving
+       *     environments means every copy of it is stale.
+       */
+      let parsed: URL | null = null;
+      try {
+        parsed = new URL(e.GOOGLE_REDIRECT_URI);
+      } catch {
+        problems.push(`GOOGLE_REDIRECT_URI must be an absolute URL (got "${e.GOOGLE_REDIRECT_URI}")`);
+      }
+      if (parsed) {
+        if (parsed.pathname !== GOOGLE_CALLBACK_PATH) {
+          problems.push(
+            `GOOGLE_REDIRECT_URI must end in ${GOOGLE_CALLBACK_PATH} (got "${parsed.pathname}")` +
+              (parsed.pathname === GOOGLE_WEB_RETURN_PATH
+                ? ' — that is the web app\'s own return path, which Google must never be given'
+                : ''),
+          );
+        }
+        if (mode === 'production' && parsed.protocol !== 'https:') {
+          problems.push('GOOGLE_REDIRECT_URI must be https in production');
+        }
+        /*
+         * And it must be OUR api's origin. `PUBLIC_API_URL` is what the
+         * deployment says the API is reachable at, so a redirect URI pointing
+         * somewhere else is either a stale host or the web origin — and the
+         * second one is the mistake above wearing a different hat, since the
+         * SPA and the API can share a hostname.
+         */
+        const apiOrigin = new URL(e.PUBLIC_API_URL).origin;
+        if (parsed.origin !== apiOrigin) {
+          problems.push(
+            `GOOGLE_REDIRECT_URI points at ${parsed.origin} but PUBLIC_API_URL says the API is at ${apiOrigin} — it must be ${apiOrigin}${GOOGLE_CALLBACK_PATH}`,
+          );
+        }
+      }
+    }
     if (mode === 'production' && !e.GOOGLE_SESSION_SECRET) {
       problems.push('GOOGLE_SESSION_SECRET is required for google auth in production');
     }

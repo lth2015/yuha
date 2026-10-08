@@ -29,7 +29,7 @@ cp .env.example .env   # 然后按需填写下表中的值
 |---|---|
 | `GOOGLE_CLIENT_ID` | [Google Cloud Console](https://console.cloud.google.com/apis/credentials) → 创建 **OAuth 2.0 客户端 ID（Web 应用）** |
 | `GOOGLE_CLIENT_SECRET` | 同上，创建时生成，只显示一次 |
-| `GOOGLE_REDIRECT_URI` | 固定填 `http://localhost:4000/v1/auth/google/callback`（本地）；**必须与控制台里登记的「已获授权的重定向 URI」一字不差** |
+| `GOOGLE_REDIRECT_URI` | 本地填 `http://localhost:4000/v1/auth/google/callback`；部署时填 `https://<该环境的 API 域名>/v1/auth/google/callback`。**必须与控制台里登记的「已获授权的重定向 URI」一字不差**（Google 是逐字节比对，多一个斜杠就算另一个 URI），而且必须是 **API 的路径**，不是前端的 `/auth/google/callback`——那条路由也真实存在（是 API 拿到一次性 code 之后把浏览器送回去的地方），所以最容易填错。填错时 Google 在它自己的页面上报 `redirect_uri_mismatch`，请求根本到不了我们这边：没有日志、没有失败的登录记录，只有地址栏里那一行。因此启动时会校验路径、协议，以及 origin 是否和 `PUBLIC_API_URL` 一致，不对就拒绝启动 |
 | `GOOGLE_SESSION_SECRET`（生产必填） | `openssl rand -hex 32` |
 
 配置后登录页自动出现「使用 Google 继续」按钮；MFA（Google Authenticator 两步验证）在 账户设置 → 两步验证 中扫码开启，无需额外配置。

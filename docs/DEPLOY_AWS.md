@@ -137,7 +137,7 @@ Point `sonare.example.com` (CNAME) at `cloudfront_domain`.
 
 | Console | What to configure |
 | --- | --- |
-| **Google Cloud** | OAuth 2.0 Web client. Authorized redirect URI: `https://api.sonare.example.com/v1/auth/google/callback` (exactly; it equals `GOOGLE_REDIRECT_URI` in Helm). Copy client id/secret into Secrets Manager. |
+| **Google Cloud** | OAuth 2.0 **Web application** client. Authorized redirect URI: `https://yuha.studio/v1/auth/google/callback` — byte-identical, and the API's path, never the web app's `/auth/google/callback`. It equals `config.google.redirectUri` in the Helm values (not a secret); the client secret and `GOOGLE_SESSION_SECRET` go into Secrets Manager. No "Authorized JavaScript origin" is needed: this is the server-side code flow, and no Google script runs in the browser. |
 | **Stripe** | Four live Prices, in **JPY**, matching `apps/api/src/catalogue.ts`: `drop_5` ¥980, `market_license` ¥980, `pro_monthly` ¥1,980/month, `premier_monthly` ¥3,980/month. All four ids are required at start-up. Webhook endpoint: `https://yuha.studio/api/webhooks/stripe`, format **Snapshot**, API version **2025-03-31.basil**, and the fourteen events listed in [STRIPE_WEBHOOK.md](STRIPE_WEBHOOK.md) — that file is the list of record; this row used to name five and say USD. Price ids and `STRIPE_API_VERSION` go into the Helm values; the `whsec_…` signing secret goes into Secrets Manager. |
 | **ACM** | `ap-northeast-1` cert for `api.sonare.example.com` (ALB); `us-east-1` cert for the CloudFront domain. |
 

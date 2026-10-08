@@ -823,6 +823,34 @@ const MUTATIONS = [
     to: "        AND email LIKE ?\n      ORDER BY email ASC",
     tests: ['tests/operator-grant.test.ts'],
   },
+  /* ---- the Google callback address (round 6) --------------------------- */
+  {
+    // The whole check. Google refuses on its own page with nothing on our
+    // side to look at, so a wrong value has to be refused at boot.
+    name: 'the-google-redirect-uri-is-only-checked-for-presence',
+    file: 'apps/api/src/config.ts',
+    from: '        if (parsed.pathname !== GOOGLE_CALLBACK_PATH) {',
+    to: '        if (parsed.pathname !== parsed.pathname) {',
+    tests: ['tests/google-redirect-uri.test.ts'],
+  },
+  {
+    // A host carried over from the previous deployment: the AWS-migration
+    // failure, and the one nothing else would notice.
+    name: 'the-google-redirect-uri-may-point-at-another-host',
+    file: 'apps/api/src/config.ts',
+    from: '        if (parsed.origin !== apiOrigin) {',
+    to: '        if (parsed.origin !== parsed.origin) {',
+    tests: ['tests/google-redirect-uri.test.ts'],
+  },
+  {
+    // The API's callback path and the SPA's return path are different routes,
+    // and handing Google the second is the mistake that reads as reasonable.
+    name: 'the-api-registers-the-web-apps-callback-path',
+    file: 'apps/api/src/auth/google-paths.ts',
+    from: "export const GOOGLE_CALLBACK_PATH = '/v1/auth/google/callback';",
+    to: "export const GOOGLE_CALLBACK_PATH = '/auth/google/callback';",
+    tests: ['tests/google-redirect-uri.test.ts'],
+  },
   {
     name: 'a-blank-numeric-config-line-is-zero-again',
     file: 'apps/api/src/config.ts',

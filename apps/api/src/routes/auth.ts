@@ -22,6 +22,7 @@ import {
   GoogleSessionAdapter,
   type AuthAdapter,
 } from '../auth/index.js';
+import { GOOGLE_CALLBACK_PATH } from '../auth/google-paths.js';
 import { grantTrialIfEligible } from '../services/billing.js';
 import {
   confirmMfa,
@@ -225,7 +226,7 @@ export default async function authRoutes(
         .redirect(google.authorizationUrl(state, pkceChallenge(verifier)));
     });
 
-    app.get('/v1/auth/google/callback', async (req, reply) => {
+    app.get(GOOGLE_CALLBACK_PATH, async (req, reply) => {
       const query = z
         .object({ code: z.string().optional(), state: z.string().optional(), error: z.string().optional() })
         .parse(req.query);

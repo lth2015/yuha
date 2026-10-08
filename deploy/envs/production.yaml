@@ -72,8 +72,17 @@ config:
 
   authAdapter: google
   google:
-    clientId: ""
-    redirectUri: ""
+    # The OAuth 2.0 **Web application** client id from the Google Cloud
+    # Console. Not a secret (it is in the authorization URL); the client
+    # SECRET and GOOGLE_SESSION_SECRET are in Secrets Manager.
+    clientId: ""   # <id>.apps.googleusercontent.com
+    # Must be byte-identical to an entry in that client's "Authorized redirect
+    # URIs", and must be the API's path — NOT the web app's
+    # /auth/google/callback, which is where this server sends the browser
+    # afterwards and which Google must never be given. The API refuses to
+    # start if the path or the origin is wrong; Google answers
+    # redirect_uri_mismatch on its own page, which leaves no trace here.
+    redirectUri: "https://yuha.studio/v1/auth/google/callback"
   cognito:
     region: ap-northeast-1
     userPoolId: ""   # terraform output cognito_user_pool_id
