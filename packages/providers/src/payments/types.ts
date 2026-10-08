@@ -50,9 +50,31 @@ export interface RemotePrice {
    * charges tax on top of the ¥980 the page promised.
    */
   taxBehavior: string | null;
+  /**
+   * 'per_unit' | 'tiered'. A tiered Price has no single amount, which this
+   * catalogue cannot express.
+   */
+  billingScheme: string | null;
+  /**
+   * 'licensed' | 'metered' for a recurring Price.
+   *
+   * A metered Price carries a non-null `unit_amount` — it is the rate per
+   * reported unit — so it agrees with every field this used to compare, and
+   * Stripe bills **nothing** because we never report usage. The subscription
+   * invoice then arrives paid at zero and the webhook grants a month of
+   * credits for free.
+   */
+  usageType: string | null;
   /** The Price's own product id: two different Prices under one product. */
   productId: string | null;
   productName: string | null;
+  /**
+   * Whether the Price's PRODUCT is usable. An archived product with an active
+   * Price agrees on every other field, and Stripe refuses the Checkout
+   * Session at purchase time — so the first symptom is a customer who cannot
+   * buy, with the configuration check saying everything is fine.
+   */
+  productActive: boolean | null;
 }
 
 /** Normalised webhook event, independent of the payment vendor. */

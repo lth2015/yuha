@@ -27,6 +27,17 @@ const SECRET_PARAMS = new Set([
   'secret',
   'key_secret',
   'password',
+  /*
+   * Not a credential — a customer's address. The operator console looks people
+   * up with `GET /v1/admin/users?email=…`, so every lookup wrote
+   * `alice@example.com` into the request log at info level, and nginx's
+   * default `combined` format and an ALB access log record the request line
+   * too. Log storage has different retention, different access control and a
+   * wider audience than the database, which is the opposite of the care taken
+   * everywhere else about this field — `maskEmail` exists two screens away in
+   * the same console.
+   */
+  'email',
 ]);
 
 export function redactUrlSecrets(url: string): string {

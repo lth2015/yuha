@@ -144,9 +144,13 @@ export async function createHarness(overrides: Record<string, string> = {}): Pro
  * A stablecoin quote inheriting this fixture would have had its arithmetic
  * verified against $4.99.
  *
- * The unit counts are deliberately NOT production's (15 and 45): a great many
- * tests assert on credit balances, and this change is about the prices that
- * get converted. The mismatch is recorded here rather than left implied.
+ * The unit counts ARE production's now (15 and 45). This comment used to say
+ * the opposite — "deliberately NOT production's" — which was true when it was
+ * written and stopped being true when the 100/400 leftovers were corrected;
+ * `tests/stripe-webhook-path.test.ts` now asserts that every field here
+ * matches `catalogue.ts`, so the comment was describing the reverse of an
+ * enforced invariant. Nothing asserted the old numbers, which is how they
+ * survived a re-pricing.
  */
 async function seedCatalogue(): Promise<void> {
   /*

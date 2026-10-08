@@ -108,6 +108,9 @@ export function cataloguePrices(config: AppConfig): CataloguePrice[] {
     amountMinor: row.amount_minor,
     currency: 'jpy',
     interval: row.billing_interval,
+    // Every row is tax-inclusive, as Japanese consumer law expects, and the
+    // comparison reads it from here rather than assuming it.
+    taxIncluded: true,
     envVar: `STRIPE_PRICE_ID_${row.price_key.toUpperCase()}`,
     priceId: row.stripe_price_id,
   }));

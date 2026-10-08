@@ -419,12 +419,103 @@ describe('compensation is bounded too', () => {
   });
 
   it('keeps its allowance separate from the gift allowance', async () => {
-    // One must not eat the other's budget: they answer to different limits for
-    // different reasons.
+    /*
+     * One must not eat the other's budget: they answer to different limits for
+     * different reasons.
+     *
+     * The numbers are chosen so a MERGED budget fails. This harness allows
+     * 150 gift units a day; the gift below takes 140, leaving 10. A shared
+     * pool would then refuse the 20-unit compensation, so the second 200 is
+     * the assertion. The first version gifted 100 and compensated 20 against
+     * allowances of 150 and 2000, which passes whether the budgets are
+     * separate or shared — the test name was the one thing it did not test.
+     */
     const friend = await h.createUser({ email: 'separate-budgets@example.test' });
+    // Two gifts, because a single 140 would hit the 100 per-gift cap. Together
+    // they take 140 of the 150 daily allowance, leaving 10.
     expect((await gift(admin, friend.id, { units: 100, reason: 'most of the gift allowance' })).statusCode).toBe(200);
+    expect((await gift(admin, friend.id, { units: 40, reason: 'the rest of the gift allowance' })).statusCode).toBe(200);
+    // 140 + 20 = 160, past the 150 gift allowance — so this can only succeed
+    // if compensation counts against its own.
     expect((await compensate(admin, friend.id, 20, 'a failure of ours, unrelated')).statusCode).toBe(200);
-    expect((await getBalance(friend.id)).available).toBe(120);
+    expect((await getBalance(friend.id)).available).toBe(160);
+  });
+
+  it('refuses a reason too long for the ledger column instead of answering 500', async () => {
+    /*
+     * `ledger_entries.reason` is VARCHAR(255) and the route used to allow 500.
+     * With the `operator_gift: ` prefix that is 515 characters for a 255-byte
+     * column, so an operator pasting a long justification got
+     * ER_DATA_TOO_LONG — not an AppError, therefore a bare 500
+     * INTERNAL_ERROR with nothing pointing at the field — and then retried.
+     */
+    const friend = await h.createUser({ email: 'long-reason@example.test' });
+    const tooLong = await gift(admin, friend.id, { units: 5, reason: 'x'.repeat(300) });
+    expect(tooLong.statusCode).toBe(400);
+    expect((await getBalance(friend.id)).available).toBe(0);
+
+    // And a reason that fits still works, prefix included.
+    const ok = await gift(admin, friend.id, { units: 5, reason: 'y'.repeat(200) });
+    expect(ok.statusCode).toBe(200);
+  });
+
+  it('treats a repeated idempotency key as a retry, not as a second gift', async () => {
+    /*
+     * The one money endpoint in this API that had no idempotency key, while
+     * `IDEMPOTENCY_HEADER` and `idempotencyKeySchema` are a convention
+     * enforced on licence purchase and both generation routes. The failure is
+     * ordinary: the API commits, the response is lost to an idle timeout or a
+     * pod roll, the console shows an error beside the pre-gift balance, and
+     * the operator types the number again.
+     */
+    const friend = await h.createUser({ email: 'retried-gift@example.test' });
+    const body = { units: 30, reason: 'a gift that was retried', idempotencyKey: 'gift-retry-key-1' };
+
+    const first = await gift(admin, friend.id, body);
+    const second = await gift(admin, friend.id, body);
+    expect(first.statusCode).toBe(200);
+    expect(second.statusCode).toBe(200);
+    expect(second.json()).toMatchObject({ replayed: true, batchId: first.json().batchId });
+
+    expect((await getBalance(friend.id)).available).toBe(30);
+    expect(await listBatches(friend.id)).toHaveLength(1);
+    // One gift, one audit row — the operator asked once.
+    const audit = await query<{ n: number }>(
+      `SELECT COUNT(*) AS n FROM audit_logs WHERE subject_id = ? AND action = 'entitlement.gifted'`,
+      [friend.id],
+    );
+    expect(Number(audit[0]!.n)).toBe(1);
+  });
+
+  it('still gives twice when the second gift carries its own key', async () => {
+    // A deliberate second gift sends a NEW key. The key tells the two apart;
+    // it does not stop anybody giving twice.
+    const friend = await h.createUser({ email: 'two-keys@example.test' });
+    await gift(admin, friend.id, { units: 10, reason: 'the first gift', idempotencyKey: 'two-keys-a' });
+    await gift(admin, friend.id, { units: 10, reason: 'the second gift', idempotencyKey: 'two-keys-b' });
+    expect((await getBalance(friend.id)).available).toBe(20);
+  });
+
+  it('refuses a compensation for a deleted or suspended account', async () => {
+    /*
+     * `grant` refused both from the start; `compensate` refused neither,
+     * although it is the wider door — open to `support`, with four times the
+     * daily allowance. Crediting the row an executed erasure left behind
+     * partially reverses the erasure.
+     */
+    const gone = await h.createUser({ email: 'compensate-gone@example.test' });
+    await query(`UPDATE users SET status = 'deleted', deleted_at = UTC_TIMESTAMP(3) WHERE id = ?`, [gone.id]);
+    expect((await compensate(support, gone.id, 5, 'compensating a tombstone')).statusCode).toBe(404);
+
+    const stopped = await h.createUser({ email: 'compensate-stopped@example.test' });
+    await query(`UPDATE users SET status = 'suspended' WHERE id = ?`, [stopped.id]);
+    expect((await compensate(support, stopped.id, 5, 'compensating a stopped account')).statusCode).toBe(403);
+  });
+
+  it('answers 400 rather than 500 for a compensation to a non-uuid id', async () => {
+    // It reached the entitlement_batches foreign key and surfaced as a 500.
+    const res = await compensate(support, 'not-a-uuid', 5, 'a malformed account id');
+    expect(res.statusCode).toBe(400);
   });
 });
 
@@ -444,7 +535,10 @@ describe('the gift source is one list, in three places', () => {
      * comment block above it, so adding a seventh value to the comment while
      * forgetting the constraint would have passed.
      */
-    const list = /source IN\s*\(([^)]*)\)/.exec(migration)?.[1];
+    // Anchored to the ADD CONSTRAINT, not to the first `source IN (` in the
+    // file: the comment block above it is prose that could easily contain the
+    // phrase, and then a seventh value added to the comment alone would pass.
+    const list = /ADD CONSTRAINT[\s\S]*?source IN\s*\(([^)]*)\)/.exec(migration)?.[1];
     expect(list, 'migration 0018 has no `source IN (...)` list').toBeTruthy();
     const inMigration = [...list!.matchAll(/'([a-z_]+)'/g)].map((m) => m[1]!);
     expect([...new Set(inMigration)].sort()).toEqual([...EntitlementSource.options].sort());
@@ -466,6 +560,22 @@ describe('the gift source is one list, in three places', () => {
     for (const source of EntitlementSource.options) {
       expect(col!.cc, `the live CHECK does not allow ${source}`).toContain(source);
     }
+    /*
+     * And nothing MORE than the enum. `toContain` in one direction only
+     * proves the CHECK permits each value — a later migration that adds a
+     * seventh without touching the enum would pass, and then a source exists
+     * in the database that no API response can name.
+     */
+    /*
+     * MySQL renders the clause with charset introducers and escaped quotes —
+     * `(\`source\` in (_utf8mb4\\'one_time_order\\',…))` — so the backslashes
+     * come off before the literals are read. Matching `'([a-z_]+)'` against
+     * the raw text found nothing and compared an empty list, which is a check
+     * that cannot fail in the other direction.
+     */
+    const inLiveCheck = [...col!.cc.replace(/\\/g, '').matchAll(/'([a-z_]+)'/g)].map((m) => m[1]!);
+    expect(inLiveCheck.length, 'no literals were parsed out of the live CHECK clause').toBeGreaterThan(0);
+    expect([...new Set(inLiveCheck)].sort()).toEqual([...EntitlementSource.options].sort());
   });
 
   it('every source the enum names has a label in all three languages', async () => {

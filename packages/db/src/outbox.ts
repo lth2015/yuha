@@ -184,11 +184,30 @@ export async function recordWebhookEvent(
     ],
     tx,
   );
-  const row = (await queryOne<WebhookEventRow>(
+  const row = await queryOne<WebhookEventRow>(
     `SELECT ${WEBHOOK_COLUMNS} FROM webhook_events WHERE provider = ? AND event_id = ?`,
     [params.provider, params.eventId],
     tx,
-  ))!;
+  );
+  /*
+   * `INSERT IGNORE` downgrades EVERY error to a warning, not only a duplicate
+   * key, and `duplicate` is inferred from `affectedRows === 0`. So a row
+   * refused for any other reason reported `duplicate: true`, and the `!` here
+   * asserted a row that is not there — which the webhook route then answered
+   * 200 `{received:true, duplicate:true}` to. Stripe marks that delivered and
+   * never retries: charged, acknowledged, nothing granted, which is the exact
+   * outcome the two-path commit set out to make impossible.
+   *
+   * Nothing Stripe can send reaches it today (`event_id` is VARCHAR(191)
+   * against 28-character ids, `event_type` VARCHAR(128) against types under
+   * 60), so this is about the handler being structurally unable to tell the
+   * two apart rather than a live hole. Throwing means a 5xx and a redelivery.
+   */
+  if (!row) {
+    throw new Error(
+      `webhook event ${params.provider}/${params.eventId} was neither inserted nor found — the insert was refused for a reason other than a duplicate`,
+    );
+  }
   return { row, duplicate: res.affectedRows === 0 };
 }
 

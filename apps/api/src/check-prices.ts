@@ -12,10 +12,16 @@
  *
  *   pnpm check:stripe-prices
  */
+import { activeCataloguePriceIds, closeDb } from '@yuha/db';
 import { ConfigError, loadConfig } from './config.js';
 import { cataloguePrices } from './catalogue.js';
 import { createContext } from './context.js';
-import { blocksSelling, describePriceProblem, verifyStripeCatalogue } from './services/stripe-catalogue.js';
+import {
+  blocksSelling,
+  catalogueDrift,
+  describePriceProblem,
+  verifyStripeCatalogue,
+} from './services/stripe-catalogue.js';
 
 let config;
 try {
@@ -30,11 +36,31 @@ try {
 
 const ctx = createContext(config);
 const rows = cataloguePrices(config);
-const problems = await verifyStripeCatalogue(ctx, rows);
+const fromStripe = await verifyStripeCatalogue(ctx, rows);
 
-if (problems === null) {
+if (fromStripe === null) {
   console.log('• nothing to check: this deployment uses the simulated payments adapter');
+  await closeDb();
   process.exit(0);
+}
+
+/*
+ * And the database, because that is what Checkout reads.
+ *
+ * `verifyStripeCatalogue` compares the environment variables against Stripe.
+ * `createCheckout` compares nothing — it uses
+ * `product_catalog.stripe_price_id`, which only `pnpm seed` writes. The
+ * documented path for a price change moves the variable and rolls the pods,
+ * so without this the command would have reported four ticks about ids no
+ * purchase uses.
+ */
+let problems = fromStripe;
+try {
+  problems = [...fromStripe, ...catalogueDrift(rows, await activeCataloguePriceIds())];
+} catch (err) {
+  console.error(`• could not read product_catalog (${err instanceof Error ? err.message : String(err)}).`);
+  console.error('  The ids below were compared against Stripe only, not against what this');
+  console.error('  deployment will actually sell.');
 }
 
 /*
@@ -55,6 +81,8 @@ for (const row of rows) {
   );
   for (const p of mine) console.log(`    ${describePriceProblem(p)}`);
 }
+
+await closeDb();
 
 const blocking = problems.filter(blocksSelling);
 if (blocking.length > 0) {

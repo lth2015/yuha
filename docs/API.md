@@ -353,9 +353,9 @@ never from a token claim.
 | `GET /v1/admin/audit-logs` | support | Audit trail |
 | `GET /v1/admin/order-reviews` | support | Card orders whose delivery is held pending a person (⑥) |
 | `GET /v1/admin/users?email=…` | support / admin | Accounts matching an email. **Prefix only**, three characters minimum, deleted accounts excluded — see `findUsersByEmail` for why it is not a substring search |
-| `GET /v1/admin/users/:id` | support / admin | One account: balance, every batch of credits with its source and expiry, and orders |
-| `POST /v1/admin/users/:id/grant` | **admin** | Gives credits away. Reason required. Capped per gift and per operator per rolling day (`ADMIN_GRANT_MAX_UNITS`, `ADMIN_GRANT_MAX_UNITS_PER_DAY`); recorded as `operator_gift`, never as `compensation` |
-| `POST /v1/admin/users/:id/compensate` | support / admin | A make-good for a failure of ours. Capped at 20, recorded as `compensation`. Unchanged, and deliberately open to support where `grant` is not |
+| `GET /v1/admin/users/:id` | support / admin | One account: balance, its credit batches with source and expiry, and orders. Both lists are capped and carry `creditsTruncated` / `ordersTruncated`. Reads are written to `audit_logs` |
+| `POST /v1/admin/users/:id/grant` | **admin** | Gives credits away. Reason required (≤200 — it also lands in `ledger_entries.reason`, which is VARCHAR(255)). Optional `idempotencyKey` makes a retry a retry rather than a second gift, answering `replayed: true`. Capped per gift and per operator per rolling day (`ADMIN_GRANT_MAX_UNITS`, `ADMIN_GRANT_MAX_UNITS_PER_DAY`); recorded as `operator_gift`, never as `compensation`. Refuses a deleted or suspended account |
+| `POST /v1/admin/users/:id/compensate` | support / admin | A make-good for a failure of ours. Capped at 20 per call and at `ADMIN_COMPENSATION_MAX_UNITS_PER_DAY` per operator per rolling day, recorded as `compensation`. Refuses a deleted or suspended account. Deliberately open to support where `grant` is not |
 | `POST /v1/admin/order-reviews/:id/decide` | **admin** | Release and deliver, or refuse — reason required. Refusing does not refund; that happens in Stripe |
 | `GET /v1/admin/stablecoin-payments` | support | Payments in review, money with no order to attach it to, and refunds owed |
 | `POST /v1/admin/stablecoin-payments/:id/review` | **admin** | Accept a short, over or late payment, or reject it — reason required |

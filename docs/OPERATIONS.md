@@ -247,6 +247,17 @@ the order and invoice paths, which key on a business reference so a replayed
 webhook grants once, and it is right here: a person clicking "Give 50" twice
 meant it twice.
 
+A **retry** is a different thing, and `idempotencyKey` is how the two are told
+apart. The console generates one per attempt and replaces it only once a gift
+lands, so pressing the button again after a lost response is the same gift —
+the response says `replayed: true` and nothing new is written. A deliberate
+second gift sends a new key. By API, pass your own: without one, every call is
+a new gift, which is what a lost response used to turn into two.
+
+The customer panel's credit and order lists are capped (100 and 50) and say so
+when there is more; the order list used to cap silently at 50 on the screen
+whose purpose is to show what an account has bought.
+
 Credits given this way appear in the ledger as `operator_gift`, which is what
 makes the question answerable later. `GET /v1/admin/audit-logs` carries the
 operator, the reason and the expiry for each one.

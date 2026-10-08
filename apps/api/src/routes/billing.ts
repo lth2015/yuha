@@ -184,7 +184,33 @@ export default async function billingRoutes(app: FastifyInstance, opts: { ctx: A
    * third webhook path is safe would have found two settings that look like
    * the protection and one that is.
    */
-  for (const path of STRIPE_WEBHOOK_PATHS) app.post(path, stripeWebhook);
+  for (const path of STRIPE_WEBHOOK_PATHS) {
+    app.post(
+      path,
+      {
+        /*
+         * A per-IP ceiling, two orders of magnitude above anything Stripe
+         * does.
+         *
+         * The comment that used to sit here rejected a rate limit because
+         * "Stripe bursts during a backfill", and throttling real deliveries to
+         * bound an audit table would indeed be the wrong trade. But the
+         * unverified row is minute-bucketed, so the table was never what
+         * needed bounding — the WORK was. Every forged POST still runs an HMAC
+         * over up to a megabyte, an INSERT and a SELECT, on a ten-connection
+         * pool, from an unauthenticated public path with no limiter of any
+         * kind (`rateLimit` is registered `global: false`). That is an API
+         * anyone can take down.
+         *
+         * 600 a minute per IP: Stripe's heaviest backfill is far below it,
+         * and it arrives from a handful of addresses. `trustProxy` is set, so
+         * `req.ip` is the client rather than the load balancer.
+         */
+        config: { rateLimit: { max: 600, timeWindow: '1 minute' } },
+      },
+      stripeWebhook,
+    );
+  }
 
   /**
    * Demo-only: drives a simulated checkout to a terminal state and emits a

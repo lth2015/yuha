@@ -182,12 +182,16 @@ if (!APPLY) {
   process.exit(0);
 }
 
-const ENV_NAME = {
-  drop_5: 'STRIPE_PRICE_ID_DROP_5',
-  pro_monthly: 'STRIPE_PRICE_ID_PRO_MONTHLY',
-  premier_monthly: 'STRIPE_PRICE_ID_PREMIER_MONTHLY',
-  market_license: 'STRIPE_PRICE_ID_MARKET_LICENSE',
-};
+/**
+ * The variable a price key's id belongs in — derived, not written down.
+ *
+ * This was a hand-written map of four, and the line that used it read
+ * `if (ENV_NAME[r.price_key]) console.log(...)`. So a fifth product got its
+ * Stripe Price created and its `.env` line **silently omitted**: the `if` was
+ * the silence, and `apps/api/src/catalogue.ts` says in its own comment that a
+ * hand-written mapping is the thing the fifth product is missing from.
+ */
+const envNameFor = (priceKey) => `STRIPE_PRICE_ID_${priceKey.toUpperCase()}`;
 
 console.log('\ncreated / reused:\n');
 for (const r of results) {
@@ -195,7 +199,7 @@ for (const r of results) {
 }
 console.log('\nPaste into .env:\n');
 for (const r of results) {
-  if (ENV_NAME[r.price_key]) console.log(`${ENV_NAME[r.price_key]}=${r.price_id}`);
+  console.log(`${envNameFor(r.price_key)}=${r.price_id}`);
 }
 console.log('\nRe-run `pnpm seed` afterwards: it copies these into product_catalog.stripe_price_id,');
 console.log('which is the column checkout actually reads.');

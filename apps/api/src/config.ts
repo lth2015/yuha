@@ -632,7 +632,35 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     if (!e.GOOGLE_CLIENT_SECRET) problems.push('GOOGLE_CLIENT_SECRET is required for the google auth adapter');
     if (!e.GOOGLE_REDIRECT_URI) {
       problems.push('GOOGLE_REDIRECT_URI is required for the google auth adapter');
-    } else {
+    }
+  } else if (!e.DEV_AUTH_SECRET) {
+    problems.push('DEV_AUTH_SECRET is required for the dev auth adapter');
+  }
+
+  /*
+   * The Google flow is gated on CREDENTIALS, not on the adapter — so its
+   * checks have to be too.
+   *
+   * `routes/auth.ts` registers `/v1/auth/google/*` whenever the three
+   * variables are present, deliberately, "so Sign in with Google can coexist
+   * with the dev login in integration mode". Every check below used to live
+   * inside `adapters.auth === 'google'`, which means the configuration
+   * `.env.example` itself ships — `AUTH_ADAPTER=dev` with the three Google
+   * values filled — had a live OAuth endpoint and no validation of any of it.
+   * The redirect-URI check was written to make a wrong value impossible to
+   * deploy and was absent in the most common way to run the flow.
+   *
+   * Worse for the session secret: `stateSecret()` is
+   * `GOOGLE_SESSION_SECRET ?? DEV_AUTH_SECRET ?? ''`, and production forbids
+   * `DEV_AUTH_SECRET`. With a non-google adapter in production the secret
+   * check did not run, so the OAuth `state` would have been signed with the
+   * empty string — forgeable — which is the exact defect
+   * `tests/blank-secrets.test.ts` exists for, one layer along.
+   */
+  const googleRedirect = e.GOOGLE_REDIRECT_URI;
+  const googleFlowLive = !!(e.GOOGLE_CLIENT_ID && e.GOOGLE_CLIENT_SECRET && googleRedirect);
+  if (googleFlowLive && googleRedirect) {
+    {
       /*
        * Checked for shape, not just presence — because the failure mode has
        * no logs.
@@ -653,11 +681,22 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
        */
       let parsed: URL | null = null;
       try {
-        parsed = new URL(e.GOOGLE_REDIRECT_URI);
+        parsed = new URL(googleRedirect);
       } catch {
-        problems.push(`GOOGLE_REDIRECT_URI must be an absolute URL (got "${e.GOOGLE_REDIRECT_URI}")`);
+        problems.push(`GOOGLE_REDIRECT_URI must be an absolute URL (got "${googleRedirect}")`);
       }
       if (parsed) {
+        /*
+         * A query string or a fragment is a different URI to Google, which
+         * compares the whole thing byte for byte — so
+         * `…/callback?env=prod` passes every other check here and then fails
+         * at Google with the logless mismatch this block exists to prevent.
+         */
+        if (parsed.search || parsed.hash) {
+          problems.push(
+            'GOOGLE_REDIRECT_URI must carry no query string and no fragment — Google compares the whole URI byte for byte',
+          );
+        }
         if (parsed.pathname !== GOOGLE_CALLBACK_PATH) {
           problems.push(
             `GOOGLE_REDIRECT_URI must end in ${GOOGLE_CALLBACK_PATH} (got "${parsed.pathname}")` +
@@ -685,13 +724,21 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
       }
     }
     if (mode === 'production' && !e.GOOGLE_SESSION_SECRET) {
-      problems.push('GOOGLE_SESSION_SECRET is required for google auth in production');
+      problems.push('GOOGLE_SESSION_SECRET is required whenever the Google sign-in is configured in production');
     }
-  } else if (!e.DEV_AUTH_SECRET) {
-    problems.push('DEV_AUTH_SECRET is required for the dev auth adapter');
   }
 
-  if (adapters.text === 'tokenstars') {
+  /*
+   * The email adapter's requirements were nested INSIDE the tokenstars block.
+   *
+   * A brace in the wrong place, so with any non-TokenStars text adapter none
+   * of `SES_REGION`, `EMAIL_FROM`, `SMTP_HOST`, `SMTP_USER` or `SMTP_PASS` was
+   * checked at all — a deployment with `EMAIL_ADAPTER=ses` and no region
+   * started happily and silently could not send the sign-in and
+   * account-change notices this same file calls "a fraud measure this
+   * business has declared". Two adapter checks that could not fail, which is
+   * the shape CLAUDE.md records as this repository's recurring defect.
+   */
   if (adapters.email === 'ses') {
     if (!e.SES_REGION) problems.push('SES_REGION is required for the ses email adapter');
     if (!e.EMAIL_FROM) problems.push('EMAIL_FROM is required for the ses email adapter');
@@ -704,6 +751,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     if (!e.EMAIL_FROM) problems.push('EMAIL_FROM is required for the smtp email adapter');
   }
 
+  if (adapters.text === 'tokenstars') {
     if (!e.TOKENSTARS_BASE_URL) problems.push('TOKENSTARS_BASE_URL is required for the tokenstars adapter');
     if (!e.TOKENSTARS_API_KEY) problems.push('TOKENSTARS_API_KEY is required for the tokenstars adapter');
     if (!e.TOKENSTARS_MODEL_ID) {
@@ -884,12 +932,20 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
    * is the opposite of what anybody typing a minus sign intends. Refused by
    * name rather than clamped, because clamping would hide the typo.
    */
-  for (const key of [
-    'ADMIN_GRANT_MAX_UNITS',
-    'ADMIN_GRANT_MAX_UNITS_PER_DAY',
-    'ADMIN_COMPENSATION_MAX_UNITS_PER_DAY',
+  /*
+   * The message has to say what 0 means for THAT key, because it means
+   * opposite things: 0 on the per-gift cap switches gifting off, 0 on either
+   * daily total removes the limit. A single message saying "0 is the
+   * documented way to switch it off" sent anybody who hit it on the daily cap
+   * towards removing the cap — which `docs/OPERATIONS.md` calls the limit that
+   * matters if an operator account is compromised.
+   */
+  for (const [key, zeroMeans] of [
+    ['ADMIN_GRANT_MAX_UNITS', 'switches gifting off entirely'],
+    ['ADMIN_GRANT_MAX_UNITS_PER_DAY', 'removes the daily limit'],
+    ['ADMIN_COMPENSATION_MAX_UNITS_PER_DAY', 'removes the daily limit'],
   ] as const) {
-    if (e[key] < 0) problems.push(`${key} cannot be negative (0 is the documented way to switch it off)`);
+    if (e[key] < 0) problems.push(`${key} cannot be negative (0 ${zeroMeans})`);
   }
   if (e.ADMIN_GRANT_VALIDITY_DAYS < 1) {
     problems.push('ADMIN_GRANT_VALIDITY_DAYS must be at least 1 — zero makes every gift impossible rather than permanent');

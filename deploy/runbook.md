@@ -75,10 +75,19 @@ records that as BLOCKED_EXTERNAL, and this runbook does not pretend otherwise.
    prints the value.
 
    Then fill `config.stripe` in `deploy/envs/<env>.yaml` with the four **live**
-   `price_…` ids and the live `pk_live_…`. All four are now required at
-   start-up: the licence and STUDIO ids were not, and a missing one is a 500 on
-   the checkout call rather than a boot failure — found by whoever tries to buy
+   `price_…` ids and the live `pk_live_…`. DROP and the licence are required at
+   start-up whenever the stripe adapter is on, and the two subscription ids
+   when `FEATURE_SUBSCRIPTIONS_ENABLED` — a deployment with subscriptions
+   closed cannot sell them. Before this the licence and STUDIO ids were
+   checked under no condition at all, and a missing one is a 500 on the
+   checkout call rather than a boot failure, found by whoever tries to buy
    first. Nothing in this repository generates or guesses an id or a secret.
+
+   **Changing a price id later needs a re-seed, not just a rollout.** Checkout
+   reads `product_catalog.stripe_price_id`, which only `pnpm seed` writes, so
+   editing the ConfigMap and rolling the pods leaves every session being built
+   against the previous Price. `pnpm check:stripe-prices` compares the stored
+   column as well as the variable and reports `stale` when they differ.
 
 7. **Point the Google sign-in at this environment.** Google compares the
    redirect URI byte for byte and refuses on its own page, so a stale one
@@ -156,9 +165,12 @@ The `Location` must be `accounts.google.com/o/oauth2/v2/auth?...` carrying
 `redirect_uri=https%3A%2F%2Fyuha.studio%2Fv1%2Fauth%2Fgoogle%2Fcallback`.
 Compare that string against the Cloud Console entry character by character —
 that comparison is the whole test, because Google's is byte for byte. If
-`/v1/auth/google/start` 404s, the sign-in button will not even appear:
-`GET /v1/auth/config` reports `googleConfigured: false` whenever any of the
-three settings is missing.
+`/v1/auth/google/start` 404s, the sign-in button will not even appear.
+`GET /v1/runtime` reports `googleConfigured: false` whenever any of the three
+settings is missing, and `GET /v1/auth/config` carries `google.enabled` for
+the same fact. (This named `googleConfigured` on `/v1/auth/config`, which has
+never returned it — an operator grepping that response for it during a
+cutover finds nothing and concludes the endpoint is broken.)
 
 `400` with `{"error":{"code":"WEBHOOK_SIGNATURE_INVALID","message":"signature
 verification failed"}}` is the pass. Unsigned on purpose: the API is the only

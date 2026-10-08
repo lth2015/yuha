@@ -14,8 +14,12 @@
  *     is checked and reported as BUILD FAILED, which is not a survival.
  *   - `git checkout` does not restore an untracked file, and restoring by hand
  *     is how two earlier runs were invalidated. Each target file is copied
- *     verbatim before the run and copied back after, and the tree is required
- *     to be clean between mutations.
+ *     verbatim before the run and copied back after. The closing line REPORTS
+ *     whether the tree came back clean; it is not a requirement and nothing
+ *     exits on it, because the tree is legitimately dirty whenever this runs
+ *     against uncommitted work — which is most of the time. (It used to claim
+ *     "the tree is required to be clean between mutations". `cleanTree()` is
+ *     called once, at the end, and its result is printed.)
  *
  * A third, found while writing round 5: `if (…) {` → `if (false) {` is the
  * obvious way to write a guard out, and inside statically unreachable code
@@ -61,8 +65,14 @@ const MUTATIONS = [
   {
     name: 'orphan-write-takes-the-anti-replay-key',
     file: `${S}/stablecoin-settle.ts`,
-    from: '      await recordOrphanTransfer(',
-    to: `      await recordTransferEvent(
+    // Anchored with the line above it: `await recordOrphanTransfer(` appears
+    // at both orphan call sites, so the bare string applied to whichever came
+    // first — a mutation that passes while testing a line it is not about.
+    // The `--anchors` uniqueness check is what surfaced that.
+    from: `    for (const p of payments) {
+      await recordOrphanTransfer(`,
+    to: `    for (const p of payments) {
+      await recordTransferEvent(
         {
           chainId: obs.transaction.chainId,
           txHash: obs.transaction.hash,
@@ -660,8 +670,8 @@ const MUTATIONS = [
     // something, and leaves "how much have we given away" unanswerable.
     name: 'a-gift-is-booked-as-an-apology',
     file: 'packages/db/src/ledger.ts',
-    from: "      source: 'operator_gift',\n      sourceRef: `gift:${newId()}`,",
-    to: "      source: 'compensation',\n      sourceRef: `gift:${newId()}`,",
+    from: "      source: 'operator_gift',",
+    to: "      source: 'compensation',",
     tests: ['tests/operator-grant.test.ts'],
   },
   {
@@ -779,8 +789,8 @@ const MUTATIONS = [
     // tax_behavior: exclusive charges tax on top of the ¥980 the page promised.
     name: 'a-price-that-adds-tax-on-top-passes',
     file: 'apps/api/src/services/stripe-catalogue.ts',
-    from: "  if (remote.taxBehavior === 'exclusive') {",
-    to: "  if (remote.taxBehavior === 'never-this') {",
+    from: "  if (row.taxIncluded && remote.taxBehavior === 'exclusive') {",
+    to: "  if (row.taxIncluded && remote.taxBehavior === 'never-this') {",
     tests: ['tests/stripe-catalogue.test.ts'],
   },
   {
@@ -796,8 +806,8 @@ const MUTATIONS = [
     // "Could not check" and "nothing is wrong" are different answers.
     name: 'an-unset-price-id-blocks-a-seed-that-does-not-sell-it',
     file: 'apps/api/src/services/stripe-catalogue.ts',
-    from: "  return p.kind === 'mismatch' || p.kind === 'unreadable' || p.kind === 'duplicate';",
-    to: "  return p.kind !== 'unavailable';",
+    from: "    p.kind === 'mismatch' || p.kind === 'unreadable' || p.kind === 'duplicate' || p.kind === 'stale'",
+    to: "    p.kind !== 'unavailable'",
     tests: ['tests/stripe-catalogue.test.ts'],
   },
   {
@@ -851,6 +861,146 @@ const MUTATIONS = [
     to: "export const GOOGLE_CALLBACK_PATH = '/auth/google/callback';",
     tests: ['tests/google-redirect-uri.test.ts'],
   },
+  /* ---- round 6: what the full review found ----------------------------- */
+  {
+    // The raw-body rule read `req.url`, which keeps what the client sent,
+    // while find-my-way matches the DECODED path — so
+    // `/api/%77ebhooks/stripe` was routed to the webhook with its body parsed
+    // away, 400'd before any audit row was written, and gave an
+    // unauthenticated caller the one error message the post-deploy check uses.
+    name: 'the-raw-body-rule-reads-the-unmatched-url',
+    file: 'apps/api/src/server.ts',
+    from: '      if (keepsRawBody(req.routeOptions?.url ?? undefined)) {',
+    to: '      if (keepsRawBody(req.url)) {',
+    tests: ['tests/stripe-webhook-path.test.ts'],
+  },
+  {
+    // `${PUBLIC_WEB_URL}${successPath}` with `@evil.example/` produces a real
+    // Stripe Checkout link for this account that returns the payer to
+    // somebody else's host.
+    name: 'the-checkout-success-path-is-concatenated',
+    file: 'apps/api/src/services/billing.ts',
+    from: `      const base = internalUrl(
+        ctx.config.PUBLIC_WEB_URL,
+        params.successPath ?? '/checkout/complete',
+        '/checkout/complete',
+      );`,
+    to: "      const base = `${ctx.config.PUBLIC_WEB_URL}${params.successPath ?? '/checkout/complete'}`;",
+    tests: ['tests/checkout-redirect.test.ts'],
+  },
+  {
+    // Login CSRF: the state was self-contained, so a callback URL captured by
+    // an attacker signs the victim into the attacker's account.
+    name: 'the-oauth-state-is-not-bound-to-a-browser',
+    file: 'apps/api/src/routes/auth.ts',
+    from: '      if (!cookie || expected.length !== got.length || !timingSafeEqual(expected, got)) {',
+    to: '      if (false) {',
+    tests: ['tests/google-login-csrf.test.ts'],
+  },
+  {
+    // The redirect-URI and session-secret checks were gated on the adapter
+    // while the flow is gated on credentials, so the dev+google combination
+    // `.env.example` ships had a live endpoint and no validation.
+    name: 'the-google-checks-are-gated-on-the-adapter',
+    file: 'apps/api/src/config.ts',
+    from: '  if (googleFlowLive && googleRedirect) {',
+    to: "  if (googleFlowLive && googleRedirect && adapters.auth === 'google') {",
+    tests: ['tests/google-redirect-uri.test.ts'],
+  },
+  {
+    // A metered Price carries a non-null unit_amount and bills nothing, so a
+    // subscription invoice arrives paid at zero and grants a free month.
+    name: 'a-metered-price-passes-the-check',
+    file: 'apps/api/src/services/stripe-catalogue.ts',
+    from: "  if (remote.usageType && remote.usageType !== 'licensed') {",
+    to: '  if (remote.usageType === remote.taxBehavior) {',
+    tests: ['tests/stripe-catalogue.test.ts'],
+  },
+  {
+    // An archived product behind an active Price agrees on every field and
+    // Stripe refuses the Checkout Session.
+    name: 'an-archived-stripe-product-passes-the-check',
+    file: 'apps/api/src/services/stripe-catalogue.ts',
+    from: '  if (remote.productActive === false) {',
+    to: '  if (remote.productActive === null) {',
+    tests: ['tests/stripe-catalogue.test.ts'],
+  },
+  {
+    // Checkout reads product_catalog.stripe_price_id, not the environment
+    // variable, so a price-id change without a re-seed keeps selling the old
+    // Price while the check prints a tick.
+    name: 'the-stored-catalogue-id-is-not-compared',
+    file: 'apps/api/src/services/stripe-catalogue.ts',
+    from: '    if ((db.stripe_price_id ?? null) === (row.priceId ?? null)) continue;',
+    // A comparison the compiler cannot fold, so the block below keeps the
+    // narrowing from `if (!db) continue` above — `if (true) continue` makes it
+    // unreachable and the build fails instead of the test, which is the trap
+    // in this file's header.
+    to: '    if (row.priceKey === row.priceKey) continue;',
+    tests: ['tests/stripe-catalogue.test.ts'],
+  },
+  {
+    // A reason longer than ledger_entries.reason (VARCHAR(255)) raised
+    // ER_DATA_TOO_LONG, which is not an AppError — a bare 500, and then a
+    // retry.
+    name: 'the-credit-reason-may-be-longer-than-the-column',
+    file: 'apps/api/src/routes/admin.ts',
+    from: '  const ledgerReasoned = z.object({ reason: z.string().min(5).max(200) });',
+    to: '  const ledgerReasoned = z.object({ reason: z.string().min(5).max(500) });',
+    tests: ['tests/operator-grant.test.ts'],
+  },
+  {
+    // The gift path had no replay protection at any layer, and a lost
+    // response is an ordinary event.
+    name: 'a-retried-gift-is-a-second-gift',
+    file: 'packages/db/src/ledger.ts',
+    from: '      sourceRef: params.idempotencyKey ? `gift:${params.idempotencyKey}` : `gift:${newId()}`,',
+    to: '      sourceRef: `gift:${newId()}`,',
+    tests: ['tests/operator-grant.test.ts'],
+  },
+  {
+    // compensate is open to support and had neither the uuid check nor the
+    // deleted/suspended refusal that grant has.
+    name: 'compensation-may-credit-a-deleted-account',
+    file: 'apps/api/src/routes/admin.ts',
+    // Only the deleted/suspended half is written out; `!recipient` keeps
+    // throwing so the narrowing below survives and the build is about the
+    // defect rather than about TypeScript.
+    from: "      if (!recipient || recipient.status === 'deleted' || recipient.deleted_at) {",
+    to: '      if (!recipient) {',
+    tests: ['tests/operator-grant.test.ts'],
+  },
+  {
+    // A customer's address in a query string, logged at info by Fastify and
+    // recorded in nginx's and an ALB's access log.
+    name: 'a-customer-email-is-logged-in-the-url',
+    file: 'apps/api/src/log-redaction.ts',
+    from: "  'email',\n]);",
+    to: ']);',
+    tests: ['tests/log-url-redaction.test.ts'],
+  },
+  /*
+   * There was a mutation here for `recordWebhookEvent`'s new `if (!row) throw`
+   * — written back as the old `return { row: {} as WebhookEventRow, duplicate:
+   * true }` — and it SURVIVED, which is the correct answer.
+   *
+   * `INSERT IGNORE` downgrades every error to a warning, so a row refused for
+   * a reason other than a duplicate key reported `duplicate: true` with no row
+   * behind it, and the webhook route answered 200 to it: charged,
+   * acknowledged, nothing granted. But nothing Stripe can send reaches that
+   * branch. `event_id` is VARCHAR(191) against 28-character `evt_…` ids,
+   * `event_type` is VARCHAR(128) against types under 60, `provider` is a
+   * literal, and the table has no CHECK and no foreign key — and a data-too-
+   * long value would be TRUNCATED and then found, not missing. So the branch
+   * is defensive against a state the schema does not permit.
+   *
+   * The throw stays, because it converts a structurally impossible state into
+   * a 5xx and a Stripe redelivery rather than a wrong 200, and because the
+   * previous code's correctness rested on a non-null assertion. What is not
+   * kept is a mutation no test can kill: that is a dead entry, and a dead
+   * entry reads exactly like a passing one — the thing `--anchors` exists to
+   * stop. Same judgement as the `holdOrderForReview` entry above.
+   */
   {
     name: 'a-blank-numeric-config-line-is-zero-again',
     file: 'apps/api/src/config.ts',
@@ -907,20 +1057,38 @@ function buildFor(files) {
  */
 if (process.argv[2] === '--anchors') {
   let missing = 0;
+  let checked = 0;
   for (const m of MUTATIONS) {
     const text = readFileSync(join(ROOT, m.file), 'utf8');
     for (const e of m.edits ?? [{ from: m.from }]) {
+      checked += 1;
       if (!e.from || !text.includes(e.from)) {
         console.error(`ANCHOR NOT FOUND  ${m.name}\n  ${m.file}\n  looked for: ${JSON.stringify(e.from)}`);
+        missing += 1;
+        continue;
+      }
+      /*
+       * And it must appear exactly ONCE. `String.replace` with a string
+       * pattern replaces the first occurrence, so an anchor that a refactor
+       * has duplicated applies the defect to whichever copy comes first —
+       * which may not be the one the mutation is about, leaving a mutation
+       * that passes while testing the wrong line.
+       */
+      if (text.split(e.from).length - 1 > 1) {
+        console.error(
+          `ANCHOR NOT UNIQUE  ${m.name}\n  ${m.file}\n  appears ${text.split(e.from).length - 1} times: ${JSON.stringify(e.from)}`,
+        );
         missing += 1;
       }
     }
   }
   if (missing > 0) {
-    console.error(`\n${missing} mutation(s) no longer apply. Each one is a test nobody is running.`);
+    console.error(`\n${missing} mutation anchor(s) no longer apply or are ambiguous. Each one is a test nobody is running.`);
     process.exit(1);
   }
-  console.log(`✓ ${MUTATIONS.length} mutation anchors all still match their files`);
+  // The number of ANCHORS, not of mutations: one entry carries two edits, and
+  // reporting the mutation count overstated what was checked by one.
+  console.log(`✓ ${checked} mutation anchors all still match their files, uniquely`);
   process.exit(0);
 }
 
@@ -942,16 +1110,46 @@ const IN_FLIGHT = join(PRISTINE, 'in-flight.json');
 if (existsSync(IN_FLIGHT)) {
   const stale = JSON.parse(readFileSync(IN_FLIGHT, 'utf8'));
   const backup = join(PRISTINE, stale.file.replaceAll('/', '_'));
-  if (existsSync(backup)) {
-    copyFileSync(backup, join(ROOT, stale.file));
-    console.log(`repaired: ${stale.file} was left mutated by "${stale.name}" and has been restored`);
-    const problem = buildFor([stale.file]);
-    if (problem) console.log(`  rebuild after repair: ${problem}`);
-  } else {
+  const current = existsSync(join(ROOT, stale.file)) ? readFileSync(join(ROOT, stale.file), 'utf8') : '';
+  /*
+   * Restored ONLY if the file is still mutated.
+   *
+   * This used to copy the backup over the file unconditionally, which makes
+   * this the one script in the repository licensed to destroy uncommitted
+   * work: interrupt a run, restore the file by hand, spend an hour editing
+   * it, and the next run stamps a stale backup over the lot and prints
+   * "repaired". `/tmp/mutation-pristine` is never cleaned, so the window is
+   * not short either.
+   *
+   * The marker records the mutation's own `to` text, so "still mutated" is a
+   * question with an answer rather than an assumption. If the defect is gone,
+   * somebody already dealt with it and the only correct action is to say so
+   * and leave the file alone.
+   */
+  const stillMutated = (stale.markers ?? []).length > 0 && stale.markers.every((m) => current.includes(m));
+  if (!existsSync(backup)) {
     console.log(
       `WARNING: "${stale.name}" was interrupted and no pristine copy of ${stale.file} survives.\n` +
         `  Check it against git before trusting this tree.`,
     );
+    /*
+     * And do NOT fall through to re-baselining: line below copies each target
+     * into PRISTINE, so a still-mutated file would become the new "pristine"
+     * copy and a later repair would restore the defect.
+     */
+    rmSync(IN_FLIGHT, { force: true });
+    console.log('  refusing to continue — run `git status` first, then re-run.');
+    process.exit(1);
+  } else if (!stillMutated) {
+    console.log(
+      `"${stale.name}" was interrupted, but ${stale.file} no longer carries its defect —\n` +
+        `  somebody restored it already. Leaving the file alone.`,
+    );
+  } else {
+    copyFileSync(backup, join(ROOT, stale.file));
+    console.log(`repaired: ${stale.file} was left mutated by "${stale.name}" and has been restored`);
+    const problem = buildFor([stale.file]);
+    if (problem) console.log(`  rebuild after repair: ${problem}`);
   }
   rmSync(IN_FLIGHT, { force: true });
 }
@@ -971,8 +1169,13 @@ for (const m of selected) {
   }
   let mutated = original;
   for (const e of edits) mutated = mutated.replace(e.from, e.to);
-  // Written BEFORE the file, so an interruption is always recoverable.
-  writeFileSync(IN_FLIGHT, JSON.stringify({ name: m.name, file: m.file }));
+  // Written BEFORE the file, so an interruption is always recoverable. The
+  // `to` texts let the repair check whether the defect is still there rather
+  // than assuming it is.
+  writeFileSync(
+    IN_FLIGHT,
+    JSON.stringify({ name: m.name, file: m.file, markers: edits.map((e) => e.to).filter(Boolean) }),
+  );
   writeFileSync(path, mutated);
 
   const buildProblem = buildFor([m.file]);

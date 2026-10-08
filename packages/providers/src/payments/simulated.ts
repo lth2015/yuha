@@ -19,6 +19,17 @@ interface SimSession {
   paymentStatus: 'unpaid' | 'paid';
   status: 'open' | 'complete' | 'expired';
   createdAt: Date;
+  /**
+   * Where the provider was told to send the payer afterwards.
+   *
+   * Recorded so a test can assert it. These are built from a path the CLIENT
+   * supplies, and `${PUBLIC_WEB_URL}${successPath}` with `@evil.example/`
+   * produced a real Checkout link that returned the payer to another host —
+   * which nothing could observe, because the adapter kept the urls only long
+   * enough to ignore them.
+   */
+  successUrl: string;
+  cancelUrl: string;
 }
 
 /**
@@ -58,6 +69,8 @@ export class SimulatedPaymentsAdapter implements PaymentsAdapter {
       paymentStatus: 'unpaid',
       status: 'open',
       createdAt: new Date(),
+      successUrl: params.successUrl,
+      cancelUrl: params.cancelUrl,
     };
     this.sessions.set(sessionId, session);
 
@@ -93,6 +106,11 @@ export class SimulatedPaymentsAdapter implements PaymentsAdapter {
     const timestamp = Math.floor(Date.now() / 1000);
     const mac = createHmac('sha256', this.secret).update(`${timestamp}.${rawBody.toString('utf8')}`).digest('hex');
     return `t=${timestamp},v1=${mac}`;
+  }
+
+  /** A session as it was created, for tests that assert what we asked for. */
+  sessionFor(sessionId: string): Readonly<SimSession> | undefined {
+    return this.sessions.get(sessionId);
   }
 
   verifyWebhook(rawBody: Buffer, signatureHeader: string | undefined): VerifiedWebhook {

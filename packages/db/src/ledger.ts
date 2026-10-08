@@ -86,12 +86,26 @@ export async function balancesFor(
   return new Map(rows.map((r) => [r.user_id, Number(r.available)]));
 }
 
-export async function listBatches(userId: string, tx?: PoolConnection): Promise<EntitlementBatchRow[]> {
+/**
+ * A user's batches, newest expiry first, with a bound.
+ *
+ * `limit` was added because the operator console renders this list: a gift
+ * mints a new batch every time, so the row count grows with operator activity
+ * and an account with thousands of them loaded every one into memory and
+ * serialised them into a single response. The default is high enough that no
+ * existing caller sees a difference.
+ */
+export async function listBatches(
+  userId: string,
+  tx?: PoolConnection,
+  limit?: number,
+): Promise<EntitlementBatchRow[]> {
   return query<EntitlementBatchRow>(
     `SELECT ${BATCH_COLUMNS} FROM entitlement_batches
       WHERE user_id = ? AND status <> 'revoked'
-      ORDER BY expires_at IS NULL, expires_at, created_at`,
-    [userId],
+      ORDER BY expires_at IS NULL, expires_at, created_at
+      LIMIT ?`,
+    [userId, Math.min(Math.max(limit ?? 500, 1), 1000)],
     tx,
   );
 }
@@ -467,6 +481,13 @@ export async function giftUnits(
     reason: string;
     actorId: string;
     validityDays: number;
+    /**
+     * Turns the business key into one the caller controls, so a retry
+     * collapses onto the first attempt. Absent, every call is a new gift —
+     * which is right for a person pressing the button twice on purpose, and
+     * wrong for a lost response.
+     */
+    idempotencyKey?: string;
   },
   tx: PoolConnection,
 ): Promise<GrantResult> {
@@ -474,7 +495,7 @@ export async function giftUnits(
     {
       userId: params.userId,
       source: 'operator_gift',
-      sourceRef: `gift:${newId()}`,
+      sourceRef: params.idempotencyKey ? `gift:${params.idempotencyKey}` : `gift:${newId()}`,
       units: params.units,
       expiresAt: new Date(Date.now() + params.validityDays * 24 * 3600 * 1000),
       reason: params.reason,

@@ -23,6 +23,7 @@ import { describe, expect, it } from 'vitest';
 import { StripePaymentsAdapter, type RemotePrice } from '@yuha/providers';
 import {
   blocksSelling,
+  catalogueDrift,
   comparePrice,
   describePriceProblem,
   verifyStripeCatalogue,
@@ -40,6 +41,7 @@ const studio: CataloguePrice = {
   amountMinor: 3980,
   currency: 'jpy',
   interval: 'month',
+  taxIncluded: true,
   envVar: 'STRIPE_PRICE_ID_PREMIER_MONTHLY',
   priceId: 'price_studio',
 };
@@ -52,8 +54,11 @@ const remote = (over: Partial<RemotePrice> = {}): RemotePrice => ({
   interval: 'month',
   intervalCount: 1,
   taxBehavior: 'inclusive',
+  billingScheme: 'per_unit',
+  usageType: 'licensed',
   productId: 'prod_studio',
   productName: 'STUDIO — 45 songs / month',
+  productActive: true,
   ...over,
 });
 
@@ -137,6 +142,48 @@ describe('comparing one configured price against the catalogue', () => {
      */
     expect(comparePrice(studio, remote({ taxBehavior: 'unspecified' }))).toEqual([]);
     expect(comparePrice(studio, remote({ taxBehavior: null }))).toEqual([]);
+  });
+
+  it('catches a metered price, which agrees on every other field and bills nothing', () => {
+    /*
+     * The gap the comment in the adapter denied. A `usage_type: 'metered'`
+     * Price carries a non-null `unit_amount` — it is the rate per reported
+     * unit — so amount, currency, interval and active all agreed. Stripe then
+     * bills zero at each period because nothing reports usage, `invoice.paid`
+     * arrives with `amount_paid: 0`, and the webhook grants a month of credits
+     * against it. Free STUDIO, for ever, with the configuration check green.
+     */
+    const problems = comparePrice(studio, remote({ usageType: 'metered' }));
+    expect(problems.map((p) => p.kind === 'mismatch' && p.field)).toContain('metered');
+    expect(describePriceProblem(problems[0]!)).toContain('reported usage');
+  });
+
+  it('catches an archived Stripe product behind an active price', () => {
+    /*
+     * Every field on the Price agrees and Stripe refuses the Checkout Session
+     * at purchase time, so without this the first symptom is every sale of
+     * that SKU answering 500 while the check says the configuration is fine.
+     */
+    const problems = comparePrice(studio, remote({ productActive: false }));
+    expect(problems.map((p) => p.kind === 'mismatch' && p.field)).toContain('product');
+
+    // Unknown is not archived: a product that was not expanded says nothing.
+    expect(comparePrice(studio, remote({ productActive: null }))).toEqual([]);
+  });
+
+  it('names a tiered price as tiered rather than only as a missing amount', () => {
+    const problems = comparePrice(studio, remote({ billingScheme: 'tiered', amountMinor: null }));
+    expect(problems.map((p) => p.kind === 'mismatch' && p.field)).toContain('tiered');
+  });
+
+  it('compares tax behaviour against the catalogue row, not a literal', () => {
+    // The check compared Stripe against the hard-coded string 'exclusive', so
+    // it was asserting "this catalogue is tax-inclusive" without asking the
+    // catalogue. A tax-exclusive row would have been reported as wrong.
+    expect(comparePrice(studio, remote({ taxBehavior: 'exclusive' })).length).toBe(1);
+    const exclusiveRow: CataloguePrice = { ...studio, taxIncluded: false };
+    expect(comparePrice(exclusiveRow, remote({ taxBehavior: 'exclusive' }))).toEqual([]);
+    expect(comparePrice(exclusiveRow, remote({ taxBehavior: 'inclusive' })).length).toBe(1);
   });
 
   it('catches a currency change', () => {
@@ -329,6 +376,51 @@ describe('checking the whole catalogue', () => {
   });
 });
 
+describe('what the database will actually sell', () => {
+  /*
+   * The check asked Stripe about the environment variables. Checkout reads
+   * `product_catalog.stripe_price_id`, written only by `pnpm seed` — and the
+   * documented release path for a price change is "edit the ConfigMap, roll
+   * the pods". So a re-priced product left the column stale, every Checkout
+   * session kept using the old Price, and `pnpm check:stripe-prices` printed
+   * four ticks about ids no purchase touches. The customer is charged the old
+   * amount and the webhook's amount guard throws afterwards.
+   */
+  const rows: CataloguePrice[] = [
+    { ...studio, priceKey: 'drop_5', envVar: 'STRIPE_PRICE_ID_DROP_5', priceId: 'price_new' },
+  ];
+
+  it('reports a configured id the catalogue has not caught up with', () => {
+    const problems = catalogueDrift(rows, [{ price_key: 'drop_5', stripe_price_id: 'price_old' }]);
+    expect(problems).toHaveLength(1);
+    expect(problems[0]!.kind).toBe('stale');
+    const described = describePriceProblem(problems[0]!);
+    expect(described).toContain('price_old');
+    expect(described).toContain('pnpm seed');
+    // It blocks: a deployment in this state sells against the wrong Price.
+    expect(blocksSelling(problems[0]!)).toBe(true);
+  });
+
+  it('says nothing when the two agree', () => {
+    expect(catalogueDrift(rows, [{ price_key: 'drop_5', stripe_price_id: 'price_new' }])).toEqual([]);
+  });
+
+  it('says nothing about a product the database does not have yet', () => {
+    // A seed that has not run is not a drift, and reporting it would be noise
+    // on every fresh environment.
+    expect(catalogueDrift(rows, [])).toEqual([]);
+  });
+
+  it('notices an id removed from the configuration but still stored', () => {
+    const problems = catalogueDrift(
+      [{ ...rows[0]!, priceId: null }],
+      [{ price_key: 'drop_5', stripe_price_id: 'price_old' }],
+    );
+    expect(problems).toHaveLength(1);
+    expect(describePriceProblem(problems[0]!)).toContain('(unset)');
+  });
+});
+
 describe('the adapter itself, where the classification lives', () => {
   /*
    * The tests above drive `verifyStripeCatalogue` with a fake that throws,
@@ -377,9 +469,10 @@ describe('the adapter itself, where the classification lives', () => {
         active: true,
         unit_amount: 3980,
         currency: 'jpy',
-        recurring: { interval: 'month', interval_count: 2 },
+        recurring: { interval: 'month', interval_count: 2, usage_type: 'metered' },
         tax_behavior: 'exclusive',
-        product: { id: 'prod_x', name: 'STUDIO — 45 songs / month' },
+        billing_scheme: 'per_unit',
+        product: { id: 'prod_x', name: 'STUDIO — 45 songs / month', active: false },
       }),
     );
     await expect(adapter.retrievePrice('price_x')).resolves.toEqual({
@@ -390,8 +483,11 @@ describe('the adapter itself, where the classification lives', () => {
       interval: 'month',
       intervalCount: 2,
       taxBehavior: 'exclusive',
+      billingScheme: 'per_unit',
+      usageType: 'metered',
       productId: 'prod_x',
       productName: 'STUDIO — 45 songs / month',
+      productActive: false,
     });
   });
 });
@@ -464,20 +560,42 @@ describe('the catalogue is one list', () => {
     }
   });
 
-  it('tells a human which Stripe product each variable wants, in the places they fill it in', () => {
+  it('tells a human which Stripe product each variable wants, beside that variable', () => {
     /*
-     * The check above makes a swap unshippable; this is what stops somebody
-     * making it in the first place. Both files are read by a person with the
-     * Stripe dashboard open in another tab.
+     * Positional, because `toContain` over a whole file proves nothing here.
+     *
+     * The first version asserted that the strings CREATOR and STUDIO appeared
+     * SOMEWHERE in each file. Swapping the two comments — the precise mistake
+     * this whole mechanism is about — left all five assertions green, and
+     * DROP and the licence were not in the needle list at all. So each
+     * product's Stripe name now has to sit within a few lines of its own
+     * variable, and the list of products comes from the catalogue.
      */
-    for (const [file, needle] of [
-      ['.env.example', 'CREATOR'],
-      ['.env.example', 'STUDIO'],
-      ['infra/helm/loopscene/values.yaml', 'CREATOR'],
-      ['infra/helm/loopscene/values.yaml', 'STUDIO'],
-      ['docs/CONFIGURATION.md', 'CREATOR'],
-    ] as const) {
-      expect(read(file), `${file} does not name ${needle} anywhere`).toContain(needle);
+    const stripeNameFor = (priceKey: string) =>
+      catalogue(config).find((r) => r.price_key === priceKey)!.stripeProduct;
+
+    for (const file of ['.env.example', 'infra/helm/loopscene/values.yaml'] as const) {
+      const lines = read(file).split('\n');
+      for (const row of cataloguePrices(config)) {
+        // drop_5 → priceIdDrop5: the first segment is capitalised too.
+        const camel = row.priceKey
+          .split('_')
+          .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+          .join('');
+        const key = file.endsWith('.yaml') ? `priceId${camel}` : row.envVar;
+        const at = lines.findIndex((l) => l.trimStart().startsWith(`${key}:`) || l.startsWith(`${key}=`));
+        expect(at, `${file} does not set ${key}`).toBeGreaterThan(-1);
+        // The three lines above and the line itself: a comment directly over
+        // the key, or an inline one.
+        const near = lines.slice(Math.max(at - 3, 0), at + 1).join('\n');
+        const name = stripeNameFor(row.priceKey).split('—')[0]!.trim();
+        expect(near, `${file} does not say "${name}" next to ${key}`).toContain(name);
+      }
+    }
+    // The documentation names all four too, in its own table.
+    const configuration = read('docs/CONFIGURATION.md');
+    for (const row of cataloguePrices(config)) {
+      expect(configuration, `docs/CONFIGURATION.md has no row for ${row.envVar}`).toContain(row.envVar);
     }
   });
 });

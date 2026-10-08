@@ -1,8 +1,9 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
-import { AppError } from '@yuha/contracts';
+import { AppError, idempotencyKeySchema } from '@yuha/contracts';
 import {
   compensateUnits,
+  getUser,
   lockUser,
   unitsGrantedByActorSince,
   getAccountDeletion,
@@ -20,6 +21,7 @@ import {
   setTrackState,
   updateRightsCase,
   withTx,
+  withTxRetry,
   writeAuditLog,
 } from '@yuha/db';
 import type { AppContext } from '../context.js';
@@ -43,6 +45,20 @@ export default async function adminRoutes(app: FastifyInstance, opts: { ctx: App
   const adminOnly = app.requireRole(['admin']);
 
   const reasoned = z.object({ reason: z.string().min(5).max(500) });
+  /*
+   * A shorter bound for the two routes whose reason also lands in
+   * `ledger_entries.reason`, which is VARCHAR(255).
+   *
+   * `reasoned`'s 500 was set against `audit_logs.reason`, which is 500. The
+   * credit paths prefix the text — `operator_gift: ` (15) and
+   * `operator_compensation: ` (23) — so a 500-character reason produced 515
+   * and 523 characters for a 255-byte column. Under STRICT_TRANS_TABLES that
+   * is ER_DATA_TOO_LONG, which is not an `AppError`, so the operator got a
+   * bare 500 INTERNAL_ERROR with nothing pointing at the reason field — and
+   * then retried, which is what an idempotency key now absorbs. 200 leaves
+   * room for both prefixes with margin.
+   */
+  const ledgerReasoned = z.object({ reason: z.string().min(5).max(200) });
 
   // ------------------------------------------------------------- overview
 
@@ -111,21 +127,73 @@ export default async function adminRoutes(app: FastifyInstance, opts: { ctx: App
    * is email-only and prefix-only on purpose — see `findUsersByEmail` — since
    * a support tool that takes any fragment of anything is a people search.
    */
-  app.get('/v1/admin/users', { preHandler: staff }, async (req) => {
+  app.get(
+    '/v1/admin/users',
+    {
+      preHandler: staff,
+      /*
+       * The only rate limit in this file, and it is here because this is the
+       * one route that reads other people's email addresses in bulk.
+       *
+       * `findUsersByEmail` says plainly in its own docstring that a prefix
+       * search ordered by address with a "there are more" flag is a usable
+       * prefix-descent oracle, and that what keeps it closed is the route
+       * being staff-only. That is true right up to the moment a staff session
+       * is stolen, and then nothing slowed the walk or left a trace. This
+       * slows it; the audit row below is the trace.
+       *
+       * Generous enough that a person typing cannot hit it.
+       */
+      config: { rateLimit: { max: 60, timeWindow: '1 minute' } },
+    },
+    async (req) => {
     // Trimmed BEFORE the length check: `?email=%20%20a%20%20` passed a
     // `min(3)` applied to the raw string and then arrived at the lookup as one
     // character, which answered "no accounts" rather than "that is not a
     // search".
-    const { email } = z
-      .object({ email: z.string().trim().min(3).max(320) })
-      .parse(req.query);
-    return findCustomers({ email });
-  });
+      const { email } = z
+        .object({ email: z.string().trim().min(3).max(320) })
+        .parse(req.query);
+      const found = await findCustomers({ email });
+      /*
+       * A READ is audited here, which almost nothing else in this file does.
+       *
+       * The file header says a reason "is written to `audit_logs` together
+       * with the before/after state… an unexplained privileged action cannot
+       * be recorded — and therefore cannot happen." That was true of every
+       * mutating route and of neither read route, and this read is the one
+       * that enumerates customers. The query and the number of hits go in;
+       * the addresses do not, because the audit table should not become a
+       * second copy of the customer list.
+       */
+      await writeAuditLog({
+        actorId: req.user!.id,
+        actorRole: req.user!.role,
+        action: 'customer.searched',
+        subjectType: 'email_prefix',
+        subjectId: email.slice(0, 3),
+        reason: 'operator console customer lookup',
+        after: { matches: found.items.length, more: found.more },
+      });
+      return found;
+    },
+  );
 
   /** One account: balance, where each batch of credits came from, and orders. */
   app.get('/v1/admin/users/:id', { preHandler: staff }, async (req) => {
     const { id } = z.object({ id: z.string().uuid() }).parse(req.params);
-    return getCustomer(id);
+    const view = await getCustomer(id);
+    // Opening one customer's record is also a read worth a row: it carries
+    // the address, the balance and the whole order history.
+    await writeAuditLog({
+      actorId: req.user!.id,
+      actorRole: req.user!.role,
+      action: 'customer.opened',
+      subjectType: 'user',
+      subjectId: id,
+      reason: 'operator console customer record',
+    });
+    return view;
   });
 
   /**
@@ -139,10 +207,11 @@ export default async function adminRoutes(app: FastifyInstance, opts: { ctx: App
    */
   app.post('/v1/admin/users/:id/grant', { preHandler: adminOnly }, async (req) => {
     const { id } = z.object({ id: z.string().uuid() }).parse(req.params);
-    const body = reasoned
+    const body = ledgerReasoned
       .extend({
         units: z.number().int().min(1).max(10_000),
         validityDays: z.number().int().min(1).max(3650).optional(),
+        idempotencyKey: idempotencyKeySchema.optional(),
       })
       .parse(req.body);
     /*
@@ -156,6 +225,7 @@ export default async function adminRoutes(app: FastifyInstance, opts: { ctx: App
       units: body.units,
       reason: body.reason,
       ...(body.validityDays !== undefined ? { validityDays: body.validityDays } : {}),
+      ...(body.idempotencyKey ? { idempotencyKey: body.idempotencyKey } : {}),
       actorId: req.user!.id,
       actorRole: req.user!.role,
     });
@@ -168,10 +238,22 @@ export default async function adminRoutes(app: FastifyInstance, opts: { ctx: App
    * compensation batch is created, so the original flow stays auditable (§6.2).
    */
   app.post('/v1/admin/users/:id/compensate', { preHandler: staff }, async (req) => {
-    const { id } = req.params as { id: string };
-    const body = reasoned.extend({ units: z.number().int().min(1).max(20), jobId: z.string().uuid().optional() }).parse(req.body);
+    /*
+     * Validated and guarded the same way as `grant`, which it was not.
+     *
+     * A non-UUID `:id` used to reach the `entitlement_batches` foreign key and
+     * surface as a 500; and the deleted-or-suspended refusal that `grant` has
+     * — on the stated grounds that crediting the row an executed deletion left
+     * behind quietly undoes the deletion — was absent here, on the route that
+     * is open to `support` and whose daily allowance is four times larger.
+     * The wider door had the weaker checks.
+     */
+    const { id } = z.object({ id: z.string().uuid() }).parse(req.params);
+    const body = ledgerReasoned
+      .extend({ units: z.number().int().min(1).max(20), jobId: z.string().uuid().optional() })
+      .parse(req.body);
 
-    const result = await withTx(async (tx) => {
+    const result = await withTxRetry(async (tx) => {
       /*
        * The operator's own row first, then the day's total — the same shape
        * the gift path uses, and for the same reason.
@@ -185,6 +267,18 @@ export default async function adminRoutes(app: FastifyInstance, opts: { ctx: App
        * outage means compensating many people at once.
        */
       await lockUser(req.user!.id, tx);
+      // And the recipient, before its status is read — same reasoning as
+      // `giftCredits`, same lock order, so the two cannot deadlock each other
+      // except operator-against-operator, which the retry absorbs.
+      await lockUser(id, tx);
+      const recipient = await getUser(id, tx);
+      if (!recipient || recipient.status === 'deleted' || recipient.deleted_at) {
+        throw new AppError('NOT_FOUND', 'no such account');
+      }
+      if (recipient.status !== 'active') {
+        throw new AppError('FORBIDDEN', `this account is ${recipient.status}`);
+      }
+
       const perDay = ctx.config.ADMIN_COMPENSATION_MAX_UNITS_PER_DAY;
       if (perDay > 0) {
         const already = await unitsGrantedByActorSince(

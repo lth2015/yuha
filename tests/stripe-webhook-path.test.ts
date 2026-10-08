@@ -61,12 +61,32 @@ describe('the webhook path is one decision, in one place', () => {
      * location — or `location /api {` would have reported the route missing
      * while nginx routed it perfectly.
      */
-    const blocks = [...nginx.matchAll(/location\s+(?:([=~^*]+)\s+)?(\S+?)\s*\{([^}]*)\}/g)].map((m) => ({
-      modifier: m[1] ?? '',
-      prefix: m[2]!,
-      body: m[3]!,
-    }));
-    const proxied = blocks.filter((b) => b.body.includes('proxy_pass') && !b.modifier.includes('~'));
+    /*
+     * Brace-matched rather than `[^}]*`, and `^~` is a PREFIX modifier.
+     *
+     * Two misleading failures came out of the first version. `location ^~
+     * /api/ {` — the idiomatic way to make a prefix beat a regex location —
+     * was discarded by a `!modifier.includes('~')` filter, so the test
+     * reported "nginx has no proxying location covering …" about a config
+     * that routed it with HIGHER precedence. And `[^}]*` stops at the first
+     * `}`, so any nested block (`if (...) { return 204; }`) hid the
+     * `proxy_pass` below it and produced the same wrong message.
+     */
+    const blocks = [];
+    const header = /location\s+(=|\^~|~\*|~)?\s*(\S+?)\s*\{/g;
+    for (let m = header.exec(nginx); m; m = header.exec(nginx)) {
+      let depth = 1;
+      let i = m.index + m[0].length;
+      for (; i < nginx.length && depth > 0; i += 1) {
+        if (nginx[i] === '{') depth += 1;
+        else if (nginx[i] === '}') depth -= 1;
+      }
+      blocks.push({ modifier: m[1] ?? '', prefix: m[2]!, body: nginx.slice(m.index + m[0].length, i - 1) });
+    }
+    // Only regex locations are excluded; `=` is exact and `^~` is a prefix.
+    const proxied = blocks.filter(
+      (b) => b.body.includes('proxy_pass') && b.modifier !== '~' && b.modifier !== '~*',
+    );
 
     for (const path of STRIPE_WEBHOOK_PATHS) {
       const block = proxied.find((b) => path.startsWith(b.prefix));
@@ -84,6 +104,22 @@ describe('the webhook path is one decision, in one place', () => {
         /^\$[A-Za-z_][A-Za-z0-9_]*$/.test(pass!) || /^https?:\/\/[^/]+$/.test(pass!),
         `${block!.prefix} rewrites the URI (proxy_pass ${pass}) — the api would not see ${path}`,
       ).toBe(true);
+      /*
+       * And the variable it resolves to must itself carry no URI part.
+       * Checking only the `proxy_pass $var` text left the rewrite reachable
+       * one line up: `set $api_upstream http://api:4000/;` passes the
+       * assertion above and makes nginx replace the request URI, which is the
+       * breakage the comment claims to guard.
+       */
+      const variable = /^\$([A-Za-z_][A-Za-z0-9_]*)$/.exec(pass!)?.[1];
+      if (variable) {
+        const set = new RegExp(`set\\s+\\$${variable}\\s+([^;]+);`).exec(block!.body)?.[1]?.trim();
+        expect(set, `${block!.prefix} uses $${variable} without setting it`).toBeTruthy();
+        expect(
+          /^https?:\/\/[^/]+$/.test(set!),
+          `${block!.prefix}'s $${variable} is "${set}" — a URI part there rewrites the path the api sees`,
+        ).toBe(true);
+      }
     }
   });
 
@@ -105,9 +141,34 @@ describe('the webhook path is one decision, in one place', () => {
      * failure this whole change exists to prevent, and invisible to a test
      * that reads only the path strings.
      */
-    const rules = [...ingress.matchAll(/^\s+- path:\s*"?([^"\s]+)"?\s*\n\s+pathType:\s*(\S+)/gm)].map(
-      (m) => ({ path: m[1]!, type: m[2]! }),
-    );
+    /*
+     * Path, pathType AND the backend service, in any key order.
+     *
+     * Reading only `path` and `pathType` left the thing that matters most
+     * unchecked: pointing the `/api` rule's backend at a web service would
+     * send `/api/webhooks/stripe` somewhere that is not the API while every
+     * assertion passed. And requiring `pathType` on the line immediately
+     * after `- path:` made an identical YAML reordering fail with
+     * "expected [] to contain '/'".
+     */
+    const rules = ingress
+      // Split on the list markers rather than matched with a lookahead: `\Z`
+      // is not a JavaScript anchor, and the pattern that used it silently
+      // dropped the last rule — the `/` catch-all, which the assertion below
+      // is about.
+      .split(/^ {10}- (?=path:|pathType:|backend:)/m)
+      .slice(1)
+      .map((block) => ({
+        path: /path:\s*"?([^"\s]+)"?/.exec(block)?.[1] ?? '',
+        type: /pathType:\s*(\S+)/.exec(block)?.[1] ?? '',
+        service: /name:\s*(.+)/.exec(block)?.[1]?.trim() ?? '',
+      }));
+    expect(rules.length, 'no ingress path rules were parsed at all').toBeGreaterThan(1);
+    for (const rule of rules) {
+      expect(rule.path, 'an ingress rule has no path').toBeTruthy();
+      expect(rule.type, `${rule.path} has no pathType`).toBeTruthy();
+      expect(rule.service, `${rule.path} has no backend service`).toContain('-api');
+    }
     expect(rules.map((r) => r.path)).toContain('/');
     for (const served of STRIPE_WEBHOOK_PATHS) {
       const match = rules.find((r) => r.path !== '/' && served.startsWith(r.path));
@@ -168,7 +229,26 @@ describe('the webhook path is one decision, in one place', () => {
         if (events.length) lists.push({ file, events });
       }
     }
-    expect(lists.length, 'no --events list was found anywhere — this check found nothing to check').toBeGreaterThanOrEqual(2);
+    /*
+     * And docs/STRIPE_WEBHOOK.md, which is the only copy an operator actually
+     * uses — and was the only one no invariant covered.
+     *
+     * Three documents call that file "the list of record", and its
+     * copy-pasteable block is what gets pasted into the Stripe dashboard. The
+     * check recognised the literal string `--events`, so it held the two
+     * incidental copies in step and left the authoritative one alone. Both
+     * copies in that file are compared: the table and the block, because they
+     * can disagree with each other.
+     */
+    const record = read('docs/STRIPE_WEBHOOK.md');
+    const fenced = /```\n((?:[a-z_]+(?:\.[a-z_]+)+\n)+)```/.exec(record)?.[1];
+    expect(fenced, 'docs/STRIPE_WEBHOOK.md has no copy-pasteable event block').toBeTruthy();
+    lists.push({ file: 'docs/STRIPE_WEBHOOK.md (block)', events: fenced!.trim().split('\n') });
+    const tabled = [...record.matchAll(/^\| `([a-z_]+(?:\.[a-z_]+)+)` \|/gm)].map((m) => m[1]!);
+    expect(tabled.length, 'docs/STRIPE_WEBHOOK.md has no event table').toBeGreaterThan(0);
+    lists.push({ file: 'docs/STRIPE_WEBHOOK.md (table)', events: tabled });
+
+    expect(lists.length, 'no event list was found anywhere — this check found nothing to check').toBeGreaterThanOrEqual(4);
     for (const { file, events } of lists) {
       expect([...new Set(events)].sort(), `${file}'s --events list is not the handled set`).toEqual(
         [...handled].sort(),
@@ -211,6 +291,19 @@ describe('the webhook path is one decision, in one place', () => {
         display_name: field('display_name'),
         amount_minor: field('amount_minor'),
         units: field('units'),
+        /*
+         * `currency` especially, because it is the field the motivating bug
+         * was about: the harness used to seed USD 499/999/2999 while the
+         * catalogue seeds JPY, so a stablecoin quote inheriting the fixture
+         * had its arithmetic verified against $4.99. The first version of this
+         * invariant compared the three fields above and not this one, which
+         * means setting `currency: 'usd'` back would have left it green.
+         */
+        currency: field('currency'),
+        kind: field('kind'),
+        tax_included: field('tax_included'),
+        billing_interval: field('billing_interval'),
+        validity_days: field('validity_days'),
       };
     };
 
@@ -219,6 +312,11 @@ describe('the webhook path is one decision, in one place', () => {
         display_name: `'${row.display_name}'`,
         amount_minor: String(row.amount_minor),
         units: String(row.units),
+        currency: "'jpy'",
+        kind: `'${row.kind}'`,
+        tax_included: 'true',
+        billing_interval: row.billing_interval === null ? 'null' : `'${row.billing_interval}'`,
+        validity_days: row.validity_days === null ? 'null' : String(row.validity_days),
       });
     }
   });
@@ -323,11 +421,25 @@ describe('the webhook path is one decision, in one place', () => {
   it('puts every price id and the API version where a pod can read it', () => {
     const configmap = read('infra/helm/loopscene/templates/configmap.yaml');
     // Anchored, so a commented-out line does not satisfy it.
-    const declares = (key: string) => new RegExp(`^  ${key}:\\s*\\S`, 'm').test(configmap);
+    const valueFor = (key: string) => new RegExp(`^  ${key}:\\s*(\\S.*)$`, 'm').exec(configmap)?.[1];
     for (const priceKey of catalogueKeys) {
-      expect(declares(envKeyFor(priceKey)), `${envKeyFor(priceKey)} reaches no pod`).toBe(true);
+      const key = envKeyFor(priceKey);
+      const value = valueFor(key);
+      expect(value, `${key} reaches no pod`).toBeTruthy();
+      /*
+       * And the value must be ITS OWN values-file key. Reading only the left
+       * side let `STRIPE_PRICE_ID_PREMIER_MONTHLY:
+       * {{ .Values.config.stripe.priceIdProMonthly }}` through — the exact
+       * CREATOR/STUDIO swap this check exists to prevent, shipped by the
+       * check that was supposed to prevent it.
+       */
+      const camel = priceKey.replace(/_([a-z0-9])/g, (_, c) => c.toUpperCase());
+      expect(
+        value!.toLowerCase(),
+        `${key} is wired to the wrong values key: ${value}`,
+      ).toContain(`priceid${camel.toLowerCase()}`);
     }
-    expect(declares('STRIPE_API_VERSION')).toBe(true);
+    expect(valueFor('STRIPE_API_VERSION')).toBeTruthy();
   });
 });
 
@@ -382,6 +494,50 @@ describe('both served paths behave identically', () => {
       },
       payload: raw,
     });
+
+  it('keeps the raw body on a percent-encoded spelling of the same route', async () => {
+    /*
+     * `find-my-way` matches the DECODED path and `req.url` keeps what the
+     * client sent, so `POST /api/%77ebhooks/stripe` reached the webhook route
+     * while a `req.url.startsWith('/api/webhooks/')` test said no. The body
+     * arrived parsed, `Buffer.isBuffer` failed, and the handler answered 400
+     * "raw body was not preserved" — BEFORE `recordWebhookEvent`, so the
+     * "recorded for audit, flagged unverified" guarantee did not hold either,
+     * and an unauthenticated caller could produce on demand the one message
+     * the post-deploy check uses to tell a broken endpoint from a wrong
+     * secret. Reproduced over a raw socket; `app.inject` normalises some of
+     * these, so the encodings below are the ones it does not.
+     *
+     * Fixed by matching the route Fastify decided on rather than the target
+     * the client typed.
+     */
+    for (const path of ['/api/%77ebhooks/stripe', '/%61pi/webhooks/stripe', '/v1/%77ebhooks/stripe']) {
+      const raw = Buffer.from(JSON.stringify(event(`evt_encoded_${path.length}`)), 'utf8');
+      const res = await h.app.inject({
+        method: 'POST',
+        url: path,
+        headers: { 'content-type': 'application/json', 'stripe-signature': sim.signPayload(raw) },
+        payload: raw,
+      });
+      expect(res.statusCode, `${path} must be accepted like its plain spelling`).toBe(200);
+      expect(res.json()).toMatchObject({ received: true });
+    }
+  });
+
+  it('records an audit row even for a delivery it refuses', async () => {
+    /*
+     * The "recorded for audit, flagged unverified, never processed"
+     * guarantee. An unsigned POST has to leave a row; the encoded-path bug
+     * above bypassed it entirely by failing earlier.
+     */
+    const raw = Buffer.from(JSON.stringify(event('evt_audited')), 'utf8');
+    const res = await post(STRIPE_WEBHOOK_PRIMARY_PATH, raw, undefined);
+    expect(res.statusCode).toBe(400);
+    const rows = await query<{ n: number }>(
+      `SELECT COUNT(*) AS n FROM webhook_events WHERE event_type = 'unverified'`,
+    );
+    expect(Number(rows[0]!.n)).toBeGreaterThan(0);
+  });
 
   it('accepts the content type Stripe actually sends', async () => {
     /*

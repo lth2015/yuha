@@ -105,7 +105,15 @@ export async function buildServer(ctx: AppContext): Promise<FastifyInstance> {
     'application/json',
     { parseAs: 'buffer' },
     (req, body: Buffer, done) => {
-      if (keepsRawBody(req.url)) {
+      /*
+       * `routeOptions.url` is the pattern Fastify matched, already decoded —
+       * `/api/webhooks/stripe` for a request that arrived as
+       * `/api/%77ebhooks/stripe`. `req.url` is the raw target, and testing
+       * that let an encoded path reach the route with its body parsed away.
+       * The fallback is for the 404 case, where no route matched and nothing
+       * should be kept raw anyway.
+       */
+      if (keepsRawBody(req.routeOptions?.url ?? undefined)) {
         done(null, body);
         return;
       }

@@ -48,6 +48,26 @@ export const STRIPE_WEBHOOK_PRIMARY_PATH: (typeof STRIPE_WEBHOOK_PATHS)[number] 
  */
 const RAW_BODY_PREFIXES = ['/api/webhooks/', '/v1/webhooks/'] as const;
 
-export function keepsRawBody(url: string): boolean {
-  return RAW_BODY_PREFIXES.some((prefix) => url.startsWith(prefix));
+/**
+ * Whether this request's body must be left as bytes.
+ *
+ * Takes the **matched route**, not `req.url`, and that distinction is the
+ * whole of this function's history. `find-my-way` percent-decodes the path
+ * before matching while `req.url` keeps what the client sent, so
+ * `POST /api/%77ebhooks/stripe` is routed to `/api/webhooks/stripe` and a
+ * `req.url.startsWith('/api/webhooks/')` test says no. Reproduced over a raw
+ * socket: the route matched, the predicate did not, and the handler answered
+ * 400 "raw body was not preserved" — before `recordWebhookEvent`, so the
+ * "recorded for audit, flagged unverified" guarantee did not hold either, and
+ * an unauthenticated caller could produce on demand the one error message the
+ * post-deploy check uses to tell a broken endpoint from a wrong secret.
+ *
+ * `/%61pi/webhooks/stripe` is the same trick on the other segment. Decoding
+ * the URL here would close those two and leave the next encoding to be
+ * thought about; the matched route closes the class, because it is the string
+ * Fastify itself decided this request is.
+ */
+export function keepsRawBody(routeOrUrl: string | undefined): boolean {
+  if (!routeOrUrl) return false;
+  return RAW_BODY_PREFIXES.some((prefix) => routeOrUrl.startsWith(prefix));
 }

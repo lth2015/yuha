@@ -77,6 +77,21 @@ data:
   # without it, because the webhook payload shape depends on it.
   STRIPE_API_VERSION: {{ .Values.config.stripe.apiVersion | quote }}
 
+  # What bounds the two paths that mint credits, and the purchase cap.
+  #
+  # Every one of these was a code default with no deployment surface at all —
+  # the ConfigMap is a fixed list with no pass-through, so on Kubernetes they
+  # could not be changed without editing the chart. docs/OPERATIONS.md calls
+  # ADMIN_GRANT_MAX_UNITS_PER_DAY "the limit that matters if an operator
+  # account is compromised", which is not a thing to leave unsettable. Same
+  # defect the licence price id had one commit earlier.
+  ADMIN_GRANT_MAX_UNITS: {{ .Values.config.limits.adminGrantMaxUnits | quote }}
+  ADMIN_GRANT_MAX_UNITS_PER_DAY: {{ .Values.config.limits.adminGrantMaxUnitsPerDay | quote }}
+  ADMIN_GRANT_VALIDITY_DAYS: {{ .Values.config.limits.adminGrantValidityDays | quote }}
+  ADMIN_COMPENSATION_MAX_UNITS_PER_DAY: {{ .Values.config.limits.adminCompensationMaxUnitsPerDay | quote }}
+  PURCHASE_CAP_JPY_PER_DAY: {{ .Values.config.limits.purchaseCapJpyPerDay | quote }}
+  PURCHASE_CAP_ORDERS_PER_DAY: {{ .Values.config.limits.purchaseCapOrdersPerDay | quote }}
+
   FEATURE_SUBSCRIPTIONS_ENABLED: {{ .Values.config.features.subscriptionsEnabled | quote }}
   FEATURE_FREE_TRIAL_ENABLED: {{ .Values.config.features.freeTrialEnabled | quote }}
   FEATURE_WAV_EXPORT_ENABLED: {{ .Values.config.features.wavExportEnabled | quote }}

@@ -156,10 +156,12 @@ export async function lockUser(userId: string, tx: mysql.PoolConnection): Promis
 }
 
 /**
- * The same row lock, named for the thing most callers are protecting.
+ * `lockUser` under the name most callers know it by.
  *
- * `lockUser` exists separately because the operator-gift path locks the
- * ACTOR's row rather than the recipient's — a per-actor daily limit read
+ * `lockUser` is the function; this is a one-line alias kept because every
+ * existing caller is protecting a user's entitlements and reads better that
+ * way. The two names exist because the operator paths lock the ACTOR's row,
+ * where "entitlements" would be the wrong word: a per-actor daily limit read
  * without that lock is not a limit, since two of the operator's own requests
  * to two different recipients take two different locks, both read the same
  * stale total, and both commit.

@@ -46,6 +46,28 @@ const PRODUCT_COLUMNS = `
 `;
 
 /** Current sellable version of a product. Existing orders keep their own version (UI-10). */
+/**
+ * The Stripe price id each active catalogue row actually carries.
+ *
+ * Checkout reads `product_catalog.stripe_price_id` (`getActiveProduct` →
+ * `createCheckout`), never the environment variable. The Stripe price check
+ * compared the VARIABLE against Stripe and said nothing about the column, so
+ * the documented path for a price change — edit the ConfigMap, roll the pods,
+ * run `pnpm check:stripe-prices` — passed with a tick while every Checkout
+ * session was still built against the old Price. This is what lets the check
+ * compare the thing that takes the money.
+ */
+export async function activeCataloguePriceIds(): Promise<
+  Array<{ price_key: string; version: number; stripe_price_id: string | null }>
+> {
+  return query<{ price_key: string; version: number; stripe_price_id: string | null }>(
+    `SELECT price_key, version, stripe_price_id
+       FROM product_catalog
+      WHERE active = 1
+      ORDER BY price_key`,
+  );
+}
+
 export async function getActiveProduct(
   priceKey: string,
   tx?: PoolConnection,

@@ -115,6 +115,41 @@ check was about the rendering.
   `deploy/dgx/README.md`. Check a new public path with a request only the API
   can answer correctly — an unsigned webhook POST must come back 400 — never
   with one that 200 proves nothing about.
+- **Match on what the router decided, not on what the client typed.**
+  `find-my-way` percent-decodes the path before matching; `req.url` keeps the
+  raw target. So `POST /api/%77ebhooks/stripe` was routed to the Stripe webhook
+  while a `req.url.startsWith('/api/webhooks/')` predicate said no — the body
+  arrived parsed, the signature could not be checked, and the refusal happened
+  before the audit row was written. `req.routeOptions.url` is available inside
+  a content-type parser and is the string Fastify itself settled on. Decoding
+  by hand closes two encodings and leaves the next one.
+- **A check must look at the thing that acts, not at the thing that configures
+  it.** The Stripe price check compared `STRIPE_PRICE_ID_*` against Stripe, and
+  Checkout reads `product_catalog.stripe_price_id`, which only `pnpm seed`
+  writes. The documented release path — edit the ConfigMap, roll the pods —
+  therefore moved the variable, left the column, and the check printed four
+  ticks about ids no purchase touches. A green check on the wrong object is
+  worse than no check, because it ends the search.
+- **Concatenating a client-supplied path onto an origin is not building a URL.**
+  `${PUBLIC_WEB_URL}${successPath}` with `successPath: "@evil.example/"`
+  produced `https://yuha.studio@evil.example/` — userinfo, not a path — and a
+  leading `.` extends the hostname instead. The schema said
+  `z.string().max(200)`, which is not a guard. Build with `new URL` and then
+  assert the origin came back unchanged.
+- **A self-contained OAuth `state` binds nothing.** It was HMAC-signed, carried
+  the PKCE verifier and expired in ten minutes, and its comment claimed that
+  "binds the callback to the start request". It bound the callback to *a* start
+  request from *any* browser: an attacker who completes consent as themselves
+  and hands the callback URL to somebody else signs that person into the
+  attacker's account. `state` needs a second half the attacker cannot deliver —
+  a cookie — and `SameSite=Lax` is required, because the callback is a
+  cross-site top-level GET that `Strict` drops.
+- **A repair that cannot tell "still broken" from "already fixed" destroys
+  work.** `mutation-check --repair` copied its backup over the file
+  unconditionally, so interrupting a run, restoring by hand and then editing
+  for an hour ended with a stale backup stamped over the lot and the word
+  "repaired" printed. It now records the mutation's own text and restores only
+  when that text is still there.
 - **Prefer a scripted invariant to an eye.** The ones in this repo — brace
   balance after CSS edits, SQL placeholder counts, contrast maths, dictionary
   key parity, orphaned exports, mutation anchors — have each caught real

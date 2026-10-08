@@ -84,15 +84,74 @@ describe('the Google callback is one constant', () => {
 
   it('builds the value to register from an origin', () => {
     expect(googleRedirectUri('https://yuha.studio')).toBe('https://yuha.studio/v1/auth/google/callback');
-    // A trailing slash on the origin must not produce a doubled one: Google
-    // compares byte for byte, so `//v1/...` is a different URI.
+    /*
+     * A trailing slash, and a base that carries a path, both resolve to the
+     * same absolute callback. (`new URL` guarantees the first of those on its
+     * own, so that assertion is about the Node API rather than about this
+     * code; the second is not — a `PUBLIC_API_URL` of `https://host/api`
+     * would be a plausible deployment and must not produce
+     * `/api/v1/auth/...`, because the route is registered at the root.)
+     */
     expect(googleRedirectUri('https://yuha.studio/')).toBe('https://yuha.studio/v1/auth/google/callback');
+    expect(googleRedirectUri('https://yuha.studio/api')).toBe('https://yuha.studio/v1/auth/google/callback');
   });
 });
 
 describe('a Google redirect URI the deployment cannot be right about', () => {
   it('is accepted when it is the API origin plus the API path', () => {
     expect(() => loadConfig(env())).not.toThrow();
+  });
+
+  it('is checked whatever AUTH_ADAPTER says, because the flow is registered on credentials', () => {
+    /*
+     * `routes/auth.ts` registers `/v1/auth/google/*` whenever the three
+     * credentials are present — deliberately, "so Sign in with Google can
+     * coexist with the dev login in integration mode" — and every check here
+     * used to live inside `adapters.auth === 'google'`. So the configuration
+     * `.env.example` itself ships, `AUTH_ADAPTER=dev` with the Google values
+     * filled, had a live OAuth endpoint and no validation of any of it: the
+     * guarantee was absent in the most common way to run the flow.
+     */
+    for (const adapter of ['dev', 'cognito'] as const) {
+      const extra =
+        adapter === 'cognito'
+          ? { COGNITO_REGION: 'ap-northeast-1', COGNITO_USER_POOL_ID: 'p', COGNITO_APP_CLIENT_ID: 'c' }
+          : { DEV_AUTH_SECRET: 'dev-secret' };
+      const message = refusal({
+        AUTH_ADAPTER: adapter,
+        ...extra,
+        GOOGLE_REDIRECT_URI: googleRedirectUri('https://stale.example'),
+      });
+      expect(message, `${adapter} must still check the redirect URI`).toContain('stale.example');
+    }
+  });
+
+  it('is refused with a query string or a fragment', () => {
+    // Google compares the whole URI, so `?env=prod` is a different one — and
+    // it passed every other check here before failing, logless, at Google.
+    expect(refusal({ GOOGLE_REDIRECT_URI: `${API}${GOOGLE_CALLBACK_PATH}?env=prod` })).toContain(
+      'no query string',
+    );
+    expect(refusal({ GOOGLE_REDIRECT_URI: `${API}${GOOGLE_CALLBACK_PATH}#x` })).toContain('fragment');
+  });
+
+  it('requires a state signing secret in production whatever the adapter', () => {
+    /*
+     * `stateSecret()` was `GOOGLE_SESSION_SECRET ?? DEV_AUTH_SECRET ?? ''`,
+     * production forbids `DEV_AUTH_SECRET`, and the secret's check was inside
+     * the google-adapter branch — so a production deployment on another
+     * adapter with the Google flow configured would have signed the OAuth
+     * `state` with the empty string. Forgeable.
+     */
+    const message = refusal({
+      RUN_MODE: 'production',
+      AUTH_ADAPTER: 'cognito',
+      COGNITO_REGION: 'ap-northeast-1',
+      COGNITO_USER_POOL_ID: 'p',
+      COGNITO_APP_CLIENT_ID: 'c',
+      GOOGLE_SESSION_SECRET: undefined,
+    });
+    expect(message).toContain('GOOGLE_SESSION_SECRET');
   });
 
   it('is refused when it is the web app\'s own return path', () => {
@@ -141,19 +200,35 @@ describe('a Google redirect URI the deployment cannot be right about', () => {
 });
 
 describe('the deployment configuration names it', () => {
-  it('production carries the real value, derived from its own API host', () => {
-    /*
-     * Not a secret — it is in the authorization URL — so it belongs in the
-     * ConfigMap and can be written down rather than left as an empty string
-     * for somebody to guess. It is also derivable: the API host is already in
-     * the same file.
-     */
-    const prod = read('deploy/envs/production.yaml');
-    const apiUrl = /publicApiUrl:\s*"([^"]+)"/.exec(prod)?.[1];
-    expect(apiUrl).toBeTruthy();
-    const redirect = /redirectUri:\s*"([^"]+)"/.exec(prod)?.[1];
-    expect(redirect).toBe(googleRedirectUri(apiUrl!));
-  });
+  it.each(['production', 'staging', 'qa'])(
+    '%s derives its redirect URI from its own API host, or declares neither',
+    (env) => {
+      /*
+       * Every environment, not only production — and the YAML is read with
+       * optional quotes, because `redirectUri: https://…` is idiomatic and the
+       * quote-only pattern reported `undefined` for it.
+       *
+       * The three files are allowed to be empty, but not inconsistent: an
+       * environment whose `authAdapter` is google and whose `redirectUri` is
+       * blank refuses to boot, which is a thing to find here rather than in a
+       * rollout. Staging and qa have no host yet, so what is asserted is the
+       * pair: either both are set and agree, or the redirect is blank and the
+       * file says so.
+       */
+      const file = read(`deploy/envs/${env}.yaml`);
+      const value = (key: string) => new RegExp(`${key}:\\s*"?([^"\\s#]*)"?`).exec(file)?.[1] ?? '';
+      const apiUrl = value('publicApiUrl');
+      const redirect = value('redirectUri');
+
+      if (!redirect) {
+        // Then the API host is not known either, or the pair is inconsistent.
+        expect(apiUrl, `${env} knows its API host but leaves redirectUri blank`).toBe('');
+        return;
+      }
+      expect(apiUrl, `${env} sets redirectUri but not publicApiUrl`).toBeTruthy();
+      expect(redirect).toBe(googleRedirectUri(apiUrl));
+    },
+  );
 
   it('reaches a pod, and the secret half does not go near the ConfigMap', () => {
     const configmap = read('infra/helm/loopscene/templates/configmap.yaml');

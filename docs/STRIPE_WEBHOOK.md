@@ -188,7 +188,7 @@ In order, cheapest first. None of these moves real money.
 # 1. The path reaches the backend at all. Unsigned, so 400 is the pass.
 curl -i -X POST https://yuha.studio/api/webhooks/stripe \
   -H 'content-type: application/json' --data '{}'
-# → HTTP/1.1 400 … {"code":"WEBHOOK_SIGNATURE_INVALID","message":"signature verification failed"}
+# → HTTP/1.1 400 … {"error":{"code":"WEBHOOK_SIGNATURE_INVALID","message":"signature verification failed"}}
 # Read the message, not only the code: the same 400 saying "raw body was not
 # preserved" means the route is served but its bytes are gone, and every real
 # event is being refused too. A 200 with HTML means the request never left the

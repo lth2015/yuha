@@ -60,29 +60,67 @@ async function toMeView(u: UserRow): Promise<MeView> {
 }
 
 /**
- * Signed, self-contained OAuth state carrying the PKCE verifier and nonce.
+ * Signed OAuth state carrying the PKCE verifier, plus a cookie that binds the
+ * whole thing to ONE browser.
  *
- * Google echoes `state` back verbatim, so the CSRF nonce and the PKCE verifier
- * travel inside it, HMAC-signed with the session secret and expiring in ten
- * minutes. This keeps the flow stateless (no server-side session or cookie
- * dependency) while still binding the callback to the start request.
+ * The state used to be entirely self-contained, and the docstring called that
+ * "stateless … while still binding the callback to the start request". It
+ * bound the callback to *a* start request from *any* browser, which is not
+ * what `state` is for, and the gap is login CSRF:
+ *
+ *   1. the attacker runs `/start` and completes consent as themselves;
+ *   2. instead of following the redirect they capture the callback URL, which
+ *      carries Google's `code` and our signed `state`;
+ *   3. the victim opens that URL. We exchange the code, resolve the
+ *      ATTACKER's Google identity, mint a one-time code and hand it to the
+ *      victim's browser, which signs itself into the attacker's account —
+ *      and may then enter payment details or upload work there.
+ *
+ * PKCE contributes nothing against it, because the verifier travelled inside
+ * the state the attacker was holding.
+ *
+ * So the state now carries a nonce whose other half is an HttpOnly cookie set
+ * on the `/start` response. A callback is accepted only when the two agree,
+ * which the attacker cannot arrange: they can give the victim a URL, not a
+ * cookie for our origin. `SameSite=Lax` is required rather than `Strict` —
+ * the callback is a cross-site top-level GET from accounts.google.com, which
+ * Lax allows and Strict drops — and that is safe here because the cookie
+ * authorises nothing on its own; it only has to match a nonce.
+ *
+ * No cookie plugin: one `Set-Cookie` header out, one `Cookie` header parsed
+ * in. `@fastify/cookie` is deliberately absent from this API (there is no
+ * cookie session, which is why there is no CSRF layer to exempt the webhook
+ * from) and adding it for twelve lines would change that statement.
  */
 const STATE_TTL_SECONDS = 600;
+const STATE_COOKIE = 'yuha_oauth_state';
 
 function stateSecret(ctx: AppContext): string {
-  return ctx.config.GOOGLE_SESSION_SECRET ?? ctx.config.DEV_AUTH_SECRET ?? '';
+  /*
+   * No `?? ''` fallback. An empty HMAC key signs anything, so a deployment
+   * that reached here without a secret would hand out forgeable state —
+   * `tests/blank-secrets.test.ts` exists because that exact shape once signed
+   * every Google session with the empty string. `config.ts` refuses to start
+   * without one whenever the Google flow is configured in production; this is
+   * the second line of the same defence, and it throws rather than degrades.
+   */
+  const secret = ctx.config.GOOGLE_SESSION_SECRET ?? ctx.config.DEV_AUTH_SECRET;
+  if (!secret) {
+    throw new AppError('SERVICE_DISABLED', 'the google sign-in has no state signing secret configured');
+  }
+  return secret;
 }
 
-function encodeState(ctx: AppContext, verifier: string): string {
+function encodeState(ctx: AppContext, verifier: string, nonce: string): string {
   const body = Buffer.from(
-    JSON.stringify({ v: verifier, n: randomBytes(8).toString('hex'), exp: Math.floor(Date.now() / 1000) + STATE_TTL_SECONDS }),
+    JSON.stringify({ v: verifier, n: nonce, exp: Math.floor(Date.now() / 1000) + STATE_TTL_SECONDS }),
     'utf8',
   ).toString('base64url');
   const sig = createHmac('sha256', stateSecret(ctx)).update(body).digest('base64url');
   return `${body}.${sig}`;
 }
 
-function decodeState(ctx: AppContext, state: string): { verifier: string } | null {
+function decodeState(ctx: AppContext, state: string): { verifier: string; nonce: string } | null {
   const [body, sig] = state.split('.');
   if (!body || !sig) return null;
   const expected = createHmac('sha256', stateSecret(ctx)).update(body).digest('base64url');
@@ -92,13 +130,42 @@ function decodeState(ctx: AppContext, state: string): { verifier: string } | nul
   try {
     const parsed = JSON.parse(Buffer.from(body, 'base64url').toString('utf8')) as {
       v?: string;
+      n?: string;
       exp?: number;
     };
-    if (!parsed.v || !parsed.exp || parsed.exp < Date.now() / 1000) return null;
-    return { verifier: parsed.v };
+    if (!parsed.v || !parsed.n || !parsed.exp || parsed.exp < Date.now() / 1000) return null;
+    return { verifier: parsed.v, nonce: parsed.n };
   } catch {
     return null;
   }
+}
+
+/** The nonce this browser was given at `/start`, if any. */
+function stateCookie(req: { headers: { cookie?: string } }): string | null {
+  for (const part of (req.headers.cookie ?? '').split(';')) {
+    const [name, ...rest] = part.trim().split('=');
+    if (name === STATE_COOKIE) return rest.join('=') || null;
+  }
+  return null;
+}
+
+function setStateCookie(ctx: AppContext, nonce: string): string {
+  const attrs = [
+    `${STATE_COOKIE}=${nonce}`,
+    // Narrow enough that it is sent on the callback and nowhere else.
+    'Path=/v1/auth/google',
+    'HttpOnly',
+    'SameSite=Lax',
+    `Max-Age=${STATE_TTL_SECONDS}`,
+  ];
+  // `Secure` would stop the cookie being sent at all over plain http, which
+  // is how the flow runs locally.
+  if (ctx.config.mode === 'production') attrs.push('Secure');
+  return attrs.join('; ');
+}
+
+function clearStateCookie(): string {
+  return `${STATE_COOKIE}=; Path=/v1/auth/google; HttpOnly; SameSite=Lax; Max-Age=0`;
 }
 
 function pkceChallenge(verifier: string): string {
@@ -220,9 +287,14 @@ export default async function authRoutes(
   if (google) {
     app.get('/v1/auth/google/start', async (_req, reply) => {
       const verifier = randomBytes(32).toString('base64url');
-      const state = encodeState(ctx, verifier);
+      // The nonce goes two ways: inside the signed state, which Google echoes
+      // back, and into an HttpOnly cookie. The callback requires both, which
+      // is what ties a sign-in to the browser that started it.
+      const nonce = randomBytes(16).toString('base64url');
+      const state = encodeState(ctx, verifier, nonce);
       return reply
         .status(302)
+        .header('set-cookie', setStateCookie(ctx, nonce))
         .redirect(google.authorizationUrl(state, pkceChallenge(verifier)));
     });
 
@@ -238,6 +310,29 @@ export default async function authRoutes(
       const state = query.state ? decodeState(ctx, query.state) : null;
       if (!query.code || !state) {
         throw new AppError('AUTH_EXCHANGE_FAILED', 'missing or expired google callback state');
+      }
+      /*
+       * And this browser must be the one that started it.
+       *
+       * Without this, an attacker who completes consent as themselves and
+       * then hands the callback URL to somebody else signs that person into
+       * the attacker's account — the state verifies, because it was ours, and
+       * the PKCE verifier is inside it. The cookie is the half an attacker
+       * cannot deliver.
+       *
+       * Compared in constant time out of habit rather than need, and cleared
+       * either way: a nonce is single-use, and leaving it set would let a
+       * replay of the same callback URL in the same browser go through again.
+       */
+      const cookie = stateCookie(req);
+      const expected = Buffer.from(state.nonce);
+      const got = Buffer.from(cookie ?? '');
+      void reply.header('set-cookie', clearStateCookie());
+      if (!cookie || expected.length !== got.length || !timingSafeEqual(expected, got)) {
+        throw new AppError(
+          'AUTH_EXCHANGE_FAILED',
+          'this sign-in was started in a different browser — please sign in again',
+        );
       }
 
       const identity = await google.exchangeCode({ code: query.code, codeVerifier: state.verifier });
@@ -335,11 +430,19 @@ export default async function authRoutes(
       // accounts the list is there to fence off.
       devLoginRestricted: allowlist.restricted,
       devLoginDomains: allowlist.domains,
+      /*
+       * One fact, under one name.
+       *
+       * `enabled` and `configured` were both `!!google`, with a comment
+       * claiming the pair distinguished "present but unusable (e.g. missing
+       * client id)" from unavailable — a distinction the code cannot make,
+       * because `google` is only built when all three settings exist. Two
+       * names for one boolean is worse than one: a reader believes there is a
+       * difference and writes a branch on it. `enabled` is the one the web app
+       * reads, so `configured` went.
+       */
       google: {
         enabled: !!google,
-        // Present but unusable (e.g. missing client id) is surfaced so the UI
-        // can explain instead of hiding a broken button.
-        configured: !!google,
         clientId: ctx.config.GOOGLE_CLIENT_ID ?? null,
       },
       cognito:

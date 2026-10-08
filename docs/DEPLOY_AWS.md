@@ -138,8 +138,8 @@ Point `sonare.example.com` (CNAME) at `cloudfront_domain`.
 | Console | What to configure |
 | --- | --- |
 | **Google Cloud** | OAuth 2.0 **Web application** client. Authorized redirect URI: `https://yuha.studio/v1/auth/google/callback` — byte-identical, and the API's path, never the web app's `/auth/google/callback`. It equals `config.google.redirectUri` in the Helm values (not a secret); the client secret and `GOOGLE_SESSION_SECRET` go into Secrets Manager. No "Authorized JavaScript origin" is needed: this is the server-side code flow, and no Google script runs in the browser. |
-| **Stripe** | Four live Prices, in **JPY**, matching `apps/api/src/catalogue.ts`: `drop_5` ¥980, `market_license` ¥980, `pro_monthly` ¥1,980/month, `premier_monthly` ¥3,980/month. All four ids are required at start-up. Webhook endpoint: `https://yuha.studio/api/webhooks/stripe`, format **Snapshot**, API version **2025-03-31.basil**, and the fourteen events listed in [STRIPE_WEBHOOK.md](STRIPE_WEBHOOK.md) — that file is the list of record; this row used to name five and say USD. Price ids and `STRIPE_API_VERSION` go into the Helm values; the `whsec_…` signing secret goes into Secrets Manager. |
-| **ACM** | `ap-northeast-1` cert for `api.sonare.example.com` (ALB); `us-east-1` cert for the CloudFront domain. |
+| **Stripe** | Four live Prices, in **JPY**, matching `apps/api/src/catalogue.ts`: `drop_5` ¥980, `market_license` ¥980, `pro_monthly` ¥1,980/month, `premier_monthly` ¥3,980/month. DROP and the licence are required at start-up; the two subscription ids are required when `FEATURE_SUBSCRIPTIONS_ENABLED`. Webhook endpoint: `https://yuha.studio/api/webhooks/stripe`, format **Snapshot**, API version **2025-03-31.basil**, and the fourteen events listed in [STRIPE_WEBHOOK.md](STRIPE_WEBHOOK.md) — that file is the list of record; this row used to name five and say USD. Price ids and `STRIPE_API_VERSION` go into the Helm values; the `whsec_…` signing secret goes into Secrets Manager. |
+| **ACM** | `ap-northeast-1` cert for `yuha.studio` (ALB); `us-east-1` cert for the CloudFront domain. |
 
 ## 6. Release (Helm)
 
@@ -153,9 +153,9 @@ helm upgrade --install sonare infra/helm/loopscene \
   --set serviceAccount.api.roleArn=$(terraform -chdir=infra/terraform output -raw api_role_arn) \
   --set serviceAccount.worker.roleArn=$(terraform -chdir=infra/terraform output -raw worker_role_arn) \
   --set config.publicWebUrl=https://sonare.example.com \
-  --set config.publicApiUrl=https://api.sonare.example.com \
+  --set config.publicApiUrl=https://yuha.studio \
   --set config.google.clientId=….apps.googleusercontent.com \
-  --set config.google.redirectUri=https://api.sonare.example.com/v1/auth/google/callback \
+  --set config.google.redirectUri=https://yuha.studio/v1/auth/google/callback \
   --set config.storage.quarantineBucket=$(terraform -chdir=infra/terraform output -raw quarantine_bucket) \
   --set config.storage.deliveryBucket=$(terraform -chdir=infra/terraform output -raw delivery_bucket) \
   --set config.storage.kmsKeyId=$(terraform -chdir=infra/terraform output -raw kms_media_key_arn) \
@@ -164,7 +164,7 @@ helm upgrade --install sonare infra/helm/loopscene \
   --set config.stripe.priceIdDrop5=price_… \
   --set config.stripe.priceIdProMonthly=price_… \
   --set config.stripe.priceIdPremierMonthly=price_… \
-  --set ingress.host=api.sonare.example.com \
+  --set ingress.host=yuha.studio \
   --set ingress.certificateArn=arn:aws:acm:ap-northeast-1:…:certificate/…
 ```
 
@@ -179,8 +179,8 @@ a mutable tag would make "roll back to the previous release" ambiguous.
 ## 7. Post-deploy smoke checks
 
 ```bash
-curl -fsS https://api.sonare.example.com/health           # {"status":"ok","mode":"production"}
-curl -fsS https://api.sonare.example.com/v1/runtime       # adapters: google / glm / stripe / s3 / sqs
+curl -fsS https://yuha.studio/health           # {"status":"ok","mode":"production"}
+curl -fsS https://yuha.studio/v1/runtime       # adapters: google / glm / stripe / s3 / sqs
 kubectl -n sonare rollout status deploy/sonare-api
 kubectl -n sonare logs -l component=worker --tail=50
 ```

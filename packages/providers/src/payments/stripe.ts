@@ -256,9 +256,22 @@ export class StripePaymentsAdapter implements PaymentsAdapter {
         interval: p.recurring?.interval ?? null,
         intervalCount: p.recurring?.interval_count ?? null,
         taxBehavior: p.tax_behavior ?? null,
+        billingScheme: p.billing_scheme ?? null,
+        usageType: p.recurring?.usage_type ?? null,
         productId: typeof product === 'string' ? product : (product?.id ?? null),
         productName:
           typeof product === 'string' || !product || product.deleted ? null : product.name,
+        /*
+         * Unknown rather than false when the product was not expanded — a
+         * caller must be able to tell "Stripe says this product is archived"
+         * from "we did not ask".
+         */
+        productActive:
+          typeof product === 'string' || !product
+            ? null
+            : product.deleted
+              ? false
+              : product.active,
       };
     } catch (err) {
       /*

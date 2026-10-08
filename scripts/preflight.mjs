@@ -232,19 +232,42 @@ if (!stripe) notes.push('payments are simulated: checkout completes without leav
  * the one page that takes money.
  */
 if (stripe) {
+  /*
+   * The price-id names are DERIVED from the catalogue, and the two
+   * subscription ids are only required when subscriptions are on.
+   *
+   * This was a hand-written list of four — the thing a fifth product is
+   * missing from, which `apps/api/src/catalogue.ts` says in so many words —
+   * and it called `fail()` for any unset id regardless of
+   * `FEATURE_SUBSCRIPTIONS_ENABLED`. So it refused the
+   * stripe-with-subscriptions-off configuration that docs/CONFIGURATION.md
+   * tells people to use, which is exactly the defect that was removed from
+   * `blocksSelling` in the same change that introduced this.
+   */
   const priceKeys = [
-    'STRIPE_PRICE_ID_DROP_5',
-    'STRIPE_PRICE_ID_PRO_MONTHLY',
-    'STRIPE_PRICE_ID_PREMIER_MONTHLY',
-    'STRIPE_PRICE_ID_MARKET_LICENSE',
+    ...new Set(
+      [...readFileSync(join(ROOT, 'apps/api/src/catalogue.ts'), 'utf8').matchAll(
+        /stripe_price_id: config\.(STRIPE_PRICE_ID_[A-Z0-9_]+)/g,
+      )].map((m) => m[1]),
+    ),
   ];
-  const missing = priceKeys.filter((k) => !has(k));
+  const subscriptionsOn = (env.FEATURE_SUBSCRIPTIONS_ENABLED ?? 'true') !== 'false';
+  const SUBSCRIPTION_KEYS = new Set(['STRIPE_PRICE_ID_PRO_MONTHLY', 'STRIPE_PRICE_ID_PREMIER_MONTHLY']);
+  if (priceKeys.length === 0) {
+    fail('apps/api/src/catalogue.ts', 'no price ids found', 'this check cannot see the catalogue — fix the parse before trusting it');
+  }
+  const required = priceKeys.filter((k) => subscriptionsOn || !SUBSCRIPTION_KEYS.has(k));
+  const missing = required.filter((k) => !has(k));
   if (missing.length) {
     fail(
       missing.join(' / '),
       'no price id',
-      'PAYMENTS_ADAPTER=stripe needs one live/test price id per catalogue row — `pnpm stripe:setup --apply` prints them',
+      'the stripe adapter needs one price id per sellable catalogue row — `pnpm stripe:setup --apply` prints them',
     );
+  }
+  const skipped = priceKeys.filter((k) => !required.includes(k) && !has(k));
+  if (skipped.length) {
+    notes.push(`${skipped.join(' / ')} unset — not required while FEATURE_SUBSCRIPTIONS_ENABLED=false`);
   }
   if (!has('STRIPE_API_VERSION')) {
     notes.push(

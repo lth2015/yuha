@@ -622,6 +622,9 @@ const zh: Dict = {
   'admin.cust.gift.done': '已赠予',
   'admin.cust.gift.expiresOn': '过期于',
   'admin.cust.gift.remaining': '你今天还能送',
+  'admin.cust.gift.already': '这次是重试,之前已经赠予过',
+  'admin.cust.credits.more': '额度条目太多,只显示了一部分。',
+  'admin.cust.orders.more': '订单太多,只显示了最近的一部分。',
   // --- stablecoin console ----------------------------------------------
   'admin.sc.h2': '稳定币支付',
   'admin.sc.channelOff': '当前部署未开启稳定币支付渠道。',
@@ -1435,6 +1438,9 @@ const ja: Dict = {
   'admin.cust.gift.done': '付与しました',
   'admin.cust.gift.expiresOn': '期限',
   'admin.cust.gift.remaining': '本日あと付与できる回数',
+  'admin.cust.gift.already': 'これは再送で、付与は済んでいます',
+  'admin.cust.credits.more': 'クレジットの明細が多いため、一部のみ表示しています。',
+  'admin.cust.orders.more': 'ご注文が多いため、最近の一部のみ表示しています。',
   // --- stablecoin console ----------------------------------------------
   'admin.sc.h2': 'ステーブルコイン決済',
   'admin.sc.channelOff': 'この環境ではステーブルコイン決済は有効になっていません。',
@@ -2248,6 +2254,9 @@ const en: Dict = {
   'admin.cust.gift.done': 'Given',
   'admin.cust.gift.expiresOn': 'expires',
   'admin.cust.gift.remaining': 'you can still give today',
+  'admin.cust.gift.already': 'Already given — this was a retry:',
+  'admin.cust.credits.more': 'More credit batches than shown.',
+  'admin.cust.orders.more': 'More orders than shown; these are the most recent.',
   // --- stablecoin console ----------------------------------------------
   'admin.sc.h2': 'Stablecoin payments',
   'admin.sc.channelOff': 'The stablecoin channel is not enabled on this deployment.',

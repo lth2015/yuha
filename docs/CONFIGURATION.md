@@ -75,11 +75,28 @@ JPY 是零小数货币，Stripe 的 `unit_amount` 直接写 980，不要乘 100�
 
 **命名对不上这件事，靠校验而不是靠记性。** 变量名来自内部 price key，Stripe 控制台显示的是营销名，两套词不一样，而 CREATOR 和 STUDIO 又只差价格——填反是很自然的手误，代价是客户买 STUDIO 被扣 ¥1,980（Checkout 按 Stripe 的 Price 收，订单行里记的是目录金额，webhook 的金额校验会在**扣款之后**才抛错）。所以 `pnpm seed` 和 `pnpm check:stripe-prices` 会把每个 Price 读回来，比对金额、币种、计费周期（含 `interval_count`）、含税方式和是否 active，不一致就拒绝；两个变量填了同一个 id、或两个 id 其实属于 Stripe 里同一个 product，也会单独点出来。
 
+**改了价格 id 之后必须重新 seed。** Checkout 读的是 `product_catalog.stripe_price_id`（`getActiveProduct` → `createCheckout`），**不是**环境变量;而写这一列的只有 `pnpm seed`。所以「改 ConfigMap、滚 pod」这条路只动了变量、没动数据库,每一笔结账仍然用旧的 Price——客户被按旧价扣款,订单行里记的是目录金额,webhook 的金额校验在扣款之后才抛错。`pnpm check:stripe-prices` 现在会把这一列和配置一起比对,不一致就报 `stale` 并要求 `pnpm seed`;在加这个比对之前,它会在这种情况下打四个勾。
+
 **但要说清楚它到底保证了什么。** 这两个都是**人去跑的命令**：CI 不跑（CI 没有线上 Stripe key），pod 启动也故意不跑（第三方超时不该拦住一个本来正常的部署），而改价格 id 的实际发布路径是「改 ConfigMap、滚 pod」——两个都不经过。所以这是一道**有人跑就能抓住**的检查，不是「填反了发不出去」。改价格 id 之后请手动跑一次 `pnpm check:stripe-prices`。
 
 内部 price key 没有跟着改名，因为它是 `product_catalog` 的主键、也是 `orders` / `subscriptions` 的外键——那是一次数据迁移，而且改完也只是降低手误概率。
 
 启用：`PAYMENTS_ADAPTER=stripe`、`RUN_MODE=integration`。Webhook 的路径、要勾的 14 个事件、payload 格式与 API 版本见 [STRIPE_WEBHOOK.md](STRIPE_WEBHOOK.md)——那份是唯一的清单，这里不再抄一份会和它漂移的短名单。
+
+### B6. 运营台的额度上限（都有默认值，不填也能跑）
+
+发放额度和补偿额度都是真金白银——一个 credit 就是一次生成，也就是供应商成本。下面六个键是唯一能限制它们的东西，之前**只有代码默认值、没有任何部署入口**（Helm 的 ConfigMap 是写死的清单，没有透传），现在 ConfigMap、`values.yaml`、`deploy/envs/*.yaml` 和 `.env.example` 都有了。
+
+| 变量 | 默认 | 含义 |
+|---|---|---|
+| `ADMIN_GRANT_MAX_UNITS` | 100 | 单次赠予上限。**0 = 完全关闭赠予功能** |
+| `ADMIN_GRANT_MAX_UNITS_PER_DAY` | 500 | 每个运营**每人**滚动 24 小时的赠予总量。**0 = 取消这个上限**（注意和上面那个 0 的含义相反） |
+| `ADMIN_GRANT_VALIDITY_DAYS` | 90 | 赠予额度的有效期天数，也是运营可以往下调的上限。必须 ≥ 1 |
+| `ADMIN_COMPENSATION_MAX_UNITS_PER_DAY` | 2000 | 补偿的每人每日总量。**0 = 取消**。比赠予宽，因为真出故障时要一次补很多人；补偿单次本来就封顶 20 |
+| `PURCHASE_CAP_JPY_PER_DAY` | 50000 | 单个客户滚动 24 小时的购买金额上限（分）。**0 = 取消** |
+| `PURCHASE_CAP_ORDERS_PER_DAY` | 20 | 单个客户滚动 24 小时的下单次数上限。**0 = 取消** |
+
+负数会在启动时被拒绝，并且报错信息会说清楚这个键的 0 是「关闭功能」还是「取消上限」。
 
 ---
 

@@ -20,6 +20,22 @@ import { describe, expect, it } from 'vitest';
 import { redactUrlSecrets } from '../apps/api/src/log-redaction.js';
 
 describe('redacting secrets out of a logged url', () => {
+  it("removes a customer's email address, which is not a secret but is theirs", () => {
+    /*
+     * The operator console looks people up with `GET /v1/admin/users?email=…`,
+     * so every lookup wrote the address into the request log at info level —
+     * and nginx's default `combined` format and an ALB access log record the
+     * request line too. Log storage has different retention, different access
+     * control and a wider audience than the database, which is the opposite of
+     * the care taken over this field everywhere else: `maskEmail` exists two
+     * screens away in the same console.
+     */
+    const got = redactUrlSecrets('/v1/admin/users?email=alice%40example.com');
+    expect(got).toContain('/v1/admin/users');
+    expect(got).not.toContain('alice');
+    expect(got).not.toContain('example.com');
+  });
+
   it('removes a storage signature but keeps the route and the object', () => {
     const got = redactUrlSecrets(
       '/v1/files?zone=delivery&key=abc%2Fdef.mp3&expires=1791081524&sig=2099201edad5a6954b28c7d9',

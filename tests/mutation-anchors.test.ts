@@ -35,5 +35,13 @@ describe('the mutation list', () => {
       throw new Error(`${e.stdout ?? ''}${e.stderr ?? ''}`);
     }
     expect(out).toContain('anchors all still match');
+    /*
+     * And it checked a plausible number of them, so a `--anchors` that
+     * silently found no mutations at all cannot pass. The count is of
+     * ANCHORS, not of entries: one mutation carries two edits, which is also
+     * why the number printed used to be one short.
+     */
+    const checked = Number(/✓ (\d+) mutation anchors/.exec(out)?.[1] ?? 0);
+    expect(checked).toBeGreaterThan(80);
   });
 });

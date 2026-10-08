@@ -95,12 +95,31 @@ if (priceProblems === null) {
   if (blocking.length > 0) {
     console.error('\n✗ the configured Stripe prices do not match the catalogue:\n');
     for (const problem of blocking) console.error(`  - ${describePriceProblem(problem)}`);
-    console.error('\nNothing has been written. Fix the ids in the deployment configuration;');
-    console.error('docs/CONFIGURATION.md lists which Stripe product belongs in which variable.');
+    console.error('\nNo catalogue row has been written (the migrations above have run).');
+    console.error('Fix the ids in the deployment configuration; docs/CONFIGURATION.md lists');
+    console.error('which Stripe product belongs in which variable.');
     await closeDb();
     process.exit(1);
   }
-  console.log(`✓ Stripe prices agree with the catalogue (amount, currency, interval, tax, active)`);
+  /*
+   * A tick only when a comparison actually happened.
+   *
+   * `blocking.length === 0` is also true when every row came back
+   * `unavailable` — a 429, an expired key, an outage — and the old line then
+   * printed "Stripe prices agree with the catalogue" about four values nothing
+   * had looked at, in the script that goes on to make them sellable. The same
+   * for `missing`: an unset id is reported and then seeded as NULL.
+   */
+  const compared = cataloguePrices(config).filter(
+    (row) => !priceProblems.some((p) => p.envVar === row.envVar && (p.kind === 'unavailable' || p.kind === 'missing')),
+  );
+  if (compared.length === 0) {
+    console.log('• no Stripe price was compared — nothing below is evidence that the ids are right');
+  } else if (compared.length < 4) {
+    console.log(`✓ ${compared.length} of 4 Stripe prices agree with the catalogue; the rest were not compared`);
+  } else {
+    console.log('✓ Stripe prices agree with the catalogue (amount, currency, interval, tax, active)');
+  }
 }
 
 const CATALOGUE = catalogue(config);
@@ -123,7 +142,9 @@ for (const row of CATALOGUE) {
   });
 }
 
-console.log('✓ product catalogue seeded v2 (DROP / CREATOR / STUDIO / licence — JPY, tax-inclusive)');
+console.log(
+  `✓ product catalogue seeded (${CATALOGUE.map((r) => `${r.price_key} v${r.version}`).join(', ')} — JPY, tax-inclusive)`,
+);
 
 // ------------------------------------------------------ explore showcase
 

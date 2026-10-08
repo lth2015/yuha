@@ -59,10 +59,12 @@ config:
   google:
     # <id>.apps.googleusercontent.com — not a secret.
     clientId: ""
-    # `https://<this environment's API host>/v1/auth/google/callback`, byte-
-    # identical to the Cloud Console entry. The API host, not the web app's
-    # /auth/google/callback. Checked at start-up against PUBLIC_API_URL.
-    redirectUri: ""
+    # Byte-identical to this client's Cloud Console entry, and the API's path
+    # rather than the web app's /auth/google/callback. Derived from
+    # publicApiUrl above and checked against it at start-up — these two were
+    # left blank while publicApiUrl was set, which means this environment
+    # refused to boot with authAdapter: google and nothing said so.
+    redirectUri: "https://staging.yuha.studio/v1/auth/google/callback"
   cognito:
     region: ap-northeast-1
     userPoolId: ""   # terraform output cognito_user_pool_id
@@ -136,6 +138,16 @@ config:
     dailyBudgetMinor: "50000"
     generationRateLimitPerHour: "60"
     exportRateLimitPerHour: "120"
+    # Credits an operator may hand out. 0 on the first switches gifting off;
+    # 0 on either daily total REMOVES that limit — the two zeros mean opposite
+    # things, which is why they are commented separately.
+    adminGrantMaxUnits: "100"
+    adminGrantMaxUnitsPerDay: "500"
+    adminGrantValidityDays: "90"
+    adminCompensationMaxUnitsPerDay: "2000"
+    # What one customer may buy in a rolling day (FRAUD_PREVENTION ③).
+    purchaseCapJpyPerDay: "50000"
+    purchaseCapOrdersPerDay: "20"
 
   # production mode refuses to start unless entityName, address and contact are
   # all non-empty — the 特定商取引法 disclosure must not be a placeholder. These

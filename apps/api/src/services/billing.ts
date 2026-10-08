@@ -19,6 +19,7 @@ import {
   openOrderReview,
 } from '@yuha/db';
 import type { AppContext } from '../context.js';
+import { internalUrl } from '../internal-path.js';
 import { createPurchaseOrder } from './purchase-cap.js';
 
 export function toProductView(row: ProductRow, available: boolean): ProductView {
@@ -188,8 +189,23 @@ export async function createCheckout(
     currency: product.currency,
     stripePriceId: product.stripe_price_id,
     kind: product.kind,
-    successUrl: `${ctx.config.PUBLIC_WEB_URL}${params.successPath ?? '/checkout/complete'}?order_id=${order.id}`,
-    cancelUrl: `${ctx.config.PUBLIC_WEB_URL}${params.cancelPath ?? '/pricing'}`,
+    /*
+     * Both built through `internalUrl`, which refuses anything that would
+     * move the origin. Concatenated, `successPath: "@evil.example/"` produced
+     * `https://yuha.studio@evil.example/` — a real Stripe Checkout link for
+     * this account that returns the payer to somebody else's host.
+     */
+    successUrl: (() => {
+      const base = internalUrl(
+        ctx.config.PUBLIC_WEB_URL,
+        params.successPath ?? '/checkout/complete',
+        '/checkout/complete',
+      );
+      const url = new URL(base);
+      url.searchParams.set('order_id', order.id);
+      return url.toString();
+    })(),
+    cancelUrl: internalUrl(ctx.config.PUBLIC_WEB_URL, params.cancelPath ?? '/pricing', '/pricing'),
     idempotencyKey: `${params.userId}:${params.idempotencyKey}`,
     existingCustomerId: activeSub?.stripe_customer_id ?? null,
   });

@@ -46,6 +46,8 @@ interface Detail {
   status: string;
   createdAt: string;
   balance: { available: number; reserved: number; consumed: number; granted: number };
+  creditsTruncated: boolean;
+  ordersTruncated: boolean;
   credits: Array<{
     batchId: string;
     source: string;
@@ -70,6 +72,13 @@ interface GiftDone {
   units: number;
   expiresAt: string;
   remainingToday: number;
+  /** True when the key matched an earlier gift and nothing new was written. */
+  replayed?: boolean;
+}
+
+/** At least 8 characters, which is what the route's schema requires. */
+function newAttemptKey(): string {
+  return `gift-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
 }
 
 export function CustomerConsole() {
@@ -83,6 +92,18 @@ export function CustomerConsole() {
   const [units, setUnits] = useState('');
   const [reason, setReason] = useState('');
   const [done, setDone] = useState<GiftDone | null>(null);
+  /*
+   * One key per attempt, generated when the form is ready rather than when the
+   * request is sent.
+   *
+   * This is what makes a retry a retry. The API commits, the response is lost
+   * to an idle timeout or a pod roll, and the operator — who sees an error
+   * beside the pre-gift balance — presses again. With the same key that is one
+   * gift; without one it was two, and two audit rows that both look
+   * deliberate. The key is replaced only after a gift lands, so every press of
+   * this button until then is the same attempt.
+   */
+  const [attemptKey, setAttemptKey] = useState(() => newAttemptKey());
 
   const mayGift = mayDecidePayments(me?.role);
 
@@ -135,10 +156,12 @@ export function CustomerConsole() {
     try {
       const res = await apiFetch<GiftDone>(`/v1/admin/users/${detail.userId}/grant`, {
         method: 'POST',
-        body: { units: n, reason: reason.trim() },
+        body: { units: n, reason: reason.trim(), idempotencyKey: attemptKey },
       });
       setUnits('');
       setReason('');
+      // A new key: the next gift is a new decision, not a retry of this one.
+      setAttemptKey(newAttemptKey());
       /*
        * Re-read rather than patching the number locally: the batch list, the
        * expiry and the balance all moved, and a screen showing a stale balance
@@ -260,6 +283,7 @@ export function CustomerConsole() {
 
           <div className="stack" style={{ gap: 'var(--s2)' }}>
             <h3 style={{ fontSize: 15, margin: 0 }}>{t('admin.cust.credits.h3')}</h3>
+            {detail.creditsTruncated && <p className="small muted">{t('admin.cust.credits.more')}</p>}
             {detail.credits.length === 0 ? (
               <p className="muted small">{t('admin.cust.credits.none')}</p>
             ) : (
@@ -302,6 +326,7 @@ export function CustomerConsole() {
 
           <div className="stack" style={{ gap: 'var(--s2)' }}>
             <h3 style={{ fontSize: 15, margin: 0 }}>{t('admin.cust.orders.h3')}</h3>
+            {detail.ordersTruncated && <p className="small muted">{t('admin.cust.orders.more')}</p>}
             {detail.orders.length === 0 ? (
               <p className="muted small">{t('admin.cust.orders.none')}</p>
             ) : (
@@ -370,7 +395,7 @@ export function CustomerConsole() {
             </div>
             {done && (
               <p className="small" role="status">
-                {t('admin.cust.gift.done')} {done.units} ·{' '}
+                {done.replayed ? t('admin.cust.gift.already') : t('admin.cust.gift.done')} {done.units} ·{' '}
                 {t('admin.cust.gift.expiresOn')} {formatJst(done.expiresAt, false)}
                 {done.remainingToday >= 0 && (
                   <>

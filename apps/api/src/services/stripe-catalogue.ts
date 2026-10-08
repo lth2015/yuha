@@ -39,11 +39,31 @@ export interface CataloguePrice {
   currency: string;
   /** 'month' for a monthly subscription; null for a one-off purchase. */
   interval: string | null;
+  /**
+   * Whether the catalogue's amount already includes tax.
+   *
+   * Carried rather than assumed: the tax check compared Stripe's
+   * `tax_behavior` against the hard-coded literal `'exclusive'`, so it was
+   * really asserting "this catalogue is tax-inclusive" without the catalogue
+   * being asked. A legitimately tax-exclusive product would have been
+   * reported as wrong, and the comment claiming the comparison was against
+   * the catalogue row would have stayed.
+   */
+  taxIncluded: boolean;
   envVar: string;
   priceId: string | null;
 }
 
-export type PriceField = 'amount' | 'currency' | 'interval' | 'every' | 'tax' | 'active';
+export type PriceField =
+  | 'amount'
+  | 'currency'
+  | 'interval'
+  | 'every'
+  | 'tax'
+  | 'active'
+  | 'metered'
+  | 'tiered'
+  | 'product';
 
 export type PriceProblem =
   /** The variable is not set. NOT by itself a reason to refuse: two of the
@@ -55,6 +75,10 @@ export type PriceProblem =
   /** Could not ask — a network error, a bad key, a 429, an outage. Different
    *  from every other kind, because it says nothing about the configuration. */
   | { kind: 'unavailable'; priceKey: string; envVar: string; priceId: string; detail: string }
+  /** The database's catalogue still carries a different id from the one
+   *  configured — a price id was changed without re-seeding, so Checkout is
+   *  still using the old Price. */
+  | { kind: 'stale'; priceKey: string; envVar: string; priceId: string; stored: string }
   /** Two variables hold the same Price, or two Prices of one Stripe product.
    *  Its own kind: this used to be reported as a `mismatch` with
    *  `field: 'amount'`, which produced "the catalogue says amount its own
@@ -145,8 +169,52 @@ export function comparePrice(row: CataloguePrice, remote: RemotePrice | null): P
    * when Tax is not configured on the account and means no tax is added, so
    * it is accepted; only `exclusive` is wrong.
    */
-  if (remote.taxBehavior === 'exclusive') {
+  /*
+   * `unspecified` is Stripe's default when Tax is not configured on the
+   * account and means nothing is added, so it satisfies a tax-inclusive
+   * catalogue; `inclusive` and `exclusive` are compared against what the row
+   * says it is.
+   */
+  if (row.taxIncluded && remote.taxBehavior === 'exclusive') {
     mismatch('tax', 'included in the price', 'added on top');
+  }
+  if (!row.taxIncluded && remote.taxBehavior === 'inclusive') {
+    mismatch('tax', 'added on top', 'included in the price');
+  }
+  /*
+   * Metered, which agreed with everything above and bills nothing.
+   *
+   * A `usage_type: 'metered'` Price carries a non-null `unit_amount` — the
+   * rate per reported unit — so the amount, currency, interval and active
+   * checks all passed. Stripe then bills zero at each period because nothing
+   * reports usage, `invoice.paid` arrives with `amount_paid: 0`, and
+   * `handleInvoicePaid` grants a month of credits against it. The one comment
+   * that claimed to cover this said `unit_amount` is null for metered Prices,
+   * which is false.
+   */
+  if (remote.usageType && remote.usageType !== 'licensed') {
+    mismatch('metered', 'a fixed charge per period', `billed by reported usage (${remote.usageType})`);
+  }
+  /*
+   * Tiered, for the same reason from the other direction: `unit_amount` is
+   * null, which the amount check already reports — but reporting it as "not a
+   * fixed amount" leaves the reader guessing, and `billing_scheme` says it
+   * outright.
+   */
+  if (remote.billingScheme && remote.billingScheme !== 'per_unit') {
+    mismatch('tiered', 'one amount', `billing_scheme ${remote.billingScheme}`);
+  }
+  /*
+   * And the PRODUCT, not only the Price.
+   *
+   * An archived product with an active Price agrees on every field here, and
+   * Stripe refuses the Checkout Session — so without this the first symptom
+   * is every purchase of that SKU answering 500 while the configuration check
+   * reports a tick. `null` means the product was not expanded, which is not
+   * the same as archived and is not reported.
+   */
+  if (remote.productActive === false) {
+    mismatch('product', 'a product on sale', 'an archived or deleted Stripe product');
   }
   return problems;
 }
@@ -160,12 +228,53 @@ export function describePriceProblem(p: PriceProblem): string {
   if (p.kind === 'unavailable') {
     return `${p.envVar} could not be checked: Stripe did not answer (${p.detail}). This says nothing about whether the id is right.`;
   }
+  if (p.kind === 'stale') {
+    return `${p.envVar} is ${p.priceId} but product_catalog says ${p.stored} for ${p.priceKey} — Checkout reads the catalogue, so this deployment is still selling against the stored id. Run \`pnpm seed\`.`;
+  }
   if (p.kind === 'duplicate') {
     const what = p.what === 'price' ? 'the same Price' : "two Prices of Stripe's same product";
     return `${p.envVar} and ${p.sharedWith.join(', ')} point at ${what} (${p.priceId}) — one of them is in the wrong slot`;
   }
   const who = p.stripeProduct ? ` (Stripe calls it "${p.stripeProduct}")` : '';
   return `${p.envVar} points at ${p.priceId}${who}: the catalogue says ${p.field} ${p.catalogue}, Stripe says ${p.stripe}`;
+}
+
+/**
+ * Whether the catalogue IN THE DATABASE carries the ids the configuration
+ * says it should.
+ *
+ * The check above asks Stripe about `config.STRIPE_PRICE_ID_*`. Checkout does
+ * not read those: it reads `product_catalog.stripe_price_id`, written only by
+ * `pnpm seed`. So the documented release path for a price change — edit the
+ * ConfigMap, roll the pods — moves the variable and leaves the column, and
+ * every Checkout session keeps being built against the previous Price while
+ * `pnpm check:stripe-prices` reports four ticks. The customer is charged the
+ * old amount, the order row carries the catalogue amount, and the webhook's
+ * amount guard throws after the card is charged.
+ *
+ * Which is the failure the whole check exists to prevent, so this closes it:
+ * the command compares the column too, and a difference says to re-seed.
+ */
+export function catalogueDrift(
+  rows: CataloguePrice[],
+  stored: Array<{ price_key: string; stripe_price_id: string | null }>,
+): PriceProblem[] {
+  const out: PriceProblem[] = [];
+  for (const row of rows) {
+    const db = stored.find((r) => r.price_key === row.priceKey);
+    // A product the database does not have at all is a seed that has not run,
+    // not a drift, and the row below would be noise.
+    if (!db) continue;
+    if ((db.stripe_price_id ?? null) === (row.priceId ?? null)) continue;
+    out.push({
+      kind: 'stale',
+      priceKey: row.priceKey,
+      envVar: row.envVar,
+      priceId: row.priceId ?? '(unset)',
+      stored: db.stripe_price_id ?? '(none)',
+    });
+  }
+  return out;
 }
 
 /**
@@ -183,7 +292,9 @@ export function describePriceProblem(p: PriceProblem): string {
  * outage as a wrong id.
  */
 export function blocksSelling(p: PriceProblem): boolean {
-  return p.kind === 'mismatch' || p.kind === 'unreadable' || p.kind === 'duplicate';
+  return (
+    p.kind === 'mismatch' || p.kind === 'unreadable' || p.kind === 'duplicate' || p.kind === 'stale'
+  );
 }
 
 /**
