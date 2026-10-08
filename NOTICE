@@ -1,0 +1,62 @@
+YUHA
+Copyright 2026 YUHA contributors
+
+Licensed under the Apache License, Version 2.0. The full text is in LICENSE.
+
+
+What that licence covers
+------------------------
+
+Everything in this repository except the files listed below. Those are a third
+party's documents, kept here as written records of how the product came to be
+specified, and they are NOT licensed under Apache-2.0:
+
+  spec/API Pro Plan - API General Agreement & Licensing terms.md
+      SOUNDRAW's API agreement and licensing terms, reproduced verbatim.
+      SOUNDRAW's own terms govern that text. Whether it may be published at
+      all is an open question — see GOVERNANCE.md.
+
+  spec/TokenStars_Music_Codex_Task.md
+  PROJECT_TASK.md
+      The original TokenStars brief. These two files are byte-identical: the
+      brief itself says to put it at the repository root under that name, and
+      both copies were kept. One carve-out, two paths.
+
+  spec/TokenStars_Music_Product_Design_v0_1.docx
+  spec/TokenStars_Music_Unit_Economics.xlsx
+      TokenStars' product-design note and unit-economics model. Their
+      material, not ours to license.
+
+No third-party source code is vendored into this tree. Dependencies are
+resolved by pnpm from pnpm-lock.yaml and keep their own licences; nothing
+under node_modules is redistributed from here. The fonts the interface uses
+are loaded from Google Fonts at runtime and no font file is in this
+repository.
+
+
+Name and marks
+--------------
+
+Apache-2.0 grants no trademark rights (LICENSE, section 6). The name "YUHA",
+its wordmark, logos, marks, favicons and app icons are therefore not conveyed
+by this licence, wherever they appear — as files under
+`apps/web/public/brand/` and `yuha/YUHA_Design_v1/`, and as vector path data
+inlined into `apps/web/src/components/Brand.tsx`. The code around them is
+Apache-2.0 and will run with marks of your own; these are not yours to use as
+a brand. Whether the name and marks transfer with the code is a question for
+the donation agreement, not for this file — see GOVERNANCE.md.
+
+
+The hosted service
+------------------
+
+This repository is the software. The service at yuha.studio is a separate,
+commercially operated deployment of it, and the obligations that attach to
+selling to consumers attach to its operator rather than to this project.
+
+That operator is a sole proprietor, and the five fields of the statutory
+disclosure — a person's legal name, home address, telephone number and email —
+are published by the deployment, not by this code. They are, today, in three
+tracked files (`deploy/envs/{production,staging,qa}.yaml`). That is recorded as
+a blocking item in `docs/OPEN_ITEMS.md` §8: it has to move to the secret store
+before this repository is published anywhere. See GOVERNANCE.md.

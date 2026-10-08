@@ -315,6 +315,9 @@ const zh: Dict = {
   'footer.terms': '服务条款', 'footer.privacy': '隐私', 'footer.company': '公司信息',
   'footer.rights': '内容申诉', 'footer.slogan': '让心动，有回声。',
   'footer.made': '© {year} YUHA',
+  'footer.steward': '代码由 NEXT 技术社区维护',
+  'legal.software': '关于软件',
+  'legal.steward': 'YUHA 的软件以 Apache-2.0 开源，代码由 NEXT 技术社区维护。本服务的销售业者，为「特定商取引法相关标示」页面所载的事业者；NEXT 不是本服务的运营者，也不是买卖合同的当事方。',
 
   // ---- studio (/create) ----
   'song.transport': '《{title}》的乐谱与播放位置，可拖动或用方向键定位',
@@ -1131,6 +1134,9 @@ const ja: Dict = {
   'footer.terms': '利用規約', 'footer.privacy': 'プライバシー', 'footer.company': '会社情報',
   'footer.rights': '権利の申立て', 'footer.slogan': 'ときめきに、響きを。',
   'footer.made': '© {year} YUHA',
+  'footer.steward': 'コードの管理は NEXT コミュニティ',
+  'legal.software': 'ソフトウェアについて',
+  'legal.steward': 'YUHA のソフトウェアは Apache-2.0 のオープンソースで、コードは NEXT コミュニティが管理しています。本サービスの販売業者は「特定商取引法に基づく表記」に記載の事業者であり、NEXT は本サービスの運営者ではなく、売買契約の当事者でもありません。',
 
   // ---- studio (/create) ----
   'song.transport': '「{title}」のスコアと再生位置。ドラッグまたは矢印キーで移動できます',
@@ -1947,6 +1953,9 @@ const en: Dict = {
   'footer.terms': 'Terms', 'footer.privacy': 'Privacy', 'footer.company': 'Company',
   'footer.rights': 'Report content', 'footer.slogan': 'Let a feeling echo.',
   'footer.made': '© {year} YUHA',
+  'footer.steward': 'Code stewarded by the NEXT community',
+  'legal.software': 'Software',
+  'legal.steward': "YUHA's software is open source under Apache-2.0 and its code is stewarded by the NEXT community. The seller of this service is the business named on the legal notice (特定商取引法) page; NEXT does not operate this service and is not a party to any purchase.",
 
   // ---- studio (/create) ----
   'song.transport': 'Score and playback position for “{title}”. Drag or use the arrow keys to seek.',

@@ -69,9 +69,9 @@ describe('the lrc it writes', () => {
   });
 
   it('carries the title, artist and length when given them', () => {
-    const out = toLrc(timings(), { title: '西厢寻他', artist: '<redacted: operator name>', durationSeconds: 239 });
+    const out = toLrc(timings(), { title: '西厢寻他', artist: '张三', durationSeconds: 239 });
     expect(out).toContain('[ti:西厢寻他]');
-    expect(out).toContain('[ar:<redacted: operator name>]');
+    expect(out).toContain('[ar:张三]');
     expect(out).toContain('[length:03:59]');
   });
 

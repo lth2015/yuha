@@ -108,7 +108,7 @@ These catch what an eye does not. All must pass.
 
 ```bash
 pnpm typecheck
-pnpm test          # 131 tests, needs the containers
+pnpm test          # the whole suite, needs the containers (it prints the counts)
 pnpm check:i18n    # dictionaries, used-but-undefined keys, hardcoded strings
 pnpm check:contrast
 pnpm check:orphans

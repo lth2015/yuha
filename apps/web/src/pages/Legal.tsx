@@ -291,11 +291,22 @@ export function LegalIndex() {
         <Link to="/legal/tokushoho">{t('footer.tokushoho')}</Link>
         <Link to="/help/rights">{t('footer.rights')}</Link>
       </nav>
+      {/*
+        Who stewards the code is not who operates the service. Nothing on this
+        page names the operator — it is a list of links, and the operator is on
+        the two pages that carry the disclosure — so the paragraph names the
+        page to go to rather than saying "above", and says explicitly that the
+        steward is not the operator and not a party to a purchase. A reader who
+        sees a community credited on a legal page will otherwise assume it is
+        the counterparty. See GOVERNANCE.md.
+      */}
+      <p className="small muted">{t('legal.steward')}</p>
     </LegalPage>
   );
 }
 
 export function Company() {
+  const { t } = useI18n();
   const d = useDisclosure();
   if (!d) return <Loading />;
   return (
@@ -340,6 +351,16 @@ export function Company() {
           period. For one-time packs, unused credits within the statutory withdrawal window are refunded via
           the original payment method. Contact {d.contact} with your order id.
         </p>
+      </Section>
+      {/*
+        Apache-2.0 conveys the code, not the business. The operator block above
+        is the counterparty to every purchase; this section exists so that
+        nobody reads the open-source credit in the footer as naming it — which
+        is why it is the one section on this English page that reads in the
+        visitor's own language.
+      */}
+      <Section h={t('legal.software')}>
+        <p>{t('legal.steward')}</p>
       </Section>
       <Section h="Reporting content">
         <p>

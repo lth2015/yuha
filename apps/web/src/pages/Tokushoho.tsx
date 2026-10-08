@@ -8,6 +8,7 @@ import { useEffect, useState } from 'react';
 import type { ProductView } from '@yuha/contracts';
 import { fetchProducts } from '../lib/catalog';
 import { LOCALES, formatMoney } from '../lib/money';
+import { unconfiguredDisclosureField } from '../lib/disclosure';
 import { DraftBanner, LegalPage, useDisclosure } from './Legal';
 import { Loading } from '../components/common';
 
@@ -76,9 +77,6 @@ export function Tokushoho() {
 
   if (!d) return <Loading />;
 
-  // The statute requires a telephone number. The deployment default is a dash.
-  const phoneMissing = !d.phone || d.phone.trim() === '—' || d.phone.trim() === '';
-
   return (
     <LegalPage title="特定商取引法に基づく表記">
       <DraftBanner isPlaceholder={d.isPlaceholder} />
@@ -95,7 +93,13 @@ export function Tokushoho() {
         </div>
         <div>
           <dt>運営統括責任者</dt>
-          <dd>{d.representative}</dd>
+          <dd>
+            {unconfiguredDisclosureField(d.representative) ? (
+              <Pending what="法定必須項目。未設定です（LEGAL_ENTITY_REPRESENTATIVE）" />
+            ) : (
+              d.representative
+            )}
+          </dd>
         </div>
         <div>
           <dt>所在地</dt>
@@ -103,7 +107,7 @@ export function Tokushoho() {
         </div>
         <div>
           <dt>電話番号</dt>
-          <dd>{phoneMissing ? <Pending what="法定必須項目。未設定です（LEGAL_ENTITY_PHONE）" /> : d.phone}</dd>
+          <dd>{unconfiguredDisclosureField(d.phone) ? <Pending what="法定必須項目。未設定です（LEGAL_ENTITY_PHONE）" /> : d.phone}</dd>
         </div>
         <div>
           <dt>メールアドレス</dt>

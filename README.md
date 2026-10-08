@@ -33,6 +33,12 @@ locally); sign-in is Google OAuth plus a development login for demo mode.
 > payment path was actually exercised. Only `production` mode forbids the
 > stand-ins, and it refuses to boot if any of them is selected.
 
+Apache-2.0 ([`LICENSE`](LICENSE), scope in [`NOTICE`](NOTICE)). The code is
+stewarded by the NEXT technical community; the service at yuha.studio is a
+separately operated deployment of it and carries its own obligations to its
+customers — [`GOVERNANCE.md`](GOVERNANCE.md) draws that line, and
+[`CONTRIBUTING.md`](CONTRIBUTING.md) is how to work on the code.
+
 ---
 
 ## Quick start
@@ -155,10 +161,13 @@ pnpm db:up          # the test database runs on :53307, separate from dev
 pnpm test
 ```
 
-159 tests across 13 files run against a **real MySQL instance**, never an
-in-memory stand-in — §12.1 requires the ledger transactions, concurrency and
-unique constraints to be verified against the engine that actually enforces
-them.
+The suite runs against a **real MySQL instance**, never an in-memory
+stand-in — §12.1 requires the ledger transactions, concurrency and unique
+constraints to be verified against the engine that actually enforces them.
+`pnpm test` prints the current file and test counts; no number is repeated
+here, because a number in a README is a claim that stops being true quietly.
+
+These are the files worth knowing about first, not the whole list:
 
 | File | Covers |
 | --- | --- |
@@ -321,3 +330,36 @@ Set `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` and `GOOGLE_REDIRECT_URI`
 Cloud Console). The button appears on the sign-in card automatically; the flow
 is authorization-code + PKCE with a signed state, and the SPA exchanges a
 60-second one-time code for its session (no token ever sits in a URL).
+
+## Licence and stewardship
+
+The code is Apache-2.0: [`LICENSE`](LICENSE) is the licence,
+[`NOTICE`](NOTICE) says exactly what it covers. Two carve-outs are worth
+knowing before you reuse anything:
+
+- The four files under `spec/` are a third party's documents — including
+  SOUNDRAW's API agreement text, reproduced verbatim — and are **not** under
+  Apache-2.0.
+- Apache-2.0 grants no trademark rights, so the name *YUHA* and the marks
+  under `apps/web/public/brand/` do not come with the code.
+
+The project is stewarded upstream by the **NEXT technical community**
+(<https://www.netx.world/>): it holds the canonical repository and decides what
+is merged and released.
+
+Stewardship of the code is not operation of the service. yuha.studio runs on
+somebody's Stripe account, and the 特定商取引法 disclosure, the privacy
+controller, refunds and support all belong to whoever that is. Those strings
+come from `LEGAL_ENTITY_*` in the deployment — no default can name anybody, and
+production refuses to start without name, address and contact — and
+`pnpm check:stewardship` fails if the steward's name turns up in a statutory
+block, or an operator's details anywhere but `deploy/envs/`. If you deploy
+this, you are the operator of your deployment.
+
+One thing that follows and is **not** yet done: the operator's five fields are
+in `deploy/envs/{production,staging,qa}.yaml`, which are tracked. The operator
+is a sole proprietor, so that is a person's legal name, home address, telephone
+number and personal email, sitting in this repository. It has to move to the
+secret store before the repository is published anywhere — `OPEN_ITEMS.md` §8,
+and the one blocking item in [`GOVERNANCE.md`](GOVERNANCE.md), which has the
+rest of the detail.

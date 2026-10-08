@@ -12,6 +12,24 @@ Terraform resources, the dev database in `docker-compose.yml`) still read
 `loopscene`; renaming those forces resource recreation, so it is a separate,
 deliberate decision. Do not "tidy" either group.
 
+**Apache-2.0, stewarded by NEXT, operated by someone else.** The code is
+donated to the NEXT technical community (<https://www.netx.world/>), which is
+the upstream steward: `LICENSE`, `NOTICE`, `GOVERNANCE.md`, `CONTRIBUTING.md`.
+The service at yuha.studio was **not** donated — the Stripe account, the
+特定商取引法 販売業者, the privacy controller, refunds and support all stay with
+its operator. Two consequences bind every change you make:
+
+- Every operator-identity value on a disclosure surface is an interpolation
+  of what `GET /v1/legal/business-disclosure` served — never a literal, never a
+  dictionary key. That is what keeps any name, the steward's included, out of a
+  statutory field. And the operator's own name, address, telephone number and
+  email go in no file outside `deploy/envs/`.
+  `pnpm check:stewardship` fails on either, row by row; its header is equally
+  explicit about what a green run does *not* establish.
+- NEXT's own legal particulars are nowhere in this repository on purpose:
+  netx.world publishes none, so there is nothing to copy and nothing to infer.
+  If a file needs them, they come from the executed agreement, not from you.
+
 ## Agent skills
 
 Development on this repo runs through **Matt Pocock's engineering skills**
@@ -144,6 +162,32 @@ check was about the rendering.
   attacker's account. `state` needs a second half the attacker cannot deliver —
   a cookie — and `SameSite=Lax` is required, because the callback is a
   cross-site top-level GET that `Strict` drops.
+- **A check that greps for a name is defeated by spelling the name
+  differently.** `check-stewardship` searched the 特商法 page for the steward:
+  `Next` passed a case-sensitive `\bNEXT\b`, `スイス` passed `/瑞士|Swiss/i`,
+  and a dictionary key passed everything. What cannot be spelled around is the
+  *absence* of the right expression — the 販売業者 row must render
+  `d.entityName` — so assert that the value comes from the one place that can
+  be correct, and no name, the steward's or anyone's, can be in it. Check the
+  value, not the vocabulary.
+- **A list of needles that can come back empty passes vacuously.** The operator
+  scan read its search terms from `deploy/envs/*.yaml`, and `legal:` had to be
+  alone on its line — so `legal:   # 販売業者 block` emptied the list, the whole
+  scan was inside `if (needles.size)`, and the run printed three confident
+  ticks over a repository with the home address pasted into the README. If a
+  check derives what to look for, it must fail when it derived nothing.
+- **A length floor on a search term drops the shortest thing that matters.**
+  The same scan ignored needles under six characters to avoid matching prose,
+  which silently excluded the operator's name — a Japanese personal name is
+  three characters, and the name was the point. (Writing that name here to
+  illustrate the bug is how `pnpm check:stewardship` first failed on this
+  file. The check was right and the sentence was wrong.)
+- **`git checkout <file>` to undo a planted mutation also discards your own
+  session's work on that file.** Testing the new check by appending a line to
+  `README.md` and reverting it threw away the Licence section written an hour
+  earlier. Back up to a scratch copy and restore from that; the five new
+  provenance files are untracked, so `git checkout` would not have restored
+  them at all.
 - **A repair that cannot tell "still broken" from "already fixed" destroys
   work.** `mutation-check --repair` copied its backup over the file
   unconditionally, so interrupting a run, restoring by hand and then editing
@@ -245,6 +289,7 @@ pnpm dev             # api + worker + web
 pnpm test            # vitest (needs MySQL: pnpm db:up)
 pnpm typecheck
 pnpm check:orphans   # exports nothing imports, baselined
+pnpm check:stewardship  # the steward/operator split, enforced
 pnpm build
 ```
 

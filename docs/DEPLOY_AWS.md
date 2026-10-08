@@ -39,7 +39,7 @@ cd infra/terraform
 terraform init
 
 terraform apply -var='environment=production' \
-  -var='alert_email=redacted-operator@example.invalid' \
+  -var='alert_email=<运维告警收件地址>' \
   -var='web_callback_urls=["https://sonare.example.com"]'
 ```
 

@@ -883,12 +883,20 @@ describe('SEC-06 / §3.1: the runtime descriptor exposes no secrets', () => {
    * three fields the config requires, and not on the two it does not.
    */
   it('SEC-13: a configured deployment publishes the operator it was given', async () => {
+    /*
+     * Invented, and deliberately so. This fixture used to be the real
+     * operator's name, home address, personal mailbox and mobile number,
+     * which put all five into a public repository in order to prove that five
+     * strings travel from configuration to one endpoint. What the test needs
+     * is five values that are not the fallbacks; whose they are does not
+     * matter. `scripts/check-stewardship.mjs` fails if the real ones return.
+     */
     const operator = {
-      LEGAL_ENTITY_NAME: '<redacted: operator name>',
-      LEGAL_ENTITY_REPRESENTATIVE: '<redacted: operator name>',
-      LEGAL_ENTITY_ADDRESS: '<redacted: operator address>',
-      LEGAL_ENTITY_CONTACT: 'redacted-operator@example.invalid',
-      LEGAL_ENTITY_PHONE: '<redacted: operator phone>',
+      LEGAL_ENTITY_NAME: 'テスト事業主',
+      LEGAL_ENTITY_REPRESENTATIVE: '山田太郎',
+      LEGAL_ENTITY_ADDRESS: '〒100-0001 東京都千代田区千代田1-1 テストビル101',
+      LEGAL_ENTITY_CONTACT: 'legal@example.com',
+      LEGAL_ENTITY_PHONE: '03-0000-0000',
     };
     const configured = await createHarness(operator);
     try {

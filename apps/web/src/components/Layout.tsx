@@ -69,8 +69,17 @@ function SiteFooter() {
         <Link to="/help/rights">{t('footer.rights')}</Link>
         <Link to="/legal">{t('footer.legal')}</Link>
       </span>
+      {/*
+        The steward credit belongs in the fine print, not in the link row.
+        The code is Apache-2.0 and stewarded by the NEXT community; the
+        service is operated by whoever `LEGAL_ENTITY_*` names, and conflating
+        the two on a page a consumer reads is the failure mode worth avoiding
+        here. So this line credits the *code*, and /legal carries the split in
+        full (`legal.steward`).
+      */}
       <span className="site-foot__fine">
-        {t('footer.made', { year: new Date().getFullYear() })} · {t('footer.slogan')}
+        {t('footer.made', { year: new Date().getFullYear() })} · {t('footer.slogan')} ·{' '}
+        {t('footer.steward')}
         {runtime && !runtime.demo ? ` · ${runtime.mode}` : ''}
       </span>
     </footer>

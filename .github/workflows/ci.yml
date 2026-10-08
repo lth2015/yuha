@@ -135,6 +135,15 @@ jobs:
         # this makes it a gate.
         run: pnpm check:contrast
 
+      - name: Stewardship
+        # The code is Apache-2.0 and stewarded by the NEXT community; the
+        # service is operated by someone else, and the 特定商取引法 block names
+        # that someone. Both halves are easy to break quietly — a steward's
+        # name in a statutory disclosure is a false disclosure, and an
+        # operator's home address in an open repository is a leak. This is
+        # also where a new file under `spec/` fails until NOTICE carves it out.
+        run: pnpm check:stewardship
+
       - name: Wait for MySQL
         # `--wait` blocks on the healthcheck the compose file already defines,
         # so there is no second readiness loop here to keep in step with it.

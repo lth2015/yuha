@@ -61,7 +61,7 @@ QA 是一次足尺彩排，不是缩水版。
 - [ ] 一个 QA 用的域名，例如 `qa.yuha.studio`，以及对应的 Route 53 托管区
 - [ ] 该域名在 **ap-northeast-1** 的 ACM 证书（必须是这个区域，ALB 要用）
 - [ ] 本仓库 `lth2015/music` 的 **Settings 管理权限**（要建 Environment 和变量）
-- [ ] 以下外部服务的 QA 用密钥（向<redacted: operator name>索取，**不要用生产的那套**）：
+- [ ] 以下外部服务的 QA 用密钥（向运营方索取，**不要用生产的那套**）：
       Stripe（`sk_test_…` + `whsec_…` + 四个 price id）、Google OAuth
       client id/secret、Tokenstars API key
 
@@ -213,7 +213,7 @@ ECR 仓库是 **不可变（IMMUTABLE）** 的，同一个 commit 重新部署�
    另外配一组 `MUSIC_*`，并且把音频主机加进 `allowedAudioHosts` 白名单——
    SSRF 防护是精确主机匹配，不是后缀匹配。
 5. **特商法信息**：`qa.yaml` 里带着真实的经营者姓名、住址和电话。QA 环境如果
-   对外可访问，请先和<redacted: operator name>确认是否要替换成占位值。
+   对外可访问，请先和运营方确认是否要替换成占位值。
 
 ---
 

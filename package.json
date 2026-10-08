@@ -2,10 +2,11 @@
   "name": "yuha",
   "version": "0.1.0",
   "private": true,
+  "license": "Apache-2.0",
   "description": "YUHA \u2014 an AI song studio: describe a feeling, get a finished song",
   "packageManager": "pnpm@11.1.2",
   "engines": {
-    "node": ">=22.0.0"
+    "node": ">=22.13.0"
   },
   "type": "module",
   "scripts": {
@@ -18,6 +19,7 @@
     "check:orphans": "node scripts/find-orphan-exports.mjs",
     "check:i18n": "node scripts/check-i18n.mjs",
     "check:contrast": "node scripts/check-contrast.mjs",
+    "check:stewardship": "node scripts/check-stewardship.mjs",
     "check:limits": "node scripts/check-codepoint-limits.mjs",
     "check:type": "node scripts/check-type-scale.mjs",
     "pretest": "node scripts/check-build-fresh.mjs",
