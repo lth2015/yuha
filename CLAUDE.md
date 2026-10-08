@@ -199,6 +199,13 @@ check was about the rendering.
   blob reachable from every ref, every message, every identity field and every
   annotated tag — `git log -S` counts commits where the number of occurrences
   *changed*, which is a different question and under-reports.
+- **"It is private" is a claim about a remote, and remotes are checkable.** A
+  whole day's reasoning about how urgent a leak was rested on the repository
+  being private. It has been public since the day it was created: one anonymous
+  `git ls-remote` and one unauthenticated API read said so in a second, and
+  neither was run until after the plan had been written down. The repository's
+  visibility, who has access, and whether a fork exists are facts about a
+  server, not properties of the local checkout — ask the server.
 - **Writing down what you redacted re-publishes it.** Three times in one
   session: the operator's name went into a `CLAUDE.md` lesson and into a
   comment in `check-stewardship.mjs` as an example of what the check catches,
