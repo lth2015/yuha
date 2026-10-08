@@ -212,8 +212,11 @@ ECR 仓库是 **不可变（IMMUTABLE）** 的，同一个 commit 重新部署�
 4. **音乐服务**：`qa.yaml` 里 `music.adapter` 是 `demo`。接真实音乐服务需要
    另外配一组 `MUSIC_*`，并且把音频主机加进 `allowedAudioHosts` 白名单——
    SSRF 防护是精确主机匹配，不是后缀匹配。
-5. **特商法信息**：`qa.yaml` 里带着真实的经营者姓名、住址和电话。QA 环境如果
-   对外可访问，请先和运营方确认是否要替换成占位值。
+5. **特商法信息**：`qa.yaml` 里已经**没有**经营者姓名、住址和电话了（2026-10-08
+   移出，改由 secret store 提供，见 `deploy/runbook.md` 第 5 步）。`qa.yaml` 的
+   `runMode` 是 `integration`，`loadConfig` 不强制这三项，所以不配也能启动——
+   页面会显示"未设定"占位并带草案横幅。QA 如果对外可访问，**不要**把生产的真实
+   信息放进 QA 的 Secrets Manager。
 
 ---
 

@@ -56,7 +56,7 @@ selling to consumers attach to its operator rather than to this project.
 
 That operator is a sole proprietor, and the five fields of the statutory
 disclosure — a person's legal name, home address, telephone number and email —
-are published by the deployment, not by this code. They are, today, in three
-tracked files (`deploy/envs/{production,staging,qa}.yaml`). That is recorded as
-a blocking item in `docs/OPEN_ITEMS.md` §8: it has to move to the secret store
-before this repository is published anywhere. See GOVERNANCE.md.
+are supplied by the deployment's secret store and appear in no file here. They
+were in three tracked values files until 2026-10-08 and are still reachable in
+git history, so this repository is not yet safe to publish: see
+`docs/OPEN_ITEMS.md` §8 and GOVERNANCE.md.

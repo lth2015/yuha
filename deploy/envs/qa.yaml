@@ -157,22 +157,19 @@ config:
     purchaseCapJpyPerDay: "50000"
     purchaseCapOrdersPerDay: "20"
 
-  # production mode refuses to start unless entityName, address and contact are
-  # all non-empty — the 特定商取引法 disclosure must not be a placeholder. These
-  # overrides used to blank out even the name the chart already knows.
+  # 特定商取引法 disclosure: NOT here.
   #
-  # The operator is a sole proprietor (個人事業主), so 販売業者 and 代表者 are
-  # the same person. <redacted: operator name> is the Japanese-kanji form of the name, which is
-  # what a Japanese statutory page prints.
-  legal:
-    entityName: "<redacted: operator name>"
-    representative: "<redacted: operator name>"
-    # 住所, in the form the operator gave as the registered one. The 〒 is
-    # prefixed because a Japanese statutory disclosure conventionally carries
-    # it; <redacted: operator region> is deliberately NOT, even though convention would add it,
-    # because <redacted: operator region> is a 政令指定都市 and the registered form omits the
-    # prefecture. The registered form wins over the convention.
-    address: "<redacted: operator address>"
-    contact: "redacted-operator@example.invalid"
-    # <redacted: operator phone>, hyphenated the way a Japanese disclosure prints it.
-    phone: "<redacted: operator phone>"
+  # `LEGAL_ENTITY_NAME`, `_REPRESENTATIVE`, `_ADDRESS`, `_CONTACT` and `_PHONE`
+  # used to be five values in this file. The operator is a sole proprietor, so
+  # those five are one person's legal name, home address, telephone number and
+  # personal email — and this file is in git, in a repository that is becoming
+  # open source. They were also rendered into a ConfigMap, which is unencrypted
+  # and readable by anyone who can run `kubectl get cm`.
+  #
+  # They now arrive in the runtime Secret, from AWS Secrets Manager, with the
+  # other five properties nothing in this repository is allowed to know
+  # (`deploy/cluster/external-secrets.yaml`, `deploy/runbook.md` §「法定表示」).
+  # Production refuses to start without NAME, ADDRESS and CONTACT, so a missing
+  # property fails the rollout rather than publishing a blank disclosure.
+  #
+  # Do not add them back. `pnpm check:stewardship` fails if they reappear.

@@ -60,24 +60,34 @@ interpolation of what that endpoint served, none of those surfaces may name the
 steward, and the operator's own values must appear in no tracked file outside
 `deploy/envs/`.
 
-## The operator's details are in this repository today
+## The operator's details are not in this repository — but they are in its history
 
-They are in `deploy/envs/production.yaml`, `staging.yaml` and `qa.yaml`, which
-are tracked. The operator is a sole proprietor, so those five fields are one
-person's legal name, home address, telephone number and personal email.
+As of 2026-10-08 the working tree holds none of them. The five fields used to
+be values in `deploy/envs/{production,staging,qa}.yaml`, rendered into a
+ConfigMap: in git, and printable by anyone who could run `kubectl get cm`. The
+operator is a sole proprietor, so that was one person's legal name, home
+address, telephone number and personal email.
 
-So this is not true and must not be written anywhere: *"the repository does not
-name the operator"*. It does, in three files, and publishing the repository as
-it stands publishes a home address. They were removed from everywhere else —
-`.env.example`, five documents, a deploy script, a lyric fixture and the SEC-13
-test each carried some of them — and the check above keeps them from spreading
-again, which is a different thing from making the repository safe to publish.
+They now arrive in the runtime Secret from AWS Secrets Manager, with the other
+properties nothing here is allowed to know
+(`deploy/cluster/external-secrets.yaml`, `deploy/runbook.md` step 5). The chart
+does not render them, no values file carries them, and
+`pnpm check:stewardship` fails if a `legal:` block, a `LEGAL_ENTITY_*` key in
+the ConfigMap, or anything shaped like a Japanese address, telephone number or
+off-domain email reappears in a tracked file.
 
-Before this repository is public anywhere, the `legal:` block has to move out
-of those files into the secret store, the way every other secret already does
-(`deploy/cluster/external-secrets.yaml`). That is infrastructure work, it is
-recorded as a blocking item in `docs/OPEN_ITEMS.md` §8, and it is the one thing
-on this page that is not yet done.
+**Git history is a separate matter and is not resolved by any of that.** The
+values were committed between 2026-10-02 and 2026-10-08, and those commits are
+still reachable: `git log -S` finds them in a clone, and removing them from
+HEAD removes them from nothing. So the repository is not yet safe to publish,
+and that is `docs/OPEN_ITEMS.md` §8. Two ways out, and it is the operator's
+call: rewrite the affected commits and force-push, or publish the donation from
+a fresh history and keep this repository private.
+
+A shape cannot catch a name — the operator's is three characters of kanji. Who
+holds the five values can give the check the exact strings to look for, in a
+file git cannot carry: see `.git/stewardship-needles` in
+`scripts/check-stewardship.mjs`.
 
 ## Contributions
 

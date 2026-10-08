@@ -32,10 +32,13 @@
  *   refusal     — production refuses to start without the statutory block:
  *                 the condition covers the three fields AND the body actually
  *                 records a problem.
- *   operator    — the values in `deploy/envs/*.yaml` appear in no other
- *                 tracked text file. The needles are read from those files at
- *                 run time: a check that hardcoded them would publish exactly
- *                 what it exists to keep out.
+ *   operator    — nothing in this repository knows who the operator is. The
+ *                 five fields are supplied only by the runtime secret, and no
+ *                 tracked file carries a Japanese address, telephone number or
+ *                 off-domain email that is not on a short list of invented
+ *                 ones. This replaced a scan for the operator's actual values,
+ *                 read out of `deploy/envs/*.yaml`: those files are tracked, so
+ *                 while that was the check, the repository itself was the leak.
  *   provenance  — LICENSE is the whole Apache-2.0 text, NOTICE carves out the
  *                 third-party documents in this tree, and package.json says
  *                 Apache-2.0.
@@ -44,10 +47,12 @@
  *
  *   - It reads source, not rendered pages. A value that reaches a page from a
  *     dictionary key or a new component is outside it.
- *   - `deploy/envs/*.yaml` are themselves tracked, so the operator's details
- *     ARE in this repository, in those three files. This check keeps them from
- *     spreading; it does not make the repository safe to publish. That is
- *     `docs/OPEN_ITEMS.md` §8, and it is a blocking item.
+ *   - It checks the working tree, not git history. The operator's details were
+ *     committed between 2026-10-02 and 2026-10-08 and are still reachable in
+ *     those commits; removing them from HEAD does not remove them from a clone.
+ *     `docs/OPEN_ITEMS.md` §8 carries that, and it is what blocks publication.
+ *   - A shape is not an identity. It will not notice a name, and a Tokyo
+ *     landline it has been told is invented stays invented.
  *   - It cannot read binary files or anything that is not UTF-8/UTF-16. The
  *     run prints how many it skipped rather than implying it read them.
  *
@@ -261,114 +266,128 @@ if (src.config) {
 
 // ----------------------------------------------------------------- operator
 
-const ENV_FILES = tracked.filter((p) => /^deploy\/envs\/.*\.ya?ml$/.test(p));
-if (!ENV_FILES.length) problems.push('no deploy/envs/*.yaml found — nothing to read the operator from');
-
-/** The five keys of a `legal:` mapping. Unknown keys are not identities. */
-const LEGAL_KEYS = ['entityName', 'representative', 'address', 'contact', 'phone'];
-
-/**
- * One env file's `legal:` block.
+/*
+ * Nothing here knows the operator.
  *
- * Deliberately pickier than it looks. `/^\s*legal:\s*$/` required the key to
- * sit alone on its line, so `legal:   # 販売業者 block` produced an empty
- * needle list and a green run — the whole invariant removable by a trailing
- * comment. Quotes of either kind are stripped (a single-quoted value kept its
- * quotes inside the needle, which then matched nothing), and a block scalar
- * (`>-`, `|`) is followed into its continuation lines instead of being taken
- * literally, which is how `>-` itself became a needle and named three
- * innocent files while the address went unwatched.
+ * The first version of this section read the operator's real name, address,
+ * telephone number and email out of `deploy/envs/*.yaml` and checked that they
+ * appeared in no other tracked file. It worked, and it was the wrong shape:
+ * those three files are tracked too, so the check's own source of truth was
+ * the leak. A ConfigMap made it worse — `kubectl get cm` printed a home
+ * address to anyone with read access to the namespace.
+ *
+ * The five variables now arrive in the runtime Secret from AWS Secrets Manager
+ * and are written down nowhere in this repository. That removes the needles,
+ * so this checks two different things: that the wiring still routes them that
+ * way, and that no tracked file carries anything *shaped* like a Japanese
+ * person's contact details unless it is on a list of invented ones.
  */
-function legalBlock(text) {
-  const lines = text.split('\n');
-  const at = lines.findIndex((l) => /^\s*legal:\s*(#.*)?$/.test(l));
-  if (at < 0) return null;
-  const indent = lines[at].match(/^\s*/)[0].length;
-  const out = new Map();
-  for (let i = at + 1; i < lines.length; i += 1) {
-    const line = lines[i];
-    if (!line.trim()) continue;
-    const own = line.match(/^\s*/)[0].length;
-    if (own <= indent) break;
-    if (/^\s*#/.test(line)) continue;
-    const kv = line.match(/^\s*([A-Za-z]\w*):\s*(.*?)\s*$/);
-    if (!kv) continue;
-    let value = kv[2].replace(/\s+#.*$/, '');
-    if (/^[|>][-+]?\d*$/.test(value)) {
-      const parts = [];
-      for (let j = i + 1; j < lines.length; j += 1) {
-        if (!lines[j].trim()) continue;
-        if (lines[j].match(/^\s*/)[0].length <= own) break;
-        parts.push(lines[j].trim());
-        i = j;
-      }
-      value = parts.join(' ');
-    }
-    value = value.replace(/^(['"])([\s\S]*)\1$/, '$2');
-    out.set(kv[1], value.trim());
-  }
-  return out;
+
+const LEGAL_VARS = [
+  'LEGAL_ENTITY_NAME',
+  'LEGAL_ENTITY_REPRESENTATIVE',
+  'LEGAL_ENTITY_ADDRESS',
+  'LEGAL_ENTITY_CONTACT',
+  'LEGAL_ENTITY_PHONE',
+];
+
+const CHART_VALUES = ['infra/helm/loopscene/values.yaml', ...tracked.filter((p) => /^deploy\/envs\/.*\.ya?ml$/.test(p))];
+const CONFIGMAP = 'infra/helm/loopscene/templates/configmap.yaml';
+const EXTERNAL_SECRET = 'deploy/cluster/external-secrets.yaml';
+
+if (!CHART_VALUES.some((p) => /^deploy\/envs\//.test(p))) {
+  problems.push('no deploy/envs/*.yaml found; this check no longer covers the deployment wiring');
 }
-
-const PLACEHOLDER = /^(|-|—|\(not configured\)|TBD|未設定)$/;
-const needles = new Map(); // needle -> which field it came from
-
-for (const file of ENV_FILES) {
-  const block = legalBlock(readText(file));
-  if (!block) {
-    problems.push(`${file} — no \`legal:\` block found, so this check read no operator values from it`);
-    continue;
-  }
-  for (const key of LEGAL_KEYS) {
-    if (!block.has(key)) {
-      problems.push(`${file} — \`legal.${key}\` is missing, so this check does not know that value to look for it`);
-    }
-  }
-  for (const [key, value] of block) {
-    if (!LEGAL_KEYS.includes(key) || PLACEHOLDER.test(value)) continue;
-    /*
-     * The value, plus the ways the same fact gets typed elsewhere. A leak is
-     * rarely a copy: the SEC-13 fixture carried the address with the building
-     * line cut off, and a phone number arrives unhyphenated, with +81, or
-     * with the 〒 dropped from a postal code as often as not.
-     *
-     * The value itself is always a needle, however short. A six-character
-     * floor was tried here and quietly dropped the one that matters most: a
-     * Japanese personal name is three characters, so the operator's name
-     * pasted into the README passed a run that printed twelve ✓ needles. The
-     * floor applies to the derived spellings only, where a short fragment
-     * would match prose. (Spelling that name out here, to show the bug, is
-     * how this check first failed on its own source. It was right.)
-     */
-    const variants = new Set();
-    for (const m of value.matchAll(/〒?(\d{3}-\d{4})/g)) {
-      variants.add(m[0]);
-      variants.add(m[1]);
-      variants.add(value.slice(m.index + m[0].length).trim()); // the address without its postal code
-    }
-    for (const m of value.matchAll(/[\w.+-]+@[\w-]+\.[\w.-]+/g)) {
-      variants.add(m[0]);
-      variants.add(m[0].replace('@', '%40'));
-      variants.add(m[0].replace('@', ' (at) '));
-    }
-    for (const m of value.matchAll(/0\d{1,3}-\d{3,4}-\d{3,4}/g)) {
-      variants.add(m[0].replace(/-/g, ''));
-      variants.add(`+81 ${m[0].slice(1)}`);
-      variants.add(`+81${m[0].slice(1).replace(/-/g, '')}`);
-    }
-    needles.set(value, `legal.${key}`);
-    for (const v of variants) if (v.length >= 6) needles.set(v, `legal.${key}`);
+for (const path of CHART_VALUES) {
+  if (!existsSync(join(ROOT, path))) continue;
+  /*
+   * A `legal:` key in a values file is the old arrangement coming back. Matched
+   * on the key rather than on a value, because an empty `legal: {}` is how it
+   * came back the first time: harmless in itself, and then one environment
+   * filled it in.
+   */
+  if (/^\s*legal:/m.test(readText(path))) {
+    problems.push(`${path} — has a \`legal:\` block again; the 特定商取引法 fields come from the runtime secret, not from values in git`);
   }
 }
+if (existsSync(join(ROOT, CONFIGMAP))) {
+  const cm = readText(CONFIGMAP);
+  for (const v of LEGAL_VARS) {
+    if (new RegExp(`^\\s*${v}:`, 'm').test(cm)) {
+      problems.push(`${CONFIGMAP} — defines ${v}; a ConfigMap is unencrypted and \`kubectl get cm\` prints it`);
+    }
+  }
+}
+if (!existsSync(join(ROOT, EXTERNAL_SECRET))) {
+  problems.push(`${EXTERNAL_SECRET} is gone; the five 特定商取引法 fields have no route to the pods`);
+} else {
+  const es = readText(EXTERNAL_SECRET);
+  for (const v of LEGAL_VARS) {
+    if (!new RegExp(`secretKey:\\s*${v}\\b`).test(es)) {
+      problems.push(`${EXTERNAL_SECRET} — does not sync ${v}; production would refuse to start, or publish a blank statutory field`);
+    }
+  }
+  notes.push(`the ${LEGAL_VARS.length} 特定商取引法 fields come only from the runtime secret — no values file, no ConfigMap`);
+}
 
-if (!needles.size) problems.push('no operator values were parsed out of deploy/envs/*.yaml — this check would pass vacuously');
+/*
+ * Invented, and listed so that a real one cannot arrive quietly.
+ *
+ * Every entry is a test fixture or a documentation example. The rule is that a
+ * match of one of the shapes below has to be *exactly* one of these strings —
+ * so adding a real address or mobile means adding it here too, in a list
+ * called "invented", which is hard to do by accident and obvious in review.
+ */
+const INVENTED = new Set([
+  // tests/security.test.ts — Chiyoda 1-1, both the 〒 form and the bare one
+  // the second shape matches through the kanji that follows it.
+  '〒100-0001',
+  '100-0001',
+  // tests/title-screening.test.ts — the numbers a title must not carry, which
+  // the screening tests have to spell out in order to test that it refuses.
+  '090-1234-5678',
+  '08012345678',
+  '03-1234-5678',
+  '0120-444-444',
+  '+81 90 1234 5678',
+  // tests/security.test.ts — the invented operator's telephone number.
+  '03-0000-0000',
+]);
+
+/** Domains that may appear in an email address here. A personal mailbox is the thing being kept out. */
+const EMAIL_DOMAINS = [
+  'example.com',
+  'example.jp',
+  'example.test',
+  'evil.example',
+  'anywhere.test',
+  'yuha.studio',
+  'netstars.co.jp',
+  'mail.netstars.co.jp',
+  'netstars.co.jp.evil.test',
+  'soundraw.co.jp',
+  'apache.org',
+  'anthropic.com',
+];
+
+const SHAPES = [
+  // A postal code: with the 〒, or bare and followed by kanji (`NNN-NNNN 東京都…`).
+  [/〒\s*\d{3}-\d{4}/g, 'a Japanese postal code'],
+  [/\b\d{3}-\d{4}(?=[\s\u3000]*[\u3005-\u9fff])/g, 'a Japanese postal code'],
+  // A mobile, hyphenated, bare, or with the country code.
+  [/\b0[789]0-\d{4}-\d{4}\b/g, 'a Japanese mobile number'],
+  [/\b0[789]0\d{8}\b/g, 'a Japanese mobile number'],
+  [/\+81[\s-]?[789]0[\s-]?\d{4}[\s-]?\d{4}/g, 'a Japanese mobile number'],
+  // A landline.
+  [/\b0\d{1,3}-\d{2,4}-\d{4}\b/g, 'a Japanese telephone number'],
+];
 
 /* Formats this cannot read. Counted and printed, never implied to be clean. */
 const UNREADABLE = /\.(png|jpe?g|gif|webp|ico|pdf|docx?|xlsx?|pptx?|rtf|mp3|wav|zip|woff2?|ttf|otf|heic|tiff?)$/i;
 let skipped = 0;
+let scanned = 0;
 
 for (const path of tracked) {
-  if (/^deploy\/envs\//.test(path)) continue;
   if (UNREADABLE.test(path)) {
     skipped += 1;
     continue;
@@ -384,18 +403,83 @@ for (const path of tracked) {
     skipped += 1;
     continue;
   }
-  const seen = new Set();
-  for (const [needle, field] of needles) {
-    const at = text.indexOf(needle);
-    if (at < 0 || seen.has(field)) continue;
-    seen.add(field);
-    problems.push(`${path}:${text.slice(0, at).split('\n').length} — carries the operator's ${field}; it belongs only in deploy/envs/`);
+  scanned += 1;
+  const lineOf = (at) => text.slice(0, at).split('\n').length;
+  const reported = new Set();
+  for (const [shape, what] of SHAPES) {
+    for (const m of text.matchAll(shape)) {
+      if (INVENTED.has(m[0].trim())) continue;
+      const key = `${what}:${m[0]}`;
+      if (reported.has(key)) continue;
+      reported.add(key);
+      problems.push(
+        `${path}:${lineOf(m.index)} — ${what} that is not on the invented list: ${m[0]}. ` +
+          'If it is invented, add it to INVENTED in this script; if it is somebody\'s, it does not belong here.',
+      );
+    }
+  }
+  for (const m of text.matchAll(/[A-Za-z0-9._%+-]+@([A-Za-z0-9.-]+\.[A-Za-z]{2,})/g)) {
+    const domain = m[1].toLowerCase().replace(/[.,;:)\]]+$/, '');
+    if (EMAIL_DOMAINS.includes(domain)) continue;
+    const key = `email:${m[0]}`;
+    if (reported.has(key)) continue;
+    reported.add(key);
+    problems.push(
+      `${path}:${lineOf(m.index)} — an email address at ${domain}, which is not a domain this repository uses. ` +
+        'A personal mailbox does not belong in source; add the domain to EMAIL_DOMAINS only if it is not one.',
+    );
   }
 }
-if (needles.size) {
+notes.push(
+  `no Japanese address, telephone number or off-domain email in ${scanned} tracked text file(s) ` +
+    `(${skipped} in formats this cannot read were not scanned)`,
+);
+
+/*
+ * The exact values, when whoever runs this has them.
+ *
+ * A shape cannot catch a name: the operator's is three characters of kanji and
+ * looks like any other three. The repository must not hold the values, so this
+ * reads them — one per line — from a file git cannot carry:
+ * `.git/stewardship-needles`, or `$STEWARDSHIP_NEEDLES_FILE`. Nothing is
+ * printed but a count, and a match reports the file and line it found, never
+ * the value.
+ *
+ * Optional on purpose. A contributor who never had the values gets the shape
+ * scan above, and the operator gets the real one:
+ *
+ *   printf '%s\n' '<name>' '<address>' '<phone>' '<email>' > .git/stewardship-needles
+ */
+const needleFile = process.env.STEWARDSHIP_NEEDLES_FILE ?? join(ROOT, '.git/stewardship-needles');
+if (existsSync(needleFile)) {
+  const exact = readFileSync(needleFile, 'utf8')
+    .split('\n')
+    .map((l) => l.trim())
+    .filter((l) => l.length >= 2 && !l.startsWith('#'));
+  let hits = 0;
+  for (const path of tracked) {
+    if (UNREADABLE.test(path)) continue;
+    let text;
+    try {
+      text = readText(path);
+    } catch {
+      continue;
+    }
+    for (const needle of exact) {
+      const at = text.indexOf(needle);
+      if (at < 0) continue;
+      hits += 1;
+      problems.push(
+        `${path}:${text.slice(0, at).split('\n').length} — carries one of the values in ${needleFile}. ` +
+          'Not printed here; open that line.',
+      );
+    }
+  }
+  if (!hits) notes.push(`${exact.length} exact value(s) from ${needleFile} appear in no tracked file`);
+} else {
   notes.push(
-    `${needles.size} spelling(s) of ${LEGAL_KEYS.length} operator field(s) appear in no other tracked text file ` +
-      `(${skipped} file(s) in formats this cannot read were not scanned)`,
+    'no exact-value list present, so only shapes were checked — see the comment above ' +
+      '`.git/stewardship-needles` if you hold the operator\'s five fields',
   );
 }
 

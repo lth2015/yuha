@@ -356,10 +356,9 @@ production refuses to start without name, address and contact — and
 block, or an operator's details anywhere but `deploy/envs/`. If you deploy
 this, you are the operator of your deployment.
 
-One thing that follows and is **not** yet done: the operator's five fields are
-in `deploy/envs/{production,staging,qa}.yaml`, which are tracked. The operator
-is a sole proprietor, so that is a person's legal name, home address, telephone
-number and personal email, sitting in this repository. It has to move to the
-secret store before the repository is published anywhere — `OPEN_ITEMS.md` §8,
-and the one blocking item in [`GOVERNANCE.md`](GOVERNANCE.md), which has the
-rest of the detail.
+Those five fields are in no file here. They used to be values in
+`deploy/envs/*.yaml` and keys in a ConfigMap; they now come from the runtime
+secret, and the check fails if they come back. **Git history still has them**,
+in commits from 2026-10-02 to 2026-10-08, which is why this repository is not
+yet safe to make public — `OPEN_ITEMS.md` §8, and
+[`GOVERNANCE.md`](GOVERNANCE.md) for the two ways out.

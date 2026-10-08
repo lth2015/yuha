@@ -101,8 +101,13 @@ data:
   GENERATION_RATE_LIMIT_PER_HOUR: {{ .Values.config.limits.generationRateLimitPerHour | quote }}
   EXPORT_RATE_LIMIT_PER_HOUR: {{ .Values.config.limits.exportRateLimitPerHour | quote }}
 
-  LEGAL_ENTITY_NAME: {{ .Values.config.legal.entityName | quote }}
-  LEGAL_ENTITY_REPRESENTATIVE: {{ .Values.config.legal.representative | quote }}
-  LEGAL_ENTITY_ADDRESS: {{ .Values.config.legal.address | quote }}
-  LEGAL_ENTITY_CONTACT: {{ .Values.config.legal.contact | quote }}
-  LEGAL_ENTITY_PHONE: {{ .Values.config.legal.phone | quote }}
+  # The five LEGAL_ENTITY_* variables are deliberately absent.
+  #
+  # They were here, read from `.Values.config.legal`, which meant the operator's
+  # legal name, home address, telephone number and personal email were in a
+  # values file in git and in an unencrypted ConfigMap any `kubectl get cm`
+  # prints. The operator is a sole proprietor: that is personal data, not
+  # configuration. They come through `.Values.envFromSecret` instead
+  # (`deploy/cluster/external-secrets.yaml`), which the helper lists *after*
+  # this ConfigMap — so re-adding them here would not even win, it would only
+  # publish them.

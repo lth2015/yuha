@@ -23,7 +23,8 @@ its operator. Two consequences bind every change you make:
   of what `GET /v1/legal/business-disclosure` served — never a literal, never a
   dictionary key. That is what keeps any name, the steward's included, out of a
   statutory field. And the operator's own name, address, telephone number and
-  email go in no file outside `deploy/envs/`.
+  email go in **no file at all** — not a values file, not a ConfigMap, not a
+  test fixture, not a comment. They come from the deployment's secret store.
   `pnpm check:stewardship` fails on either, row by row; its header is equally
   explicit about what a green run does *not* establish.
 - NEXT's own legal particulars are nowhere in this repository on purpose:

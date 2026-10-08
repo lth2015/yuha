@@ -66,6 +66,33 @@ records that as BLOCKED_EXTERNAL, and this runbook does not pretend otherwise.
    property until they are added, which is the correct failure — Google sign-in
    cannot work without them, and a silently absent key looks like a login bug.
 
+   **The 特定商取引法 disclosure goes in the same JSON** (法定表示). Five more
+   properties, in the same secret, added the same way:
+
+   ```bash
+   aws secretsmanager put-secret-value --secret-id loopscene-staging/app \
+     --secret-string '{"…the six above…","LEGAL_ENTITY_NAME":"…","LEGAL_ENTITY_REPRESENTATIVE":"…","LEGAL_ENTITY_ADDRESS":"…","LEGAL_ENTITY_CONTACT":"…","LEGAL_ENTITY_PHONE":"…"}'
+   ```
+
+   `put-secret-value` replaces the whole JSON, so send every property in one
+   call — including the six above — or the ones you leave out disappear and the
+   sync starts reporting them missing.
+
+   These five are *published* on `/legal/tokushoho`, so they are not secrets in
+   the usual sense. They are here because the operator is a sole proprietor:
+   that makes them one person's legal name, home address, telephone number and
+   personal email, and until 2026-10-08 they were values in
+   `deploy/envs/*.yaml` and keys in an unencrypted ConfigMap — committed to a
+   repository that is becoming open source, and printable by anyone who can run
+   `kubectl get cm`. Nothing in the repository knows them now, and nothing in it
+   should: `pnpm check:stewardship` fails if they reappear.
+
+   Production refuses to start without `NAME`, `ADDRESS` and `CONTACT`
+   (`loadConfig`, SEC-13), so a missing property fails the rollout rather than
+   publishing a blank statutory block. `REPRESENTATIVE` and `PHONE` are not
+   required by `loadConfig` but *are* required by the statute — set them: the
+   page marks each one **要法務確認** when it is missing, in public.
+
 6. **Register the Stripe webhook endpoint, and fill the price ids.** The
    endpoint is `POST https://yuha.studio/api/webhooks/stripe`, format
    **Snapshot**, API version **2025-03-31.basil**, with the fourteen events

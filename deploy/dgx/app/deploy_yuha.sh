@@ -7,8 +7,8 @@ set -euo pipefail
 cd "$(dirname "$0")"
 # The @netstars.co.jp addresses below are office test access for the internal
 # build on the DGX, not the product's legal identity — that is the sole
-# proprietor named in `deploy/envs/*.yaml`, and named nowhere else in this
-# repository. Seven or eight colleagues sign in with
+# proprietor named in the deployment's secret store, and named nowhere in this
+# repository at all. Seven or eight colleagues sign in with
 # their work addresses, so clearing this allowlist locks them all out. Leave it.
 DGX="${DGX:-dgx}"
 MUSIC="$(cd ../../.. && pwd)"   # repo root (this script lives in deploy/dgx/app)

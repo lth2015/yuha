@@ -231,18 +231,15 @@ config:
     purchaseCapJpyPerDay: "50000"
     purchaseCapOrdersPerDay: "20"
 
-  # SEC-13: production refuses to start if these are empty.
+  # SEC-13 (特定商取引法) has no values here any more.
   #
-  # Blank here on purpose. The chart is the generic default and must not name
-  # a party; `deploy/envs/*.yaml` carry the real operator. These used to hold
-  # a live company's name and address, which the chart then published as the
-  # operator of this service.
-  legal:
-    entityName: ""
-    representative: ""
-    address: ""
-    contact: ""
-    phone: ""
+  # There was a blank `legal:` block, so that `deploy/envs/*.yaml` could fill
+  # it in. That made one person's name, home address, telephone number and
+  # personal email into chart values, tracked in git and rendered into a
+  # ConfigMap. The five variables now come from the runtime Secret
+  # (`envFromSecret`), so neither this file nor any environment's values file
+  # knows them. Production still refuses to start without name, address and
+  # contact — that check is in `loadConfig`, not here.
 
 podDisruptionBudget:
   enabled: true

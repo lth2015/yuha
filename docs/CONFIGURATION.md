@@ -113,9 +113,12 @@ JPY 是零小数货币，Stripe 的 `unit_amount` 直接写 980，不要乘 100�
 - `TRACK_RETENTION_DAYS=90` 歌曲被作者删除后，音频还保留多久可恢复；到期由 worker 的 maintenance 循环真正删除存储对象。处于未结权利申诉、或已被他人购买授权的歌不受影响。设 0 表示永不删除
 - `MUSIC_ALLOW_INSECURE_SELF_HOSTED=true` 只用于自托管模型服务器（局域网 GPU 机器，地址形如 `http://192.168.x.x:8000`）。它关掉的是音频抓取的 https 检查和私有地址检查，且只对已经写进 `MUSIC_ALLOWED_AUDIO_HOSTS` 的 host 生效。`loadConfig` 在 `RUN_MODE=production` 下直接拒绝这个开关
 - `LEGAL_ENTITY_NAME / REPRESENTATIVE / ADDRESS / CONTACT / PHONE`（真实事业主体信息，
-  由配置提供，代码里没有任何默认值可以冒充它）。运营主体是个人事业主，五个字段只
-  存在于 `deploy/envs/*.yaml`（2026-10-02 补齐），本仓库其它任何文件都不记录它们
-  —— 那是一个人的姓名、住所、电话和邮箱，而代码是开源的。
+  由配置提供，代码里没有任何默认值可以冒充它）。运营主体是个人事业主，所以这五项
+  就是一个人的姓名、住所、电话和邮箱，而代码是开源的——**本仓库任何文件都不记录
+  它们**。线上从 secret store 取（AWS Secrets Manager → `yuha-runtime`，见
+  `deploy/runbook.md` 第 5 步）；2026-10-08 之前它们是 `deploy/envs/*.yaml` 里的
+  值，已经移走，`pnpm check:stewardship` 会阻止它们回来。本地 `.env` 不进 git，
+  随便填。
   注意：填满这五项只是让「事业主体」不再是占位符，**不代表条款已经过法务审阅** ——
   那由 `Legal.tsx` 的 `LEGAL_TEXT_REVIEWED` 常量决定，见 `docs/OPEN_ITEMS.md` §4。
   生产模式在 NAME / ADDRESS / CONTACT 任一为空时拒绝启动（SEC-13）。
