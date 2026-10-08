@@ -50,5 +50,8 @@ __pycache__/
 # place a cloud session can copy files out of — so they are ignored here rather
 # than kept elsewhere. Untracked, they would otherwise be swept into the very
 # patch being built: work.patch would carry the whole 8MB bundle inside itself.
-/yuha.bundle
+# Any bundle, not just the one name: a bundle carrying the pre-redaction
+# history is exactly the file that must never be committed, and it arrives
+# under whatever name the session gave it (`yuha-redacted.bundle` did).
+*.bundle
 /work.patch
