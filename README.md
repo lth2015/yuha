@@ -356,9 +356,9 @@ production refuses to start without name, address and contact — and
 block, or an operator's details anywhere but `deploy/envs/`. If you deploy
 this, you are the operator of your deployment.
 
-Those five fields are in no file here. They used to be values in
-`deploy/envs/*.yaml` and keys in a ConfigMap; they now come from the runtime
-secret, and the check fails if they come back. **Git history still has them**,
-in commits from 2026-10-02 to 2026-10-08, which is why this repository is not
-yet safe to make public — `OPEN_ITEMS.md` §8, and
-[`GOVERNANCE.md`](GOVERNANCE.md) for the two ways out.
+Those five fields are in no file here, and in no commit either. They were
+values in `deploy/envs/*.yaml` and keys in a ConfigMap until 2026-10-08; they
+now come from the runtime secret, the check fails if they come back, and the
+history that carried them was rewritten rather than merely edited at the tip —
+`OPEN_ITEMS.md` §8 for what was replaced and how it was verified,
+[`GOVERNANCE.md`](GOVERNANCE.md) for why the repository moved.

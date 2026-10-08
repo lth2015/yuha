@@ -76,13 +76,15 @@ does not render them, no values file carries them, and
 the ConfigMap, or anything shaped like a Japanese address, telephone number or
 off-domain email reappears in a tracked file.
 
-**Git history is a separate matter and is not resolved by any of that.** The
-values were committed between 2026-10-02 and 2026-10-08, and those commits are
-still reachable: `git log -S` finds them in a clone, and removing them from
-HEAD removes them from nothing. So the repository is not yet safe to publish,
-and that is `docs/OPEN_ITEMS.md` §8. Two ways out, and it is the operator's
-call: rewrite the affected commits and force-push, or publish the donation from
-a fresh history and keep this repository private.
+**Git history held them too, and was rewritten for it.** Removing a value from
+HEAD removes it from nothing: `git log -S` still found all five in commits from
+2026-10-01 to 2026-10-08. Those commits were rewritten on 2026-10-08
+(`git filter-repo`), which changed the SHA of every commit from the first
+affected one onward — so this history is **not** the one the old repository
+holds, and the old repository is being deleted rather than force-pushed,
+because GitHub keeps unreachable objects fetchable by SHA until it is asked to
+collect them. What that rewrite replaced, and how it was verified, is in
+`docs/OPEN_ITEMS.md` §8.
 
 A shape cannot catch a name — the operator's is three characters of kanji. Who
 holds the five values can give the check the exact strings to look for, in a

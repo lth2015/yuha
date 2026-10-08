@@ -189,6 +189,24 @@ check was about the rendering.
   earlier. Back up to a scratch copy and restore from that; the five new
   provenance files are untracked, so `git checkout` would not have restored
   them at all.
+- **`filter-repo --replace-text` does not touch commit messages, and a
+  wrapped address is not one string.** The first rewrite left the operator's
+  name in a commit *subject* (`--replace-message` takes the same file and was
+  simply not passed) and left part of the address in a message body, because
+  the address had been line-wrapped mid-address and the long literal therefore
+  matched nothing. Author and committer identities are a third place a rewrite
+  does not reach without `--mailmap`. So verify a redaction by reading every
+  blob reachable from every ref, every message, every identity field and every
+  annotated tag — `git log -S` counts commits where the number of occurrences
+  *changed*, which is a different question and under-reports.
+- **Writing down what you redacted re-publishes it.** Three times in one
+  session: the operator's name went into a `CLAUDE.md` lesson and into a
+  comment in `check-stewardship.mjs` as an example of what the check catches,
+  and a piece of the address went into the lesson above — each time as an
+  illustration, each time in a committed file. The check caught two of the
+  three; a place-name fragment has no shape, so only `.git/stewardship-needles`
+  (which git cannot carry) would have caught the third. Describe the class, not
+  the value: "part of the address", never the part.
 - **A repair that cannot tell "still broken" from "already fixed" destroys
   work.** `mutation-check --repair` copied its backup over the file
   unconditionally, so interrupting a run, restoring by hand and then editing
