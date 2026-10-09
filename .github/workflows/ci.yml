@@ -14,7 +14,7 @@ on:
   push:
     # `yuha` is the working branch. Leaving it out is what made this file
     # decorative; whichever branch the work is on has to be in this list.
-    branches: [main, master, yuha]
+    branches: [master]
   pull_request:
   workflow_dispatch:
   # Called by deploy.yml on the ref being released, so a release runs this
