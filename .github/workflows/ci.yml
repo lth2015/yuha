@@ -83,12 +83,18 @@ jobs:
           cache: pnpm
 
       - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+        run: pnpm install --frozen-lockfile --prefer-offline
 
       # ffmpeg backs the output checks and export rendering; the audio tests
       # exercise it for real rather than mocking it out.
       - name: Install ffmpeg
-        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends ffmpeg
+        run: |
+          if command -v ffmpeg >/dev/null 2>&1; then
+            echo "ffmpeg is already available: $(ffmpeg -version | head -1)"
+          else
+            sudo apt-get update
+            sudo apt-get install -y --no-install-recommends ffmpeg
+          fi
 
       - name: Start MySQL from docker-compose.yml
         # The test database only — `pnpm db:up` would also start the
