@@ -1,6 +1,10 @@
-name: Deploy
+name: Deploy QA
 
 on:
+  workflow_run:
+    workflows: [Artifact Build]
+    types: [completed]
+    branches: [main, master, yuha]
   workflow_dispatch:
     inputs:
       commit_sha:
@@ -32,13 +36,25 @@ concurrency:
 
 jobs:
   deploy:
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
     runs-on: ubuntu-latest
     timeout-minutes: 30
     environment: qa
     steps:
+      - name: Resolve release inputs
+        id: release
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_run" ]; then
+            echo "commit_sha=${{ github.event.workflow_run.head_sha }}" >> "$GITHUB_OUTPUT"
+            echo "artifact_run_id=${{ github.event.workflow_run.id }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "commit_sha=${{ inputs.commit_sha }}" >> "$GITHUB_OUTPUT"
+            echo "artifact_run_id=${{ inputs.artifact_run_id }}" >> "$GITHUB_OUTPUT"
+          fi
+
       - uses: actions/checkout@v4
         with:
-          ref: ${{ inputs.commit_sha }}
+          ref: ${{ steps.release.outputs.commit_sha }}
 
       - uses: aws-actions/configure-aws-credentials@v4
         with:
@@ -49,7 +65,7 @@ jobs:
       - name: Resolve immutable image digests
         id: images
         env:
-          SHA: ${{ inputs.commit_sha }}
+          SHA: ${{ steps.release.outputs.commit_sha }}
         run: |
           set -euo pipefail
           api_digest="$(aws ecr describe-images --repository-name music/api --image-ids imageTag="$SHA" --query 'imageDetails[0].imageDigest' --output text)"
@@ -62,11 +78,11 @@ jobs:
       - name: Download the matching web artifact
         uses: actions/download-artifact@v4
         with:
-          name: web-dist-${{ inputs.commit_sha }}
+          name: web-dist-${{ steps.release.outputs.commit_sha }}
           path: apps/web/dist
           github-token: ${{ github.token }}
           repository: ${{ github.repository }}
-          run-id: ${{ inputs.artifact_run_id }}
+          run-id: ${{ steps.release.outputs.artifact_run_id }}
 
       - name: Point kubectl at QA EKS
         run: aws eks update-kubeconfig --name "$EKS_CLUSTER" --region "$AWS_REGION"
@@ -108,8 +124,8 @@ jobs:
           {
             echo "### QA Deploy"
             echo ""
-            echo "- commit: \`${{ inputs.commit_sha }}\`"
-            echo "- artifact run: \`${{ inputs.artifact_run_id }}\`"
+            echo "- commit: \`${{ steps.release.outputs.commit_sha }}\`"
+            echo "- artifact run: \`${{ steps.release.outputs.artifact_run_id }}\`"
             echo "- API digest: \`${{ steps.images.outputs.api_digest }}\`"
             echo "- result: \`${{ job.status }}\`"
           } >> "$GITHUB_STEP_SUMMARY"
