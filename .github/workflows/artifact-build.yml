@@ -73,6 +73,10 @@ jobs:
           SHA: ${{ steps.commit.outputs.sha }}
         run: |
           set -euo pipefail
+          if aws ecr describe-images --repository-name music/api --image-ids imageTag="$SHA" >/dev/null 2>&1; then
+            echo "API image already exists for $SHA; skipping immutable tag push"
+            exit 0
+          fi
           docker buildx build \
             --platform linux/amd64 \
             --file Dockerfile.api \
@@ -86,6 +90,10 @@ jobs:
           SHA: ${{ steps.commit.outputs.sha }}
         run: |
           set -euo pipefail
+          if aws ecr describe-images --repository-name music/worker --image-ids imageTag="$SHA" >/dev/null 2>&1; then
+            echo "Worker image already exists for $SHA; skipping immutable tag push"
+            exit 0
+          fi
           docker buildx build \
             --platform linux/amd64 \
             --file Dockerfile.worker \
