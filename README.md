@@ -134,8 +134,12 @@ knowing before you reuse anything:
 
 | Not under Apache-2.0 | Why |
 | --- | --- |
-| `spec/*` and `PROJECT_TASK.md` | A third party's documents, kept as written records of the original brief — including a counterparty's agreement text reproduced verbatim. Not ours to license. |
 | The name *YUHA*, its wordmark, logos, marks and icons | Apache-2.0 grants no trademark rights (section 6). The code is yours to run; the brand is not. Wherever they appear — `apps/web/public/brand/`, `yuha/YUHA_Design_v1/`, and the vector paths inlined into `apps/web/src/components/Brand.tsx`. |
+
+Until 2026-10-09 the repository also carried five documents belonging to two
+other companies, kept as written records of the original brief. They were never
+ours to license and have been withdrawn pending advice; code comments that cite
+`PROJECT_TASK.md §x` refer to one of them, which is now an internal document.
 
 Contributions are under the same licence (Apache-2.0, section 5) unless the
 steward adopts a CLA or DCO; there is no sign-off requirement today. See

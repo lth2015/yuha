@@ -7,25 +7,18 @@ Licensed under the Apache License, Version 2.0. The full text is in LICENSE.
 What that licence covers
 ------------------------
 
-Everything in this repository except the files listed below. Those are a third
-party's documents, kept here as written records of how the product came to be
-specified, and they are NOT licensed under Apache-2.0:
+Everything in this repository. There is no carve-out any more, because the
+files that needed one are no longer here.
 
-  spec/API Pro Plan - API General Agreement & Licensing terms.md
-      SOUNDRAW's API agreement and licensing terms, reproduced verbatim.
-      SOUNDRAW's own terms govern that text. Whether it may be published at
-      all is an open question — see GOVERNANCE.md.
-
-  spec/TokenStars_Music_Codex_Task.md
-  PROJECT_TASK.md
-      The original TokenStars brief. These two files are byte-identical: the
-      brief itself says to put it at the repository root under that name, and
-      both copies were kept. One carve-out, two paths.
-
-  spec/TokenStars_Music_Product_Design_v0_1.docx
-  spec/TokenStars_Music_Unit_Economics.xlsx
-      TokenStars' product-design note and unit-economics model. Their
-      material, not ours to license.
+Until 2026-10-09 this repository also carried five documents belonging to two
+other companies — a counterparty's agreement text reproduced verbatim, and a
+client's brief, product-design note and unit-economics model — kept as written
+records of how the product came to be specified. They were never ours to
+license, `NOTICE` said so, and that fixed the licensing claim while answering
+nothing about whether they could be published at all. They have been withdrawn
+from this repository pending advice, and `pnpm check:stewardship` fails if any
+of them returns. Their history has not yet been cleaned; that is
+`docs/OPEN_ITEMS.md` §8.
 
 No third-party source code is vendored into this tree. Dependencies are
 resolved by pnpm from pnpm-lock.yaml and keep their own licences; nothing

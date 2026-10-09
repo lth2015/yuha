@@ -39,9 +39,10 @@
  *                 ones. This replaced a scan for the operator's actual values,
  *                 read out of `deploy/envs/*.yaml`: those files are tracked, so
  *                 while that was the check, the repository itself was the leak.
- *   provenance  — LICENSE is the whole Apache-2.0 text, NOTICE carves out the
- *                 third-party documents in this tree, and package.json says
- *                 Apache-2.0.
+ *   provenance  — LICENSE is the whole Apache-2.0 text, package.json says
+ *                 Apache-2.0, and the third-party documents that were withdrawn
+ *                 on 2026-10-09 have not come back — neither to `spec/` nor to
+ *                 the controlled copies' folder, which git must never carry.
  *
  * What it does NOT establish, so that nobody reads more into a green run:
  *
@@ -525,42 +526,57 @@ if (pkg.license !== 'Apache-2.0') {
 }
 
 /*
- * Third-party documents in this tree. NOTICE says the Apache grant covers
- * "everything except" these, which is only true while it lists all of them —
- * and `spec/` is not the whole list: `PROJECT_TASK.md` at the root is a
- * byte-identical copy of `spec/TokenStars_Music_Codex_Task.md`, so the same
- * brief was carved out and licensed at the same time. Declared here, and each
- * one asserted to be tracked, so that deleting one of these files fails this
- * check instead of leaving a carve-out for nothing.
+ * The third-party documents, and keeping them gone.
+ *
+ * Five files — a counterparty's agreement text reproduced verbatim, and a
+ * client's brief, product-design note and unit-economics model — sat in this
+ * repository from its root commit until 2026-10-09, in a repository that was
+ * public the whole time. `NOTICE` used to carve them out of the Apache grant,
+ * which settled the licensing claim and nothing else: the agreement carries
+ * its own confidentiality clause and a third party's personal data in its
+ * signature block, and neither of those is answered by not licensing it.
+ *
+ * They are withdrawn pending advice, held outside git, and this is the half of
+ * that which is mechanical. The earlier version of this check asserted the
+ * opposite — that each of them was tracked and named in NOTICE — so the
+ * invariant is inverted rather than deleted, and the paths stay written down
+ * because a path nobody lists is a path nobody notices returning.
  */
-const THIRD_PARTY = [
+const WITHDRAWN = [
   'spec/API Pro Plan - API General Agreement & Licensing terms.md',
   'spec/TokenStars_Music_Codex_Task.md',
   'spec/TokenStars_Music_Product_Design_v0_1.docx',
   'spec/TokenStars_Music_Unit_Economics.xlsx',
   'PROJECT_TASK.md',
 ];
-const CARVE_OUT = 'are NOT licensed under Apache-2.0';
 
-if (existsSync(join(ROOT, 'NOTICE'))) {
-  const notice = readText('NOTICE');
-  if (!notice.includes(CARVE_OUT)) {
-    // `notice.includes(path)` tests mention, not exclusion: the lead-in was
-    // rewritten to "including the following files, relicensed under the
-    // donation agreement" with the paths untouched, and the check stayed green.
-    problems.push(`NOTICE no longer says the listed files "${CARVE_OUT}"`);
+for (const f of WITHDRAWN) {
+  if (tracked.includes(f)) {
+    problems.push(`${f} is tracked again; it was withdrawn on 2026-10-09 pending advice (see _legal-hold/MANIFEST.md)`);
   }
-  const carved = notice.slice(notice.indexOf(CARVE_OUT));
-  for (const f of THIRD_PARTY) {
-    if (!tracked.includes(f)) problems.push(`${f} is listed as third-party here but is not tracked; fix this list`);
-    else if (!carved.includes(f)) problems.push(`NOTICE does not carve out ${f}; Apache-2.0 would be claimed over it`);
-  }
-  // Anything new under spec/ is third-party by location and has to be declared.
-  for (const f of tracked.filter((p) => p.startsWith('spec/'))) {
-    if (!THIRD_PARTY.includes(f)) problems.push(`${f} is new under spec/; add it to THIRD_PARTY here and to NOTICE`);
-  }
-  notes.push(`${THIRD_PARTY.length} third-party document(s) carved out of the Apache grant`);
 }
+/*
+ * `spec/` was where they lived, so anything new there is the same mistake
+ * under a new name. The directory is empty now and may stay that way.
+ */
+for (const f of tracked.filter((p) => p.startsWith('spec/'))) {
+  problems.push(`${f} is under spec/, which holds third-party material and is closed; put it somewhere else`);
+}
+/*
+ * The controlled copies. `.gitignore` keeps them out, which one `git add -f`
+ * undoes, and committing them would publish the very documents the removal
+ * was for.
+ */
+for (const f of tracked.filter((p) => p.startsWith('_legal-hold/'))) {
+  problems.push(`${f} is committed; _legal-hold/ is the controlled copy of withdrawn third-party material and must never be in git`);
+}
+if (!existsSync(join(ROOT, '_legal-hold/MANIFEST.md'))) {
+  // A note, not a failure: a fresh clone legitimately has no controlled copy.
+  notes.push('no _legal-hold/ here (expected in a clone; the controlled copies live on the operator\'s machine)');
+} else {
+  notes.push('the controlled copies are present and untracked');
+}
+notes.push(`${WITHDRAWN.length} withdrawn third-party document(s) have not returned, and spec/ is closed`);
 
 // -------------------------------------------------------------------- verdict
 

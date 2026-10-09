@@ -202,7 +202,7 @@ describe('the webhook path is one decision, in one place', () => {
     const files = sh('git ls-files -z').split('\0').filter(Boolean);
     const lists: Array<{ file: string; events: string[] }> = [];
     for (const file of files) {
-      if (file.startsWith('spec/') || file === 'PROJECT_TASK.md') continue; // frozen records of the brief
+      if (file.startsWith('spec/') || file === 'PROJECT_TASK.md') continue; // third-party records; withdrawn 2026-10-09, and spec/ stays closed
       if (file === 'tests/stripe-webhook-path.test.ts') continue;
       let text: string;
       try {

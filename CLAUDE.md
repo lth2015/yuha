@@ -5,9 +5,13 @@ sung, 30s to 4 minutes. pnpm monorepo: `apps/{api,web,worker}`,
 `packages/{contracts,db,providers}`.
 
 **The product is YUHA.** Two earlier names survive only where renaming is
-unsafe: `PROJECT_TASK.md` and `spec/` are written records of the original
-brief, and `0002_sonare_songs.sql` is an applied, checksum-tracked migration
-whose name and bytes are frozen. Infrastructure identifiers (Helm chart,
+unsafe: `0002_sonare_songs.sql` is an applied, checksum-tracked migration whose
+name and bytes are frozen, and code comments throughout cite `PROJECT_TASK.md`
+by section. That document and the four under `spec/` belonged to two other
+companies and were **withdrawn from this repository on 2026-10-09** pending
+advice; they are held outside git (`_legal-hold/`, gitignored). Do not restore
+them, and do not rewrite the citations — they point at a real document that is
+simply no longer public. Infrastructure identifiers (Helm chart,
 Terraform resources, the dev database in `docker-compose.yml`) still read
 `loopscene`; renaming those forces resource recreation, so it is a separate,
 deliberate decision. Do not "tidy" either group.

@@ -58,13 +58,13 @@ meaningfully tested by the engine that enforces them.
 
 ## Things that look untidy and must stay
 
-- `PROJECT_TASK.md` and `spec/` are written records of the original brief, under
-  earlier product names. They are history, not debt — and they are a third
-  party's documents, carved out of the Apache-2.0 grant in `NOTICE`
-  (`PROJECT_TASK.md` is a byte-identical copy of
-  `spec/TokenStars_Music_Codex_Task.md`; both paths are listed there, and a new
-  file under `spec/` fails `pnpm check:stewardship` until it is). Do not
-  relicense, rewrite or "modernise" them.
+- `PROJECT_TASK.md` and the four documents under `spec/` are gone as of
+  2026-10-09, and must not come back. They belonged to two other companies —
+  a counterparty's agreement text and a client's brief, design note and
+  unit-economics model — and were withdrawn from the repository pending legal
+  advice. `pnpm check:stewardship` fails if any of them, or any new file under
+  `spec/`, appears. Code comments that cite `PROJECT_TASK.md §x` still point at
+  a real document; leave them alone.
 - `packages/db/src/migrations/0002_sonare_songs.sql` is applied and
   checksum-tracked. Its name and bytes are frozen; a new migration is how you
   change the schema.
