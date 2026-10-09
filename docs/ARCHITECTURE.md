@@ -18,9 +18,12 @@ was built and, where a decision was contested, why it went the way it did.
 | `infra/terraform` | AWS resources (Tokyo) |
 | `infra/helm` | API and worker deployment |
 
-The API and the worker are **one image**, and both import their domain logic
-from `@yuha/api`. That is deliberate: they share the ledger and the state
-machine, and two copies of those rules would eventually disagree about money.
+The API and the worker are built as **separate images** from
+`Dockerfile.api` and `Dockerfile.worker`. They still build from the same commit
+and share the same workspace packages, but each runtime image contains only
+the process it starts. This keeps image size, scanning, rollback and runtime
+ownership independent while preserving one source of truth for the ledger and
+state machine.
 
 ---
 

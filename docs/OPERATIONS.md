@@ -2,10 +2,9 @@
 
 Runbook for LOOPSCENE. `PROJECT_TASK.md` §12.3 and §13.
 
-> Nothing in this document has been executed against real AWS infrastructure.
-> No account has been provisioned, so every procedure below is written to be
-> followed, not reported as rehearsed. Targets that need a drill to prove
-> (RPO/RTO) are marked as **unverified targets**, not achievements.
+The QA deployment path is implemented by GitHub Actions. Commits to `main`,
+`master` or `yuha` run CI, then build and push separate API and worker images,
+and finally deploy QA with immutable ECR digests.
 
 ---
 
@@ -33,30 +32,35 @@ Never put a real key in `values.yaml`, in git, or in Terraform state.
 
 ### Release
 
-The normal path is Actions → Deploy (`.github/workflows/deploy.yml`), and
+The normal path is Actions → Deploy QA (`.github/workflows/deploy.yml`), and
 `deploy/runbook.md` is the procedure. What follows is the same thing by hand,
 for when the workflow cannot run.
 
 ```bash
-# 1. Build and push, capturing the digest — tags are not acceptable references
-docker build -t $ECR/loopscene-$ENV-api:$SHA .
-docker push $ECR/loopscene-$ENV-api:$SHA
-DIGEST=$(docker inspect --format='{{index .RepoDigests 0}}' $ECR/loopscene-$ENV-api:$SHA | cut -d@ -f2)
+# 1. Build and push each workload separately. Tags are not acceptable deploy references.
+docker build -f Dockerfile.api -t $ECR/music/api:$SHA .
+docker push $ECR/music/api:$SHA
+API_DIGEST=$(docker inspect --format='{{index .RepoDigests 0}}' $ECR/music/api:$SHA | cut -d@ -f2)
+
+docker build -f Dockerfile.worker -t $ECR/music/worker:$SHA .
+docker push $ECR/music/worker:$SHA
+WORKER_DIGEST=$(docker inspect --format='{{index .RepoDigests 0}}' $ECR/music/worker:$SHA | cut -d@ -f2)
 
 # 2. Deploy. Migrations run as a pre-upgrade hook, before any new pod starts.
 helm upgrade --install yuha infra/helm/loopscene \
-  --namespace yuha --create-namespace \
+  --namespace qa-music --create-namespace \
   --values deploy/envs/$ENV.yaml \
-  --set image.api.digest=$DIGEST --set image.worker.digest=$DIGEST \
+  --set image.api.repository=music/api \
+  --set image.worker.repository=music/worker \
+  --set image.api.digest=$API_DIGEST --set image.worker.digest=$WORKER_DIGEST \
   --atomic --timeout 10m
 ```
 
-Three things in that block were wrong until 2026-09-28, and each would have
-produced a different broken deploy: the ECR repositories Terraform creates are
-`loopscene-<environment>-api`, not `loopscene-api`; the release and namespace
-are `yuha`, which is what the IRSA trust policies name and what the deploy
-workflow uses; and `infra/helm/loopscene/values-$ENV.yaml` has never existed —
-the per-environment values live in `deploy/envs/`.
+The shared ECR repositories are intentionally named `music/api` and
+`music/worker`; QA and production are distinguished by the immutable image
+tag/digest and deployment environment, not by separate repository names. The
+QA namespace is `qa-music`; production will use its own namespace and values
+file when that environment is introduced.
 
 The chart **refuses to render** without a digest. A mutable tag would make
 "roll back to the previous release" ambiguous, which is unacceptable on a path
