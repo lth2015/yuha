@@ -56,6 +56,15 @@ jobs:
         with:
           ref: ${{ steps.release.outputs.commit_sha }}
 
+      - name: Resolve image tag
+        id: image
+        env:
+          SHA: ${{ steps.release.outputs.commit_sha }}
+        run: |
+          set -euo pipefail
+          date_tag="$(git show -s --date=format:%Y%m%d --format=%cd "$SHA")"
+          echo "tag=${date_tag}-${SHA:0:6}" >> "$GITHUB_OUTPUT"
+
       - name: Debug GitHub OIDC claims
         uses: actions/github-script@v7
         with:
@@ -82,13 +91,13 @@ jobs:
       - name: Resolve immutable image digests
         id: images
         env:
-          SHA: ${{ steps.release.outputs.commit_sha }}
+          IMAGE_TAG: ${{ steps.image.outputs.tag }}
         run: |
           set -euo pipefail
-          api_digest="$(aws ecr describe-images --repository-name music/api --image-ids imageTag="$SHA" --query 'imageDetails[0].imageDigest' --output text)"
-          worker_digest="$(aws ecr describe-images --repository-name music/worker --image-ids imageTag="$SHA" --query 'imageDetails[0].imageDigest' --output text)"
-          case "$api_digest" in sha256:*) ;; *) echo "API artifact not found for $SHA"; exit 1 ;; esac
-          case "$worker_digest" in sha256:*) ;; *) echo "Worker artifact not found for $SHA"; exit 1 ;; esac
+          api_digest="$(aws ecr describe-images --repository-name music/api --image-ids imageTag="$IMAGE_TAG" --query 'imageDetails[0].imageDigest' --output text)"
+          worker_digest="$(aws ecr describe-images --repository-name music/worker --image-ids imageTag="$IMAGE_TAG" --query 'imageDetails[0].imageDigest' --output text)"
+          case "$api_digest" in sha256:*) ;; *) echo "API artifact not found for $IMAGE_TAG"; exit 1 ;; esac
+          case "$worker_digest" in sha256:*) ;; *) echo "Worker artifact not found for $IMAGE_TAG"; exit 1 ;; esac
           echo "api_digest=$api_digest" >> "$GITHUB_OUTPUT"
           echo "worker_digest=$worker_digest" >> "$GITHUB_OUTPUT"
 
@@ -142,6 +151,7 @@ jobs:
             echo "### QA Deploy"
             echo ""
             echo "- commit: \`${{ steps.release.outputs.commit_sha }}\`"
+            echo "- image tag: \`${{ steps.image.outputs.tag }}\`"
             echo "- artifact run: \`${{ steps.release.outputs.artifact_run_id }}\`"
             echo "- API digest: \`${{ steps.images.outputs.api_digest }}\`"
             echo "- result: \`${{ job.status }}\`"
