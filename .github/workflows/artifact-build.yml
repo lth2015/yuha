@@ -106,6 +106,7 @@ jobs:
       - name: Build web artifact
         run: |
           pnpm install --frozen-lockfile --prefer-offline
+          pnpm --filter @yuha/contracts build
           pnpm --dir apps/web build
 
       - uses: actions/upload-artifact@v4
