@@ -4,8 +4,6 @@ metadata:
   name: {{ .Values.serviceAccount.worker.name }}
   labels:
     {{- include "loopscene.labels" . | nindent 4 }}
-  annotations:
-    eks.amazonaws.com/role-arn: {{ .Values.serviceAccount.worker.roleArn | quote }}
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -61,7 +59,7 @@ spec:
           env:
             {{- include "loopscene.envVars" . | nindent 12 }}
           envFrom:
-            {{- include "loopscene.envFrom" . | nindent 12 }}
+            {{- include "loopscene.envFrom" (dict "Values" .Values "Chart" .Chart "envFromSecret" .Values.worker.envFromSecret) | nindent 12 }}
           securityContext:
             allowPrivilegeEscalation: false
             readOnlyRootFilesystem: true
@@ -74,10 +72,19 @@ spec:
             # read-only.
             - name: tmp
               mountPath: /tmp
+            - name: aws-secrets
+              mountPath: {{ .Values.workerSecretMountPath }}
+              readOnly: true
       volumes:
         - name: tmp
           emptyDir:
             sizeLimit: 2Gi
+        - name: aws-secrets
+          csi:
+            driver: secrets-store.csi.k8s.io
+            readOnly: true
+            volumeAttributes:
+              secretProviderClass: {{ include "loopscene.name" . }}-worker-secrets
       # Long enough for an in-flight audio render to finish and release its
       # lease cleanly.
       terminationGracePeriodSeconds: 60
@@ -146,7 +153,7 @@ spec:
           env:
             {{- include "loopscene.envVars" . | nindent 12 }}
           envFrom:
-            {{- include "loopscene.envFrom" . | nindent 12 }}
+            {{- include "loopscene.envFrom" (dict "Values" .Values "Chart" .Chart "envFromSecret" .Values.api.envFromSecret) | nindent 12 }}
           securityContext:
             allowPrivilegeEscalation: false
             readOnlyRootFilesystem: true

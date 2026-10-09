@@ -284,23 +284,6 @@ jobs:
         with:
           args: -color
 
-  terraform:
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    steps:
-      - uses: actions/checkout@v4
-      - uses: hashicorp/setup-terraform@v3
-        with:
-          terraform_version: 1.8.2
-      - name: Format check
-        run: terraform -chdir=infra/terraform fmt -check -recursive
-      - name: Validate
-        # `init -backend=false` validates syntax and provider schemas without
-        # any AWS credentials; no account has been authorised for this project.
-        run: |
-          terraform -chdir=infra/terraform init -backend=false
-          terraform -chdir=infra/terraform validate
-
   helm:
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -313,15 +296,15 @@ jobs:
         run: |
           helm lint infra/helm/loopscene \
             --set image.registry=example.dkr.ecr.ap-northeast-1.amazonaws.com \
-            --set image.api.repository=loopscene-staging-api \
-            --set image.worker.repository=loopscene-staging-worker \
+            --set image.api.repository=music/api \
+            --set image.worker.repository=music/worker \
             --set image.api.digest=sha256:0 --set image.worker.digest=sha256:0
       - name: Render the templates
         run: |
           helm template loopscene infra/helm/loopscene \
             --set image.registry=example.dkr.ecr.ap-northeast-1.amazonaws.com \
-            --set image.api.repository=loopscene-staging-api \
-            --set image.worker.repository=loopscene-staging-worker \
+            --set image.api.repository=music/api \
+            --set image.worker.repository=music/worker \
             --set image.api.digest=sha256:0000000000000000000000000000000000000000000000000000000000000000 \
             --set image.worker.digest=sha256:0000000000000000000000000000000000000000000000000000000000000000 \
             > /dev/null
@@ -356,8 +339,8 @@ jobs:
           # check would silently pass. Same reason shellcheck asks (SC2181).
           if out=$(helm template loopscene infra/helm/loopscene \
             --set image.registry=example.dkr.ecr.ap-northeast-1.amazonaws.com \
-            --set image.api.repository=loopscene-staging-api \
-            --set image.worker.repository=loopscene-staging-worker 2>&1); then
+            --set image.api.repository=music/api \
+            --set image.worker.repository=music/worker 2>&1); then
             echo "FAIL: the chart rendered without a digest"
             exit 1
           fi

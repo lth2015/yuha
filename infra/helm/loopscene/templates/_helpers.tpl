@@ -41,8 +41,8 @@ previous release" ambiguous, so the chart fails rather than deploying one.
 
 {{/*
 Shared environment, split into the two keys a container spec expects.
-Secrets come exclusively from `envFromSecret`; nothing sensitive is rendered
-into the ConfigMap or into Helm release history (SEC-06).
+Secrets come from the CSI-synchronized Kubernetes Secret; nothing sensitive is
+rendered into the ConfigMap or into Helm release history (SEC-06).
 */}}
 {{/*
 `runMode` becomes RUN_MODE, which the API parses as an enum of exactly
@@ -70,5 +70,5 @@ the first, which is the failure this repository keeps finding in its own docs.
 - configMapRef:
     name: {{ include "loopscene.name" . }}-config
 - secretRef:
-    name: {{ .Values.envFromSecret }}
+    name: {{ .envFromSecret }}
 {{- end -}}

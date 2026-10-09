@@ -4,8 +4,6 @@ metadata:
   name: {{ .Values.serviceAccount.api.name }}
   labels:
     {{- include "loopscene.labels" . | nindent 4 }}
-  annotations:
-    eks.amazonaws.com/role-arn: {{ .Values.serviceAccount.api.roleArn | quote }}
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -58,7 +56,7 @@ spec:
           env:
             {{- include "loopscene.envVars" . | nindent 12 }}
           envFrom:
-            {{- include "loopscene.envFrom" . | nindent 12 }}
+            {{- include "loopscene.envFrom" (dict "Values" .Values "Chart" .Chart "envFromSecret" .Values.api.envFromSecret) | nindent 12 }}
           securityContext:
             allowPrivilegeEscalation: false
             readOnlyRootFilesystem: true
@@ -84,9 +82,18 @@ spec:
           volumeMounts:
             - name: tmp
               mountPath: /tmp
+            - name: aws-secrets
+              mountPath: {{ .Values.apiSecretMountPath }}
+              readOnly: true
       volumes:
         - name: tmp
           emptyDir: {}
+        - name: aws-secrets
+          csi:
+            driver: secrets-store.csi.k8s.io
+            readOnly: true
+            volumeAttributes:
+              secretProviderClass: {{ include "loopscene.name" . }}-api-secrets
       terminationGracePeriodSeconds: 30
 ---
 apiVersion: v1

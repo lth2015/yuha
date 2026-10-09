@@ -1,4 +1,4 @@
-# Ship a commit to EKS in Tokyo.
+# Ship a commit to the QA EKS cluster in Tokyo.
 #
 # `ci.yml` builds the image with `push: false`, validates the Terraform and
 # lints the chart. Everything was built and checked and nothing was ever
@@ -21,8 +21,8 @@ on:
       environment:
         description: Target environment
         type: choice
-        options: [qa, staging, production]
-        default: staging
+        options: [qa]
+        default: qa
         required: true
   push:
     tags: ['v*']
@@ -36,8 +36,9 @@ concurrency:
 
 env:
   AWS_REGION: ap-northeast-1
-  NAMESPACE: yuha
+  NAMESPACE: qa-music
   RELEASE: yuha
+  EKS_CLUSTER: qa-web3-netx-tokyo-eks
 
 jobs:
   # The whole of CI — suite, image, Terraform, chart — against the ref being
@@ -50,9 +51,8 @@ jobs:
 
   deploy:
     needs: verify
-    # A tag deploys production; the manual trigger says which.
-    environment: ${{ inputs.environment || 'production' }}
-    runs-on: ${{ (inputs.environment || 'production') == 'production' && vars.DEPLOY_RUNNER_PRODUCTION || 'ubuntu-latest' }}
+    environment: ${{ inputs.environment || 'qa' }}
+    runs-on: ubuntu-latest
     timeout-minutes: 30
 
     permissions:
@@ -66,28 +66,13 @@ jobs:
         id: target
         run: |
           set -euo pipefail
-          ENVIRONMENT="${{ inputs.environment || 'production' }}"
+          ENVIRONMENT="${{ inputs.environment || 'qa' }}"
           {
             echo "environment=$ENVIRONMENT"
-            echo "cluster=loopscene-$ENVIRONMENT"
+            echo "cluster=$EKS_CLUSTER"
             echo "values=deploy/envs/$ENVIRONMENT.yaml"
           } >> "$GITHUB_OUTPUT"
           test -f "deploy/envs/$ENVIRONMENT.yaml"
-
-      - name: Production needs a runner inside the VPC
-        if: steps.target.outputs.environment == 'production'
-        run: |
-          set -euo pipefail
-          # infra/terraform/compute.tf keeps the production EKS endpoint
-          # private. A GitHub-hosted runner cannot reach it, and would fail
-          # several minutes later with a connection timeout that reads like an
-          # outage. Say what is actually wrong, immediately.
-          if [ -z "${{ vars.DEPLOY_RUNNER_PRODUCTION }}" ]; then
-            echo "::error::The production EKS endpoint is private (cluster_endpoint_public_access = false)."
-            echo "::error::Set the repository variable DEPLOY_RUNNER_PRODUCTION to a self-hosted runner label inside the VPC."
-            echo "::error::See deploy/README.md — 'Production reaches the cluster differently'."
-            exit 1
-          fi
 
       - uses: aws-actions/configure-aws-credentials@v4
         with:
@@ -108,8 +93,8 @@ jobs:
         run: |
           set -euo pipefail
           SHA="${GITHUB_SHA}"
-          API_REPO="loopscene-${ENVIRONMENT}-api"
-          WORKER_REPO="loopscene-${ENVIRONMENT}-worker"
+          API_REPO="music/api"
+          WORKER_REPO="music/worker"
 
           # The ECR repositories are IMMUTABLE, so re-running a deploy for a
           # commit that is already published must reuse it rather than fail on
@@ -157,22 +142,6 @@ jobs:
       - name: Point kubectl at the cluster
         run: aws eks update-kubeconfig --name "${{ steps.target.outputs.cluster }}" --region "$AWS_REGION"
 
-      - name: Sync secrets from Secrets Manager
-        env:
-          ENVIRONMENT: ${{ steps.target.outputs.environment }}
-        run: |
-          set -euo pipefail
-          ACCOUNT_ID="$(aws sts get-caller-identity --query Account --output text)"
-          # The chart mounts `yuha-runtime`; this is what creates it. Applied
-          # before the release so the migration hook has a DATABASE_URL.
-          sed -e "s/__NAMESPACE__/${NAMESPACE}/g" \
-              -e "s/__ENVIRONMENT__/${ENVIRONMENT}/g" \
-              -e "s/__ACCOUNT_ID__/${ACCOUNT_ID}/g" \
-              deploy/cluster/external-secrets.yaml | kubectl apply -n "$NAMESPACE" -f -
-
-          kubectl wait --for=condition=Ready externalsecret/yuha-runtime \
-            -n "$NAMESPACE" --timeout=120s
-
       - name: helm upgrade
         run: |
           set -euo pipefail
@@ -189,6 +158,20 @@ jobs:
             --atomic \
             --wait \
             --timeout 15m
+
+      - name: Build web frontend
+        run: |
+          set -euo pipefail
+          pnpm install --frozen-lockfile
+          pnpm --dir apps/web build
+
+      - name: Publish web frontend to S3
+        run: |
+          set -euo pipefail
+          aws s3 sync apps/web/dist/ s3://qa-music-web/ --delete
+          aws cloudfront create-invalidation \
+            --distribution-id E3F0OZRA08GGF0 \
+            --paths '/*'
 
       - name: Verify what was deployed is what is serving
         run: |

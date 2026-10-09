@@ -27,25 +27,36 @@ runMode: integration
 image:
   # <account>.dkr.ecr.ap-northeast-1.amazonaws.com — from the ECR outputs.
   registry: ""
-  # Terraform names these `loopscene-<environment>-{api,worker}`. The chart has
-  # no default and fails at render if this is empty.
+  # Shared ECR repositories; environment is encoded in the immutable image tag.
   api:
-    repository: loopscene-qa-api
+    repository: music/api
     digest: ""   # set by the workflow, never committed
   worker:
-    repository: loopscene-qa-worker
+    repository: music/worker
     digest: ""
   pullPolicy: IfNotPresent
 
 serviceAccount:
   api:
-    name: yuha-api
-    roleArn: ""      # terraform output api_role_arn
+    name: api
   worker:
-    name: yuha-worker
-    roleArn: ""      # terraform output worker_role_arn
+    name: worker
 
-envFromSecret: yuha-runtime
+secrets:
+  api:
+    awsSecretName: qa-music-api-secrets-kv
+    kubernetesSecretName: api-secrets
+  worker:
+    awsSecretName: qa-music-worker-secrets-kv
+    kubernetesSecretName: worker-secrets
+
+apiSecretMountPath: /mnt/secrets/api
+workerSecretMountPath: /mnt/secrets/worker
+
+api:
+  envFromSecret: api-secrets
+worker:
+  envFromSecret: worker-secrets
 
 api:
   replicaCount: 2
@@ -168,7 +179,7 @@ config:
   #
   # They now arrive in the runtime Secret, from AWS Secrets Manager, with the
   # other five properties nothing in this repository is allowed to know
-  # (`deploy/cluster/external-secrets.yaml`, `deploy/runbook.md` §「法定表示」).
+  # (`infra/helm/loopscene/templates/secretproviderclass.yaml`, `deploy/runbook.md` §「法定表示」).
   # Production refuses to start without NAME, ADDRESS and CONTACT, so a missing
   # property fails the rollout rather than publishing a blank disclosure.
   #

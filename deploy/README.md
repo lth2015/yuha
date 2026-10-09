@@ -2,6 +2,38 @@
 
 How a commit becomes a running deployment in Tokyo (`ap-northeast-1`).
 
+## Current QA delivery path
+
+The current QA path is the source of truth for the first deployment:
+
+```text
+GitHub Actions
+    │ GitHub OIDC (no long-lived AWS keys)
+    ▼
+qa-music-github-actions-deploy-role
+    ├── push immutable images → ECR: music/api, music/worker
+    ├── Helm release → existing EKS: qa-web3-netx-tokyo-eks
+    │                    namespace: qa-music
+    └── build web → S3: qa-music-web → CloudFront invalidation
+```
+
+Runtime secrets use the existing EKS add-ons:
+
+```text
+AWS Secrets Manager
+    → Secrets Store CSI Driver + AWS Provider
+    → SecretProviderClass
+    → files and synchronized Kubernetes Secret
+```
+
+The application repository does not apply Terraform and does not write secret
+values. AWS infrastructure is maintained in the separate private
+`music-infrastructure` repository. Route 53 remains manual in account `0702`.
+
+The QA workflow is `.github/workflows/deploy.yml`. It can be started manually
+from GitHub Actions with `environment: qa`. A local documentation change does
+not trigger a remote workflow until it is pushed; do not push automatically.
+
 ## What was already here
 
 Most of the AWS story predates this folder, and none of it was duplicated into
