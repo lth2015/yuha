@@ -1,0 +1,42 @@
+FROM node:22.13.1-bookworm-slim AS build
+
+RUN npm install -g pnpm@11.1.2 && npm cache clean --force
+WORKDIR /app
+
+COPY pnpm-lock.yaml pnpm-workspace.yaml package.json ./
+COPY packages/contracts/package.json packages/contracts/
+COPY packages/db/package.json packages/db/
+COPY packages/providers/package.json packages/providers/
+COPY apps/api/package.json apps/api/
+COPY apps/worker/package.json apps/worker/
+
+RUN pnpm install --frozen-lockfile --filter "@yuha/contracts..." \
+      --filter "@yuha/db..." --filter "@yuha/providers..." \
+      --filter "@yuha/worker..."
+
+COPY tsconfig.base.json ./
+COPY scripts/ scripts/
+COPY packages/ packages/
+COPY apps/api/ apps/api/
+COPY apps/worker/ apps/worker/
+
+RUN pnpm --filter @yuha/contracts build \
+ && pnpm --filter @yuha/db build \
+ && pnpm --filter @yuha/providers build \
+ && pnpm --filter @yuha/worker build
+
+RUN CI=true pnpm deploy --filter=@yuha/worker --prod --legacy /deploy/worker
+
+FROM node:22.13.1-bookworm-slim AS runtime
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends ffmpeg ca-certificates tini \
+ && rm -rf /var/lib/apt/lists/*
+
+ENV NODE_ENV=production
+WORKDIR /app
+RUN groupadd --gid 10001 loopscene \
+ && useradd --uid 10001 --gid 10001 --no-create-home --shell /usr/sbin/nologin loopscene
+COPY --from=build --chown=root:root /deploy/worker ./worker
+USER loopscene
+ENTRYPOINT ["/usr/bin/tini", "--"]
+CMD ["node", "worker/dist/index.js"]

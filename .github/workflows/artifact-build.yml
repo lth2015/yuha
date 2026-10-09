@@ -68,17 +68,30 @@ jobs:
 
       - uses: docker/setup-buildx-action@v3
 
-      - name: Build and push immutable images
+      - name: Build and push API image
         env:
           SHA: ${{ steps.commit.outputs.sha }}
         run: |
           set -euo pipefail
           docker buildx build \
             --platform linux/amd64 \
+            --file Dockerfile.api \
             --tag "$ECR_REGISTRY/music/api:$SHA" \
+            --cache-from type=gha,scope=api \
+            --cache-to type=gha,mode=max,scope=api \
+            --push .
+
+      - name: Build and push Worker image
+        env:
+          SHA: ${{ steps.commit.outputs.sha }}
+        run: |
+          set -euo pipefail
+          docker buildx build \
+            --platform linux/amd64 \
+            --file Dockerfile.worker \
             --tag "$ECR_REGISTRY/music/worker:$SHA" \
-            --cache-from type=gha \
-            --cache-to type=gha,mode=max \
+            --cache-from type=gha,scope=worker \
+            --cache-to type=gha,mode=max,scope=worker \
             --push .
 
       - uses: pnpm/action-setup@v4
