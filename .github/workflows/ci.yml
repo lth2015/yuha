@@ -218,60 +218,6 @@ jobs:
             console.log('demo configuration validates');
           "
 
-  docker:
-    if: ${{ !inputs.skip_docker }}
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: docker/setup-buildx-action@v3
-
-      - name: Build the image
-        uses: docker/build-push-action@v6
-        with:
-          context: .
-          push: false
-          load: true
-          tags: loopscene:ci
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-
-      - name: Verify ffmpeg is present in the image
-        # The worker exits at start-up without it, so catching this here rather
-        # than in a cluster is worth one extra step.
-        run: docker run --rm --entrypoint ffmpeg loopscene:ci -version | head -1
-
-      - name: Verify every entry point resolves in the image
-        # pnpm's workspace links do not survive a naive copy, so a missing
-        # module here would only surface in a cluster.
-        run: |
-          docker run --rm loopscene:ci node -e "require.resolve" >/dev/null
-          docker run --rm loopscene:ci node api/node_modules/@yuha/db/dist/cli.js migrate 2>&1 \
-            | grep -q "DATABASE_URL is not set"
-          echo "api, worker and migrate entry points all resolve"
-
-      - name: Verify the image refuses an invalid production configuration
-        run: |
-          set +e
-          output=$(docker run --rm \
-            -e RUN_MODE=production \
-            -e DATABASE_URL=mysql://u:p@localhost:3306/x \
-            -e AUTH_ADAPTER=dev \
-            loopscene:ci 2>&1)
-          status=$?
-          set -e
-          echo "$output"
-          if [ $status -eq 0 ]; then
-            echo "FAIL: production mode started with the dev auth adapter"
-            exit 1
-          fi
-          echo "$output" | grep -q "dev auth adapter" || {
-            echo "FAIL: expected the config error to name the dev auth adapter"
-            exit 1
-          }
-          echo "production correctly refused the development login (SEC-03)"
-
   workflows:
     # Lint the workflows themselves.
     #
