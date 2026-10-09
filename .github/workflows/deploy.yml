@@ -46,6 +46,10 @@ jobs:
   # and the drift would be invisible until a release broke.
   verify:
     uses: ./.github/workflows/ci.yml
+    with:
+      # Deploy builds and pushes the release image in the next job. Avoid
+      # building the same image once in CI and again before the push.
+      skip_docker: true
     permissions:
       contents: read
 
