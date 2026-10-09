@@ -23,6 +23,7 @@ COPY apps/worker/ apps/worker/
 RUN pnpm --filter @yuha/contracts build \
  && pnpm --filter @yuha/db build \
  && pnpm --filter @yuha/providers build \
+ && pnpm --filter @yuha/api build \
  && pnpm --filter @yuha/worker build
 
 RUN CI=true pnpm deploy --filter=@yuha/worker --prod --legacy /deploy/worker
