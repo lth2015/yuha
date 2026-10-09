@@ -81,9 +81,12 @@ HEAD removes it from nothing: `git log -S` still found all five in commits from
 2026-10-01 to 2026-10-08. Those commits were rewritten on 2026-10-08
 (`git filter-repo`), which changed the SHA of every commit from the first
 affected one onward — so this history is **not** the one the old repository
-holds, and the old repository is being deleted rather than force-pushed,
-because GitHub keeps unreachable objects fetchable by SHA until it is asked to
-collect them. What that rewrite replaced, and how it was verified, is in
+holds. The project therefore moved to a new repository on 2026-10-09 rather
+than force-pushing over the old one, because GitHub keeps unreachable objects
+fetchable by SHA until it is asked to collect them, and a force-push would have
+left every redacted value retrievable by anyone who had noted a commit id. The
+old repository is a separate, still-open item. What the rewrite replaced, and
+how both it and the published result were verified, is in
 `docs/OPEN_ITEMS.md` §8.
 
 A shape cannot catch a name — the operator's is three characters of kanji. Who

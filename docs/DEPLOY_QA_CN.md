@@ -60,7 +60,7 @@ QA 是一次足尺彩排，不是缩水版。
       RDS / S3 / SQS / IAM / KMS / Cognito 的权限
 - [ ] 一个 QA 用的域名，例如 `qa.yuha.studio`，以及对应的 Route 53 托管区
 - [ ] 该域名在 **ap-northeast-1** 的 ACM 证书（必须是这个区域，ALB 要用）
-- [ ] 本仓库 `lth2015/music` 的 **Settings 管理权限**（要建 Environment 和变量）
+- [ ] 本仓库 `lth2015/yuha` 的 **Settings 管理权限**（要建 Environment 和变量）。2026-10-09 仓库从 `lth2015/music` 迁到这里，Actions 的 secrets、变量、Environment、分支保护都**不会**跟着 push 过来，必须在新仓库重建
 - [ ] 以下外部服务的 QA 用密钥（向运营方索取，**不要用生产的那套**）：
       Stripe（`sk_test_…` + `whsec_…` + 四个 price id）、Google OAuth
       client id/secret、Tokenstars API key
