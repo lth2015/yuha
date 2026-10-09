@@ -85,12 +85,14 @@ jobs:
           retention-days: 30
 
       - name: Publish artifact summary
+        env:
+          SHA: ${{ steps.commit.outputs.sha }}
         run: |
           {
             echo "### Artifact Build"
             echo ""
-            echo "- commit: `${{ steps.commit.outputs.sha }}`"
-            echo "- ECR: `music/api:${{ steps.commit.outputs.sha }}`"
-            echo "- ECR: `music/worker:${{ steps.commit.outputs.sha }}`"
-            echo "- web artifact: `web-dist-${{ steps.commit.outputs.sha }}`"
+            echo "- commit: $SHA"
+            echo "- ECR: music/api:$SHA"
+            echo "- ECR: music/worker:$SHA"
+            echo "- web artifact: web-dist-$SHA"
           } >> "$GITHUB_STEP_SUMMARY"
