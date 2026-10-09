@@ -1,82 +1,44 @@
-# Ship a commit to the QA EKS cluster in Tokyo.
-#
-# `ci.yml` builds the image with `push: false`, validates the Terraform and
-# lints the chart. Everything was built and checked and nothing was ever
-# delivered; this is the part that delivers it.
-#
-# It now waits for that, which it did not. This workflow fires on `v*` and had
-# no `needs:` of any kind, while `ci.yml` was triggered only by `main` and
-# `master` — and development happens on `yuha`, without pull requests. The two
-# facts together meant a tag could deploy a commit no test had ever been run
-# against, and in practice that was every commit. `verify` calls `ci.yml`
-# through `workflow_call`, on this exact ref, and `deploy` needs it.
-#
-# Inputs live in `deploy/`. The only repository configuration is the IAM role
-# ARN — there is no static AWS key anywhere, by design.
 name: Deploy
 
 on:
   workflow_dispatch:
     inputs:
-      environment:
-        description: Target environment
-        type: choice
-        options: [qa]
-        default: qa
+      commit_sha:
+        description: Commit SHA produced by Artifact Build
         required: true
-  push:
-    tags: ['v*']
+        type: string
+      artifact_run_id:
+        description: Artifact Build workflow run ID containing the web artifact
+        required: true
+        type: string
 
-# Two deploys to one environment must not interleave: the second helm upgrade
-# would race the first one's migration hook. Never cancel in progress — a
-# half-applied migration is worse than a queued deploy.
-concurrency:
-  group: deploy-${{ inputs.environment || 'production' }}
-  cancel-in-progress: false
+permissions:
+  actions: read
+  contents: read
+  id-token: write
 
 env:
   AWS_REGION: ap-northeast-1
   NAMESPACE: qa-music
   RELEASE: yuha
   EKS_CLUSTER: qa-web3-netx-tokyo-eks
+  ECR_REGISTRY: 654654578710.dkr.ecr.ap-northeast-1.amazonaws.com
+  WEB_BUCKET: qa-music-web
+  CLOUDFRONT_DISTRIBUTION_ID: E3F0OZRA08GGF0
+
+concurrency:
+  group: deploy-qa
+  cancel-in-progress: false
 
 jobs:
-  # The whole of CI — suite, image, Terraform, chart — against the ref being
-  # deployed. Not a copy of it: a second definition would drift from the first
-  # and the drift would be invisible until a release broke.
-  verify:
-    uses: ./.github/workflows/ci.yml
-    with:
-      # Deploy builds and pushes the release image in the next job. Avoid
-      # building the same image once in CI and again before the push.
-      skip_docker: true
-    permissions:
-      contents: read
-
   deploy:
-    needs: verify
-    environment: ${{ inputs.environment || 'qa' }}
     runs-on: ubuntu-latest
     timeout-minutes: 30
-
-    permissions:
-      contents: read
-      id-token: write   # the OIDC token exchanged for the deploy role
-
+    environment: qa
     steps:
       - uses: actions/checkout@v4
-
-      - name: Resolve target
-        id: target
-        run: |
-          set -euo pipefail
-          ENVIRONMENT="${{ inputs.environment || 'qa' }}"
-          {
-            echo "environment=$ENVIRONMENT"
-            echo "cluster=$EKS_CLUSTER"
-            echo "values=deploy/envs/$ENVIRONMENT.yaml"
-          } >> "$GITHUB_OUTPUT"
-          test -f "deploy/envs/$ENVIRONMENT.yaml"
+        with:
+          ref: ${{ inputs.commit_sha }}
 
       - uses: aws-actions/configure-aws-credentials@v4
         with:
@@ -84,123 +46,70 @@ jobs:
           aws-region: ${{ env.AWS_REGION }}
           role-session-name: gha-deploy-${{ github.run_id }}
 
-      - uses: aws-actions/amazon-ecr-login@v2
-        id: ecr
-
-      - uses: docker/setup-buildx-action@v3
-
-      - name: Build and push
-        id: image
+      - name: Resolve immutable image digests
+        id: images
         env:
-          REGISTRY: ${{ steps.ecr.outputs.registry }}
-          ENVIRONMENT: ${{ steps.target.outputs.environment }}
+          SHA: ${{ inputs.commit_sha }}
         run: |
           set -euo pipefail
-          SHA="${GITHUB_SHA}"
-          API_REPO="music/api"
-          WORKER_REPO="music/worker"
+          api_digest="$(aws ecr describe-images --repository-name music/api --image-ids imageTag="$SHA" --query 'imageDetails[0].imageDigest' --output text)"
+          worker_digest="$(aws ecr describe-images --repository-name music/worker --image-ids imageTag="$SHA" --query 'imageDetails[0].imageDigest' --output text)"
+          case "$api_digest" in sha256:*) ;; *) echo "API artifact not found for $SHA"; exit 1 ;; esac
+          case "$worker_digest" in sha256:*) ;; *) echo "Worker artifact not found for $SHA"; exit 1 ;; esac
+          echo "api_digest=$api_digest" >> "$GITHUB_OUTPUT"
+          echo "worker_digest=$worker_digest" >> "$GITHUB_OUTPUT"
 
-          # The ECR repositories are IMMUTABLE, so re-running a deploy for a
-          # commit that is already published must reuse it rather than fail on
-          # the push. Redeploying the same commit is a normal thing to want.
-          digest_of() {
-            aws ecr describe-images --repository-name "$1" --image-ids imageTag="$SHA" \
-              --query 'imageDetails[0].imageDigest' --output text 2>/dev/null || true
-          }
-
-          API_DIGEST="$(digest_of "$API_REPO")"
-          if [ -z "$API_DIGEST" ] || [ "$API_DIGEST" = "None" ]; then
-            # One image serves both: the worker Deployment overrides the
-            # command. It is pushed to both repositories because Terraform
-            # gives them separate lifecycle policies.
-            docker buildx build \
-              --platform linux/amd64 \
-              --tag "$REGISTRY/$API_REPO:$SHA" \
-              --tag "$REGISTRY/$WORKER_REPO:$SHA" \
-              --cache-from type=gha \
-              --cache-to type=gha,mode=max \
-              --push .
-            API_DIGEST="$(digest_of "$API_REPO")"
-          else
-            echo "$SHA already published; reusing it."
-          fi
-
-          WORKER_DIGEST="$(digest_of "$WORKER_REPO")"
-          for d in "$API_DIGEST" "$WORKER_DIGEST"; do
-            case "$d" in
-              sha256:*) ;;
-              *) echo "::error::could not resolve an image digest (got '$d')"; exit 1 ;;
-            esac
-          done
-
-          {
-            echo "registry=$REGISTRY"
-            echo "api_digest=$API_DIGEST"
-            echo "worker_digest=$WORKER_DIGEST"
-          } >> "$GITHUB_OUTPUT"
-
-      - uses: azure/setup-helm@v4
+      - name: Download the matching web artifact
+        uses: actions/download-artifact@v4
         with:
-          version: v3.16.3
+          name: web-dist-${{ inputs.commit_sha }}
+          path: apps/web/dist
+          github-token: ${{ github.token }}
+          repository: ${{ github.repository }}
+          run-id: ${{ inputs.artifact_run_id }}
 
-      - name: Point kubectl at the cluster
-        run: aws eks update-kubeconfig --name "${{ steps.target.outputs.cluster }}" --region "$AWS_REGION"
+      - name: Point kubectl at QA EKS
+        run: aws eks update-kubeconfig --name "$EKS_CLUSTER" --region "$AWS_REGION"
 
-      - name: helm upgrade
+      - name: Deploy the immutable images
         run: |
           set -euo pipefail
-          # --atomic rolls the release back if the migration hook or the
-          # rollout fails, so a bad deploy does not leave half the pods on the
-          # new image. The chart refuses a mutable tag, so both images are
-          # pinned by digest.
           helm upgrade --install "$RELEASE" infra/helm/loopscene \
             --namespace "$NAMESPACE" --create-namespace \
-            --values "${{ steps.target.outputs.values }}" \
-            --set image.registry="${{ steps.image.outputs.registry }}" \
-            --set image.api.digest="${{ steps.image.outputs.api_digest }}" \
-            --set image.worker.digest="${{ steps.image.outputs.worker_digest }}" \
+            --values deploy/envs/qa.yaml \
+            --set image.registry="$ECR_REGISTRY" \
+            --set image.api.repository=music/api \
+            --set image.worker.repository=music/worker \
+            --set image.api.digest="${{ steps.images.outputs.api_digest }}" \
+            --set image.worker.digest="${{ steps.images.outputs.worker_digest }}" \
             --atomic \
             --wait \
             --timeout 15m
 
-      - name: Build web frontend
+      - name: Publish the matching web artifact
         run: |
           set -euo pipefail
-          pnpm install --frozen-lockfile
-          pnpm --dir apps/web build
-
-      - name: Publish web frontend to S3
-        run: |
-          set -euo pipefail
-          aws s3 sync apps/web/dist/ s3://qa-music-web/ --delete
+          aws s3 sync apps/web/dist/ "s3://$WEB_BUCKET/" --delete
           aws cloudfront create-invalidation \
-            --distribution-id E3F0OZRA08GGF0 \
+            --distribution-id "$CLOUDFRONT_DISTRIBUTION_ID" \
             --paths '/*'
 
-      - name: Verify what was deployed is what is serving
+      - name: Verify the rollout
         run: |
           set -euo pipefail
-          kubectl rollout status deploy -n "$NAMESPACE" -l app.kubernetes.io/instance="$RELEASE" --timeout=5m
-          # Ask the running pod, rather than trusting that a rollout finishing
-          # means the thing it rolled out works.
+          kubectl rollout status deployment -n "$NAMESPACE" -l app.kubernetes.io/instance="$RELEASE" --timeout=5m
           kubectl run "deploy-check-${GITHUB_RUN_ID}" -n "$NAMESPACE" \
             --rm -i --restart=Never --image=curlimages/curl:8.11.0 --quiet -- \
-            # Port 80 is what the Service publishes; 4000 is the container
-            # port behind it. This asked for 4000 and would have failed to
-            # connect on every deploy — as the last step, after a rollout that
-            # actually succeeded.
             curl -fsS --max-time 10 "http://${RELEASE}-api/health"
 
       - name: Report
         if: always()
         run: |
           {
-            echo "### Deploy — ${{ steps.target.outputs.environment }}"
+            echo "### QA Deploy"
             echo ""
-            echo "| | |"
-            echo "|---|---|"
-            echo "| commit | \`${GITHUB_SHA}\` |"
-            echo "| cluster | \`${{ steps.target.outputs.cluster }}\` |"
-            echo "| api digest | \`${{ steps.image.outputs.api_digest }}\` |"
-            echo "| result | ${{ job.status }} |"
+            echo "- commit: \`${{ inputs.commit_sha }}\`"
+            echo "- artifact run: \`${{ inputs.artifact_run_id }}\`"
+            echo "- API digest: \`${{ steps.images.outputs.api_digest }}\`"
+            echo "- result: \`${{ job.status }}\`"
           } >> "$GITHUB_STEP_SUMMARY"
