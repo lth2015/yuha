@@ -55,3 +55,9 @@ __pycache__/
 # under whatever name the session gave it (`yuha-redacted.bundle` did).
 *.bundle
 /work.patch
+
+# Controlled copies of the third-party documents withdrawn from this repository
+# on 2026-10-09, kept so that removing them was not evidence destruction. They
+# are a counterparty's confidential material and must never be committed.
+# See _legal-hold/MANIFEST.md.
+/_legal-hold/

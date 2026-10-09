@@ -1,253 +1,149 @@
-# YUHA
+<p align="center">
+  <img src="yuha/YUHA_Design_v1/assets/yuha-logo.png" alt="YUHA" width="260">
+</p>
 
-**Any song you can describe.** An AI song studio: describe an idea (or bring
-your own lyrics), pick styles, energy and length, and get a finished song —
-vocals sung or instrumental, 30 seconds to four minutes — with a persistent
-player, a private library and MP3 download. Payments run on Stripe (test mode
-locally); sign-in is Google OAuth plus a development login for demo mode.
+<p align="center">
+  <b>Any song you can describe.</b><br>
+  Write how a moment felt. Get a finished song back — sung or instrumental,
+  30&nbsp;seconds to four minutes, yours to keep.
+</p>
 
-> Repo note: the product is **YUHA**. Two earlier names survive in places that
-> cannot be renamed safely — `PROJECT_TASK.md` and `spec/` are the original
-> brief and stay as written records, and the applied migration
-> `0002_sonare_songs.sql` is checksum-tracked, so its name and contents are
-> frozen. Local and deployed infrastructure identifiers (the Helm chart, the
-> Terraform resources, the dev database) still read `loopscene`; renaming them
-> would force resource recreation, so that is a deliberate, separate decision.
+<p align="center">
+  <img src="https://img.shields.io/badge/license-Apache--2.0-blue.svg" alt="Apache-2.0">
+  <img src="https://img.shields.io/badge/node-%E2%89%A5%2022.13-brightgreen.svg" alt="Node 22.13+">
+  <img src="https://img.shields.io/badge/stewarded%20by-NEXT%20community-ff6a3d.svg" alt="Stewarded by the NEXT community">
+</p>
 
-> Scope note: there is **no public feed and no likes**. Songs are private, and
-> publishing means anyone holding the link can open it. The platform sells its
-> own service and does not split licence revenue with creators — what a licence
-> records is authorship and usage rights, which is the part intended to carry
-> over to on-chain proof later.
-
-> **This is not ready to charge anyone.** No music-provider agreement is signed,
-> no legal review has happened, and no AWS account has been provisioned. Demo
-> mode defaults to synthesised audio and simulated payments, and says so
-> continuously in the interface. See
-> [`docs/LAUNCH_READINESS.md`](docs/LAUNCH_READINESS.md) for the full list of
-> what is still missing.
->
-> "Demo" describes the defaults, not a ceiling. Each adapter is chosen
-> independently, so a local run can hold real Stripe **test-mode** keys and a
-> real TokenStars key while the music stays synthesised — which is how the
-> payment path was actually exercised. Only `production` mode forbids the
-> stand-ins, and it refuses to boot if any of them is selected.
-
-Apache-2.0 ([`LICENSE`](LICENSE), scope in [`NOTICE`](NOTICE)). The code is
-stewarded by the NEXT technical community; the service at yuha.studio is a
-separately operated deployment of it and carries its own obligations to its
-customers — [`GOVERNANCE.md`](GOVERNANCE.md) draws that line, and
-[`CONTRIBUTING.md`](CONTRIBUTING.md) is how to work on the code.
+<p align="center">
+  <img src="docs/screenshots/home.webp" alt="The YUHA home page: one box, one sentence, one song" width="900">
+</p>
 
 ---
 
-## Quick start
+## One sentence in, one song out
 
-Requirements: **Node ≥ 22.13**, **pnpm 11** (or `corepack pnpm`), **Docker** (for MySQL), **ffmpeg**.
+No DAW, no prompt engineering, no stems to assemble. You type what the moment
+felt like — *"夕方の海辺、自転車で友達と帰る道。軽やかに、風を通すように。"* — and
+you get a finished track.
+
+- **Full songs, with vocals.** 30 seconds to four minutes. Lyrics written for
+  you from your description, or bring your own. Instrumental if you prefer.
+- **Decide at the start, not in a settings panel.** The home page asks one
+  question (vocals or not) and commits to 2:00. Length, styles, your own
+  lyrics and visibility live one click away in the studio.
+- **It stays yours.** Songs are private by default. Publishing means handing
+  out a link, not joining a feed — there is no public timeline, no likes, and
+  no play counter shown to anybody.
+- **MP3 you can actually use,** with a per-song record of who wrote it, who
+  holds usage rights and what was paid.
+- **Three languages.** The whole interface reads in 日本語 / 中文 / English.
+
+## Have a look
+
+<table>
+  <tr>
+    <td width="50%"><img src="docs/screenshots/create.webp" alt="The studio: a description, style chips, length and vocal mode"><br><sub><b>The studio</b> — describe it, pick a few styles, spend one credit.</sub></td>
+    <td width="50%"><img src="docs/screenshots/song.webp" alt="A finished song with cover art, player and download"><br><sub><b>A finished song</b> — cover art, player, MP3, a link to share if you want one.</sub></td>
+  </tr>
+  <tr>
+    <td><img src="docs/screenshots/library.webp" alt="A private library of generated songs"><br><sub><b>Your library</b> — private, searchable, yours.</sub></td>
+    <td><img src="docs/screenshots/pricing.webp" alt="Pricing: DROP, CREATOR and STUDIO"><br><sub><b>Pricing</b> — one credit, one song. A failed generation costs nothing.</sub></td>
+  </tr>
+</table>
+
+<p align="center">
+  <img src="docs/screenshots/mobile-home.webp" alt="YUHA on a phone: the home page" width="250">
+  &nbsp;
+  <img src="docs/screenshots/mobile-song.webp" alt="YUHA on a phone: a finished song" width="250">
+  &nbsp;
+  <img src="docs/screenshots/mobile-library.webp" alt="YUHA on a phone: the library" width="250">
+</p>
+
+<sub>Screenshots taken 2026-10-09 from this commit, running locally in demo
+mode — the songs in them are real generations, and the audio behind them is
+synthesised rather than modelled (see below).</sub>
+
+## Try it in five minutes
 
 ```bash
-cp .env.example .env
-# Fill in the two secrets the demo needs:
-#   DEV_AUTH_SECRET       — openssl rand -hex 32
-#   STORAGE_SIGNING_SECRET — openssl rand -hex 32
-
-pnpm bootstrap    # install, synthesise audio fixtures, start MySQL, migrate, seed
-pnpm dev          # API :4000, worker, web :5173
+git clone https://github.com/lth2015/yuha.git && cd yuha
+cp .env.example .env     # fill in DEV_AUTH_SECRET and STORAGE_SIGNING_SECRET
+pnpm bootstrap           # install, audio fixtures, MySQL, migrate, seed
+pnpm dev                 # api :4000 · worker · web :5173
 ```
 
-Then open <http://localhost:5173> and sign in with one of the seeded demo
-accounts:
+Open <http://localhost:5173> and sign in as `creator@example.jp` — a seeded
+demo account with 10 credits. Write a sentence, press the button, and a song
+is in your library a few seconds later. Everything in the gallery above was
+produced this way.
 
-| Account | Purpose |
+**What "demo mode" means, exactly:** the audio is synthesised from ffmpeg
+oscillators rather than generated by a music model, and payments are
+simulated. Nothing else is faked — the queue, the worker, the credit ledger,
+the licence records and the three-language interface are the real ones, and
+the app says which it is where it matters: on the song, in the job while it
+runs, at checkout and on the sign-in card. Point `MUSIC_ADAPTER` at a
+real provider and `PAYMENTS_ADAPTER=stripe` at test keys and the same build
+does the real thing; that is how the payment path was exercised.
+
+[`docs/DEVELOPMENT.md`](docs/DEVELOPMENT.md) has the rest: run modes, the
+architecture, the test suite, deployment.
+
+## Where it stands
+
+**Not ready to charge anyone yet.** No music-provider agreement is signed, the
+consumer-facing legal text has not been through counsel, and no AWS account has
+been provisioned. Demo mode defaults to synthesised audio and simulated
+payments, and labels both. The full list is in
+[`docs/LAUNCH_READINESS.md`](docs/LAUNCH_READINESS.md) and the live one in
+[`docs/OPEN_ITEMS.md`](docs/OPEN_ITEMS.md) — both are kept honest on purpose,
+and reading them is the fastest way to understand the project.
+
+What *is* finished is most of the engineering: a test suite that runs against
+a real MySQL rather than a stand-in (`pnpm test` prints the count — no number
+is quoted here, because a number in a README stops being true quietly), a
+credit ledger that survives concurrency, Stripe checkout and webhooks, Google
+OAuth with TOTP, rights-complaint handling, and an operations console.
+
+---
+
+## Donated to the NEXT technical community
+
+YUHA's code has been donated to the **NEXT technical community**
+(<https://www.netx.world/>), which is its upstream steward: it holds this
+repository and decides what is merged and released.
+
+**The service is not the code.** A hosted deployment of YUHA is operated
+commercially and separately at yuha.studio. The Stripe account, the
+特定商取引法 disclosure, the privacy controller, refunds and support all belong
+to that operator and travel with none of this. The steward is not a party to
+anybody's purchase, and nothing in this repository names the operator — those
+strings come from the deployment's own secret store, and a scripted check
+(`pnpm check:stewardship`) fails if that ever stops being true.
+
+If you deploy this, you are the operator of your deployment.
+[`GOVERNANCE.md`](GOVERNANCE.md) draws the whole line, including what the
+donation has not settled yet.
+
+## Licence
+
+**Apache License 2.0** — [`LICENSE`](LICENSE).
+
+[`NOTICE`](NOTICE) says exactly what that covers, and two carve-outs are worth
+knowing before you reuse anything:
+
+| Not under Apache-2.0 | Why |
 | --- | --- |
-| `creator@example.jp` | ordinary creator with 10 credits |
-| `empty@example.jp` | creator with no credits (tests the top-up path) |
-| `support@example.jp` | support role — read-only console plus compensation |
-| `admin@example.jp` | administrator — rights cases and feature switches |
+| The name *YUHA*, its wordmark, logos, marks and icons | Apache-2.0 grants no trademark rights (section 6). The code is yours to run; the brand is not. Wherever they appear — `apps/web/public/brand/`, `yuha/YUHA_Design_v1/`, and the vector paths inlined into `apps/web/src/components/Brand.tsx`. |
 
-These are **development identities**. `loadConfig` refuses to start in
-production mode if the dev auth adapter is selected, so they cannot exist there.
+Until 2026-10-09 the repository also carried five documents belonging to two
+other companies, kept as written records of the original brief. They were never
+ours to license and have been withdrawn pending advice; code comments that cite
+`PROJECT_TASK.md §x` refer to one of them, which is now an internal document.
 
-### Commands
-
-| Command | What it does |
-| --- | --- |
-| `pnpm bootstrap` | One-shot local setup (install → fixtures → database → migrate → seed) |
-| `pnpm dev` | API, worker and web together |
-| `pnpm build` | Build every package and app |
-| `pnpm typecheck` | Typecheck the whole workspace |
-| `pnpm test` | Full test suite against a real MySQL |
-| `pnpm db:up` / `db:down` | Start / stop the MySQL containers |
-| `pnpm db:migrate` | Apply pending migrations |
-| `pnpm db:reset` | Drop and recreate (refuses anything not named dev/test/local) |
-| `pnpm seed` | Price catalogue, landing samples, demo accounts |
-| `pnpm fixtures:audio` | Re-synthesise the demo audio fixtures |
-
----
-
-## Run modes
-
-The mode is one explicit value, and the adapter selection has to be consistent
-with it. An illegal combination fails at start-up rather than producing a
-half-real service (`PROJECT_TASK.md` §3.1).
-
-| Mode | Identity | Audio | Payments | Notes |
-| --- | --- | --- | --- | --- |
-| `demo` | dev login | synthesised fixtures | simulated *(default)* | Local development. Banner always visible. Any adapter can be overridden — `PAYMENTS_ADAPTER=stripe` with test keys is the supported way to exercise real checkout locally. |
-| `integration` | Cognito or dev | real provider as credentials allow | Stripe **test** mode | Record which dependencies are real per run. |
-| `production` | Cognito only | licensed provider only | Stripe live | Refuses to boot without real legal-entity details. |
-
-Production refuses, at start-up, to run with: the development login, the demo
-music adapter, simulated payments, local storage, a test Stripe key, a
-`DEV_AUTH_SECRET`, `DATABASE_SSL=false`, or placeholder 特定商取引法 details.
-Those refusals are covered by tests in `tests/security.test.ts`.
-
-Two further guards apply in every mode:
-
-- `MUSIC_COMMERCIAL_DELIVERY=true` is rejected while the demo adapter is in use.
-  A synthesised tone has no agreement behind it and can never carry a commercial
-  licence (SEC-09).
-- `FEATURE_WAV_EXPORT_ENABLED=true` is rejected unless the provider actually
-  delivers lossless audio. Transcoding MP3 to WAV is not a quality upgrade and
-  is not offered as one (UI-07).
-
----
-
-## Architecture at a glance
-
-```
-apps/web        React SPA (Japanese, mobile-first) → S3 + CloudFront
-apps/api        Fastify modular monolith           → ALB → EKS
-apps/worker     Outbox dispatch, provider calls, audio processing, webhooks
-packages/contracts   zod schemas, error codes, business enums
-packages/providers   TokenStars, music, storage, queue, payments adapters
-packages/db          Migrations, repositories, the credit ledger
-infra/terraform      AWS (Tokyo): EKS, RDS MySQL, S3, SQS, Cognito, CloudFront
-infra/helm           API + worker deployment, digest-pinned
-```
-
-Request path: the API creates the job, reserves a credit and writes an outbox
-row **in one transaction**; the worker dispatches to SQS, calls the providers,
-verifies the audio and delivers. The browser polls with backoff — no request is
-ever held open waiting for audio.
-
-`docs/ARCHITECTURE.md` has the full picture, including the state machine and the
-ledger design.
-
-### Database: MySQL, not PostgreSQL
-
-`PROJECT_TASK.md` §1.1 and §4 say "RDS PostgreSQL". The actual deployment target
-is a **MySQL-compatible RDS**, so `packages/db` targets **MySQL 8.0 / Aurora
-MySQL 3.x**. 8.0 is a hard floor — three of its features carry the ledger's
-correctness guarantees:
-
-| Feature | Used for |
-| --- | --- |
-| `SELECT … FOR UPDATE SKIP LOCKED` | Job, outbox and queue claiming without two workers colliding |
-| Enforced `CHECK` constraints | The anti-oversell invariant on `entitlement_batches` |
-| `STORED` generated columns | Standing in for PostgreSQL partial unique indexes (a unique index ignores NULLs) |
-
-One operational consequence: creating the licence-immutability trigger (SEC-08)
-requires `log_bin_trust_function_creators=1`. It is set in `docker-compose.yml`
-locally and in the RDS parameter group in `infra/terraform/data.tf`. The
-migration fails with an explicit message rather than skipping the trigger.
-
----
-
-## Testing
-
-```bash
-pnpm db:up          # the test database runs on :53307, separate from dev
-pnpm test
-```
-
-The suite runs against a **real MySQL instance**, never an in-memory
-stand-in — §12.1 requires the ledger transactions, concurrency and unique
-constraints to be verified against the engine that actually enforces them.
-`pnpm test` prints the current file and test counts; no number is repeated
-here, because a number in a README is a claim that stops being true quietly.
-
-These are the files worth knowing about first, not the whole list:
-
-| File | Covers |
-| --- | --- |
-| `tests/ledger.test.ts` | GEN-01/03/08/09/11, PAY-05/09, reconciliation, concurrent contention |
-| `tests/generation.test.ts` | The HTTP surface and the real worker pipeline: GEN-01…12, AI-03/05/06 |
-| `tests/payments.test.ts` | PAY-01…11 through the real webhook pipeline |
-| `tests/stripe-invoice-shape.test.ts` | The Invoice/Subscription field layout Stripe actually sends |
-| `tests/security.test.ts` | SEC-01…13, SSRF guards, run-mode boundaries, audit logging |
-| `tests/budget.test.ts` | The daily upstream spend cap and what it refuses |
-| `tests/market.test.ts` | Licensing a song, and who may not license one |
-| `tests/mfa.test.ts` | TOTP enrollment, challenge, recovery codes |
-| `tests/demo-provider.test.ts` | What the demo adapter refuses to pretend it can do |
-| `tests/tokenstars.test.ts` | Reply budget, truncation, refusal states |
-| `tests/telemetry.test.ts`, `tests/explore.test.ts`, `tests/lyrics.test.ts` | Analytics events, play counting, lyric timing |
-
-One caveat worth knowing before trusting a green run: most payment tests drive
-the **simulated** adapter, whose fixtures were written from the same
-understanding of Stripe that the production code holds. A simulator agrees with
-the belief it was built from, so it cannot detect that Stripe has changed. It
-did not: subscribers paid and received nothing for as long as the current API
-version has been in use, while every test passed. `stripe-invoice-shape.test.ts`
-exists because of that, and its payloads are trimmed copies of real ones —
-keep them that way.
-
-Fault injection uses markers (`__FAULT_FAIL__`, `__FAULT_REJECT__`,
-`__FAULT_UNKNOWN__`) carried in the generation brief, so failure tests drive the
-same production code path rather than a test-only branch inside the worker.
-
----
-
-## Demo audio
-
-Every fixture in `assets/fixtures/audio/` is synthesised from scratch by
-`scripts/make-audio-fixtures.mjs` using ffmpeg oscillators and noise sources.
-There is no third-party recording, sample or model output in any of them, so the
-demo path carries no licensing question at all.
-
-They are synthetic tones, not music. Per §8 they demonstrate that the
-engineering pipeline works; they are not evidence of model quality, originality
-or commercial value.
-
----
-
-## Deployment
-
-Terraform and Helm are written to be reviewable and are validated in CI
-(`terraform validate`, `helm lint`, `helm template`). **Nothing has been
-applied** — no AWS account has been authorised for this project, so every AWS
-acceptance item is recorded as `BLOCKED_EXTERNAL` in `docs/ACCEPTANCE.md`.
-
-```bash
-docker build -t loopscene:local .    # one image, both workloads
-terraform -chdir=infra/terraform init -backend=false && terraform -chdir=infra/terraform validate
-helm template loopscene infra/helm/loopscene --set image.api.digest=sha256:… --set image.worker.digest=sha256:…
-```
-
-The Helm chart **refuses to render** without digest-pinned images: a mutable tag
-would make "roll back to the previous release" ambiguous.
-
-`docs/OPERATIONS.md` covers deployment, refunds, compensation, reconciliation,
-alerts, rollback and recovery.
-
----
-
-## Documentation
-
-| Document | Contents |
-| --- | --- |
-| [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | Modules, data flow, state machine, schema, design trade-offs |
-| [`docs/UI_DESIGN.md`](docs/UI_DESIGN.md) | Design system and direction, with the competitive review behind it |
-| [`docs/API.md`](docs/API.md) | Endpoints, error codes, idempotency rules |
-| [`docs/OPERATIONS.md`](docs/OPERATIONS.md) | Deploy, refund, compensate, reconcile, alert, roll back, recover |
-| [`docs/ACCEPTANCE.md`](docs/ACCEPTANCE.md) | Every UI/GEN/PAY/AI/SEC item with a result and evidence |
-| [`docs/ACCEPTANCE_PAYMENTS.md`](docs/ACCEPTANCE_PAYMENTS.md) | What the Stripe sandbox has actually been made to do, and what is still only argued |
-| [`docs/STRIPE_WEBHOOK.md`](docs/STRIPE_WEBHOOK.md) | The live webhook endpoint: path, the fourteen events to tick, payload format and API version, where the signing secret lives |
-| [`docs/CONFIGURATION.md`](docs/CONFIGURATION.md) | Every environment variable, and which run modes refuse which values |
-| [`docs/DEPLOY_AWS.md`](docs/DEPLOY_AWS.md) | The AWS deployment path, none of which has been applied |
-| [`docs/UI_CRAFT.md`](docs/UI_CRAFT.md) | The detail rules the interface is held to |
-| [`docs/OPEN_ITEMS.md`](docs/OPEN_ITEMS.md) | What is unfinished, what is blocked, and on whom |
-| [`docs/LAUNCH_READINESS.md`](docs/LAUNCH_READINESS.md) | What must be true before charging anyone |
+Contributions are under the same licence (Apache-2.0, section 5) unless the
+steward adopts a CLA or DCO; there is no sign-off requirement today. See
+[`CONTRIBUTING.md`](CONTRIBUTING.md).
 
 ---
 
@@ -278,28 +174,6 @@ None of these are reachable through a hidden entry point or a provider default �
 rejects voice-imitation, quoted-lyrics and artist-reference prompts before any
 spend occurs.
 
-## Music provider: GLM preset
-
-`MUSIC_ADAPTER=glm` wires the generic HTTP adapter with GLM (Z.ai bigmodel)
-defaults — async submit + poll, 30s–4min songs, vocals supported. Only
-`MUSIC_API_KEY` is required; every endpoint path/field remains overridable via
-the `MUSIC_*` variables in `.env.example`. Until a signed agreement exists the
-preset reports `commercialDeliveryPermitted: false` (SEC-09), so demo-mode
-synthesised audio is what ships by default. Swap to any provider by filling in
-the `http` adapter's mapping from its documentation.
-
-## Two-factor authentication (Google Authenticator)
-
-Sign-in is Google OAuth (PKCE + JWKS-verified id tokens); accounts can add a
-TOTP second factor compatible with Google Authenticator: enrollment shows a
-QR `otpauth://` URI, confirmation requires a live code, and every later
-sign-in is intercepted by a 5-minute single-use challenge token until a valid
-code (or a one-time recovery code) is presented. Secrets are AES-256-GCM
-encrypted at rest; recovery codes are SHA-256 hashed and consumed one at a
-time; disable requires a valid code. Google's consumer accounts expose no MFA
-API we can call on a user's behalf, so this is the standard commercial
-integration of Google's authenticator surface with our own verified flow.
-
 ## Licensing and the authorship record
 
 A song whose link is open can be licensed by another user (**¥980**,
@@ -314,51 +188,20 @@ record is deliberately kept as a system of record — it is the authorship proof
 intended to carry over to on-chain attestation later, and it must outlive any
 monetisation model layered on top of it.
 
-## Lyric alignment
+## Documentation
 
-Synced lyrics carry a provenance label: `aligned` timings come from a real
-vocal-sync model via the configurable HTTP alignment adapter
-(`ALIGNMENT_ADAPTER=http` + the `ALIGNMENT_*` mapping from that model's
-documentation — nothing is invented); until one is configured the worker
-stores deterministic line timings labelled `estimated`, and the UI says
-"Estimated sync" rather than implying word-level accuracy.
-
-## Google login
-
-Set `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` and `GOOGLE_REDIRECT_URI`
-(redirect: `<api-origin>/v1/auth/google/callback`, registered verbatim in Google
-Cloud Console). The button appears on the sign-in card automatically; the flow
-is authorization-code + PKCE with a signed state, and the SPA exchanges a
-60-second one-time code for its session (no token ever sits in a URL).
-
-## Licence and stewardship
-
-The code is Apache-2.0: [`LICENSE`](LICENSE) is the licence,
-[`NOTICE`](NOTICE) says exactly what it covers. Two carve-outs are worth
-knowing before you reuse anything:
-
-- The four files under `spec/` are a third party's documents — including
-  SOUNDRAW's API agreement text, reproduced verbatim — and are **not** under
-  Apache-2.0.
-- Apache-2.0 grants no trademark rights, so the name *YUHA* and the marks
-  under `apps/web/public/brand/` do not come with the code.
-
-The project is stewarded upstream by the **NEXT technical community**
-(<https://www.netx.world/>): it holds the canonical repository and decides what
-is merged and released.
-
-Stewardship of the code is not operation of the service. yuha.studio runs on
-somebody's Stripe account, and the 特定商取引法 disclosure, the privacy
-controller, refunds and support all belong to whoever that is. Those strings
-come from `LEGAL_ENTITY_*` in the deployment — no default can name anybody, and
-production refuses to start without name, address and contact — and
-`pnpm check:stewardship` fails if the steward's name turns up in a statutory
-block, or an operator's details anywhere but `deploy/envs/`. If you deploy
-this, you are the operator of your deployment.
-
-Those five fields are in no file here, and in no commit either. They were
-values in `deploy/envs/*.yaml` and keys in a ConfigMap until 2026-10-08; they
-now come from the runtime secret, the check fails if they come back, and the
-history that carried them was rewritten rather than merely edited at the tip —
-`OPEN_ITEMS.md` §8 for what was replaced and how it was verified,
-[`GOVERNANCE.md`](GOVERNANCE.md) for why the repository moved.
+| Document | Contents |
+| --- | --- |
+| [`docs/DEVELOPMENT.md`](docs/DEVELOPMENT.md) | Run it locally, run modes, architecture, the test suite, deployment |
+| [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | Modules, data flow, state machine, schema, design trade-offs |
+| [`docs/UI_DESIGN.md`](docs/UI_DESIGN.md) | Design system and direction, with the competitive review behind it |
+| [`docs/API.md`](docs/API.md) | Endpoints, error codes, idempotency rules |
+| [`docs/OPERATIONS.md`](docs/OPERATIONS.md) | Deploy, refund, compensate, reconcile, alert, roll back, recover |
+| [`docs/ACCEPTANCE.md`](docs/ACCEPTANCE.md) | Every UI/GEN/PAY/AI/SEC item with a result and evidence |
+| [`docs/ACCEPTANCE_PAYMENTS.md`](docs/ACCEPTANCE_PAYMENTS.md) | What the Stripe sandbox has actually been made to do, and what is still only argued |
+| [`docs/STRIPE_WEBHOOK.md`](docs/STRIPE_WEBHOOK.md) | The live webhook endpoint: path, the fourteen events to tick, payload format and API version, where the signing secret lives |
+| [`docs/CONFIGURATION.md`](docs/CONFIGURATION.md) | Every environment variable, and which run modes refuse which values |
+| [`docs/DEPLOY_AWS.md`](docs/DEPLOY_AWS.md) | The AWS deployment path, none of which has been applied |
+| [`docs/UI_CRAFT.md`](docs/UI_CRAFT.md) | The detail rules the interface is held to |
+| [`docs/OPEN_ITEMS.md`](docs/OPEN_ITEMS.md) | What is unfinished, what is blocked, and on whom |
+| [`docs/LAUNCH_READINESS.md`](docs/LAUNCH_READINESS.md) | What must be true before charging anyone |
