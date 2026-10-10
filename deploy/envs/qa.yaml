@@ -55,12 +55,10 @@ workerSecretMountPath: /mnt/secrets/worker
 
 api:
   envFromSecret: api-secrets
-worker:
-  envFromSecret: worker-secrets
-
-api:
   replicaCount: 2
   port: 4000
+worker:
+  envFromSecret: worker-secrets
 
 ingress:
   enabled: true
