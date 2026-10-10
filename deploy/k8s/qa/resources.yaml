@@ -193,13 +193,6 @@ spec:
         fsGroup: 10001
         seccompProfile:
           type: RuntimeDefault
-      nodeSelector:
-        workload: worker
-      tolerations:
-        - effect: NoSchedule
-          key: workload
-          operator: Equal
-          value: worker
       containers:
         - name: worker
           image: 654654578710.dkr.ecr.ap-northeast-1.amazonaws.com/music/worker@sha256:0000000000000000000000000000000000000000000000000000000000000000
