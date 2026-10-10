@@ -1,0 +1,676 @@
+
+# Source: yuha/templates/api.yaml
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: yuha-api
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: yuha
+      component: api
+---
+
+# Source: yuha/templates/worker.yaml
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: worker
+  labels:
+    app.kubernetes.io/name: yuha
+    app.kubernetes.io/instance: yuha
+    app.kubernetes.io/version: "0.1.0"
+    app.kubernetes.io/managed-by: Helm
+---
+
+# Source: yuha/templates/api.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: yuha-api
+  labels:
+    app.kubernetes.io/name: yuha
+    app.kubernetes.io/instance: yuha
+    app.kubernetes.io/version: "0.1.0"
+    app.kubernetes.io/managed-by: Helm
+spec:
+  type: ClusterIP
+  ports:
+    - port: 80
+      targetPort: http
+      name: http
+  selector:
+    app.kubernetes.io/name: yuha
+    component: api
+---
+
+# Source: yuha/templates/api.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: yuha-api
+  labels:
+    app.kubernetes.io/name: yuha
+    app.kubernetes.io/instance: yuha
+    app.kubernetes.io/version: "0.1.0"
+    app.kubernetes.io/managed-by: Helm
+    component: api
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: yuha
+      component: api
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: yuha
+        app.kubernetes.io/instance: yuha
+        app.kubernetes.io/version: "0.1.0"
+        app.kubernetes.io/managed-by: Helm
+        component: api
+      annotations:
+        # Roll pods when non-secret configuration changes.
+        checksum/config: 9e7d1b5839ffe348311f63caebea8e704dcea7d8ab4e1a200789e87053a5e38f
+    spec:
+      serviceAccountName: api
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        fsGroup: 10001
+        seccompProfile:
+          type: RuntimeDefault
+      # §4.2: replicas spread across availability zones.
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: topology.kubernetes.io/zone
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels:
+              app.kubernetes.io/name: yuha
+              component: api
+      containers:
+        - name: api
+          image: 654654578710.dkr.ecr.ap-northeast-1.amazonaws.com/music/api@sha256:0000000000000000000000000000000000000000000000000000000000000000
+          imagePullPolicy: IfNotPresent
+          command: ["node", "api/dist/index.js"]
+          ports:
+            - name: http
+              containerPort: 4000
+          env:
+            - name: RUN_MODE
+              value: "integration"
+            - name: NODE_ENV
+              value: "production"
+          envFrom:
+            - configMapRef:
+                name: yuha-config
+            - secretRef:
+                name: api-secrets
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          # Readiness checks the database; liveness deliberately does not, so a
+          # brief database blip drains traffic instead of restarting every pod.
+          startupProbe:
+            httpGet: { path: /health, port: http }
+            failureThreshold: 30
+            periodSeconds: 2
+          readinessProbe:
+            httpGet: { path: /ready, port: http }
+            periodSeconds: 10
+            timeoutSeconds: 3
+          livenessProbe:
+            httpGet: { path: /health, port: http }
+            periodSeconds: 20
+            timeoutSeconds: 3
+            failureThreshold: 3
+          resources:
+            limits:
+              memory: 1Gi
+            requests:
+              cpu: 250m
+              memory: 512Mi
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+            - name: aws-secrets
+              mountPath: /mnt/secrets/api
+              readOnly: true
+      volumes:
+        - name: tmp
+          emptyDir: {}
+        - name: aws-secrets
+          csi:
+            driver: secrets-store.csi.k8s.io
+            readOnly: true
+            volumeAttributes:
+              secretProviderClass: yuha-api-secrets
+      terminationGracePeriodSeconds: 30
+---
+
+# Source: yuha/templates/worker.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: yuha-worker
+  labels:
+    app.kubernetes.io/name: yuha
+    app.kubernetes.io/instance: yuha
+    app.kubernetes.io/version: "0.1.0"
+    app.kubernetes.io/managed-by: Helm
+    component: worker
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: yuha
+      component: worker
+  strategy:
+    # A worker holds a job lease while it runs. Replacing pods one at a time
+    # keeps the number of abandoned leases small; any that do occur expire and
+    # are re-claimed (GEN-05).
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: yuha
+        app.kubernetes.io/instance: yuha
+        app.kubernetes.io/version: "0.1.0"
+        app.kubernetes.io/managed-by: Helm
+        component: worker
+      annotations:
+        checksum/config: 9e7d1b5839ffe348311f63caebea8e704dcea7d8ab4e1a200789e87053a5e38f
+    spec:
+      serviceAccountName: worker
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        fsGroup: 10001
+        seccompProfile:
+          type: RuntimeDefault
+      nodeSelector:
+        workload: worker
+      tolerations:
+        - effect: NoSchedule
+          key: workload
+          operator: Equal
+          value: worker
+      containers:
+        - name: worker
+          image: 654654578710.dkr.ecr.ap-northeast-1.amazonaws.com/music/worker@sha256:0000000000000000000000000000000000000000000000000000000000000000
+          imagePullPolicy: IfNotPresent
+          command: ["node", "worker/dist/index.js"]
+          env:
+            - name: RUN_MODE
+              value: "integration"
+            - name: NODE_ENV
+              value: "production"
+          envFrom:
+            - configMapRef:
+                name: yuha-config
+            - secretRef:
+                name: worker-secrets
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          resources:
+            limits:
+              memory: 1536Mi
+            requests:
+              cpu: 500m
+              memory: 512Mi
+          volumeMounts:
+            # ffmpeg needs writable scratch space; the root filesystem stays
+            # read-only.
+            - name: tmp
+              mountPath: /tmp
+            - name: aws-secrets
+              mountPath: /mnt/secrets/worker
+              readOnly: true
+      volumes:
+        - name: tmp
+          emptyDir:
+            sizeLimit: 2Gi
+        - name: aws-secrets
+          csi:
+            driver: secrets-store.csi.k8s.io
+            readOnly: true
+            volumeAttributes:
+              secretProviderClass: yuha-worker-secrets
+      # Long enough for an in-flight audio render to finish and release its
+      # lease cleanly.
+      terminationGracePeriodSeconds: 60
+---
+
+# Source: yuha/templates/api.yaml
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: yuha-api
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: yuha-api
+  minReplicas: 2
+  maxReplicas: 8
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 65
+---
+
+# Source: yuha/templates/worker.yaml
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: yuha-worker
+  annotations:
+    # §12.3: adding workers does not add upstream capacity. The provider's
+    # concurrency quota and the daily budget are the real ceiling, and the
+    # application enforces both regardless of replica count.
+    loopscene.io/scaling-note: "bounded by provider concurrency and DAILY_BUDGET_MINOR"
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: yuha-worker
+  minReplicas: 1
+  maxReplicas: 4
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 70
+  behavior:
+    scaleDown:
+      # Slow scale-down avoids interrupting in-flight generations.
+      stabilizationWindowSeconds: 300
+---
+
+# Source: yuha/templates/api.yaml
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: yuha-api
+  annotations:
+    alb.ingress.kubernetes.io/healthcheck-path: /health
+    alb.ingress.kubernetes.io/listen-ports: '[{"HTTPS":443}]'
+    alb.ingress.kubernetes.io/load-balancer-attributes: idle_timeout.timeout_seconds=60
+    alb.ingress.kubernetes.io/scheme: internet-facing
+    alb.ingress.kubernetes.io/ssl-redirect: "443"
+    alb.ingress.kubernetes.io/target-type: ip
+spec:
+  ingressClassName: alb
+  rules:
+    - host: "qa.yuha.studio"
+      http:
+        paths:
+          # The API's own namespaces, named explicitly rather than left to the
+          # catch-all below.
+          #
+          # `/` alone already routed everything here, so these four changed
+          # nothing on the day they were written — which is the point. The
+          # moment anything else is put behind this host (a CloudFront origin
+          # for the SPA is already built in infra/terraform/compute.tf, and
+          # production.yaml points publicWebUrl at this same name), a catch-all
+          # is the only rule and the first path to lose is whichever one
+          # somebody forgets. `/api` carries the Stripe webhook: losing it
+          # means the SPA answers 200 to a signed event and Stripe never
+          # retries.
+          #
+          # What makes them win over `/` is the LENGTH, not this ordering. The
+          # AWS Load Balancer Controller sorts an Ingress's paths before it
+          # assigns ALB rule priorities — Exact first, then Prefix longest
+          # first — which is also what the Ingress spec itself says ("the
+          # longest matching path"). So the order here is for a reader, and
+          # `pathType: Prefix` is load-bearing: `Exact` on `/api` would route
+          # `/api` and send `/api/webhooks/stripe` to the catch-all, which is
+          # precisely the silent failure these lines exist to prevent.
+          # tests/stripe-webhook-path.test.ts checks the pathType, not the
+          # order.
+          #
+          # `/v1` is the rest of the API and the path the CLI forwarder uses;
+          # `/health` and `/ready` are the probes, which answer 200 from a page
+          # shell too and so cannot be left to the catch-all either.
+          - path: /api
+            pathType: Prefix
+            backend:
+              service:
+                name: yuha-api
+                port:
+                  number: 80
+          - path: /v1
+            pathType: Prefix
+            backend:
+              service:
+                name: yuha-api
+                port:
+                  number: 80
+          - path: /health
+            pathType: Prefix
+            backend:
+              service:
+                name: yuha-api
+                port:
+                  number: 80
+          - path: /ready
+            pathType: Prefix
+            backend:
+              service:
+                name: yuha-api
+                port:
+                  number: 80
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: yuha-api
+                port:
+                  number: 80
+---
+
+# Source: yuha/templates/api.yaml
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: api
+  annotations:
+    "helm.sh/hook": pre-install,pre-upgrade
+    "helm.sh/hook-weight": "-10"
+    "helm.sh/hook-delete-policy": before-hook-creation
+  labels:
+    app.kubernetes.io/name: yuha
+    app.kubernetes.io/instance: yuha
+    app.kubernetes.io/version: "0.1.0"
+    app.kubernetes.io/managed-by: Helm
+---
+
+# Source: yuha/templates/configmap.yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: yuha-config
+  annotations:
+    "helm.sh/hook": pre-install,pre-upgrade
+    "helm.sh/hook-weight": "-9"
+    "helm.sh/hook-delete-policy": before-hook-creation
+  labels:
+    app.kubernetes.io/name: yuha
+    app.kubernetes.io/instance: yuha
+    app.kubernetes.io/version: "0.1.0"
+    app.kubernetes.io/managed-by: Helm
+data:
+  # Non-sensitive configuration only. Every secret arrives through the synced
+  # Secret named by .Values.envFromSecret.
+  PUBLIC_WEB_URL: "https://qa.yuha.studio"
+  PUBLIC_API_URL: "https://qa.yuha.studio"
+  LOG_LEVEL: "info"
+  HOST: "0.0.0.0"
+  PORT: "4000"
+  DATABASE_SSL: "true"
+
+  AUTH_ADAPTER: "google"
+  GOOGLE_CLIENT_ID: ""
+  GOOGLE_REDIRECT_URI: "https://qa.yuha.studio/v1/auth/google/callback"
+  COGNITO_REGION: "ap-northeast-1"
+  COGNITO_USER_POOL_ID: ""
+  COGNITO_APP_CLIENT_ID: ""
+
+  STORAGE_ADAPTER: "s3"
+  S3_REGION: "ap-northeast-1"
+  S3_QUARANTINE_BUCKET: ""
+  S3_DELIVERY_BUCKET: ""
+  S3_KMS_KEY_ID: ""
+  DOWNLOAD_URL_TTL_SECONDS: "900"
+
+  QUEUE_ADAPTER: "sqs"
+  SQS_REGION: "ap-northeast-1"
+  SQS_QUEUE_URL: ""
+
+  TEXT_ADAPTER: "tokenstars"
+  TOKENSTARS_BASE_URL: ""
+  TOKENSTARS_MODEL_ID: ""
+  TOKENSTARS_CHAT_PATH: "/v1/chat/completions"
+  TOKENSTARS_REQUEST_ID_HEADER: "x-request-id"
+  TOKENSTARS_STRUCTURED_OUTPUTS: "true"
+
+  MUSIC_ADAPTER: "demo"
+  MUSIC_PROVIDER_ID: "demo-local"
+  MUSIC_BASE_URL: ""
+  MUSIC_MODEL: ""
+  MUSIC_CONTRACT_VERSION: ""
+  MUSIC_LICENSE_VERSION: ""
+  MUSIC_SUBMIT_PATH: ""
+  MUSIC_POLL_PATH: ""
+  MUSIC_CANCEL_PATH: ""
+  MUSIC_REQUEST_ID_FIELD: ""
+  MUSIC_STATUS_FIELD: ""
+  MUSIC_AUDIO_URL_FIELD: ""
+  MUSIC_STATUS_MAP: "{\"pending\":[],\"completed\":[],\"failed\":[],\"rejected\":[]}"
+  MUSIC_IDEMPOTENCY_HEADER: ""
+  MUSIC_ALLOWED_AUDIO_HOSTS: ""
+  MUSIC_SUPPORTS_INSTRUMENTAL: "true"
+  MUSIC_SUPPORTS_CANCEL: "false"
+  MUSIC_SUPPORTS_WEBHOOK: "false"
+  MUSIC_SUPPORTS_STATUS_QUERY: "true"
+  MUSIC_COMMERCIAL_DELIVERY: "false"
+  MUSIC_DATA_REGION: "ap-northeast-1"
+  MUSIC_COST_MINOR_PER_REQUEST: "45"
+  MUSIC_BILL_FAILED_REQUESTS: "true"
+  MUSIC_COST_IS_ESTIMATE: "true"
+
+  PAYMENTS_ADAPTER: "stripe"
+  STRIPE_PUBLISHABLE_KEY: ""
+  STRIPE_PRICE_ID_DROP_5: ""
+  STRIPE_PRICE_ID_PRO_MONTHLY: ""
+  STRIPE_PRICE_ID_PREMIER_MONTHLY: ""
+  # The market licence was live in Stripe and reached no pod: this key was
+  # missing from the ConfigMap entirely, so `stripe_price_id` seeded as NULL
+  # and buying a licence 500'd on the checkout call.
+  STRIPE_PRICE_ID_MARKET_LICENSE: ""
+  # Pinned, not inherited from the SDK. The API refuses to start in production
+  # without it, because the webhook payload shape depends on it.
+  STRIPE_API_VERSION: "2025-03-31.basil"
+
+  # What bounds the two paths that mint credits, and the purchase cap.
+  #
+  # Every one of these was a code default with no deployment surface at all —
+  # the ConfigMap is a fixed list with no pass-through, so on Kubernetes they
+  # could not be changed without editing the chart. docs/OPERATIONS.md calls
+  # ADMIN_GRANT_MAX_UNITS_PER_DAY "the limit that matters if an operator
+  # account is compromised", which is not a thing to leave unsettable. Same
+  # defect the licence price id had one commit earlier.
+  ADMIN_GRANT_MAX_UNITS: "100"
+  ADMIN_GRANT_MAX_UNITS_PER_DAY: "500"
+  ADMIN_GRANT_VALIDITY_DAYS: "90"
+  ADMIN_COMPENSATION_MAX_UNITS_PER_DAY: "2000"
+  PURCHASE_CAP_JPY_PER_DAY: "50000"
+  PURCHASE_CAP_ORDERS_PER_DAY: "20"
+
+  FEATURE_SUBSCRIPTIONS_ENABLED: "true"
+  FEATURE_FREE_TRIAL_ENABLED: "true"
+  FEATURE_WAV_EXPORT_ENABLED: "false"
+
+  MAX_CONCURRENT_JOBS_PER_USER: "3"
+  DAILY_BUDGET_MINOR: "50000"
+  GENERATION_RATE_LIMIT_PER_HOUR: "60"
+  EXPORT_RATE_LIMIT_PER_HOUR: "120"
+
+  # The five LEGAL_ENTITY_* variables are deliberately absent.
+  #
+  # They were here, read from `.Values.config.legal`, which meant the operator's
+  # legal name, home address, telephone number and personal email were in a
+  # values file in git and in an unencrypted ConfigMap any `kubectl get cm`
+  # prints. The operator is a sole proprietor: that is personal data, not
+  # configuration. They come through `.Values.envFromSecret` instead
+  # (`deploy/cluster/external-secrets.yaml`), which the helper lists *after*
+  # this ConfigMap — so re-adding them here would not even win, it would only
+  # publish them.
+
+---
+
+# Source: yuha/templates/secretproviderclass.yaml
+apiVersion: secrets-store.csi.x-k8s.io/v1
+kind: SecretProviderClass
+metadata:
+  name: yuha-api-secrets
+  annotations:
+    "helm.sh/hook": pre-install,pre-upgrade
+    "helm.sh/hook-weight": "-8"
+    "helm.sh/hook-delete-policy": before-hook-creation
+  labels:
+    app.kubernetes.io/name: yuha
+    app.kubernetes.io/instance: yuha
+    app.kubernetes.io/version: "0.1.0"
+    app.kubernetes.io/managed-by: Helm
+spec:
+  provider: aws
+  parameters:
+    usePodIdentity: "true"
+    objects: |
+      - objectName: "qa-music-api-secrets-kv"
+        objectType: "secretsmanager"
+        jmesPath:
+          - path: DATABASE_URL
+            objectAlias: DATABASE_URL
+          - path: GOOGLE_CLIENT_SECRET
+            objectAlias: GOOGLE_CLIENT_SECRET
+          - path: GOOGLE_SESSION_SECRET
+            objectAlias: GOOGLE_SESSION_SECRET
+          - path: STRIPE_SECRET_KEY
+            objectAlias: STRIPE_SECRET_KEY
+          - path: STRIPE_WEBHOOK_SECRET
+            objectAlias: STRIPE_WEBHOOK_SECRET
+          - path: TOKENSTARS_API_KEY
+            objectAlias: TOKENSTARS_API_KEY
+          - path: MUSIC_API_KEY
+            objectAlias: MUSIC_API_KEY
+          - path: LEGAL_ENTITY_NAME
+            objectAlias: LEGAL_ENTITY_NAME
+          - path: LEGAL_ENTITY_REPRESENTATIVE
+            objectAlias: LEGAL_ENTITY_REPRESENTATIVE
+          - path: LEGAL_ENTITY_ADDRESS
+            objectAlias: LEGAL_ENTITY_ADDRESS
+          - path: LEGAL_ENTITY_CONTACT
+            objectAlias: LEGAL_ENTITY_CONTACT
+          - path: LEGAL_ENTITY_PHONE
+            objectAlias: LEGAL_ENTITY_PHONE
+  secretObjects:
+    - secretName: api-secrets
+      type: Opaque
+      data:
+        - objectName: DATABASE_URL
+          key: DATABASE_URL
+        - objectName: GOOGLE_CLIENT_SECRET
+          key: GOOGLE_CLIENT_SECRET
+        - objectName: GOOGLE_SESSION_SECRET
+          key: GOOGLE_SESSION_SECRET
+        - objectName: STRIPE_SECRET_KEY
+          key: STRIPE_SECRET_KEY
+        - objectName: STRIPE_WEBHOOK_SECRET
+          key: STRIPE_WEBHOOK_SECRET
+        - objectName: TOKENSTARS_API_KEY
+          key: TOKENSTARS_API_KEY
+        - objectName: MUSIC_API_KEY
+          key: MUSIC_API_KEY
+        - objectName: LEGAL_ENTITY_NAME
+          key: LEGAL_ENTITY_NAME
+        - objectName: LEGAL_ENTITY_REPRESENTATIVE
+          key: LEGAL_ENTITY_REPRESENTATIVE
+        - objectName: LEGAL_ENTITY_ADDRESS
+          key: LEGAL_ENTITY_ADDRESS
+        - objectName: LEGAL_ENTITY_CONTACT
+          key: LEGAL_ENTITY_CONTACT
+        - objectName: LEGAL_ENTITY_PHONE
+          key: LEGAL_ENTITY_PHONE
+---
+
+# Source: yuha/templates/secretproviderclass.yaml
+apiVersion: secrets-store.csi.x-k8s.io/v1
+kind: SecretProviderClass
+metadata:
+  name: yuha-worker-secrets
+  annotations:
+    "helm.sh/hook": pre-install,pre-upgrade
+    "helm.sh/hook-weight": "-8"
+    "helm.sh/hook-delete-policy": before-hook-creation
+  labels:
+    app.kubernetes.io/name: yuha
+    app.kubernetes.io/instance: yuha
+    app.kubernetes.io/version: "0.1.0"
+    app.kubernetes.io/managed-by: Helm
+spec:
+  provider: aws
+  parameters:
+    usePodIdentity: "true"
+    objects: |
+      - objectName: "qa-music-worker-secrets-kv"
+        objectType: "secretsmanager"
+        jmesPath:
+          - path: DATABASE_URL
+            objectAlias: DATABASE_URL
+          - path: GOOGLE_CLIENT_SECRET
+            objectAlias: GOOGLE_CLIENT_SECRET
+          - path: GOOGLE_SESSION_SECRET
+            objectAlias: GOOGLE_SESSION_SECRET
+          - path: STRIPE_SECRET_KEY
+            objectAlias: STRIPE_SECRET_KEY
+          - path: STRIPE_WEBHOOK_SECRET
+            objectAlias: STRIPE_WEBHOOK_SECRET
+          - path: TOKENSTARS_API_KEY
+            objectAlias: TOKENSTARS_API_KEY
+          - path: MUSIC_API_KEY
+            objectAlias: MUSIC_API_KEY
+          - path: LEGAL_ENTITY_NAME
+            objectAlias: LEGAL_ENTITY_NAME
+          - path: LEGAL_ENTITY_REPRESENTATIVE
+            objectAlias: LEGAL_ENTITY_REPRESENTATIVE
+          - path: LEGAL_ENTITY_ADDRESS
+            objectAlias: LEGAL_ENTITY_ADDRESS
+          - path: LEGAL_ENTITY_CONTACT
+            objectAlias: LEGAL_ENTITY_CONTACT
+          - path: LEGAL_ENTITY_PHONE
+            objectAlias: LEGAL_ENTITY_PHONE
+  secretObjects:
+    - secretName: worker-secrets
+      type: Opaque
+      data:
+        - objectName: DATABASE_URL
+          key: DATABASE_URL
+        - objectName: GOOGLE_CLIENT_SECRET
+          key: GOOGLE_CLIENT_SECRET
+        - objectName: GOOGLE_SESSION_SECRET
+          key: GOOGLE_SESSION_SECRET
+        - objectName: STRIPE_SECRET_KEY
+          key: STRIPE_SECRET_KEY
+        - objectName: STRIPE_WEBHOOK_SECRET
+          key: STRIPE_WEBHOOK_SECRET
+        - objectName: TOKENSTARS_API_KEY
+          key: TOKENSTARS_API_KEY
+        - objectName: MUSIC_API_KEY
+          key: MUSIC_API_KEY
+        - objectName: LEGAL_ENTITY_NAME
+          key: LEGAL_ENTITY_NAME
+        - objectName: LEGAL_ENTITY_REPRESENTATIVE
+          key: LEGAL_ENTITY_REPRESENTATIVE
+        - objectName: LEGAL_ENTITY_ADDRESS
+          key: LEGAL_ENTITY_ADDRESS
+        - objectName: LEGAL_ENTITY_CONTACT
+          key: LEGAL_ENTITY_CONTACT
+        - objectName: LEGAL_ENTITY_PHONE
+          key: LEGAL_ENTITY_PHONE
+
+

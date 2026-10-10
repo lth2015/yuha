@@ -47,9 +47,11 @@ jobs:
           if [ "${{ github.event_name }}" = "workflow_run" ]; then
             echo "commit_sha=${{ github.event.workflow_run.head_sha }}" >> "$GITHUB_OUTPUT"
             echo "artifact_run_id=${{ github.event.workflow_run.id }}" >> "$GITHUB_OUTPUT"
+            echo "branch=${{ github.event.workflow_run.head_branch }}" >> "$GITHUB_OUTPUT"
           else
             echo "commit_sha=${{ inputs.commit_sha }}" >> "$GITHUB_OUTPUT"
             echo "artifact_run_id=${{ inputs.artifact_run_id }}" >> "$GITHUB_OUTPUT"
+            echo "branch=master" >> "$GITHUB_OUTPUT"
           fi
 
       - uses: actions/checkout@v5
@@ -136,7 +138,8 @@ jobs:
       - name: Point kubectl at QA EKS
         run: aws eks update-kubeconfig --name "$EKS_CLUSTER" --region "$AWS_REGION"
 
-      - name: Deploy the immutable images
+      - name: Deploy with Helm on master
+        if: steps.release.outputs.branch == 'master'
         run: |
           set -euo pipefail
           helm upgrade --install "$RELEASE" infra/helm/loopscene \
@@ -150,6 +153,23 @@ jobs:
             --rollback-on-failure \
             --wait \
             --timeout 15m
+
+      - name: Deploy with kubectl on cicd
+        if: steps.release.outputs.branch == 'cicd'
+        env:
+          API_DIGEST: ${{ steps.images.outputs.api_digest }}
+          WORKER_DIGEST: ${{ steps.images.outputs.worker_digest }}
+        run: |
+          set -euo pipefail
+          workdir="$RUNNER_TEMP/yuha-k8s"
+          mkdir -p "$workdir"
+          cp deploy/k8s/qa/resources.yaml deploy/k8s/qa/migration.yaml "$workdir/"
+          sed -i "s#sha256:0000000000000000000000000000000000000000000000000000000000000000#$API_DIGEST#g" "$workdir/resources.yaml" "$workdir/migration.yaml"
+          sed -i "s#sha256:0000000000000000000000000000000000000000000000000000000000000000#$WORKER_DIGEST#g" "$workdir/resources.yaml"
+          kubectl apply --namespace "$NAMESPACE" --filename "$workdir/resources.yaml"
+          kubectl delete job yuha-migrate-1 --namespace "$NAMESPACE" --ignore-not-found
+          kubectl apply --namespace "$NAMESPACE" --filename "$workdir/migration.yaml"
+          kubectl wait --namespace "$NAMESPACE" --for=condition=complete job/yuha-migrate-1 --timeout=10m
 
       - name: Publish the matching web artifact
         run: |
