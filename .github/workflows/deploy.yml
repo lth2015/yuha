@@ -56,6 +56,29 @@ jobs:
         with:
           ref: ${{ steps.release.outputs.commit_sha }}
 
+      - name: Install deployment tools
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/bin" "$RUNNER_TEMP/aws-cli"
+          curl --fail --silent --show-error --location \
+            "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" \
+            --output "$RUNNER_TEMP/aws-cli.zip"
+          unzip -q -o "$RUNNER_TEMP/aws-cli.zip" -d "$RUNNER_TEMP/aws-cli"
+          "$RUNNER_TEMP/aws-cli/aws/install" \
+            --install-dir "$RUNNER_TEMP/aws-cli/current" \
+            --bin-dir "$RUNNER_TEMP/bin" \
+            --update
+          export PATH="$RUNNER_TEMP/bin:$PATH"
+          echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
+          aws --version
+
+      - name: Install kubectl
+        uses: azure/setup-kubectl@v4
+
+      - name: Install Helm
+        uses: azure/setup-helm@v5
+
       - name: Resolve image tag
         id: image
         env:
