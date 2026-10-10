@@ -1,0 +1,212 @@
+name: CICD QA Release
+
+on:
+  push:
+    branches: [cicd]
+  workflow_dispatch:
+
+permissions:
+  actions: read
+  contents: read
+  id-token: write
+
+env:
+  AWS_REGION: ap-northeast-1
+  ECR_REGISTRY: 654654578710.dkr.ecr.ap-northeast-1.amazonaws.com
+  NAMESPACE: qa-music
+  EKS_CLUSTER: qa-web3-netx-tokyo-eks
+  WEB_BUCKET: qa-music-web
+  CLOUDFRONT_DISTRIBUTION_ID: E3F0OZRA08GGF0
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    environment: qa
+    outputs:
+      image_tag: ${{ steps.image.outputs.tag }}
+      api_digest: ${{ steps.digests.outputs.api_digest }}
+      worker_digest: ${{ steps.digests.outputs.worker_digest }}
+      migration_digest: ${{ steps.digests.outputs.migration_digest }}
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Resolve image tag
+        id: image
+        run: |
+          set -euo pipefail
+          date_tag="$(git show -s --date=format:%Y%m%d --format=%cd HEAD)"
+          echo "tag=${date_tag}-${GITHUB_SHA:0:6}" >> "$GITHUB_OUTPUT"
+
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+          role-session-name: gha-cicd-build-${{ github.run_id }}
+
+      - uses: aws-actions/amazon-ecr-login@v2
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Build and push API image
+        env:
+          IMAGE_TAG: ${{ steps.image.outputs.tag }}
+        run: |
+          set -euo pipefail
+          if ! aws ecr describe-images --repository-name music/api --image-ids imageTag="$IMAGE_TAG" >/dev/null 2>&1; then
+            docker buildx build --platform linux/amd64 --file Dockerfile.api \
+              --tag "$ECR_REGISTRY/music/api:$IMAGE_TAG" \
+              --cache-from type=gha,scope=api --cache-to type=gha,mode=max,scope=api --push .
+          fi
+
+      - name: Build and push Worker image
+        env:
+          IMAGE_TAG: ${{ steps.image.outputs.tag }}
+        run: |
+          set -euo pipefail
+          if ! aws ecr describe-images --repository-name music/worker --image-ids imageTag="$IMAGE_TAG" >/dev/null 2>&1; then
+            docker buildx build --platform linux/amd64 --file Dockerfile.worker \
+              --tag "$ECR_REGISTRY/music/worker:$IMAGE_TAG" \
+              --cache-from type=gha,scope=worker --cache-to type=gha,mode=max,scope=worker --push .
+          fi
+
+      - name: Build and push Migration image
+        env:
+          IMAGE_TAG: ${{ steps.image.outputs.tag }}
+        run: |
+          set -euo pipefail
+          if ! aws ecr describe-images --repository-name music/migration --image-ids imageTag="$IMAGE_TAG" >/dev/null 2>&1; then
+            docker buildx build --platform linux/amd64 --file Dockerfile.migration \
+              --tag "$ECR_REGISTRY/music/migration:$IMAGE_TAG" \
+              --cache-from type=gha,scope=migration --cache-to type=gha,mode=max,scope=migration --push .
+          fi
+
+      - name: Resolve pushed image digests
+        id: digests
+        env:
+          IMAGE_TAG: ${{ steps.image.outputs.tag }}
+        run: |
+          set -euo pipefail
+          for repository in api worker migration; do
+            digest="$(aws ecr describe-images --repository-name "music/$repository" --image-ids imageTag="$IMAGE_TAG" --query 'imageDetails[0].imageDigest' --output text)"
+            case "$digest" in sha256:*) ;; *) echo "Missing digest for music/$repository:$IMAGE_TAG"; exit 1 ;; esac
+            echo "${repository}_digest=$digest" >> "$GITHUB_OUTPUT"
+          done
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.1.2
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.13.1
+          cache: pnpm
+
+      - name: Build web artifact
+        run: |
+          pnpm install --frozen-lockfile --prefer-offline
+          pnpm --filter @yuha/contracts build
+          pnpm --dir apps/web build
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: web-dist-${{ github.sha }}
+          path: apps/web/dist
+          if-no-files-found: error
+          retention-days: 30
+
+  deploy:
+    needs: build
+    runs-on: qa-music-gha-runner
+    timeout-minutes: 30
+    environment: qa
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Install deployment tools
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/bin" "$RUNNER_TEMP/aws-cli"
+          curl --fail --silent --show-error --location https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip --output "$RUNNER_TEMP/aws-cli.zip"
+          unzip -q -o "$RUNNER_TEMP/aws-cli.zip" -d "$RUNNER_TEMP/aws-cli"
+          "$RUNNER_TEMP/aws-cli/aws/install" --install-dir "$RUNNER_TEMP/aws-cli/current" --bin-dir "$RUNNER_TEMP/bin" --update
+          echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
+
+      - uses: azure/setup-kubectl@v4
+
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+          role-session-name: gha-cicd-deploy-${{ github.run_id }}
+
+      - name: Point kubectl at QA EKS
+        run: aws eks update-kubeconfig --name "$EKS_CLUSTER" --region "$AWS_REGION"
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: web-dist-${{ github.sha }}
+          path: apps/web/dist
+
+      - name: Deploy migration and applications with kubectl
+        env:
+          API_DIGEST: ${{ needs.build.outputs.api_digest }}
+          WORKER_DIGEST: ${{ needs.build.outputs.worker_digest }}
+          MIGRATION_DIGEST: ${{ needs.build.outputs.migration_digest }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          workdir="$RUNNER_TEMP/yuha-k8s"
+          mkdir -p "$workdir"
+          cp deploy/k8s/qa/resources.yaml deploy/k8s/qa/migration.yaml "$workdir/"
+          placeholder='sha256:0000000000000000000000000000000000000000000000000000000000000000'
+          sed -i "s#$placeholder#$API_DIGEST#g" "$workdir/resources.yaml"
+          sed -i "s#$placeholder#$WORKER_DIGEST#g" "$workdir/resources.yaml"
+          sed -i "s#$placeholder#$MIGRATION_DIGEST#g" "$workdir/migration.yaml"
+
+          awk 'BEGIN { RS="---"; ORS="---\n" } /kind: ServiceAccount|kind: ConfigMap|kind: SecretProviderClass/ { print }' \
+            "$workdir/resources.yaml" > "$workdir/migration-prerequisites.yaml"
+          kubectl apply --namespace "$NAMESPACE" --filename "$workdir/migration-prerequisites.yaml"
+          kubectl delete job yuha-migrate-1 --namespace "$NAMESPACE" --ignore-not-found
+          kubectl apply --namespace "$NAMESPACE" --filename "$workdir/migration.yaml"
+
+          migration_pod=""
+          for attempt in $(seq 1 24); do
+            migration_pod="$(kubectl get pods --namespace "$NAMESPACE" --selector=job-name=yuha-migrate-1 --output=jsonpath='{.items[0].metadata.name}' 2>/dev/null || true)"
+            if [ -n "$migration_pod" ]; then
+              phase="$(kubectl get pod "$migration_pod" --namespace "$NAMESPACE" --output=jsonpath='{.status.phase}')"
+              echo "migration pod=$migration_pod phase=$phase"
+              if [ "$phase" = Running ]; then
+                kubectl logs --follow "$migration_pod" --namespace "$NAMESPACE" &
+                migration_logs_pid=$!
+                break
+              fi
+            fi
+            if [ "$attempt" -eq 24 ]; then
+              kubectl describe pod "$migration_pod" --namespace "$NAMESPACE" || true
+              kubectl get events --namespace "$NAMESPACE" --sort-by=.lastTimestamp | tail -n 50 || true
+              exit 1
+            fi
+            sleep 5
+          done
+
+          if kubectl wait --namespace "$NAMESPACE" --for=condition=complete job/yuha-migrate-1 --timeout=15m; then
+            [ -n "${migration_logs_pid:-}" ] && wait "$migration_logs_pid" || true
+            kubectl apply --namespace "$NAMESPACE" --filename "$workdir/resources.yaml"
+          else
+            [ -n "${migration_logs_pid:-}" ] && kill "$migration_logs_pid" 2>/dev/null || true
+            kubectl logs job/yuha-migrate-1 --namespace "$NAMESPACE" || true
+            kubectl describe job yuha-migrate-1 --namespace "$NAMESPACE" || true
+            kubectl get events --namespace "$NAMESPACE" --sort-by=.lastTimestamp | tail -n 50 || true
+            exit 1
+          fi
+
+      - name: Publish web artifact
+        run: |
+          set -euo pipefail
+          aws s3 sync apps/web/dist/ "s3://$WEB_BUCKET/" --delete
+          aws cloudfront create-invalidation --distribution-id "$CLOUDFRONT_DISTRIBUTION_ID" --paths '/*'
+
+      - name: Verify rollout
+        run: kubectl rollout status deployment -n "$NAMESPACE" -l app.kubernetes.io/instance=yuha --timeout=5m

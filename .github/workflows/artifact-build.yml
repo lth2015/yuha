@@ -1,8 +1,6 @@
 name: Artifact Build
 
 on:
-  push:
-    branches: [cicd]
   workflow_run:
     workflows: [CI]
     types: [completed]
