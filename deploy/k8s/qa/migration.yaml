@@ -41,8 +41,7 @@ spec:
         runAsUser: 10001
       containers:
         - name: migrate
-          image: 654654578710.dkr.ecr.ap-northeast-1.amazonaws.com/music/api@sha256:0000000000000000000000000000000000000000000000000000000000000000
-          command: ["node", "api/node_modules/@yuha/db/dist/cli.js", "migrate"]
+          image: 654654578710.dkr.ecr.ap-northeast-1.amazonaws.com/music/migration@sha256:0000000000000000000000000000000000000000000000000000000000000000
           env:
             - name: RUN_MODE
               value: "integration"

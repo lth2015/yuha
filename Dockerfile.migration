@@ -1,0 +1,33 @@
+FROM node:22.13.1-bookworm-slim AS build
+
+RUN npm install -g pnpm@11.1.2 && npm cache clean --force
+WORKDIR /app
+
+COPY pnpm-lock.yaml pnpm-workspace.yaml package.json ./
+COPY packages/contracts/package.json packages/contracts/
+COPY packages/db/package.json packages/db/
+
+RUN pnpm install --frozen-lockfile --filter "@yuha/db..."
+
+COPY tsconfig.base.json ./
+COPY packages/contracts/ packages/contracts/
+COPY packages/db/ packages/db/
+
+RUN pnpm --filter @yuha/contracts build \
+ && pnpm --filter @yuha/db build
+
+RUN CI=true pnpm deploy --filter=@yuha/db --prod --legacy /deploy/migration
+
+FROM node:22.13.1-bookworm-slim AS runtime
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends ca-certificates tini \
+ && rm -rf /var/lib/apt/lists/*
+
+ENV NODE_ENV=production
+WORKDIR /app
+RUN groupadd --gid 10001 loopscene \
+ && useradd --uid 10001 --gid 10001 --no-create-home --shell /usr/sbin/nologin loopscene
+COPY --from=build --chown=root:root /deploy/migration ./migration
+USER loopscene
+ENTRYPOINT ["/usr/bin/tini", "--"]
+CMD ["node", "migration/dist/cli.js", "migrate"]

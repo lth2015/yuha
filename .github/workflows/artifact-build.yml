@@ -117,6 +117,23 @@ jobs:
             --cache-to type=gha,mode=max,scope=worker \
             --push .
 
+      - name: Build and push Migration image
+        env:
+          IMAGE_TAG: ${{ steps.image.outputs.tag }}
+        run: |
+          set -euo pipefail
+          if aws ecr describe-images --repository-name music/migration --image-ids imageTag="$IMAGE_TAG" >/dev/null 2>&1; then
+            echo "Migration image already exists for $IMAGE_TAG; skipping immutable tag push"
+            exit 0
+          fi
+          docker buildx build \
+            --platform linux/amd64 \
+            --file Dockerfile.migration \
+            --tag "$ECR_REGISTRY/music/migration:$IMAGE_TAG" \
+            --cache-from type=gha,scope=migration \
+            --cache-to type=gha,mode=max,scope=migration \
+            --push .
+
       - uses: pnpm/action-setup@v4
         with:
           version: 11.1.2
@@ -150,5 +167,6 @@ jobs:
             echo "- image tag: ${{ steps.image.outputs.tag }}"
             echo "- ECR: music/api:${{ steps.image.outputs.tag }}"
             echo "- ECR: music/worker:${{ steps.image.outputs.tag }}"
+            echo "- ECR: music/migration:${{ steps.image.outputs.tag }}"
             echo "- web artifact: web-dist-$SHA"
           } >> "$GITHUB_STEP_SUMMARY"

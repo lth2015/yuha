@@ -124,10 +124,13 @@ jobs:
           set -euo pipefail
           api_digest="$(aws ecr describe-images --repository-name music/api --image-ids imageTag="$IMAGE_TAG" --query 'imageDetails[0].imageDigest' --output text)"
           worker_digest="$(aws ecr describe-images --repository-name music/worker --image-ids imageTag="$IMAGE_TAG" --query 'imageDetails[0].imageDigest' --output text)"
+          migration_digest="$(aws ecr describe-images --repository-name music/migration --image-ids imageTag="$IMAGE_TAG" --query 'imageDetails[0].imageDigest' --output text)"
           case "$api_digest" in sha256:*) ;; *) echo "API artifact not found for $IMAGE_TAG"; exit 1 ;; esac
           case "$worker_digest" in sha256:*) ;; *) echo "Worker artifact not found for $IMAGE_TAG"; exit 1 ;; esac
+          case "$migration_digest" in sha256:*) ;; *) echo "Migration artifact not found for $IMAGE_TAG"; exit 1 ;; esac
           echo "api_digest=$api_digest" >> "$GITHUB_OUTPUT"
           echo "worker_digest=$worker_digest" >> "$GITHUB_OUTPUT"
+          echo "migration_digest=$migration_digest" >> "$GITHUB_OUTPUT"
 
       - name: Download the matching web artifact
         uses: actions/download-artifact@v4
@@ -145,13 +148,15 @@ jobs:
         env:
           API_DIGEST: ${{ steps.images.outputs.api_digest }}
           WORKER_DIGEST: ${{ steps.images.outputs.worker_digest }}
+          MIGRATION_DIGEST: ${{ steps.images.outputs.migration_digest }}
         run: |
           set -euo pipefail
           workdir="$RUNNER_TEMP/yuha-k8s"
           mkdir -p "$workdir"
           cp deploy/k8s/qa/resources.yaml deploy/k8s/qa/migration.yaml "$workdir/"
-          sed -i "s#sha256:0000000000000000000000000000000000000000000000000000000000000000#$API_DIGEST#g" "$workdir/resources.yaml" "$workdir/migration.yaml"
+          sed -i "s#sha256:0000000000000000000000000000000000000000000000000000000000000000#$API_DIGEST#g" "$workdir/resources.yaml"
           sed -i "s#sha256:0000000000000000000000000000000000000000000000000000000000000000#$WORKER_DIGEST#g" "$workdir/resources.yaml"
+          sed -i "s#sha256:0000000000000000000000000000000000000000000000000000000000000000#$MIGRATION_DIGEST#g" "$workdir/migration.yaml"
 
           # Migration is a hard gate. Apply only the objects it needs first;
           # Deployments, Services, HPAs and Ingress must not start yet.
