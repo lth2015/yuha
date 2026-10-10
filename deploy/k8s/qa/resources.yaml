@@ -443,6 +443,8 @@ data:
   HOST: "0.0.0.0"
   PORT: "4000"
   DATABASE_SSL: "true"
+  DATABASE_HOST: "qa-music-database.cn0qgmcaw2fj.ap-northeast-1.rds.amazonaws.com"
+  DATABASE_PORT: "3306"
   DATABASE_NAME: "music"
 
   AUTH_ADAPTER: "google"
