@@ -6,6 +6,9 @@ WORKDIR /app
 COPY pnpm-lock.yaml pnpm-workspace.yaml package.json ./
 COPY packages/contracts/package.json packages/contracts/
 COPY packages/db/package.json packages/db/
+COPY packages/providers/package.json packages/providers/
+COPY apps/api/package.json apps/api/
+COPY apps/worker/package.json apps/worker/
 
 RUN pnpm install --frozen-lockfile --filter "@yuha/db..."
 
