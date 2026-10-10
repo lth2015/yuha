@@ -12,9 +12,9 @@ name: CI
 
 on:
   push:
-    # `yuha` is the working branch. Leaving it out is what made this file
+    # `cicd` is the release-pipeline test branch. Leaving it out makes this file
     # decorative; whichever branch the work is on has to be in this list.
-    branches: [master]
+    branches: [master, cicd]
   pull_request:
   workflow_dispatch:
   # Called by deploy.yml on the ref being released, so a release runs this
