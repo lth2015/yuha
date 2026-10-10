@@ -1,13 +1,41 @@
 /**
  * Migration CLI: `pnpm db:migrate` / `pnpm db:reset`.
- * Reads DATABASE_URL directly so it can run before the API config loads.
+ * Reads the RDS JSON credentials mounted under the shared application secret
+ * directory so migration uses the same database source as API and Worker.
  */
+import { existsSync, readFileSync } from 'node:fs';
+import { join } from 'node:path';
+
 import { closeDb, initDb } from './pool.js';
 import { migrate, reset } from './migrate.js';
 
-const url = process.env.DATABASE_URL;
+type MysqlCredentials = {
+  host?: string;
+  port?: number | string;
+  username?: string;
+  password?: string;
+  dbname?: string;
+  database?: string;
+};
+
+const credentialsFile =
+  process.env.DATABASE_SECRET_FILE ?? join(process.cwd(), 'secrets', 'mysql-credentials.json');
+
+function readDatabaseUrl(): string | undefined {
+  if (!existsSync(credentialsFile)) return undefined;
+  try {
+    const value = JSON.parse(readFileSync(credentialsFile, 'utf8')) as MysqlCredentials;
+    const database = value.dbname ?? value.database;
+    if (!value.host || !value.username || value.password === undefined || !database) return undefined;
+    return `mysql://${encodeURIComponent(value.username)}:${encodeURIComponent(value.password)}@${value.host}:${value.port ?? 3306}/${encodeURIComponent(database)}`;
+  } catch {
+    return undefined;
+  }
+}
+
+const url = readDatabaseUrl();
 if (!url) {
-  console.error('DATABASE_URL is not set. Copy .env.example to .env and fill it in.');
+  console.error(`MySQL credentials are missing: ${credentialsFile}`);
   process.exit(1);
 }
 

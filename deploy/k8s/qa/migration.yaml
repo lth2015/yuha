@@ -35,7 +35,7 @@ spec:
             driver: secrets-store.csi.k8s.io
             readOnly: true
             volumeAttributes:
-              secretProviderClass: yuha-api-secrets
+              secretProviderClass: yuha-database-secrets
       securityContext:
         runAsNonRoot: true
         runAsUser: 10001
@@ -51,11 +51,9 @@ spec:
           envFrom:
             - configMapRef:
                 name: yuha-config
-            - secretRef:
-                name: api-secrets
           volumeMounts:
             - name: api-secrets
-              mountPath: /mnt/secrets/api
+              mountPath: /app/secrets
               readOnly: true
           securityContext:
             allowPrivilegeEscalation: false
