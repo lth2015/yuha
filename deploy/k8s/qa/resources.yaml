@@ -137,7 +137,10 @@ spec:
             - name: tmp
               mountPath: /tmp
             - name: aws-secrets
-              mountPath: /mnt/secrets/api
+              mountPath: /app/secrets/app
+              readOnly: true
+            - name: database-secrets
+              mountPath: /app/secrets
               readOnly: true
       volumes:
         - name: tmp
@@ -148,6 +151,12 @@ spec:
             readOnly: true
             volumeAttributes:
               secretProviderClass: yuha-api-secrets
+        - name: database-secrets
+          csi:
+            driver: secrets-store.csi.k8s.io
+            readOnly: true
+            volumeAttributes:
+              secretProviderClass: yuha-database-secrets
       terminationGracePeriodSeconds: 30
 ---
 
@@ -225,7 +234,10 @@ spec:
             - name: tmp
               mountPath: /tmp
             - name: aws-secrets
-              mountPath: /mnt/secrets/worker
+              mountPath: /app/secrets/app
+              readOnly: true
+            - name: database-secrets
+              mountPath: /app/secrets
               readOnly: true
       volumes:
         - name: tmp
@@ -237,6 +249,12 @@ spec:
             readOnly: true
             volumeAttributes:
               secretProviderClass: yuha-worker-secrets
+        - name: database-secrets
+          csi:
+            driver: secrets-store.csi.k8s.io
+            readOnly: true
+            volumeAttributes:
+              secretProviderClass: yuha-database-secrets
       # Long enough for an in-flight audio render to finish and release its
       # lease cleanly.
       terminationGracePeriodSeconds: 60
@@ -589,6 +607,28 @@ spec:
           key: LEGAL_ENTITY_CONTACT
         - objectName: LEGAL_ENTITY_PHONE
           key: LEGAL_ENTITY_PHONE
+
+---
+
+# RDS-managed database credentials. This is deliberately separate from the
+# API and Worker application secrets.
+apiVersion: secrets-store.csi.x-k8s.io/v1
+kind: SecretProviderClass
+metadata:
+  name: yuha-database-secrets
+  labels:
+    app.kubernetes.io/name: yuha
+    app.kubernetes.io/instance: yuha
+    app.kubernetes.io/version: "0.1.0"
+    app.kubernetes.io/managed-by: kubectl
+spec:
+  provider: aws
+  parameters:
+    usePodIdentity: "true"
+    objects: |
+      - objectName: "rds!db-acd50008-7e86-4dbd-b5c8-92c67396f239"
+        objectType: "secretsmanager"
+        objectAlias: mysql-credentials.json
 ---
 
 # Source: yuha/templates/secretproviderclass.yaml

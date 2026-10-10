@@ -1,3 +1,5 @@
+import { existsSync, readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { z } from 'zod';
 import { GOOGLE_CALLBACK_PATH, GOOGLE_WEB_RETURN_PATH } from './auth/google-paths.js';
 import { RunMode } from '@yuha/contracts';
@@ -567,8 +569,36 @@ export class ConfigError extends Error {
   }
 }
 
+type MysqlCredentials = {
+  host?: string;
+  port?: number | string;
+  username?: string;
+  password?: string;
+  dbname?: string;
+  database?: string;
+};
+
+function databaseUrlFromFile(): string | undefined {
+  const file =
+    process.env.DATABASE_SECRET_FILE ?? join(process.cwd(), 'secrets', 'mysql-credentials.json');
+  if (!existsSync(file)) return undefined;
+  try {
+    const value = JSON.parse(readFileSync(file, 'utf8')) as MysqlCredentials;
+    const database = value.dbname ?? value.database;
+    if (!value.host || !value.username || value.password === undefined || !database) return undefined;
+    return `mysql://${encodeURIComponent(value.username)}:${encodeURIComponent(value.password)}@${value.host}:${value.port ?? 3306}/${encodeURIComponent(database)}`;
+  } catch {
+    return undefined;
+  }
+}
+
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
-  const parsed = envSchema.safeParse(env);
+  const configEnv = { ...env };
+  if (!configEnv.DATABASE_URL) {
+    const databaseUrl = databaseUrlFromFile();
+    if (databaseUrl) configEnv.DATABASE_URL = databaseUrl;
+  }
+  const parsed = envSchema.safeParse(configEnv);
   if (!parsed.success) {
     throw new ConfigError(
       parsed.error.issues.map((i) => `${i.path.join('.') || '(root)'}: ${i.message}`),
