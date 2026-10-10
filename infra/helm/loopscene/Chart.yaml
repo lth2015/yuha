@@ -1,6 +1,6 @@
 apiVersion: v2
-name: loopscene
-description: LOOPSCENE API and generation worker
+name: yuha
+description: Yuha API and generation worker
 type: application
 version: 0.1.0
 appVersion: "0.1.0"
