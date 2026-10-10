@@ -28,7 +28,7 @@ spec:
         component: migrate
     spec:
       restartPolicy: Never
-      serviceAccountName: api
+        serviceAccountName: migration
       volumes:
         - name: api-secrets
           csi:

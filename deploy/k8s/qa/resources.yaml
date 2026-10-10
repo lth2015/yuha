@@ -24,6 +24,17 @@ metadata:
     app.kubernetes.io/managed-by: Helm
 ---
 
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: migration
+  labels:
+    app.kubernetes.io/name: yuha
+    app.kubernetes.io/instance: yuha
+    app.kubernetes.io/version: "0.1.0"
+    app.kubernetes.io/managed-by: kubectl
+---
+
 # Source: yuha/templates/api.yaml
 apiVersion: v1
 kind: Service
