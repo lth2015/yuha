@@ -140,14 +140,14 @@ jobs:
         run: |
           set -euo pipefail
           helm upgrade --install "$RELEASE" infra/helm/loopscene \
-            --namespace "$NAMESPACE" --create-namespace \
+            --namespace "$NAMESPACE" \
             --values deploy/envs/qa.yaml \
             --set image.registry="$ECR_REGISTRY" \
             --set image.api.repository=music/api \
             --set image.worker.repository=music/worker \
             --set image.api.digest="${{ steps.images.outputs.api_digest }}" \
             --set image.worker.digest="${{ steps.images.outputs.worker_digest }}" \
-            --atomic \
+            --rollback-on-failure \
             --wait \
             --timeout 15m
 
