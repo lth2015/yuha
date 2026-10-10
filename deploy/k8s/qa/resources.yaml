@@ -443,6 +443,7 @@ data:
   HOST: "0.0.0.0"
   PORT: "4000"
   DATABASE_SSL: "true"
+  DATABASE_NAME: "music"
 
   AUTH_ADAPTER: "google"
   GOOGLE_CLIENT_ID: ""

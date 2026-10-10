@@ -25,7 +25,7 @@ function readDatabaseUrl(): string | undefined {
   if (!existsSync(credentialsFile)) return undefined;
   try {
     const value = JSON.parse(readFileSync(credentialsFile, 'utf8')) as MysqlCredentials;
-    const database = value.dbname ?? value.database;
+    const database = value.dbname ?? value.database ?? process.env.DATABASE_NAME;
     if (!value.host || !value.username || value.password === undefined || !database) return undefined;
     return `mysql://${encodeURIComponent(value.username)}:${encodeURIComponent(value.password)}@${value.host}:${value.port ?? 3306}/${encodeURIComponent(database)}`;
   } catch {
@@ -35,7 +35,9 @@ function readDatabaseUrl(): string | undefined {
 
 const url = readDatabaseUrl();
 if (!url) {
-  console.error(`MySQL credentials are missing: ${credentialsFile}`);
+  console.error(
+    `MySQL connection settings are incomplete. Expected a mounted JSON file with host, username, password, and dbname/database, or DATABASE_NAME: ${credentialsFile}`,
+  );
   process.exit(1);
 }
 
