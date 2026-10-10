@@ -87,13 +87,6 @@ worker:
     # budget, not this number. Raising it does not buy more upstream capacity.
     maxReplicas: 4
     targetCPUUtilizationPercentage: 70
-  nodeSelector:
-    workload: worker
-  tolerations:
-    - key: workload
-      operator: Equal
-      value: worker
-      effect: NoSchedule
 
 # Runs `db:migrate` as a pre-upgrade hook so the schema is in place before any
 # new pod starts. Production API pods do not migrate on boot.
