@@ -7,6 +7,12 @@ on:
     branches: [master, cicd]
   workflow_dispatch:
     inputs:
+      deploy_branch:
+        description: Source branch to deploy
+        type: choice
+        options: [cicd, master]
+        default: cicd
+        required: true
       commit_sha:
         description: Commit SHA produced by Artifact Build
         required: true
@@ -51,7 +57,7 @@ jobs:
           else
             echo "commit_sha=${{ inputs.commit_sha }}" >> "$GITHUB_OUTPUT"
             echo "artifact_run_id=${{ inputs.artifact_run_id }}" >> "$GITHUB_OUTPUT"
-            echo "branch=master" >> "$GITHUB_OUTPUT"
+            echo "branch=${{ inputs.deploy_branch }}" >> "$GITHUB_OUTPUT"
           fi
 
       - uses: actions/checkout@v5
