@@ -1,10 +1,12 @@
 name: Artifact Build
 
 on:
+  push:
+    branches: [cicd]
   workflow_run:
     workflows: [CI]
     types: [completed]
-    branches: [master, cicd]
+    branches: [master]
   workflow_dispatch:
     inputs:
       commit_sha:
@@ -22,7 +24,7 @@ env:
 
 jobs:
   build:
-    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
+    if: ${{ github.event_name == 'push' || github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     environment: qa
@@ -32,8 +34,10 @@ jobs:
         run: |
           if [ "${{ github.event_name }}" = "workflow_run" ]; then
             echo "sha=${{ github.event.workflow_run.head_sha }}" >> "$GITHUB_OUTPUT"
-          else
+          elif [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             echo "sha=${{ inputs.commit_sha }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "sha=${{ github.sha }}" >> "$GITHUB_OUTPUT"
           fi
 
       - uses: actions/checkout@v5
