@@ -52,7 +52,7 @@ jobs:
             echo "artifact_run_id=${{ inputs.artifact_run_id }}" >> "$GITHUB_OUTPUT"
           fi
 
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           ref: ${{ steps.release.outputs.commit_sha }}
 

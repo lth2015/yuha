@@ -38,7 +38,7 @@ concurrency:
 
 jobs:
   build-and-test:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 20
 
     # No `services:` block. A real MySQL 8.0 is still required — §12.1 wants
@@ -71,7 +71,7 @@ jobs:
     # `docker compose` is on every GitHub-hosted runner, so the compose file
     # is the definition in both places. Change a flag there and CI follows.
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - uses: pnpm/action-setup@v4
         with:
@@ -235,20 +235,20 @@ jobs:
     # expression context and runs shellcheck over each `run:` block, which
     # also covers the quieter version of the same problem: a step that is
     # syntactically fine and silently never executes.
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - uses: docker://rhysd/actionlint:1.7.7
         with:
           args: -color
 
   helm:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
-      - uses: azure/setup-helm@v4
+      - uses: actions/checkout@v5
+      - uses: azure/setup-helm@v5
         with:
           version: v3.16.3
       - name: Lint the chart
