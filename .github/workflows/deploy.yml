@@ -164,8 +164,43 @@ jobs:
           kubectl delete job yuha-migrate-1 --namespace "$NAMESPACE" --ignore-not-found
           kubectl apply --namespace "$NAMESPACE" --filename "$workdir/migration.yaml"
 
+          echo "Waiting for migration Pod to start..."
+          migration_pod=""
+          for attempt in $(seq 1 24); do
+            migration_pod="$(kubectl get pods --namespace "$NAMESPACE" \
+              --selector=job-name=yuha-migrate-1 \
+              --output=jsonpath='{.items[0].metadata.name}' 2>/dev/null || true)"
+            if [ -n "$migration_pod" ]; then
+              phase="$(kubectl get pod "$migration_pod" --namespace "$NAMESPACE" \
+                --output=jsonpath='{.status.phase}' 2>/dev/null || true)"
+              echo "migration pod=$migration_pod phase=${phase:-unknown}"
+              case "$phase" in
+                Running)
+                  echo "Migration started. Streaming logs:"
+                  kubectl logs --follow "$migration_pod" --namespace "$NAMESPACE" &
+                  migration_logs_pid=$!
+                  break
+                  ;;
+                Succeeded)
+                  echo "Migration Pod completed before log streaming began."
+                  break
+                  ;;
+              esac
+            fi
+            if [ "$attempt" -eq 24 ]; then
+              echo "::error::Migration Pod did not start within 2 minutes."
+              kubectl describe pod "$migration_pod" --namespace "$NAMESPACE" || true
+              kubectl get events --namespace "$NAMESPACE" --sort-by=.lastTimestamp | tail -n 50 || true
+              exit 1
+            fi
+            sleep 5
+          done
+
           if kubectl wait --namespace "$NAMESPACE" \
             --for=condition=complete job/yuha-migrate-1 --timeout=15m; then
+            if [ -n "${migration_logs_pid:-}" ]; then
+              wait "$migration_logs_pid" || true
+            fi
             echo "Migration succeeded."
             {
               echo "## Migration result"
@@ -176,6 +211,10 @@ jobs:
               kubectl logs job/yuha-migrate-1 --namespace "$NAMESPACE" || true
             } >> "$GITHUB_STEP_SUMMARY"
           else
+            if [ -n "${migration_logs_pid:-}" ]; then
+              kill "$migration_logs_pid" 2>/dev/null || true
+              wait "$migration_logs_pid" 2>/dev/null || true
+            fi
             echo "::error::Migration failed; application deployment was not started."
             {
               echo "## Migration result"
