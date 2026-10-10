@@ -42,11 +42,24 @@ spec:
       containers:
         - name: migrate
           image: 654654578710.dkr.ecr.ap-northeast-1.amazonaws.com/music/migration@sha256:0000000000000000000000000000000000000000000000000000000000000000
+          command: ["sh", "-c"]
+          args:
+            - |
+              set -eu
+              secret_file=/app/secrets/mysql-credentials.json
+              echo "Checking mounted database Secret metadata: $secret_file"
+              ls -la /app/secrets
+              stat "$secret_file"
+              sha256sum "$secret_file"
+              node -e 'const fs=require("fs"); const value=JSON.parse(fs.readFileSync(process.argv[1], "utf8")); console.log(JSON.stringify({keys:Object.keys(value), types:Object.fromEntries(Object.entries(value).map(([key,item]) => [key, typeof item]))}));' "$secret_file"
+              exec node migration/dist/cli.js migrate
           env:
             - name: RUN_MODE
               value: "integration"
             - name: NODE_ENV
               value: "production"
+            - name: DATABASE_SECRET_FILE
+              value: /app/secrets/mysql-credentials.json
           envFrom:
             - configMapRef:
                 name: yuha-config
