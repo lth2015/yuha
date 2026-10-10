@@ -84,9 +84,6 @@ jobs:
       - name: Install kubectl
         uses: azure/setup-kubectl@v4
 
-      - name: Install Helm
-        uses: azure/setup-helm@v5
-
       - name: Resolve image tag
         id: image
         env:
@@ -144,24 +141,7 @@ jobs:
       - name: Point kubectl at QA EKS
         run: aws eks update-kubeconfig --name "$EKS_CLUSTER" --region "$AWS_REGION"
 
-      - name: Deploy with Helm on master
-        if: steps.release.outputs.branch == 'master'
-        run: |
-          set -euo pipefail
-          helm upgrade --install "$RELEASE" infra/helm/loopscene \
-            --namespace "$NAMESPACE" \
-            --values deploy/envs/qa.yaml \
-            --set image.registry="$ECR_REGISTRY" \
-            --set image.api.repository=music/api \
-            --set image.worker.repository=music/worker \
-            --set image.api.digest="${{ steps.images.outputs.api_digest }}" \
-            --set image.worker.digest="${{ steps.images.outputs.worker_digest }}" \
-            --rollback-on-failure \
-            --wait \
-            --timeout 15m
-
-      - name: Deploy with kubectl on cicd
-        if: steps.release.outputs.branch == 'cicd'
+      - name: Deploy with kubectl and migration gate
         env:
           API_DIGEST: ${{ steps.images.outputs.api_digest }}
           WORKER_DIGEST: ${{ steps.images.outputs.worker_digest }}
