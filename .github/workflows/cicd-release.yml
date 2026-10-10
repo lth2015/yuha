@@ -182,6 +182,18 @@ jobs:
                 migration_logs_pid=$!
                 break
               fi
+              if [ "$phase" = Failed ]; then
+                echo "::error::Migration Pod failed before reaching Running."
+                kubectl logs "$migration_pod" --namespace "$NAMESPACE" || true
+                kubectl describe pod "$migration_pod" --namespace "$NAMESPACE" || true
+                kubectl get events --namespace "$NAMESPACE" --sort-by=.lastTimestamp | tail -n 50 || true
+                exit 1
+              fi
+              if [ "$phase" = Succeeded ]; then
+                echo "Migration Pod completed before log streaming began. Logs:"
+                kubectl logs "$migration_pod" --namespace "$NAMESPACE" || true
+                break
+              fi
             fi
             if [ "$attempt" -eq 24 ]; then
               kubectl describe pod "$migration_pod" --namespace "$NAMESPACE" || true
