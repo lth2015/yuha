@@ -1,4 +1,6 @@
-# Build, check and test every commit, and every release before it ships.
+# Build, check and test every master commit. The cicd branch is reserved for
+# validating the release pipeline itself; its artifact workflow performs the
+# required frontend and image builds without running this test suite.
 #
 # This file was complete and had never run. The triggers were `main` and
 # `master`; development happens on `yuha` and goes in without pull requests,
@@ -38,6 +40,7 @@ concurrency:
 
 jobs:
   build-and-test:
+    if: ${{ github.ref_name == 'master' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 20
 
@@ -225,6 +228,7 @@ jobs:
           "
 
   workflows:
+    if: ${{ github.ref_name == 'master' }}
     # Lint the workflows themselves.
     #
     # The one failure mode a CI file cannot report is its own: written as a
@@ -244,6 +248,7 @@ jobs:
           args: -color
 
   helm:
+    if: ${{ github.ref_name == 'master' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
