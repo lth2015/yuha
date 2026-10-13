@@ -1,3 +1,4 @@
+{{- if not (and .Values.api.runtimeConfigMap .Values.worker.runtimeConfigMap) }}
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -115,3 +116,4 @@ data:
   # (`deploy/cluster/external-secrets.yaml`), which the helper lists *after*
   # this ConfigMap — so re-adding them here would not even win, it would only
   # publish them.
+{{- end }}

@@ -62,11 +62,12 @@ spec:
             - name: APP_SECRET_DIR
               value: {{ .Values.apiSecretMountPath | quote }}
           envFrom:
+            {{- if .Values.api.runtimeConfigMap }}
+            - configMapRef:
+                name: {{ .Values.api.runtimeConfigMap }}
+            {{- else }}
             - configMapRef:
                 name: {{ include "loopscene.name" . }}-config
-            {{- with .Values.api.runtimeConfigMap }}
-            - configMapRef:
-                name: {{ . }}
             {{- end }}
           securityContext:
             allowPrivilegeEscalation: false

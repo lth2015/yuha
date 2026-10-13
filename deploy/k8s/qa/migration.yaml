@@ -62,7 +62,7 @@ spec:
               value: /app/secrets/mysql-credentials.json
           envFrom:
             - configMapRef:
-                name: yuha-config
+                name: qa-music-api-config
           volumeMounts:
             - name: api-secrets
               mountPath: /app/secrets

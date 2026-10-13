@@ -68,7 +68,11 @@ the first, which is the failure this repository keeps finding in its own docs.
 
 {{- define "loopscene.envFrom" -}}
 - configMapRef:
+    {{- if .runtimeConfigMap }}
+    name: {{ .runtimeConfigMap }}
+    {{- else }}
     name: {{ include "loopscene.name" . }}-config
+    {{- end }}
 - secretRef:
     name: {{ .envFromSecret }}
 {{- end -}}

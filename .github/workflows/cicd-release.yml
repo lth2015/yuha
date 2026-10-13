@@ -165,6 +165,8 @@ jobs:
           sed -i "s#music/worker@$placeholder#music/worker@$WORKER_DIGEST#g" "$workdir/resources.yaml"
           sed -i "s#$placeholder#$MIGRATION_DIGEST#g" "$workdir/migration.yaml"
 
+          kubectl get configmap qa-music-api-config qa-music-worker-config --namespace "$NAMESPACE" --output=name
+
           awk 'BEGIN { RS="---"; ORS="---\n" } /kind: ServiceAccount|kind: ConfigMap|kind: SecretProviderClass/ { print }' \
             "$workdir/resources.yaml" > "$workdir/migration-prerequisites.yaml"
           kubectl apply --namespace "$NAMESPACE" --filename "$workdir/migration-prerequisites.yaml"
