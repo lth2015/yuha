@@ -569,8 +569,6 @@ spec:
       - objectName: "qa-music-api-secrets-kv"
         objectType: "secretsmanager"
         jmesPath:
-          - path: DATABASE_URL
-            objectAlias: DATABASE_URL
           - path: GOOGLE_CLIENT_SECRET
             objectAlias: GOOGLE_CLIENT_SECRET
           - path: GOOGLE_SESSION_SECRET
@@ -597,8 +595,6 @@ spec:
     - secretName: api-secrets
       type: Opaque
       data:
-        - objectName: DATABASE_URL
-          key: DATABASE_URL
         - objectName: GOOGLE_CLIENT_SECRET
           key: GOOGLE_CLIENT_SECRET
         - objectName: GOOGLE_SESSION_SECRET
@@ -667,8 +663,6 @@ spec:
       - objectName: "qa-music-worker-secrets-kv"
         objectType: "secretsmanager"
         jmesPath:
-          - path: DATABASE_URL
-            objectAlias: DATABASE_URL
           - path: GOOGLE_CLIENT_SECRET
             objectAlias: GOOGLE_CLIENT_SECRET
           - path: GOOGLE_SESSION_SECRET
@@ -695,8 +689,6 @@ spec:
     - secretName: worker-secrets
       type: Opaque
       data:
-        - objectName: DATABASE_URL
-          key: DATABASE_URL
         - objectName: GOOGLE_CLIENT_SECRET
           key: GOOGLE_CLIENT_SECRET
         - objectName: GOOGLE_SESSION_SECRET
