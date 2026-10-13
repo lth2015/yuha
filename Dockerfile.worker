@@ -35,6 +35,7 @@ RUN apt-get update \
 
 ENV NODE_ENV=production
 WORKDIR /app
+RUN mkdir -p /app/secrets /app/app-secrets /mnt/secrets/api /mnt/secrets/worker
 RUN groupadd --gid 10001 loopscene \
  && useradd --uid 10001 --gid 10001 --no-create-home --shell /usr/sbin/nologin loopscene
 COPY --from=build --chown=root:root /deploy/worker ./worker

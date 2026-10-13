@@ -114,7 +114,7 @@ spec:
             - name: NODE_ENV
               value: "production"
             - name: APP_SECRET_DIR
-              value: /app/secrets/app
+              value: /app/app-secrets
           envFrom:
             - configMapRef:
                 name: yuha-config
@@ -148,7 +148,7 @@ spec:
             - name: tmp
               mountPath: /tmp
             - name: aws-secrets
-              mountPath: /app/secrets/app
+              mountPath: /app/app-secrets
               readOnly: true
             - name: database-secrets
               mountPath: /app/secrets
@@ -224,7 +224,7 @@ spec:
             - name: NODE_ENV
               value: "production"
             - name: APP_SECRET_DIR
-              value: /app/secrets/app
+              value: /app/app-secrets
           envFrom:
             - configMapRef:
                 name: yuha-config
@@ -245,7 +245,7 @@ spec:
             - name: tmp
               mountPath: /tmp
             - name: aws-secrets
-              mountPath: /app/secrets/app
+              mountPath: /app/app-secrets
               readOnly: true
             - name: database-secrets
               mountPath: /app/secrets
