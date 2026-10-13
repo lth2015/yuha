@@ -456,14 +456,14 @@ data:
 
   STORAGE_ADAPTER: "s3"
   S3_REGION: "ap-northeast-1"
-  S3_QUARANTINE_BUCKET: ""
-  S3_DELIVERY_BUCKET: ""
+  S3_QUARANTINE_BUCKET: "qa-music-media-quarantine"
+  S3_DELIVERY_BUCKET: "qa-music-media-delivery"
   S3_KMS_KEY_ID: ""
   DOWNLOAD_URL_TTL_SECONDS: "900"
 
   QUEUE_ADAPTER: "sqs"
   SQS_REGION: "ap-northeast-1"
-  SQS_QUEUE_URL: ""
+  SQS_QUEUE_URL: "https://sqs.ap-northeast-1.amazonaws.com/654654578710/qa-music-generation-queue"
 
   TEXT_ADAPTER: "tokenstars"
   TOKENSTARS_BASE_URL: ""
