@@ -55,10 +55,12 @@ workerSecretMountPath: /mnt/secrets/worker
 
 api:
   envFromSecret: api-secrets
+  runtimeConfigMap: qa-music-api-config
   replicaCount: 2
   port: 4000
 worker:
   envFromSecret: worker-secrets
+  runtimeConfigMap: qa-music-worker-config
 
 ingress:
   enabled: true

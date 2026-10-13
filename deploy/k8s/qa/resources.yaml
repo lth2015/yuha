@@ -118,6 +118,8 @@ spec:
           envFrom:
             - configMapRef:
                 name: yuha-config
+            - configMapRef:
+                name: qa-music-api-config
           securityContext:
             allowPrivilegeEscalation: false
             readOnlyRootFilesystem: true
@@ -228,6 +230,8 @@ spec:
           envFrom:
             - configMapRef:
                 name: yuha-config
+            - configMapRef:
+                name: qa-music-worker-config
           securityContext:
             allowPrivilegeEscalation: false
             readOnlyRootFilesystem: true
@@ -571,6 +575,16 @@ spec:
         jmesPath:
           - path: GOOGLE_CLIENT_SECRET
             objectAlias: GOOGLE_CLIENT_SECRET
+          - path: DEV_AUTH_SECRET
+            objectAlias: DEV_AUTH_SECRET
+          - path: STORAGE_SIGNING_SECRET
+            objectAlias: STORAGE_SIGNING_SECRET
+          - path: ALIGNMENT_API_KEY
+            objectAlias: ALIGNMENT_API_KEY
+          - path: POLYGON_RPC_PRIMARY_URL
+            objectAlias: POLYGON_RPC_PRIMARY_URL
+          - path: POLYGON_RPC_SECONDARY_URL
+            objectAlias: POLYGON_RPC_SECONDARY_URL
           - path: GOOGLE_SESSION_SECRET
             objectAlias: GOOGLE_SESSION_SECRET
           - path: STRIPE_SECRET_KEY
@@ -597,6 +611,16 @@ spec:
       data:
         - objectName: GOOGLE_CLIENT_SECRET
           key: GOOGLE_CLIENT_SECRET
+        - objectName: DEV_AUTH_SECRET
+          key: DEV_AUTH_SECRET
+        - objectName: STORAGE_SIGNING_SECRET
+          key: STORAGE_SIGNING_SECRET
+        - objectName: ALIGNMENT_API_KEY
+          key: ALIGNMENT_API_KEY
+        - objectName: POLYGON_RPC_PRIMARY_URL
+          key: POLYGON_RPC_PRIMARY_URL
+        - objectName: POLYGON_RPC_SECONDARY_URL
+          key: POLYGON_RPC_SECONDARY_URL
         - objectName: GOOGLE_SESSION_SECRET
           key: GOOGLE_SESSION_SECRET
         - objectName: STRIPE_SECRET_KEY
@@ -665,6 +689,16 @@ spec:
         jmesPath:
           - path: GOOGLE_CLIENT_SECRET
             objectAlias: GOOGLE_CLIENT_SECRET
+          - path: DEV_AUTH_SECRET
+            objectAlias: DEV_AUTH_SECRET
+          - path: STORAGE_SIGNING_SECRET
+            objectAlias: STORAGE_SIGNING_SECRET
+          - path: ALIGNMENT_API_KEY
+            objectAlias: ALIGNMENT_API_KEY
+          - path: POLYGON_RPC_PRIMARY_URL
+            objectAlias: POLYGON_RPC_PRIMARY_URL
+          - path: POLYGON_RPC_SECONDARY_URL
+            objectAlias: POLYGON_RPC_SECONDARY_URL
           - path: GOOGLE_SESSION_SECRET
             objectAlias: GOOGLE_SESSION_SECRET
           - path: STRIPE_SECRET_KEY
@@ -691,6 +725,16 @@ spec:
       data:
         - objectName: GOOGLE_CLIENT_SECRET
           key: GOOGLE_CLIENT_SECRET
+        - objectName: DEV_AUTH_SECRET
+          key: DEV_AUTH_SECRET
+        - objectName: STORAGE_SIGNING_SECRET
+          key: STORAGE_SIGNING_SECRET
+        - objectName: ALIGNMENT_API_KEY
+          key: ALIGNMENT_API_KEY
+        - objectName: POLYGON_RPC_PRIMARY_URL
+          key: POLYGON_RPC_PRIMARY_URL
+        - objectName: POLYGON_RPC_SECONDARY_URL
+          key: POLYGON_RPC_SECONDARY_URL
         - objectName: GOOGLE_SESSION_SECRET
           key: GOOGLE_SESSION_SECRET
         - objectName: STRIPE_SECRET_KEY
