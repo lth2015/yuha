@@ -61,12 +61,11 @@ spec:
             - name: APP_SECRET_DIR
               value: {{ .Values.workerSecretMountPath | quote }}
           envFrom:
-            {{- if .Values.worker.runtimeConfigMap }}
-            - configMapRef:
-                name: {{ .Values.worker.runtimeConfigMap }}
-            {{- else }}
             - configMapRef:
                 name: {{ include "loopscene.name" . }}-config
+            {{- with .Values.worker.runtimeConfigMap }}
+            - configMapRef:
+                name: {{ . }}
             {{- end }}
           securityContext:
             allowPrivilegeEscalation: false
@@ -168,7 +167,7 @@ spec:
           env:
             {{- include "loopscene.envVars" . | nindent 12 }}
           envFrom:
-            {{- include "loopscene.envFrom" (dict "Values" .Values "Chart" .Chart "envFromSecret" .Values.api.envFromSecret "runtimeConfigMap" .Values.api.runtimeConfigMap) | nindent 12 }}
+            {{- include "loopscene.envFrom" (dict "Values" .Values "Chart" .Chart "envFromSecret" .Values.api.envFromSecret) | nindent 12 }}
           volumeMounts:
             - name: api-secrets
               mountPath: {{ .Values.apiSecretMountPath }}
