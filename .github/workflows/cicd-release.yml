@@ -161,8 +161,8 @@ jobs:
           mkdir -p "$workdir"
           cp deploy/k8s/qa/resources.yaml deploy/k8s/qa/migration.yaml "$workdir/"
           placeholder='sha256:0000000000000000000000000000000000000000000000000000000000000000'
-          sed -i "s#$placeholder#$API_DIGEST#g" "$workdir/resources.yaml"
-          sed -i "s#$placeholder#$WORKER_DIGEST#g" "$workdir/resources.yaml"
+          sed -i "s#music/api@$placeholder#music/api@$API_DIGEST#g" "$workdir/resources.yaml"
+          sed -i "s#music/worker@$placeholder#music/worker@$WORKER_DIGEST#g" "$workdir/resources.yaml"
           sed -i "s#$placeholder#$MIGRATION_DIGEST#g" "$workdir/migration.yaml"
 
           awk 'BEGIN { RS="---"; ORS="---\n" } /kind: ServiceAccount|kind: ConfigMap|kind: SecretProviderClass/ { print }' \

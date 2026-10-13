@@ -59,8 +59,11 @@ spec:
               containerPort: {{ .Values.api.port }}
           env:
             {{- include "loopscene.envVars" . | nindent 12 }}
+            - name: APP_SECRET_DIR
+              value: {{ .Values.apiSecretMountPath | quote }}
           envFrom:
-            {{- include "loopscene.envFrom" (dict "Values" .Values "Chart" .Chart "envFromSecret" .Values.api.envFromSecret) | nindent 12 }}
+            - configMapRef:
+                name: {{ include "loopscene.name" . }}-config
           securityContext:
             allowPrivilegeEscalation: false
             readOnlyRootFilesystem: true

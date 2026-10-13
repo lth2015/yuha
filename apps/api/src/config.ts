@@ -1,4 +1,4 @@
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { z } from 'zod';
 import { GOOGLE_CALLBACK_PATH, GOOGLE_WEB_RETURN_PATH } from './auth/google-paths.js';
@@ -596,6 +596,16 @@ function databaseUrlFromFile(): string | undefined {
 
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
   const configEnv = { ...env };
+  if (configEnv.APP_SECRET_DIR) {
+    if (!existsSync(configEnv.APP_SECRET_DIR)) {
+      throw new ConfigError([`APP_SECRET_DIR is not mounted: ${configEnv.APP_SECRET_DIR}`]);
+    }
+    for (const name of readdirSync(configEnv.APP_SECRET_DIR)) {
+      if (/^[A-Z][A-Z0-9_]*$/.test(name) && !configEnv[name]) {
+        configEnv[name] = readFileSync(join(configEnv.APP_SECRET_DIR, name), 'utf8');
+      }
+    }
+  }
   if (!configEnv.DATABASE_URL) {
     const databaseUrl = databaseUrlFromFile();
     if (databaseUrl) configEnv.DATABASE_URL = databaseUrl;

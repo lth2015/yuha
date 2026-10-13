@@ -113,11 +113,11 @@ spec:
               value: "integration"
             - name: NODE_ENV
               value: "production"
+            - name: APP_SECRET_DIR
+              value: /app/secrets/app
           envFrom:
             - configMapRef:
                 name: yuha-config
-            - secretRef:
-                name: api-secrets
           securityContext:
             allowPrivilegeEscalation: false
             readOnlyRootFilesystem: true
@@ -223,11 +223,11 @@ spec:
               value: "integration"
             - name: NODE_ENV
               value: "production"
+            - name: APP_SECRET_DIR
+              value: /app/secrets/app
           envFrom:
             - configMapRef:
                 name: yuha-config
-            - secretRef:
-                name: worker-secrets
           securityContext:
             allowPrivilegeEscalation: false
             readOnlyRootFilesystem: true

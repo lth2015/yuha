@@ -58,8 +58,11 @@ spec:
           command: ["node", "worker/dist/index.js"]
           env:
             {{- include "loopscene.envVars" . | nindent 12 }}
+            - name: APP_SECRET_DIR
+              value: {{ .Values.workerSecretMountPath | quote }}
           envFrom:
-            {{- include "loopscene.envFrom" (dict "Values" .Values "Chart" .Chart "envFromSecret" .Values.worker.envFromSecret) | nindent 12 }}
+            - configMapRef:
+                name: {{ include "loopscene.name" . }}-config
           securityContext:
             allowPrivilegeEscalation: false
             readOnlyRootFilesystem: true
