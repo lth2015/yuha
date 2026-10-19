@@ -811,6 +811,24 @@ const MUTATIONS = [
     tests: ['tests/stripe-catalogue.test.ts'],
   },
   {
+    // A test secret key reported as fine for production: the live/test pair
+    // that loadConfig deliberately allows outside production, and Checkout
+    // cannot use.
+    name: 'a-test-stripe-key-passes-the-production-check',
+    file: 'apps/api/src/services/production-readiness.ts',
+    from: "  if (stripe.secretKey === 'test') {",
+    to: "  if (false) {",
+    tests: ['tests/production-readiness.test.ts'],
+  },
+  {
+    // The report echoing what it was given — a secret in a terminal and a ticket.
+    name: 'the-production-check-prints-values',
+    file: 'apps/api/src/services/production-readiness.ts',
+    from: "    out = out.split(value).join(`<${key}>`);",
+    to: '    void key;',
+    tests: ['tests/production-readiness.test.ts'],
+  },
+  {
     // The operator's address printed back onto the 特商法 page. Withheld on
     // counsel's advice and provided on request; one `{d.address}` undoes it.
     name: 'the-withheld-address-is-printed-again',
