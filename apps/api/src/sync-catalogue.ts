@@ -7,12 +7,14 @@
  * products, so until this has run once `/v1/products` is empty and the pricing
  * page has nothing to sell.
  *
- * Run it inside an API pod, which already has the configuration and the
- * database credentials mounted:
+ * It runs inside an API pod, which already has the configuration and the
+ * database credentials mounted. The QA deploy workflow does that after every
+ * rollout (`.github/workflows/deploy.yml`, "Write the price catalogue");
+ * anywhere else, by hand:
  *
  *   kubectl -n qa-music exec deploy/yuha-api -- node api/dist/sync-catalogue.js
  *
- * Run it again after any `STRIPE_PRICE_ID_*` change. Checkout reads the price
+ * It has to follow every `STRIPE_PRICE_ID_*` change. Checkout reads the price
  * id from the database row, not from the environment, so changing the
  * ConfigMap and rolling the pods alone does not change what is charged.
  *

@@ -110,11 +110,18 @@ records that as BLOCKED_EXTERNAL, and this runbook does not pretend otherwise.
    checkout call rather than a boot failure, found by whoever tries to buy
    first. Nothing in this repository generates or guesses an id or a secret.
 
-   **Changing a price id later needs a re-seed, not just a rollout.** Checkout
-   reads `product_catalog.stripe_price_id`, which only `pnpm seed` writes, so
-   editing the ConfigMap and rolling the pods leaves every session being built
-   against the previous Price. `pnpm check:stripe-prices` compares the stored
-   column as well as the variable and reports `stale` when they differ.
+   **The catalogue is written after the rollout, not by it.** Checkout reads
+   `product_catalog.stripe_price_id`, not the ConfigMap, and the migration Job
+   writes no products. The QA deploy workflow's *Write the price catalogue*
+   step runs `node api/dist/sync-catalogue.js` in an API pod after every
+   rollout, then `check-prices.js`, which fails on a wrong, stale, missing or
+   absent row. Anywhere that workflow does not run, run the same two by hand:
+
+       kubectl -n <namespace> exec deploy/yuha-api -- node api/dist/sync-catalogue.js
+       kubectl -n <namespace> exec deploy/yuha-api -- node api/dist/check-prices.js
+
+   Not `pnpm seed`: on a live database it also creates accounts and showcase
+   songs, and the API image has no pnpm.
 
 7. **Point the Google sign-in at this environment.** Google compares the
    redirect URI byte for byte and refuses on its own page, so a stale one

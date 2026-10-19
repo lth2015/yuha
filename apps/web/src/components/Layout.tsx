@@ -48,11 +48,19 @@ function LangSwitch({
   setLang,
   label,
   className = '',
+  inMenu = false,
 }: {
   lang: string;
   setLang: (code: (typeof LANGS)[number]['code']) => void;
   label: string;
   className?: string;
+  /**
+   * Inside the account menu (`role="menu"`) a plain toggle button is not
+   * something a menu may contain, and a screen reader in menu mode can skip
+   * it — on a signed-in phone that was the only way to change language. There
+   * the three are a radio group of menu items instead; nothing changes visually.
+   */
+  inMenu?: boolean;
 }) {
   return (
     <div className={`lang-switch${className ? ` ${className}` : ''}`} role="group" aria-label={label}>
@@ -61,7 +69,9 @@ function LangSwitch({
           key={l.code}
           type="button"
           className={`lang-switch__btn${lang === l.code ? ' is-active' : ''}`}
-          aria-pressed={lang === l.code}
+          {...(inMenu
+            ? { role: 'menuitemradio', 'aria-checked': lang === l.code }
+            : { 'aria-pressed': lang === l.code })}
           onClick={() => setLang(l.code)}
         >
           {l.label}
@@ -128,9 +138,13 @@ export function Layout({ children }: { children: ReactNode }) {
    * return to.
    */
   const topupHref =
-    location.pathname === '/pricing' || location.pathname.startsWith('/checkout')
-      ? '/pricing'
-      : `/pricing?from=${encodeURIComponent(location.pathname)}`;
+    location.pathname === '/pricing'
+      ? // Already there: keep the `from` it arrived with, or pressing the
+        // button again would forget where the buyer is to be sent back to.
+        `/pricing${location.search}`
+      : location.pathname.startsWith('/checkout')
+        ? '/pricing'
+        : `/pricing?from=${encodeURIComponent(location.pathname + location.search)}`;
   const [nowPlaying, setNowPlaying] = useState<NowPlayingSong | null>(null);
   const [nowPlayingOpen, setNowPlayingOpen] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
@@ -365,7 +379,7 @@ export function Layout({ children }: { children: ReactNode }) {
                     <div className="account__who">
                       <strong>{me.displayName?.trim() || t('card.creator')}</strong>
                       <span className="small">{me.email}</span>
-                      {/* The nav pill is hidden on narrow phones; the count lives here too. */}
+                      {/* On narrow phones the header keeps only the top-up action; the count lives here. */}
                       <span className="small account__credits">{t('nav.credits', { n: credits })}</span>
                     </div>
                     {/* Phones only (styles.css): with the top-up button in the
@@ -376,6 +390,7 @@ export function Layout({ children }: { children: ReactNode }) {
                       setLang={setLang}
                       label={t('a11y.lang')}
                       className="account__lang"
+                      inMenu
                     />
                     <Link role="menuitem" to={topupHref} className="account__topup" onClick={() => setMenuOpen(false)}>
                       <span aria-hidden="true">＋</span> {t('nav.topup')}

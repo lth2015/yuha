@@ -17,8 +17,9 @@ import type { AppContext } from '../context.js';
  * rename, and it would still only make the mistake less likely.
  *
  * Be precise about what this buys, because the first version of this comment
- * was not. It runs in `pnpm seed` and in `pnpm check:stripe-prices`, and both
- * are commands a person runs. CI does not run it — it has no live Stripe key —
+ * was not. It runs wherever the catalogue is written (`pnpm seed`, and
+ * `sync-catalogue`, which the QA deploy runs after every rollout) and in
+ * `pnpm check:stripe-prices`. CI does not run it — it has no live Stripe key —
  * and `check-prices.ts` explains why it is deliberately not at pod start-up.
  * The deployment path for a price-id change is "the ConfigMap changes and the
  * pods roll", which touches neither. So this is a check that exists and will
@@ -76,9 +77,12 @@ export type PriceProblem =
    *  from every other kind, because it says nothing about the configuration. */
   | { kind: 'unavailable'; priceKey: string; envVar: string; priceId: string; detail: string }
   /** The database's catalogue still carries a different id from the one
-   *  configured — a price id was changed without re-seeding, so Checkout is
-   *  still using the old Price. */
+   *  configured — a price id was changed without re-syncing the catalogue,
+   *  so Checkout is still using the old Price. */
   | { kind: 'stale'; priceKey: string; envVar: string; priceId: string; stored: string }
+  /** The database has no active row for this product at all: the catalogue
+   *  was never written, so nothing can be bought. */
+  | { kind: 'absent'; priceKey: string; envVar: string }
   /** Two variables hold the same Price, or two Prices of one Stripe product.
    *  Its own kind: this used to be reported as a `mismatch` with
    *  `field: 'amount'`, which produced "the catalogue says amount its own
@@ -219,6 +223,14 @@ export function comparePrice(row: CataloguePrice, remote: RemotePrice | null): P
   return problems;
 }
 
+/**
+ * What to run when the database's catalogue is wrong. Not `pnpm seed`: on a
+ * deployed database that also creates accounts and showcase songs, and the
+ * API image has neither pnpm nor tsx to run it with.
+ */
+const SYNC_REMEDY =
+  'Write the catalogue with `node api/dist/sync-catalogue.js` inside an API pod (locally: `pnpm catalogue:sync`).';
+
 /** Human-readable, and deliberately naming the Stripe product. */
 export function describePriceProblem(p: PriceProblem): string {
   if (p.kind === 'missing') return `${p.envVar} is not set, so ${p.priceKey} cannot be sold`;
@@ -229,7 +241,10 @@ export function describePriceProblem(p: PriceProblem): string {
     return `${p.envVar} could not be checked: Stripe did not answer (${p.detail}). This says nothing about whether the id is right.`;
   }
   if (p.kind === 'stale') {
-    return `${p.envVar} is ${p.priceId} but product_catalog says ${p.stored} for ${p.priceKey} — Checkout reads the catalogue, so this deployment is still selling against the stored id. Run \`pnpm seed\`.`;
+    return `${p.envVar} is ${p.priceId} but product_catalog says ${p.stored} for ${p.priceKey} — Checkout reads the catalogue, so this deployment is still selling against the stored id. ${SYNC_REMEDY}`;
+  }
+  if (p.kind === 'absent') {
+    return `product_catalog has no active ${p.priceKey} row, so it cannot be bought at all. ${SYNC_REMEDY}`;
   }
   if (p.kind === 'duplicate') {
     const what = p.what === 'price' ? 'the same Price' : "two Prices of Stripe's same product";
@@ -245,7 +260,7 @@ export function describePriceProblem(p: PriceProblem): string {
  *
  * The check above asks Stripe about `config.STRIPE_PRICE_ID_*`. Checkout does
  * not read those: it reads `product_catalog.stripe_price_id`, written only by
- * `pnpm seed`. So the documented release path for a price change — edit the
+ * `syncCatalogue` (`sync-catalogue`, and `pnpm seed` locally). So the documented release path for a price change — edit the
  * ConfigMap, roll the pods — moves the variable and leaves the column, and
  * every Checkout session keeps being built against the previous Price while
  * `pnpm check:stripe-prices` reports four ticks. The customer is charged the
@@ -253,7 +268,12 @@ export function describePriceProblem(p: PriceProblem): string {
  * amount guard throws after the card is charged.
  *
  * Which is the failure the whole check exists to prevent, so this closes it:
- * the command compares the column too, and a difference says to re-seed.
+ * the command compares the column too, and a difference says to re-sync.
+ *
+ * A product with no row at all is reported too. It used to be skipped as "a
+ * seed that has not run, not a drift" — and an empty catalogue is precisely
+ * what left the QA pricing page with nothing to sell while this would have
+ * printed its success line.
  */
 export function catalogueDrift(
   rows: CataloguePrice[],
@@ -262,9 +282,10 @@ export function catalogueDrift(
   const out: PriceProblem[] = [];
   for (const row of rows) {
     const db = stored.find((r) => r.price_key === row.priceKey);
-    // A product the database does not have at all is a seed that has not run,
-    // not a drift, and the row below would be noise.
-    if (!db) continue;
+    if (!db) {
+      out.push({ kind: 'absent', priceKey: row.priceKey, envVar: row.envVar });
+      continue;
+    }
     if ((db.stripe_price_id ?? null) === (row.priceId ?? null)) continue;
     out.push({
       kind: 'stale',
@@ -293,7 +314,11 @@ export function catalogueDrift(
  */
 export function blocksSelling(p: PriceProblem): boolean {
   return (
-    p.kind === 'mismatch' || p.kind === 'unreadable' || p.kind === 'duplicate' || p.kind === 'stale'
+    p.kind === 'mismatch' ||
+    p.kind === 'unreadable' ||
+    p.kind === 'duplicate' ||
+    p.kind === 'stale' ||
+    p.kind === 'absent'
   );
 }
 
@@ -302,8 +327,8 @@ export function blocksSelling(p: PriceProblem): boolean {
  *
  * Not run at pod start-up, on purpose: it is a network call to a third party,
  * and a Stripe outage must not stop a deployment that is already serving. It
- * runs in `seed.ts`, which is where the catalogue is written and therefore the
- * last moment before anything can be sold, and from `pnpm check:stripe-prices`
+ * runs in `syncCatalogue`, which is where the catalogue is written and
+ * therefore the last moment before anything can be sold, and from `pnpm check:stripe-prices`
  * for a deployment nobody is re-seeding.
  *
  * Returns `null` for "could not check", which is different from "nothing is

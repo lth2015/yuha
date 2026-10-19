@@ -259,6 +259,19 @@ jobs:
             --rm -i --restart=Never --image=curlimages/curl:8.11.0 --quiet -- \
             curl -fsS --max-time 10 "http://${RELEASE}-api/health"
 
+      # The migration Job writes the schema and no products, and Checkout reads
+      # price ids from product_catalog, not from the ConfigMap. Without this a
+      # fresh environment serves an empty pricing page, and a price-id change
+      # rolled out here keeps charging the old Price. Idempotent; it asks
+      # Stripe before writing and fails this step, writing nothing, when a
+      # configured id is wrong. Then the read-back check, which also fails on
+      # an empty or partial catalogue.
+      - name: Write the price catalogue
+        run: |
+          set -euo pipefail
+          kubectl exec -n "$NAMESPACE" "deployment/${RELEASE}-api" -- node api/dist/sync-catalogue.js
+          kubectl exec -n "$NAMESPACE" "deployment/${RELEASE}-api" -- node api/dist/check-prices.js
+
       - name: Report
         if: always()
         run: |

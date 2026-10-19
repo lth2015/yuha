@@ -33,6 +33,7 @@ await migrate();
 // ---------------------------------------------------------------- catalogue
 const catalogueWritten = await syncCatalogue(ctx, config);
 if (!catalogueWritten) {
+  console.error('(The migrations above have run; only the catalogue was refused.)');
   await closeDb();
   process.exit(1);
 }

@@ -806,9 +806,27 @@ const MUTATIONS = [
     // "Could not check" and "nothing is wrong" are different answers.
     name: 'an-unset-price-id-blocks-a-seed-that-does-not-sell-it',
     file: 'apps/api/src/services/stripe-catalogue.ts',
-    from: "    p.kind === 'mismatch' || p.kind === 'unreadable' || p.kind === 'duplicate' || p.kind === 'stale'",
+    from: "    p.kind === 'mismatch' ||\n    p.kind === 'unreadable' ||\n    p.kind === 'duplicate' ||\n    p.kind === 'stale' ||\n    p.kind === 'absent'",
     to: "    p.kind !== 'unavailable'",
     tests: ['tests/stripe-catalogue.test.ts'],
+  },
+  {
+    // An empty catalogue reported as nothing wrong: QA's empty pricing page,
+    // with the check that should have caught it printing its success line.
+    name: 'a-catalogue-the-database-does-not-have-passes-the-check',
+    file: 'apps/api/src/services/stripe-catalogue.ts',
+    from: "      out.push({ kind: 'absent', priceKey: row.priceKey, envVar: row.envVar });",
+    to: '      // (not reported)',
+    tests: ['tests/stripe-catalogue.test.ts'],
+  },
+  {
+    // The refusal path writing anyway: Stripe asked, disagreement found, rows
+    // written regardless.
+    name: 'a-refused-catalogue-is-written-anyway',
+    file: 'apps/api/src/services/catalogue-sync.ts',
+    from: "      fail('which Stripe product belongs in which variable.');\n      return false;",
+    to: "      fail('which Stripe product belongs in which variable.');",
+    tests: ['tests/catalogue-sync.test.ts'],
   },
   {
     // Two Prices under one Stripe product: two different ids, so comparing

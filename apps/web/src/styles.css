@@ -1857,13 +1857,13 @@ textarea.is-full { border-color: var(--danger); }
 @media (max-width: 480px) {
   .topnav__account .credit-pill__count { display: none; }
   .topnav__account .credit-pill--topup { padding: 0; border: none; background: none; min-height: 0; }
-  .topnav__account .credit-pill__cta { min-height: 36px; padding: 0 14px; }
+  .topnav__account .credit-pill__cta { min-height: 44px; padding: 0 16px; }
   .account__credits { display: block; }
   /* Signed in, the header is logo · top-up · avatar; language moves into the menu. */
   .topnav__account.is-signed-in > .lang-switch { display: none; }
   .account__lang { display: inline-flex; align-self: flex-start; margin: 4px 12px 6px; }
   /* `.account__menu button` is a full-width menu row; these are segments. */
-  .account__menu .account__lang .lang-switch__btn { min-height: 32px; padding: 6px 12px; border-radius: 999px; text-align: center; }
+  .account__menu .account__lang .lang-switch__btn { min-height: 44px; min-width: 44px; padding: 6px 12px; border-radius: 999px; text-align: center; }
   .account__menu .account__lang .lang-switch__btn:not(.is-active):hover { background: transparent; color: var(--ink); }
 }
 .credit-pill:hover { border-color: var(--ink); }

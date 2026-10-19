@@ -6,6 +6,7 @@ import { fetchProducts } from '../lib/catalog';
 import { useI18n } from '../lib/i18n';
 import { LOCALES, formatMoney, formatPerUnit } from '../lib/money';
 import { useSession } from '../lib/session';
+import { safeInternalPath } from '../lib/paths';
 import { ErrorNotice } from '../components/common';
 import { CHECKOUT_RETURN_KEY } from './Checkout';
 
@@ -59,8 +60,10 @@ export default function Pricing() {
     // Park where they came from before leaving for the payment provider, so
     // the confirmation screen can send them back to the draft they left.
     try {
-      const from = new URLSearchParams(window.location.search).get('from');
-      if (from && from.startsWith('/') && !from.startsWith('//')) {
+      // `safeInternalPath`, not a prefix check of its own: `/\host` passed
+      // `startsWith('/') && !startsWith('//')`, and browsers read it as //host.
+      const from = safeInternalPath(new URLSearchParams(window.location.search).get('from'));
+      if (from) {
         localStorage.setItem(CHECKOUT_RETURN_KEY, from);
       } else {
         localStorage.removeItem(CHECKOUT_RETURN_KEY);

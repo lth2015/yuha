@@ -71,6 +71,7 @@ const SURFACES = ['--bg', '--surface-solid', '--surface-soft'];
 const FILLED = [
   { surface: '--petal', text: '--ink', floor: 4.5, what: 'the primary button' },
   { surface: '--petal-soft', text: '--ink', floor: 4.5, what: 'a chosen chip' },
+  { surface: '--petal-soft', text: '--link', floor: 4.5, what: 'the header top-up action' },
 ];
 
 /**

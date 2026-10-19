@@ -84,7 +84,7 @@ export async function syncCatalogue(
     if (blocking.length > 0) {
       fail('\n✗ the configured Stripe prices do not match the catalogue:\n');
       for (const problem of blocking) fail(`  - ${describePriceProblem(problem)}`);
-      fail('\nNo catalogue row has been written (the migrations above have run).');
+      fail('\nNo catalogue row has been written.');
       fail('Fix the ids in the deployment configuration; docs/CONFIGURATION.md lists');
       fail('which Stripe product belongs in which variable.');
       return false;

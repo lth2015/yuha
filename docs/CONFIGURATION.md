@@ -73,9 +73,9 @@ cp .env.example .env   # 然后按需填写下表中的值
 
 JPY 是零小数货币，Stripe 的 `unit_amount` 直接写 980，不要乘 100。
 
-**命名对不上这件事，靠校验而不是靠记性。** 变量名来自内部 price key，Stripe 控制台显示的是营销名，两套词不一样，而 CREATOR 和 STUDIO 又只差价格——填反是很自然的手误，代价是客户买 STUDIO 被扣 ¥1,980（Checkout 按 Stripe 的 Price 收，订单行里记的是目录金额，webhook 的金额校验会在**扣款之后**才抛错）。所以 `pnpm seed` 和 `pnpm check:stripe-prices` 会把每个 Price 读回来，比对金额、币种、计费周期（含 `interval_count`）、含税方式和是否 active，不一致就拒绝；两个变量填了同一个 id、或两个 id 其实属于 Stripe 里同一个 product，也会单独点出来。
+**命名对不上这件事，靠校验而不是靠记性。** 变量名来自内部 price key，Stripe 控制台显示的是营销名，两套词不一样，而 CREATOR 和 STUDIO 又只差价格——填反是很自然的手误，代价是客户买 STUDIO 被扣 ¥1,980（Checkout 按 Stripe 的 Price 收，订单行里记的是目录金额，webhook 的金额校验会在**扣款之后**才抛错）。所以写目录的命令（`sync-catalogue`，本地还有 `pnpm seed`）和 `pnpm check:stripe-prices` 会把每个 Price 读回来，比对金额、币种、计费周期（含 `interval_count`）、含税方式和是否 active，不一致就拒绝；两个变量填了同一个 id、或两个 id 其实属于 Stripe 里同一个 product，也会单独点出来。
 
-**改了价格 id 之后必须重新 seed。** Checkout 读的是 `product_catalog.stripe_price_id`（`getActiveProduct` → `createCheckout`），**不是**环境变量;而写这一列的只有 `pnpm seed`。所以「改 ConfigMap、滚 pod」这条路只动了变量、没动数据库,每一笔结账仍然用旧的 Price——客户被按旧价扣款,订单行里记的是目录金额,webhook 的金额校验在扣款之后才抛错。`pnpm check:stripe-prices` 现在会把这一列和配置一起比对,不一致就报 `stale` 并要求 `pnpm seed`;在加这个比对之前,它会在这种情况下打四个勾。
+**改了价格 id 之后必须重写目录。** Checkout 读的是 `product_catalog.stripe_price_id`（`getActiveProduct` → `createCheckout`），**不是**环境变量;而写这一列的只有 `syncCatalogue`——部署环境里是 `node api/dist/sync-catalogue.js`（QA 部署流程在每次滚动发布之后自动执行），本地是 `pnpm catalogue:sync` 或 `pnpm seed`。所以「改 ConfigMap、滚 pod」这条路只动了变量、没动数据库,每一笔结账仍然用旧的 Price——客户被按旧价扣款,订单行里记的是目录金额,webhook 的金额校验在扣款之后才抛错。`pnpm check:stripe-prices` 现在会把这一列和配置一起比对,不一致就报 `stale`,某个商品在表里根本没有就报 `absent`,两者都要求重写目录;在加这些比对之前,它会在这种情况下打四个勾——目录整个是空的时候也一样。
 
 **但要说清楚它到底保证了什么。** 这两个都是**人去跑的命令**：CI 不跑（CI 没有线上 Stripe key），pod 启动也故意不跑（第三方超时不该拦住一个本来正常的部署），而改价格 id 的实际发布路径是「改 ConfigMap、滚 pod」——两个都不经过。所以这是一道**有人跑就能抓住**的检查，不是「填反了发不出去」。改价格 id 之后请手动跑一次 `pnpm check:stripe-prices`。
 

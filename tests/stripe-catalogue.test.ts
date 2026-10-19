@@ -396,7 +396,11 @@ describe('what the database will actually sell', () => {
     expect(problems[0]!.kind).toBe('stale');
     const described = describePriceProblem(problems[0]!);
     expect(described).toContain('price_old');
-    expect(described).toContain('pnpm seed');
+    // The remedy is the catalogue-only command. `pnpm seed` is wrong for a
+    // deployed database (it makes accounts and showcase songs) and the API
+    // image has no pnpm to run it with.
+    expect(described).toContain('sync-catalogue');
+    expect(described).not.toContain('pnpm seed');
     // It blocks: a deployment in this state sells against the wrong Price.
     expect(blocksSelling(problems[0]!)).toBe(true);
   });
@@ -405,10 +409,25 @@ describe('what the database will actually sell', () => {
     expect(catalogueDrift(rows, [{ price_key: 'drop_5', stripe_price_id: 'price_new' }])).toEqual([]);
   });
 
-  it('says nothing about a product the database does not have yet', () => {
-    // A seed that has not run is not a drift, and reporting it would be noise
-    // on every fresh environment.
-    expect(catalogueDrift(rows, [])).toEqual([]);
+  it('refuses a catalogue the database does not have at all', () => {
+    // This used to say nothing, on the grounds that "a seed that has not run
+    // is not a drift". It is worse than a drift: nothing can be sold. QA sat
+    // in exactly this state — an empty pricing page — while this check, had
+    // anyone run it, would have printed its success line.
+    const problems = catalogueDrift(rows, []);
+    expect(problems).toHaveLength(1);
+    expect(problems[0]!.kind).toBe('absent');
+    expect(blocksSelling(problems[0]!)).toBe(true);
+    expect(describePriceProblem(problems[0]!)).toContain('sync-catalogue');
+  });
+
+  it('refuses a catalogue with one product missing, naming that one', () => {
+    const two: CataloguePrice[] = [
+      rows[0]!,
+      { ...studio, priceKey: 'pro_monthly', envVar: 'STRIPE_PRICE_ID_PRO_MONTHLY', priceId: null },
+    ];
+    const problems = catalogueDrift(two, [{ price_key: 'drop_5', stripe_price_id: 'price_new' }]);
+    expect(problems.map((p) => [p.kind, p.priceKey])).toEqual([['absent', 'pro_monthly']]);
   });
 
   it('notices an id removed from the configuration but still stored', () => {
