@@ -598,7 +598,15 @@ function databaseUrlFromFile(): string | undefined {
   }
 }
 
-export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
+/**
+ * The environment `loadConfig` actually reads: the process environment, then
+ * each mounted secret file for a variable the environment does not already
+ * set, then the database URL from its credentials file. Exported so a check
+ * can look at the same merged values the application will — an explicit
+ * `env:` or ConfigMap value wins over the secret, which is exactly the thing
+ * that is easy to forget when a value "is in the secret".
+ */
+export function resolveEnv(env: NodeJS.ProcessEnv = process.env): NodeJS.ProcessEnv {
   const configEnv = { ...env };
   if (configEnv.APP_SECRET_DIR) {
     if (!existsSync(configEnv.APP_SECRET_DIR)) {
@@ -614,6 +622,11 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     const databaseUrl = databaseUrlFromFile();
     if (databaseUrl) configEnv.DATABASE_URL = databaseUrl;
   }
+  return configEnv;
+}
+
+export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
+  const configEnv = resolveEnv(env);
   const parsed = envSchema.safeParse(configEnv);
   if (!parsed.success) {
     throw new ConfigError(
