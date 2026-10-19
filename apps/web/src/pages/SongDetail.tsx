@@ -9,6 +9,7 @@ import { fetchProducts, findLicenceProduct } from '../lib/catalog';
 import { useI18n } from '../lib/i18n';
 import { LOCALES, formatMoney } from '../lib/money';
 import { useSession } from '../lib/session';
+import { cardPaymentsEnabled, purchaseRoute, stablecoinOfferedFor } from '../lib/purchase';
 import { CoverArt } from '../components/CoverArt';
 import { ErrorNotice } from '../components/common';
 import { Score } from '../components/Score';
@@ -275,8 +276,19 @@ export default function SongDetail() {
     }
   };
 
+  const licenseRoute = purchaseRoute({
+    cardPaymentsEnabled: cardPaymentsEnabled(runtime),
+    stablecoinOffered: stablecoinOfferedFor(runtime, 'market_license'),
+  });
+
   const buyLicense = async () => {
-    if (licensing || !me) return;
+    if (licensing || !me || licenseRoute === 'closed') return;
+    if (licenseRoute === 'stablecoin') {
+      // The confirmation screen takes the wallet path for a licence when
+      // given the song; no card order is opened that nobody could pay.
+      navigate(`/checkout/confirm?price=market_license&track=${encodeURIComponent(song.trackId)}`);
+      return;
+    }
     setLicensing(true);
     setActionError(null);
     try {
@@ -487,13 +499,15 @@ export default function SongDetail() {
                   type="button"
                   className="text-action is-strong"
                   onClick={buyLicense}
-                  disabled={licensing || !me || licenseProduct === null}
+                  disabled={licensing || !me || licenseProduct === null || licenseRoute === 'closed'}
                   /* No `title`: it is not a reliable accessible name and never
                      reaches touch users. The one here was also a hardcoded
                      Chinese literal promising "创作者获得 70%" — a revenue share
                      migration 0005 removed. The string outlived the feature. */
                   aria-label={
-                    licenseProduct
+                    licenseRoute === 'closed'
+                      ? t('song.license.cardClosed')
+                      : licenseProduct
                       ? t('song.license.aria', {
                           price: formatMoney(licenseProduct.amountMinor, licenseProduct.currency, LOCALES[lang]),
                         })
@@ -502,6 +516,8 @@ export default function SongDetail() {
                 >
                   {licensing
                     ? t('song.licensing')
+                    : licenseRoute === 'closed'
+                      ? t('song.license.cardClosed')
                     : licenseProduct
                       ? t('song.license', {
                           price: formatMoney(licenseProduct.amountMinor, licenseProduct.currency, LOCALES[lang]),

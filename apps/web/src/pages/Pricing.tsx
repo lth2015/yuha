@@ -7,6 +7,7 @@ import { useI18n } from '../lib/i18n';
 import { LOCALES, formatMoney, formatPerUnit } from '../lib/money';
 import { useSession } from '../lib/session';
 import { safeInternalPath } from '../lib/paths';
+import { cardPaymentsEnabled, purchaseRoute, stablecoinOfferedFor } from '../lib/purchase';
 import { ErrorNotice } from '../components/common';
 import { CHECKOUT_RETURN_KEY } from './Checkout';
 
@@ -52,6 +53,10 @@ export default function Pricing() {
     fetchProducts().then(setProducts).catch(setError);
   }, [attempt]);
 
+  const cardOpen = cardPaymentsEnabled(runtime);
+  const routeFor = (priceKey: string) =>
+    purchaseRoute({ cardPaymentsEnabled: cardOpen, stablecoinOffered: stablecoinOfferedFor(runtime, priceKey) });
+
   const buy = async (priceKey: string) => {
     if (!me) {
       navigate(`/auth?next=/pricing`);
@@ -70,6 +75,12 @@ export default function Pricing() {
       }
     } catch {
       /* private browsing — the return path is a nicety, not a requirement */
+    }
+    if (routeFor(priceKey) === 'stablecoin') {
+      // Straight to the confirmation screen, which offers only the wallet
+      // here. No order yet: a card order would be one nobody can pay.
+      navigate(`/checkout/confirm?price=${encodeURIComponent(priceKey)}`);
+      return;
     }
     setBusyKey(priceKey);
     setError(null);
@@ -141,6 +152,14 @@ export default function Pricing() {
 
       <ErrorNotice error={error} onRetry={() => setAttempt((n) => n + 1)} />
 
+      {/* Said before anyone presses a button, not discovered after it. */}
+      {!cardOpen && (
+        <div className="alert alert--info" role="status">
+          {t('price.cardClosed')}
+          {stablecoinOfferedFor(runtime, 'drop_5') && ` ${t('price.cardClosedStablecoin')}`}
+        </div>
+      )}
+
       {/*
         Skeletons mean "loading". A failed catalogue read left `products` null,
         so three shimmering plan placeholders sat under the banner for the rest
@@ -204,7 +223,12 @@ export default function Pricing() {
                       <li key={b}>{t(b)}</li>
                     ))}
                   </ul>
-                  {p.available ? (
+                  {p.available && routeFor(p.priceKey) === 'closed' ? (
+                    <span className="plan__current">
+                      {t('price.soon')}
+                      <span className="plan__soonwhy">{t('price.cardClosedWhy')}</span>
+                    </span>
+                  ) : p.available ? (
                     <button
                       type="button"
                       id={`plan-${p.priceKey}-cta`}
@@ -226,7 +250,9 @@ export default function Pricing() {
                         ? t('price.opening')
                         : p.kind === 'subscription'
                           ? t('price.subscribe')
-                          : t('price.buy')}
+                          : routeFor(p.priceKey) === 'stablecoin'
+                            ? t('price.buyStablecoin')
+                            : t('price.buy')}
                     </button>
                   ) : (
                     // Say *why* it is unavailable. "Coming soon" with no reason

@@ -1085,6 +1085,14 @@ export interface FeatureFlags {
   wavExportEnabled: boolean;
   commercialDeliveryEnabled: boolean;
   realPaymentsEnabled: boolean;
+  /**
+   * Whether a card purchase started here can actually finish. Stripe, or the
+   * demo — where the simulated round trip is the point. Simulated payments
+   * anywhere else cannot complete: the settle page refuses outside demo, and
+   * the sessions live in one process while a deployment runs several. That
+   * is how yuha.studio sent every buyer to "this page is for demo mode only".
+   */
+  cardPaymentsEnabled: boolean;
   generationEnabled: boolean;
 }
 
@@ -1099,6 +1107,7 @@ export function baseFeatures(cfg: AppConfig): FeatureFlags {
     // what anyone sets in the environment.
     commercialDeliveryEnabled: cfg.MUSIC_COMMERCIAL_DELIVERY && cfg.adapters.music !== 'demo',
     realPaymentsEnabled: cfg.adapters.payments === 'stripe',
+    cardPaymentsEnabled: cfg.adapters.payments === 'stripe' || cfg.mode === 'demo',
     generationEnabled: true,
   };
 }
