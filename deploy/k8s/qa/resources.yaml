@@ -337,7 +337,7 @@ metadata:
 spec:
   ingressClassName: alb
   rules:
-    - host: "qa.yuha.studio"
+    - host: "yuha.studio"
       http:
         paths:
           # The API's own namespaces, named explicitly rather than left to the

@@ -224,3 +224,12 @@ jobs:
 
       - name: Verify rollout
         run: kubectl rollout status deployment -n "$NAMESPACE" -l app.kubernetes.io/instance=yuha --timeout=5m
+
+      - name: Verify QA Ingress
+        run: |
+          set -euo pipefail
+          host="$(kubectl get ingress yuha-api -n "$NAMESPACE" -o jsonpath='{.spec.rules[0].host}')"
+          [ "$host" = "yuha.studio" ] || { echo "::error::Unexpected Ingress host: $host"; exit 1; }
+          address="$(kubectl get ingress yuha-api -n "$NAMESPACE" -o jsonpath='{.status.loadBalancer.ingress[0].hostname}')"
+          [ -n "$address" ] || { echo "::error::Ingress has no ALB address; check ACM certificate and controller events."; exit 1; }
+          echo "Ingress yuha.studio is assigned ALB $address"
