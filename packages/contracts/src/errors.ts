@@ -42,6 +42,7 @@ export const ERROR_CODES = [
   'SUBSCRIPTION_NOT_FOUND',
   'SUBSCRIPTION_ALREADY_ACTIVE',
   'SUBSCRIPTIONS_DISABLED',
+  'CARD_PAYMENTS_CLOSED',
   'WEBHOOK_SIGNATURE_INVALID',
   // platform
   'BUDGET_EXCEEDED',
@@ -98,6 +99,7 @@ const STATUS_BY_CODE: Record<ErrorCode, number> = {
   // 409: the request is well formed, the account's state is what refuses it.
   SUBSCRIPTION_ALREADY_ACTIVE: 409,
   SUBSCRIPTIONS_DISABLED: 403,
+  CARD_PAYMENTS_CLOSED: 403,
   WEBHOOK_SIGNATURE_INVALID: 400,
   BUDGET_EXCEEDED: 429,
   // 429: the request is fine and the account has bought too much too quickly.

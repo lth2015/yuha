@@ -47,6 +47,7 @@ export default async function publicRoutes(app: FastifyInstance, opts: { ctx: Ap
         wavExportEnabled: features.wavExportEnabled,
         commercialDeliveryEnabled: features.commercialDeliveryEnabled,
         realPaymentsEnabled: features.realPaymentsEnabled,
+        cardPaymentsEnabled: features.cardPaymentsEnabled,
         qrWalletsEnabled: ctx.config.STRIPE_WALLETS_ENABLED,
       },
       adapters: {

@@ -85,6 +85,11 @@ export async function createCheckout(
   },
 ): Promise<{ orderId: string; checkoutUrl: string; simulated: boolean }> {
   const features = await ctx.features();
+  // First, before any row: an order for a card payment that cannot finish is
+  // a pending order nobody can ever pay.
+  if (!features.cardPaymentsEnabled) {
+    throw new AppError('CARD_PAYMENTS_CLOSED', 'card payment is not open on this deployment');
+  }
   const product = await getActiveProduct(params.priceKey);
   if (!product || !product.active) throw new AppError('NOT_FOUND', 'unknown product');
   if (product.kind === 'subscription' && !features.subscriptionsEnabled) {

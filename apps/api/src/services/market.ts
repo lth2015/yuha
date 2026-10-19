@@ -26,6 +26,11 @@ export async function createLicenseCheckout(
   ctx: AppContext,
   params: { userId: string; trackId: string; idempotencyKey: string },
 ): Promise<{ orderId: string; checkoutUrl: string; simulated: boolean }> {
+  // Before anything else, as in `createCheckout`: whatever the song, a card
+  // purchase cannot finish on a deployment with card payment closed.
+  if (!(await ctx.features()).cardPaymentsEnabled) {
+    throw new AppError('CARD_PAYMENTS_CLOSED', 'card payment is not open on this deployment');
+  }
   const track = await getPublicTrack(params.trackId);
   if (!track) throw new AppError('NOT_FOUND', 'song not found on the market');
   if (track.owner_id === params.userId) {

@@ -298,6 +298,7 @@ export function createContext(config: AppConfig): AppContext {
         commercialDeliveryEnabled:
           statics.commercialDeliveryEnabled && overrides.commercialDeliveryEnabled !== false,
         realPaymentsEnabled: statics.realPaymentsEnabled,
+        cardPaymentsEnabled: statics.cardPaymentsEnabled,
         generationEnabled: overrides.generationEnabled !== false,
       };
     },

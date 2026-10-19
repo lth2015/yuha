@@ -6,6 +6,7 @@ import { useI18n } from '../lib/i18n';
 import { formatMoney, formatJst, useSession } from '../lib/session';
 import { LOCALES } from '../lib/money';
 import { safeInternalPath } from '../lib/paths';
+import { cardPaymentsEnabled, purchaseRoute, stablecoinOfferedFor } from '../lib/purchase';
 import { Badge, ErrorNotice, Loading } from '../components/common';
 
 interface Disclosure {
@@ -85,13 +86,15 @@ export function CheckoutConfirm() {
    * chooser are decided by the same expression. A guard that only the renderer
    * can see is how a page ends up doing something it does not offer.
    */
-  const stablecoinOffered =
-    !!runtime?.stablecoin.enabled &&
-    runtime.stablecoin.tokens.length > 0 &&
-    (priceKey === 'drop_5' || priceKey === 'market_license');
+  const stablecoinOffered = stablecoinOfferedFor(runtime, priceKey);
+  const cardOpen = cardPaymentsEnabled(runtime);
+  const route = purchaseRoute({ cardPaymentsEnabled: cardOpen, stablecoinOffered });
+  // With card payment closed the wallet is not a choice, it is the way.
+  const payWith: 'card' | 'stablecoin' = route === 'stablecoin' ? 'stablecoin' : method;
 
   const proceed = async () => {
-    if (method === 'stablecoin' && stablecoinOffered) {
+    if (route === 'closed') return;
+    if (payWith === 'stablecoin' && stablecoinOffered) {
       /*
        * The obligation is created on the next page, by asking for a quote —
        * which is why the amount, the contents, the delivery timing and the
@@ -235,7 +238,18 @@ export function CheckoutConfirm() {
         </section>
       )}
 
-      {stablecoinOffered && (
+      {route === 'stablecoin' && (
+        <div className="alert alert--info" role="status">
+          {t('checkout.cardClosedStablecoin')}
+        </div>
+      )}
+      {route === 'closed' && (
+        <div className="alert alert--info" role="status">
+          {t('checkout.cardClosed')}
+        </div>
+      )}
+
+      {stablecoinOffered && cardOpen && (
         <section className="panel stack">
           <h2 style={{ fontSize: 20, margin: 0 }}>{t('checkout.method.title')}</h2>
           <div className="row">
@@ -291,19 +305,19 @@ export function CheckoutConfirm() {
       <button
         type="button"
         className="btn btn--primary btn--block"
-        disabled={!agreed || submitting || !product.available}
+        disabled={!agreed || submitting || !product.available || route === 'closed'}
         onClick={() => void proceed()}
       >
         {submitting
           ? t('checkout.submitting')
-          : method === 'stablecoin'
+          : payWith === 'stablecoin'
             ? t('checkout.payStablecoin')
             : t('checkout.pay', { amount: formatMoney(product.amountMinor, product.currency, LOCALES[lang]) })}
       </button>
 
       <p className="small muted" style={{ margin: 0, textAlign: 'center' }}>
-        {method === 'stablecoin' ? t('checkout.stablecoinFooter') : t('checkout.cardNote')}
-        {runtime?.demo && method === 'card' && t('checkout.demoNote')}
+        {payWith === 'stablecoin' ? t('checkout.stablecoinFooter') : t('checkout.cardNote')}
+        {runtime?.demo && payWith === 'card' && t('checkout.demoNote')}
       </p>
     </div>
   );

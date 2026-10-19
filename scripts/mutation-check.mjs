@@ -811,6 +811,31 @@ const MUTATIONS = [
     tests: ['tests/stripe-catalogue.test.ts'],
   },
   {
+    // A credit-pack checkout started where card payment cannot finish: the
+    // pending order and the "demo mode only" dead end on yuha.studio.
+    name: 'a-card-checkout-starts-where-cards-cannot-finish',
+    file: 'apps/api/src/services/billing.ts',
+    from: "  if (!features.cardPaymentsEnabled) {\n    throw new AppError('CARD_PAYMENTS_CLOSED'",
+    to: "  if (false) {\n    throw new AppError('CARD_PAYMENTS_CLOSED'",
+    tests: ['tests/card-payments-closed.test.ts'],
+  },
+  {
+    name: 'a-licence-checkout-starts-where-cards-cannot-finish',
+    file: 'apps/api/src/services/market.ts',
+    from: "  if (!(await ctx.features()).cardPaymentsEnabled) {",
+    to: "  if (false) {",
+    tests: ['tests/card-payments-closed.test.ts'],
+  },
+  {
+    // Simulated payments counted as "card payment works" everywhere, which
+    // is the exact misreading the integration deployment made.
+    name: 'simulated-payments-count-as-open-outside-the-demo',
+    file: 'apps/api/src/config.ts',
+    from: "    cardPaymentsEnabled: cfg.adapters.payments === 'stripe' || cfg.mode === 'demo',",
+    to: "    cardPaymentsEnabled: true,",
+    tests: ['tests/card-payments-closed.test.ts'],
+  },
+  {
     // The operator's address printed back onto the 特商法 page. Withheld on
     // counsel's advice and provided on request; one `{d.address}` undoes it.
     name: 'the-withheld-address-is-printed-again',

@@ -42,6 +42,8 @@ export const runtimeInfo = z.object({
     wavExportEnabled: z.boolean(),
     commercialDeliveryEnabled: z.boolean(),
     realPaymentsEnabled: z.boolean(),
+    /** A card purchase started here can finish: Stripe, or the demo's simulation. */
+    cardPaymentsEnabled: z.boolean(),
     /**
      * This deployment accepts Alipay and WeChat Pay. Declarative only — the
      * methods are enabled on the Stripe account, and this just lets the
