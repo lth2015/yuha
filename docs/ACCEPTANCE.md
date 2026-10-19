@@ -88,7 +88,7 @@ language.
 | # | Promise | How to check it |
 | --- | --- | --- |
 | 6.1 | A rights claim needs no account | Sign out. `/help/rights` still submits and returns a case number. |
-| 6.2 | 特商法 disclosure is complete or says it is not | `/legal/tokushoho` lists all statutory rows. Prices come from the live catalogue. Three rows are marked 要法務確認 — that is correct until counsel fills them. |
+| 6.2 | 特商法 disclosure is complete or says it is not | `/legal/tokushoho` lists all statutory rows. Prices come from the live catalogue. Every row has content; 要法務確認 appears only if 運営統括責任者 or the telephone number is unset, or the catalogue fails to load. No draft banner (counsel review recorded 2026-10-19). |
 | 6.3 | Usage terms are recorded per song | `/tracks/:id/export` shows the usage-terms record with its audio hash. |
 
 ## 7. Phone

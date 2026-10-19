@@ -44,7 +44,12 @@ export function useDisclosure() {
  * having read a word. Flip it in the same commit that lands the reviewed
  * text, and not before.
  */
-const LEGAL_TEXT_REVIEWED = false;
+// Reviewed by counsel, as confirmed by the operator on 2026-10-19: the terms,
+// the privacy policy, the company page and the 特商法 page as they stand in
+// this commit (the 支払方法 and 返品・キャンセル rows filled from the
+// confirmation screen's reviewed wording in the same change). Text changed
+// after this is not covered by that review.
+const LEGAL_TEXT_REVIEWED = true;
 
 /**
  * The banner used to be gated on `isPlaceholder`, which is a different claim.

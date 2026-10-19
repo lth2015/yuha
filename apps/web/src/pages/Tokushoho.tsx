@@ -9,6 +9,9 @@ import type { ProductView } from '@yuha/contracts';
 import { fetchProducts } from '../lib/catalog';
 import { LOCALES, formatMoney } from '../lib/money';
 import { unconfiguredDisclosureField } from '../lib/disclosure';
+import { textIn } from '../lib/i18n';
+import { cardPaymentsEnabled } from '../lib/purchase';
+import { useSession } from '../lib/session';
 import { DraftBanner, LegalPage, useDisclosure } from './Legal';
 import { Loading } from '../components/common';
 
@@ -30,9 +33,14 @@ import { Loading } from '../components/common';
  *     nobody has set yet, is left for counsel and says so on the page rather
  *     than carrying a plausible guess.
  *
- * `支払方法` is deliberately in the second group: the Stripe session is created
- * without `payment_method_types`, so the methods offered are whatever that
- * account has enabled. It is not knowable from this repository.
+ * `支払方法` moved to the first group once counsel had reviewed the page
+ * (2026-10-19): the channels are read from the runtime descriptor — card when
+ * a card purchase can complete here, Alipay / WeChat Pay when the operator
+ * declares them enabled on the Stripe account (`qrWalletsEnabled`; the Stripe
+ * session is created without `payment_method_types`, so the account decides),
+ * and the stablecoins the deployment accepts. `返品・キャンセル` reads the
+ * confirmation screen's own Japanese entries, so the two statutory surfaces
+ * say the same thing by construction.
  */
 
 /** A row whose value is still owed by someone qualified. */
@@ -66,6 +74,9 @@ function priceLines(products: ProductView[]): string[] {
 
 export function Tokushoho() {
   const d = useDisclosure();
+  const { runtime } = useSession();
+  const card = cardPaymentsEnabled(runtime);
+  const stablecoins = runtime?.stablecoin.enabled ? runtime.stablecoin.tokens.map((x) => x.label) : [];
   const [products, setProducts] = useState<ProductView[] | null>(null);
   const [catalogueFailed, setCatalogueFailed] = useState(false);
 
@@ -143,12 +154,22 @@ export function Tokushoho() {
         <div>
           <dt>支払方法</dt>
           <dd>
-            <Pending what="決済代行（Stripe）アカウントで有効化されている決済手段に依存するため、コードからは確定できません" />
+            <ul className="tokushoho__prices">
+              {card && <li>クレジットカード（決済代行：Stripe）</li>}
+              {card && runtime?.features.qrWalletsEnabled && <li>Alipay・WeChat Pay（単発購入のみ）</li>}
+              {stablecoins.length > 0 && (
+                <li>ステーブルコイン：{stablecoins.join('、')}（単発パック・ライセンスのみ）</li>
+              )}
+              {!card && stablecoins.length === 0 && <li>現在ご利用いただける決済手段はありません。</li>}
+            </ul>
           </dd>
         </div>
         <div>
           <dt>支払時期</dt>
-          <dd>お申し込み時に決済代行の画面でお支払いいただきます。</dd>
+          <dd>
+            {card && 'お申し込み時に決済代行の画面でお支払いいただきます。'}
+            {stablecoins.length > 0 && 'ステーブルコインの場合は、お申し込み時にお客様ご自身のウォレットから送金していただきます。'}
+          </dd>
         </div>
         <div>
           <dt>役務の提供時期</dt>
@@ -157,7 +178,11 @@ export function Tokushoho() {
         <div>
           <dt>返品・キャンセル</dt>
           <dd>
-            <Pending what="解約・返金条件の文言。現行の記載は docs 側の草案であり、確認が必要です" />
+            <ul className="tokushoho__prices">
+              <li>単発パック・ライセンス：{textIn('ja', 'checkout.cancel.oneTime')}</li>
+              <li>月額プラン：{textIn('ja', 'checkout.cancel.sub')}</li>
+              <li>返金：{textIn('ja', 'checkout.refund')}</li>
+            </ul>
           </dd>
         </div>
         <div>
