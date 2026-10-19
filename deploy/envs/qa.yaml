@@ -55,10 +55,12 @@ workerSecretMountPath: /mnt/secrets/worker
 
 api:
   envFromSecret: api-secrets
+  runtimeConfigMap: qa-music-api-config
   replicaCount: 2
   port: 4000
 worker:
   envFromSecret: worker-secrets
+  runtimeConfigMap: qa-music-worker-config
 
 ingress:
   enabled: true
@@ -89,14 +91,14 @@ config:
 
   storage:
     region: ap-northeast-1
-    quarantineBucket: ""  # terraform output quarantine_bucket
-    deliveryBucket: ""    # terraform output delivery_bucket
+    quarantineBucket: "qa-music-media-quarantine"
+    deliveryBucket: "qa-music-media-delivery"
     kmsKeyId: ""          # terraform output kms_media_key_arn
     downloadUrlTtlSeconds: 900
 
   queue:
     region: ap-northeast-1
-    url: ""               # terraform output sqs_queue_url
+    url: "https://sqs.ap-northeast-1.amazonaws.com/654654578710/qa-music-generation-queue"
 
   tokenstars:
     baseUrl: ""

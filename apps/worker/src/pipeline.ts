@@ -17,7 +17,7 @@ import {
   withTx,
   type JobRow,
 } from '@yuha/db';
-import { checkPrompt, fetchAudio, HttpMusicProvider, redactPrompt, type MusicAudioRef } from '@yuha/providers';
+import { checkPrompt, fetchAudio, HttpMusicProvider, type MusicAudioRef } from '@yuha/providers';
 
 export interface PipelineDeps {
   ctx: AppContext;
@@ -93,6 +93,7 @@ async function recordMusicCost(
  */
 async function submitJob(deps: PipelineDeps, job: JobRow): Promise<void> {
   const { ctx, log } = deps;
+  log('info', 'generation job started', { jobId: job.id });
 
   // GEN-12: the user asked to cancel and the provider has not been called yet,
   // so the cancellation wins. The version guard means only one of the two
@@ -163,7 +164,6 @@ async function submitJob(deps: PipelineDeps, job: JobRow): Promise<void> {
     log('warn', 'intent extraction failed', {
       jobId: job.id,
       status: intentResult.status,
-      prompt: redactPrompt(input.prompt),
     });
     await failJob(ctx, {
       job,
@@ -203,6 +203,7 @@ async function submitJob(deps: PipelineDeps, job: JobRow): Promise<void> {
     return;
   }
   const intent = parsed.data;
+  log('info', 'intent resolved', { jobId: job.id });
 
   // ---- music provider
   const attemptNo = await withTx(async (tx) => incrementAttempt(job.id, tx));
@@ -267,7 +268,10 @@ async function submitJob(deps: PipelineDeps, job: JobRow): Promise<void> {
           tx,
         ),
       );
-      if (moved) await processAudio(deps, moved, intent, result.audio, attempt.id);
+      if (moved) {
+        log('info', 'music provider completed', { jobId: job.id });
+        await processAudio(deps, moved, intent, result.audio, attempt.id);
+      }
       break;
     }
     case 'rejected': {
@@ -275,12 +279,14 @@ async function submitJob(deps: PipelineDeps, job: JobRow): Promise<void> {
       await recordMusicCost(ctx, { job, attemptId: attempt.id, eventType: 'rejected' });
       // §6.1: a provider rejection is not the user's fault and costs no credit.
       await failJob(ctx, { job, to: 'REJECTED', errorCode: 'upstream_rejected', errorDetail: result.code });
+      log('warn', 'music provider rejected', { jobId: job.id, code: result.code });
       break;
     }
     case 'failed': {
       await updateAttempt({ attemptId: attempt.id, status: 'failed', errorCode: result.code, finished: true });
       await recordMusicCost(ctx, { job, attemptId: attempt.id, eventType: 'failure' });
       await failJob(ctx, { job, to: 'FAILED', errorCode: 'upstream_failed', errorDetail: result.code });
+      log('warn', 'music provider failed', { jobId: job.id, code: result.code });
       break;
     }
     case 'unknown': {
@@ -354,8 +360,10 @@ async function pollJob(deps: PipelineDeps, job: JobRow): Promise<void> {
     }
 
     case 'completed': {
+      log('info', 'music provider completed', { jobId: job.id });
       if (!intent) {
         await failJob(ctx, { job, to: 'FAILED', errorCode: 'missing_resolved_params' });
+        log('warn', 'generation failed', { jobId: job.id, code: 'missing_resolved_params' });
         return;
       }
       if (attempt) {
@@ -369,6 +377,7 @@ async function pollJob(deps: PipelineDeps, job: JobRow): Promise<void> {
       if (attempt) await updateAttempt({ attemptId: attempt.id, status: 'rejected', errorCode: result.code, finished: true });
       await recordMusicCost(ctx, { job, attemptId: attempt?.id ?? null, eventType: 'rejected' });
       await failJob(ctx, { job, to: 'REJECTED', errorCode: 'upstream_rejected', errorDetail: result.code });
+      log('warn', 'music provider rejected', { jobId: job.id, code: result.code });
       return;
     }
 
@@ -376,6 +385,7 @@ async function pollJob(deps: PipelineDeps, job: JobRow): Promise<void> {
       if (attempt) await updateAttempt({ attemptId: attempt.id, status: 'failed', errorCode: result.code, finished: true });
       await recordMusicCost(ctx, { job, attemptId: attempt?.id ?? null, eventType: 'failure' });
       await failJob(ctx, { job, to: 'FAILED', errorCode: 'upstream_failed', errorDetail: result.code });
+      log('warn', 'music provider failed', { jobId: job.id, code: result.code });
       return;
     }
   }
@@ -435,6 +445,7 @@ async function processAudio(
       errorCode: 'audio_fetch_failed',
       errorDetail: (err as Error).message,
     });
+    log('warn', 'audio fetch failed', { jobId: job.id, code: 'audio_fetch_failed' });
     return;
   }
 
@@ -447,6 +458,7 @@ async function processAudio(
     body: buffer,
     contentType: audioRef.format === 'wav' ? 'audio/wav' : 'audio/mpeg',
   });
+  log('info', 'audio quarantined', { jobId: job.id });
 
   const check = await ctx.audio.checkOutput(buffer, {
     expectedDurationSeconds: intent.durationSeconds,
@@ -467,6 +479,7 @@ async function processAudio(
     });
     return;
   }
+  log('info', 'audio verified', { jobId: job.id });
 
   // GEN-09: the credit was already given back (a verification timeout, or a
   // failure the user was refunded for) and the result has only now arrived.

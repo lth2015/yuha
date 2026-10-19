@@ -1,0 +1,40 @@
+FROM node:22.13.1-bookworm-slim AS build
+
+RUN npm install -g pnpm@11.1.2 && npm cache clean --force
+WORKDIR /app
+
+COPY pnpm-lock.yaml pnpm-workspace.yaml package.json ./
+COPY packages/contracts/package.json packages/contracts/
+COPY packages/db/package.json packages/db/
+COPY packages/providers/package.json packages/providers/
+COPY apps/api/package.json apps/api/
+COPY apps/worker/package.json apps/worker/
+
+RUN pnpm install --frozen-lockfile --filter "@yuha/db..."
+
+COPY tsconfig.base.json ./
+COPY scripts/ scripts/
+COPY packages/contracts/ packages/contracts/
+COPY packages/db/ packages/db/
+
+RUN pnpm --filter @yuha/contracts build \
+ && pnpm --filter @yuha/db build
+
+RUN CI=true pnpm deploy --filter=@yuha/db --prod --legacy /deploy/migration
+
+FROM node:22.13.1-bookworm-slim AS runtime
+ADD https://truststore.pki.rds.amazonaws.com/global/global-bundle.pem /etc/ssl/certs/rds-global-bundle.pem
+RUN chmod 644 /etc/ssl/certs/rds-global-bundle.pem
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends ca-certificates tini \
+ && rm -rf /var/lib/apt/lists/*
+
+ENV NODE_ENV=production
+ENV NODE_EXTRA_CA_CERTS=/etc/ssl/certs/rds-global-bundle.pem
+WORKDIR /app
+RUN groupadd --gid 10001 loopscene \
+ && useradd --uid 10001 --gid 10001 --no-create-home --shell /usr/sbin/nologin loopscene
+COPY --from=build --chown=root:root /deploy/migration ./migration
+USER loopscene
+ENTRYPOINT ["/usr/bin/tini", "--"]
+CMD ["node", "migration/dist/cli.js", "migrate"]

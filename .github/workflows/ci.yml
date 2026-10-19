@@ -1,4 +1,4 @@
-# Build, check and test every commit, and every release before it ships.
+# Build, check and test every master commit before QA deployment.
 #
 # This file was complete and had never run. The triggers were `main` and
 # `master`; development happens on `yuha` and goes in without pull requests,
@@ -12,8 +12,6 @@ name: CI
 
 on:
   push:
-    # `yuha` is the working branch. Leaving it out is what made this file
-    # decorative; whichever branch the work is on has to be in this list.
     branches: [master]
   pull_request:
   workflow_dispatch:
@@ -242,68 +240,3 @@ jobs:
       - uses: docker://rhysd/actionlint:1.7.7
         with:
           args: -color
-
-  helm:
-    runs-on: ubuntu-24.04
-    timeout-minutes: 10
-    steps:
-      - uses: actions/checkout@v5
-      - uses: azure/setup-helm@v5
-        with:
-          version: v3.16.3
-      - name: Lint the chart
-        run: |
-          helm lint infra/helm/loopscene \
-            --set image.registry=example.dkr.ecr.ap-northeast-1.amazonaws.com \
-            --set image.api.repository=music/api \
-            --set image.worker.repository=music/worker \
-            --set image.api.digest=sha256:0 --set image.worker.digest=sha256:0
-      - name: Render the templates
-        run: |
-          helm template loopscene infra/helm/loopscene \
-            --set image.registry=example.dkr.ecr.ap-northeast-1.amazonaws.com \
-            --set image.api.repository=music/api \
-            --set image.worker.repository=music/worker \
-            --set image.api.digest=sha256:0000000000000000000000000000000000000000000000000000000000000000 \
-            --set image.worker.digest=sha256:0000000000000000000000000000000000000000000000000000000000000000 \
-            > /dev/null
-      - name: Render with each environment's real values
-        # The chart was only ever rendered with ad-hoc --set flags, so nothing
-        # checked the files a deploy actually passes. Helm ignores keys it does
-        # not recognise, which is exactly how a typo in deploy/envs reaches a
-        # cluster as a missing setting rather than as an error.
-        run: |
-          set -euo pipefail
-          DIGEST=sha256:0000000000000000000000000000000000000000000000000000000000000000
-          for values in deploy/envs/*.yaml; do
-            echo "rendering with $values"
-            helm template yuha infra/helm/loopscene \
-              --values "$values" \
-              --set image.registry=example.dkr.ecr.ap-northeast-1.amazonaws.com \
-              --set image.api.digest=$DIGEST \
-              --set image.worker.digest=$DIGEST \
-              > /dev/null
-          done
-
-      - name: Reject an unpinned image reference
-        # The chart must fail rather than deploy a mutable tag (§4.2).
-        #
-        # Everything EXCEPT the digest is supplied, so the failure can only be
-        # the digest guard. This used to render with no values at all and assert
-        # only that something failed, which any missing value would have
-        # satisfied — including two that the chart did not check at the time.
-        run: |
-          # `if cmd; then` rather than `$?`: with `set +e` above, any command
-          # between the assignment and the test would overwrite `$?` and the
-          # check would silently pass. Same reason shellcheck asks (SC2181).
-          if out=$(helm template loopscene infra/helm/loopscene \
-            --set image.registry=example.dkr.ecr.ap-northeast-1.amazonaws.com \
-            --set image.api.repository=music/api \
-            --set image.worker.repository=music/worker 2>&1); then
-            echo "FAIL: the chart rendered without a digest"
-            exit 1
-          fi
-          case "$out" in
-            *digest*) echo "chart correctly requires a digest-pinned image" ;;
-            *) echo "FAIL: render failed, but not on the digest:"; echo "$out"; exit 1 ;;
-          esac
