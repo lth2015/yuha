@@ -12,6 +12,7 @@
  * `cardPaymentsEnabled` is the one fact all of that should have been decided
  * by: Stripe, or the demo, where the simulated round trip is the point.
  */
+import { randomUUID } from 'node:crypto';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { query } from '@yuha/db';
 import { purchaseRoute } from '../apps/web/src/lib/purchase.js';
@@ -67,7 +68,9 @@ describe('the API refuses to start one, before writing anything', () => {
     const user = await integration.createUser();
     const res = await integration.app.inject({
       method: 'POST',
-      url: '/v1/market/tracks/00000000-0000-0000-0000-000000000000/license',
+      // Any id: refused before the track is looked up. (Not the all-zero UUID —
+      // check:stewardship reads its digit groups as a telephone number.)
+      url: `/v1/market/tracks/${randomUUID()}/license`,
       headers: { ...user.authHeader, 'idempotency-key': 'closed-card-0002' },
       payload: {} as never,
     });
