@@ -46,6 +46,7 @@ production mode if the dev auth adapter is selected, so they cannot exist there.
 | `pnpm db:migrate` | Apply pending migrations |
 | `pnpm db:reset` | Drop and recreate (refuses anything not named dev/test/local) |
 | `pnpm seed` | Price catalogue, landing samples, demo accounts |
+| `pnpm catalogue:sync` | Price catalogue only (what a deployed environment runs, as `node api/dist/sync-catalogue.js`) |
 | `pnpm fixtures:audio` | Re-synthesise the demo audio fixtures |
 
 ---

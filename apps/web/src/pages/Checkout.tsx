@@ -5,6 +5,7 @@ import { ApiError, apiFetch, newIdempotencyKey } from '../lib/api';
 import { useI18n } from '../lib/i18n';
 import { formatMoney, formatJst, useSession } from '../lib/session';
 import { LOCALES } from '../lib/money';
+import { safeInternalPath } from '../lib/paths';
 import { Badge, ErrorNotice, Loading } from '../components/common';
 
 interface Disclosure {
@@ -327,9 +328,8 @@ export const CHECKOUT_RETURN_KEY = 'yuha.checkout-return';
 
 function readReturnPath(): string | null {
   try {
-    const v = localStorage.getItem(CHECKOUT_RETURN_KEY);
     // Only ever an in-app path, never an absolute URL from somewhere else.
-    return v && v.startsWith('/') && !v.startsWith('//') ? v : null;
+    return safeInternalPath(localStorage.getItem(CHECKOUT_RETURN_KEY));
   } catch {
     return null;
   }

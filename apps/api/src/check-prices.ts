@@ -1,7 +1,7 @@
 /**
  * Asks Stripe whether the configured price ids are the ones we meant.
  *
- * The same check `seed.ts` runs, available on its own because a deployment
+ * The same check `syncCatalogue` runs before writing, available on its own because a deployment
  * that is already up is not re-seeded to change a price id — the ConfigMap
  * changes and the pods roll. Reads nothing but the catalogue and Stripe, and
  * writes nothing anywhere.
@@ -38,29 +38,44 @@ const ctx = createContext(config);
 const rows = cataloguePrices(config);
 const fromStripe = await verifyStripeCatalogue(ctx, rows);
 
-if (fromStripe === null) {
-  console.log('• nothing to check: this deployment uses the simulated payments adapter');
-  await closeDb();
-  process.exit(0);
-}
-
 /*
  * And the database, because that is what Checkout reads.
  *
  * `verifyStripeCatalogue` compares the environment variables against Stripe.
  * `createCheckout` compares nothing — it uses
- * `product_catalog.stripe_price_id`, which only `pnpm seed` writes. The
- * documented path for a price change moves the variable and rolls the pods,
- * so without this the command would have reported four ticks about ids no
- * purchase uses.
+ * `product_catalog.stripe_price_id`, which only `syncCatalogue` writes
+ * (`sync-catalogue` in a deployment, `pnpm seed` locally). The documented
+ * path for a price change moves the variable and rolls the pods, so without
+ * this the command would have reported four ticks about ids no purchase uses.
+ *
+ * Read even when payments are simulated: there is no Stripe to ask then, but
+ * an empty catalogue still means the pricing page has nothing to sell, and
+ * "nothing to check" was the answer this command gave about exactly that.
  */
-let problems = fromStripe;
+let problems = fromStripe ?? [];
+let catalogueRead = false;
 try {
-  problems = [...fromStripe, ...catalogueDrift(rows, await activeCataloguePriceIds())];
+  problems = [...problems, ...catalogueDrift(rows, await activeCataloguePriceIds())];
+  catalogueRead = true;
 } catch (err) {
   console.error(`• could not read product_catalog (${err instanceof Error ? err.message : String(err)}).`);
-  console.error('  The ids below were compared against Stripe only, not against what this');
-  console.error('  deployment will actually sell.');
+  if (fromStripe !== null) {
+    console.error('  The ids below were compared against Stripe only, not against what this');
+    console.error('  deployment will actually sell.');
+  }
+}
+
+if (fromStripe === null) {
+  console.log('• Stripe prices not checked: this deployment uses the simulated payments adapter');
+  await closeDb();
+  // No tick about a table nobody read: with no Stripe to ask, the catalogue
+  // was the only thing left to check.
+  if (!catalogueRead) process.exit(1);
+  const blocking = problems.filter(blocksSelling);
+  for (const p of blocking) console.error(`✗ ${describePriceProblem(p)}`);
+  if (blocking.length > 0) process.exit(1);
+  console.log(`✓ product_catalog has all ${rows.length} products`);
+  process.exit(0);
 }
 
 /*

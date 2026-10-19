@@ -43,6 +43,44 @@ function accountName(me: { displayName: string | null; email: string }): string 
   return me.displayName?.trim() || me.email;
 }
 
+function LangSwitch({
+  lang,
+  setLang,
+  label,
+  className = '',
+  inMenu = false,
+}: {
+  lang: string;
+  setLang: (code: (typeof LANGS)[number]['code']) => void;
+  label: string;
+  className?: string;
+  /**
+   * Inside the account menu (`role="menu"`) a plain toggle button is not
+   * something a menu may contain, and a screen reader in menu mode can skip
+   * it — on a signed-in phone that was the only way to change language. There
+   * the three are a radio group of menu items instead; nothing changes visually.
+   */
+  inMenu?: boolean;
+}) {
+  return (
+    <div className={`lang-switch${className ? ` ${className}` : ''}`} role="group" aria-label={label}>
+      {LANGS.map((l) => (
+        <button
+          key={l.code}
+          type="button"
+          className={`lang-switch__btn${lang === l.code ? ' is-active' : ''}`}
+          {...(inMenu
+            ? { role: 'menuitemradio', 'aria-checked': lang === l.code }
+            : { 'aria-pressed': lang === l.code })}
+          onClick={() => setLang(l.code)}
+        >
+          {l.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
 function SiteFooter() {
   const { t } = useI18n();
   const { runtime } = useSession();
@@ -93,6 +131,20 @@ export function Layout({ children }: { children: ReactNode }) {
   const location = useLocation();
   const player = usePlayer();
   const credits = entitlements?.availableUnits ?? me?.creditsAvailable ?? 0;
+  /*
+   * Carries where the buyer was, so the post-payment screen can send them back
+   * to it (Pricing parks `from` before leaving for Stripe). Not from /pricing
+   * itself, and not from the checkout screens, which are not somewhere to
+   * return to.
+   */
+  const topupHref =
+    location.pathname === '/pricing'
+      ? // Already there: keep the `from` it arrived with, or pressing the
+        // button again would forget where the buyer is to be sent back to.
+        `/pricing${location.search}`
+      : location.pathname.startsWith('/checkout')
+        ? '/pricing'
+        : `/pricing?from=${encodeURIComponent(location.pathname + location.search)}`;
   const [nowPlaying, setNowPlaying] = useState<NowPlayingSong | null>(null);
   const [nowPlayingOpen, setNowPlayingOpen] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
@@ -277,24 +329,29 @@ export function Layout({ children }: { children: ReactNode }) {
             ))}
           </nav>
 
-          <div className="topnav__account">
-            <div className="lang-switch" role="group" aria-label={t('a11y.lang')}>
-              {LANGS.map((l) => (
-                <button
-                  key={l.code}
-                  type="button"
-                  className={`lang-switch__btn${lang === l.code ? ' is-active' : ''}`}
-                  aria-pressed={lang === l.code}
-                  onClick={() => setLang(l.code)}
-                >
-                  {l.label}
-                </button>
-              ))}
-            </div>
+          <div className={`topnav__account${me ? ' is-signed-in' : ''}`}>
+            <LangSwitch lang={lang} setLang={setLang} label={t('a11y.lang')} />
             {me ? (
               <>
-                <Link to="/pricing" className="credit-pill">
-                  {t('nav.credits', { n: credits })}
+                {/*
+                  The way to buy credits, and it has to read as one. This pill
+                  used to say only 「可用 0 次」: a number in a lozenge, with
+                  nothing saying it could be pressed, and it was hidden outright
+                  at phone widths. Running out left no visible way forward.
+                  Now it names the action, turns petal-coloured at zero, and on
+                  a phone keeps the action while the count moves to the menu.
+                */}
+                <Link
+                  to={topupHref}
+                  className={`credit-pill credit-pill--topup${credits < 1 ? ' is-empty' : ''}`}
+                >
+                  <span className="credit-pill__count">
+                    {credits < 1 ? t('nav.creditsEmpty') : t('nav.credits', { n: credits })}
+                  </span>
+                  <span className="credit-pill__cta">
+                    <span aria-hidden="true">＋</span>
+                    {t('nav.topup')}
+                  </span>
                 </Link>
                 <div ref={accountRef} className={`account${menuOpen ? ' is-open' : ''}`}>
                   <button
@@ -322,9 +379,22 @@ export function Layout({ children }: { children: ReactNode }) {
                     <div className="account__who">
                       <strong>{me.displayName?.trim() || t('card.creator')}</strong>
                       <span className="small">{me.email}</span>
-                      {/* The nav pill is hidden on narrow phones; the count lives here too. */}
+                      {/* On narrow phones the header keeps only the top-up action; the count lives here. */}
                       <span className="small account__credits">{t('nav.credits', { n: credits })}</span>
                     </div>
+                    {/* Phones only (styles.css): with the top-up button in the
+                        header there is no room for the language switch beside
+                        it, so a signed-in phone keeps it here instead. */}
+                    <LangSwitch
+                      lang={lang}
+                      setLang={setLang}
+                      label={t('a11y.lang')}
+                      className="account__lang"
+                      inMenu
+                    />
+                    <Link role="menuitem" to={topupHref} className="account__topup" onClick={() => setMenuOpen(false)}>
+                      <span aria-hidden="true">＋</span> {t('nav.topup')}
+                    </Link>
                     <Link role="menuitem" to="/library" onClick={() => setMenuOpen(false)}>
                       {t('account.mySongs')}
                     </Link>
