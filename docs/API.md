@@ -107,8 +107,10 @@ from (UI-01). With a real provider this returns an empty list until pre-cleared
 assets are configured — arbitrary generations are not used as samples.
 
 ### `GET /v1/legal/business-disclosure`
-特定商取引法 details. `isPlaceholder: true` in demo; production refuses to boot
-without real values.
+特定商取引法 details: `entityName`, `representative`, `contact`, `phone`.
+`isPlaceholder: true` in demo; production refuses to boot without real values.
+There is no address field: the operator's address is withheld and provided on
+request (the 特商法 page says so), and config has no variable for it.
 
 ### `POST /v1/rights-cases`
 **Unauthenticated and free by design** (SEC-10) — a rights holder must never

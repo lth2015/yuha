@@ -509,7 +509,11 @@ const envSchema = z.object({
   // --- legal disclosure (SEC-13) -----------------------------------------
   LEGAL_ENTITY_NAME: z.string().optional(),
   LEGAL_ENTITY_REPRESENTATIVE: z.string().optional(),
-  LEGAL_ENTITY_ADDRESS: z.string().optional(),
+  // No variable for the operator's address: the operator is an individual, and
+  // the address is withheld from every page and provided on request (counsel,
+  // 2026-10-19).
+  // Not read at all, so a value left in a secret cannot be published by a
+  // later change: there is no config field for it to come out of.
   LEGAL_ENTITY_CONTACT: z.string().optional(),
   LEGAL_ENTITY_PHONE: z.string().optional(),
 });
@@ -654,10 +658,10 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
           'and private-address checks on provider audio URLs (SEC-05)',
       );
     }
-    if (!e.LEGAL_ENTITY_NAME || !e.LEGAL_ENTITY_ADDRESS || !e.LEGAL_ENTITY_CONTACT) {
+    if (!e.LEGAL_ENTITY_NAME || !e.LEGAL_ENTITY_CONTACT) {
       // SEC-13: placeholder disclosure is fine for a demo, never for real selling.
       problems.push(
-        'production mode requires LEGAL_ENTITY_NAME, LEGAL_ENTITY_ADDRESS and LEGAL_ENTITY_CONTACT ' +
+        'production mode requires LEGAL_ENTITY_NAME and LEGAL_ENTITY_CONTACT ' +
           '(特定商取引法 disclosure must not be a placeholder)',
       );
     }
@@ -1053,7 +1057,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     isDemo: mode === 'demo',
     adapters,
     alignment,
-    legalEntityConfigured: !!(e.LEGAL_ENTITY_NAME && e.LEGAL_ENTITY_ADDRESS && e.LEGAL_ENTITY_CONTACT),
+    legalEntityConfigured: !!(e.LEGAL_ENTITY_NAME && e.LEGAL_ENTITY_CONTACT),
   };
 }
 

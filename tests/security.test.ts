@@ -721,7 +721,6 @@ describe('SEC-03 / §3.1: run-mode boundaries are enforced at start-up', () => {
   const base = {
     DATABASE_URL: 'mysql://u:p@localhost:3306/x',
     LEGAL_ENTITY_NAME: 'テスト株式会社',
-    LEGAL_ENTITY_ADDRESS: '東京都渋谷区1-1-1',
     LEGAL_ENTITY_CONTACT: 'support@example.test',
     DATABASE_SSL: 'true',
   };
@@ -754,7 +753,6 @@ describe('SEC-03 / §3.1: run-mode boundaries are enforced at start-up', () => {
       loadConfig({
         ...base,
         LEGAL_ENTITY_NAME: '',
-        LEGAL_ENTITY_ADDRESS: '',
         LEGAL_ENTITY_CONTACT: '',
         RUN_MODE: 'production',
       } as never),
@@ -866,9 +864,11 @@ describe('SEC-06 / §3.1: the runtime descriptor exposes no secrets', () => {
     // controller of its users' personal data.
     expect(res.json().notice).toContain('Before real charging');
     expect(res.json().entityName).toBe('YUHA (operator not configured)');
-    for (const field of ['representative', 'address', 'contact'] as const) {
+    for (const field of ['representative', 'contact'] as const) {
       expect(res.json()[field], field).toBe('(not configured)');
     }
+    // Not even a placeholder for it: there is no address field to fill.
+    expect(res.json()).not.toHaveProperty('address');
     expect(JSON.stringify(res.json()).toLowerCase()).not.toContain('netstars');
   });
 
@@ -882,6 +882,25 @@ describe('SEC-06 / §3.1: the runtime descriptor exposes no secrets', () => {
    * block is a placeholder — so it is worth one case that it flips on the
    * three fields the config requires, and not on the two it does not.
    */
+  /*
+   * The operator's address is not published (counsel, 2026-10-19: as an
+   * individual operator it may be withheld, and is provided on request).
+   * So it is not part of "configured" — a deployment with the name and the
+   * contact address is complete — and the endpoint never serves it, even to a
+   * deployment whose secret still carries the variable from before.
+   */
+  it('SEC-13: the disclosure is complete without an address', () => {
+    const cfg = loadConfig({
+      RUN_MODE: 'demo',
+      DATABASE_URL: 'mysql://u:p@localhost:3306/x',
+      DEV_AUTH_SECRET: 'x',
+      STORAGE_SIGNING_SECRET: 'y',
+      LEGAL_ENTITY_NAME: 'テスト事業主',
+      LEGAL_ENTITY_CONTACT: 'legal@example.com',
+    } as never);
+    expect(cfg.legalEntityConfigured).toBe(true);
+  });
+
   it('SEC-13: a configured deployment publishes the operator it was given', async () => {
     /*
      * Invented, and deliberately so. This fixture used to be the real
@@ -907,7 +926,12 @@ describe('SEC-06 / §3.1: the runtime descriptor exposes no secrets', () => {
       expect(res.json().configured).toBe(true);
       expect(res.json().isPlaceholder).toBe(false);
       expect(res.json().notice).toBeNull();
+      // Set in the environment, and still not served — under any key.
+      expect(res.json()).not.toHaveProperty('address');
+      expect(res.body).not.toContain(operator.LEGAL_ENTITY_ADDRESS);
+      expect(res.body).not.toContain('100-0001');
       for (const [key, value] of Object.entries(operator)) {
+        if (key === 'LEGAL_ENTITY_ADDRESS') continue;
         const field = key.replace('LEGAL_ENTITY_', '').toLowerCase();
         const name = field === 'name' ? 'entityName' : field;
         expect(res.json()[name], key).toBe(value);

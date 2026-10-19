@@ -6,8 +6,8 @@
  * dash, so that a default can never name a party (SEC-13). Both are fine on
  * an about-us page behind a draft banner. Neither is fine in a statutory row:
  * 特商法 requires the 運営統括責任者 and a telephone number, and `loadConfig`
- * requires neither — production starts on NAME, ADDRESS and CONTACT alone, and
- * `legalEntityConfigured` is derived from the same three, so the banner is not
+ * requires neither — production starts on NAME and CONTACT alone, and
+ * `legalEntityConfigured` is derived from the same two, so the banner is not
  * showing either. `(not configured)` printed under 運営統括責任者 reads as the
  * name of the person responsible for the business.
  *

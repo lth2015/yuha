@@ -84,8 +84,8 @@
 - [ ] `DATABASE_SSL=true`
 - [ ] **`MUSIC_ALLOW_INSECURE_SELF_HOSTED` 必须不存在** —— 它会关掉 provider
       音频 URL 的 https 与私有地址检查（SEC-05）
-- [ ] `LEGAL_ENTITY_NAME` / `LEGAL_ENTITY_ADDRESS` / `LEGAL_ENTITY_CONTACT`
-      三项都非空且**不是占位值**（SEC-13，特商法披露）
+- [ ] `LEGAL_ENTITY_NAME` / `LEGAL_ENTITY_CONTACT`
+      两项都非空且**不是占位值**（SEC-13，特商法披露）。住所不配置：按请求提供
 - [ ] `MUSIC_COMMERCIAL_DELIVERY=true` 与 demo 音乐适配器**互斥**（SEC-09）。
       代码挡住的是「适配器是假的却声称商业交付」；签协议是这件事的业务前提，
       不是代码判断的对象
@@ -152,7 +152,7 @@
 - [ ] 6.2 `runMode` 改为 **`production`**
 - [ ] 6.3 `music.adapter` 改为真实适配器 **（需协议签署后）**
 - [ ] 6.4 `music.commercialDelivery` 设为 `true` **（需协议签署后）**
-- [ ] 6.5 法务信息（entityName / representative / address / contact / phone）
+- [ ] 6.5 法务信息（entityName / representative / contact / phone；住所按请求提供，不展示）
       替换为**律师确认过**的正式内容
 - [ ] 6.6 复核 `limits.*`：生产的日预算、并发数、限流是否仍然合适
 

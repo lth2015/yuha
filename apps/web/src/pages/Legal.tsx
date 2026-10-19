@@ -9,7 +9,6 @@ interface Disclosure {
   isPlaceholder: boolean;
   entityName: string;
   representative: string;
-  address: string;
   contact: string;
   phone: string;
   notice: string | null;
@@ -161,7 +160,7 @@ export function Terms() {
       </Section>
       <Section h="8. Contact">
         <p>
-          {d.entityName} — {d.contact} — {d.address}
+          {d.entityName} — {d.contact}
         </p>
       </Section>
     </LegalPage>
@@ -176,8 +175,8 @@ export function Privacy() {
       <DraftBanner isPlaceholder={d.isPlaceholder} />
       <Section h="1. Who we are">
         <p>
-          {d.entityName} ({d.address}) operates YUHA and is the controller of the personal data described
-          below. Privacy contact: {d.contact}.
+          {d.entityName} operates YUHA and is the controller of the personal data described below.
+          Privacy contact: {d.contact}.
         </p>
       </Section>
       <Section h="2. What we collect">
@@ -329,10 +328,6 @@ export function Company() {
           <div>
             <dt>Representative</dt>
             <dd>{d.representative}</dd>
-          </div>
-          <div>
-            <dt>Address</dt>
-            <dd>{d.address}</dd>
           </div>
           <div>
             <dt>Contact</dt>

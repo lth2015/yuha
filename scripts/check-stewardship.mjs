@@ -133,7 +133,6 @@ const surfaces = src.tokushoho === undefined ? [] : [
     rowsMustBe: {
       販売業者: 'd.entityName',
       運営統括責任者: 'd.representative',
-      所在地: 'd.address',
       電話番号: 'd.phone',
       メールアドレス: 'd.contact',
     },
@@ -150,7 +149,6 @@ const surfaces = src.tokushoho === undefined ? [] : [
     rowsMustBe: {
       Operator: 'd.entityName',
       Representative: 'd.representative',
-      Address: 'd.address',
       Contact: 'd.contact',
       Phone: 'd.phone',
     },
@@ -159,7 +157,7 @@ const surfaces = src.tokushoho === undefined ? [] : [
     label: 'Privacy → who we are (Legal.tsx)',
     text: src.legal && sliceOf(src.legal, '<Section h="1. Who we are">', '</Section>'),
     marker: 'controller',
-    mustContain: ['d.entityName', 'd.address', 'd.contact'],
+    mustContain: ['d.entityName', 'd.contact'],
   },
   {
     label: 'Terms → the service (Legal.tsx)',
@@ -173,7 +171,7 @@ const surfaces = src.tokushoho === undefined ? [] : [
     label: 'checkout seller block (Checkout.tsx)',
     text: src.checkout && sliceOf(src.checkout, "<h2 style={{ fontSize: 16, margin: 0 }}>{t('checkout.seller')}", '</section>'),
     marker: 'disclosure.',
-    mustContain: ['disclosure.entityName', 'disclosure.address', 'disclosure.contact'],
+    mustContain: ['disclosure.entityName', 'disclosure.contact'],
   },
   {
     label: 'business-disclosure endpoint (public.ts)',
@@ -182,7 +180,6 @@ const surfaces = src.tokushoho === undefined ? [] : [
     mustContain: [
       'entityName: ctx.config.LEGAL_ENTITY_NAME',
       'representative: ctx.config.LEGAL_ENTITY_REPRESENTATIVE',
-      'address: ctx.config.LEGAL_ENTITY_ADDRESS',
       'contact: ctx.config.LEGAL_ENTITY_CONTACT',
       'phone: ctx.config.LEGAL_ENTITY_PHONE',
     ],
@@ -237,6 +234,41 @@ for (const s of surfaces) {
 }
 notes.push(`${surfaces.length} disclosure surface(s): every operator value comes from the API, none names the steward`);
 
+/*
+ * And one value comes from nowhere: the operator's address.
+ *
+ * The operator is an individual, and counsel's advice (2026-10-19) is that the
+ * address is withheld from every page and given on request; the 特商法 page's
+ * 所在地 row says so. Withheld means not served either — the endpoint has no
+ * field for it, config has no variable, and the pods are not handed it — so a
+ * later change cannot render it back by adding one `{d.address}`. Each place
+ * it could come back through is checked here, by the expression that would
+ * carry it rather than by the value, which this repository never holds.
+ */
+const ADDRESS_EXPR = /\b(?:d|disclosure)\.address\b|\baddress:\s*ctx\.config\b|LEGAL_ENTITY_ADDRESS/;
+const ADDRESS_FILES = tracked.filter(
+  (p) =>
+    /^(apps|packages|deploy|infra|\.github)\//.test(p) &&
+    /\.(tsx?|mjs|ya?ml|tpl|json|tf)$/.test(p) &&
+    !/\/(dist|node_modules)\//.test(p),
+);
+let addressHits = 0;
+for (const path of ADDRESS_FILES) {
+  const text = readText(path);
+  text.split('\n').forEach((line, i) => {
+    const hit = line.match(ADDRESS_EXPR);
+    if (hit) {
+      addressHits++;
+      problems.push(`${path}:${i + 1} — carries the operator's address again ("${hit[0]}"); it is withheld and provided on request`);
+    }
+  });
+}
+if (ADDRESS_FILES.length < 50) {
+  // A filter that matches almost nothing passes vacuously.
+  problems.push(`the address scan covered only ${ADDRESS_FILES.length} files; its file filter is broken`);
+}
+if (addressHits === 0) notes.push(`the operator's address is served, rendered and mounted nowhere (${ADDRESS_FILES.length} files scanned)`);
+
 // ------------------------------------------------------------------ refusal
 
 if (src.config) {
@@ -255,13 +287,13 @@ if (src.config) {
     const end = src.config.indexOf('\n    }', at);
     const guard = src.config.slice(at, end < 0 ? at + 400 : end);
     const condition = guard.slice(0, guard.indexOf('{'));
-    for (const env of ['LEGAL_ENTITY_NAME', 'LEGAL_ENTITY_ADDRESS', 'LEGAL_ENTITY_CONTACT']) {
+    for (const env of ['LEGAL_ENTITY_NAME', 'LEGAL_ENTITY_CONTACT']) {
       if (!condition.includes(env)) problems.push(`config.ts — the production guard dropped ${env}`);
     }
     if (!/problems\.push\(/.test(guard)) {
       problems.push('config.ts — the production guard no longer records a problem, so nothing refuses');
     }
-    notes.push('production refuses to start without LEGAL_ENTITY_NAME/ADDRESS/CONTACT');
+    notes.push('production refuses to start without LEGAL_ENTITY_NAME/CONTACT');
   }
 }
 
@@ -277,7 +309,7 @@ if (src.config) {
  * the leak. A ConfigMap made it worse — `kubectl get cm` printed a home
  * address to anyone with read access to the namespace.
  *
- * The five variables now arrive in the runtime Secret from AWS Secrets Manager
+ * The variables (five then, four now that the address is withheld) arrive in the runtime Secret from AWS Secrets Manager
  * and are written down nowhere in this repository. That removes the needles,
  * so this checks two different things: that the wiring still routes them that
  * way, and that no tracked file carries anything *shaped* like a Japanese
@@ -287,7 +319,6 @@ if (src.config) {
 const LEGAL_VARS = [
   'LEGAL_ENTITY_NAME',
   'LEGAL_ENTITY_REPRESENTATIVE',
-  'LEGAL_ENTITY_ADDRESS',
   'LEGAL_ENTITY_CONTACT',
   'LEGAL_ENTITY_PHONE',
 ];
@@ -320,7 +351,7 @@ if (existsSync(join(ROOT, CONFIGMAP))) {
   }
 }
 if (!existsSync(join(ROOT, EXTERNAL_SECRET))) {
-  problems.push(`${EXTERNAL_SECRET} is gone; the five 特定商取引法 fields have no route to the pods`);
+  problems.push(`${EXTERNAL_SECRET} is gone; the 特定商取引法 fields have no route to the pods`);
 } else {
   const es = readText(EXTERNAL_SECRET);
   for (const v of LEGAL_VARS) {

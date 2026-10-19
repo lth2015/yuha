@@ -811,6 +811,15 @@ const MUTATIONS = [
     tests: ['tests/stripe-catalogue.test.ts'],
   },
   {
+    // The operator's address printed back onto the 特商法 page. Withheld on
+    // counsel's advice and provided on request; one `{d.address}` undoes it.
+    name: 'the-withheld-address-is-printed-again',
+    file: 'apps/web/src/pages/Tokushoho.tsx',
+    from: '          <dd>ご請求があった場合には、下記メールアドレス宛てにご連絡いただければ遅滞なく開示いたします。</dd>',
+    to: '          <dd>{d.address}</dd>',
+    tests: ['tests/statutory-disclosure.test.ts'],
+  },
+  {
     // An empty catalogue reported as nothing wrong: QA's empty pricing page,
     // with the check that should have caught it printing its success line.
     name: 'a-catalogue-the-database-does-not-have-passes-the-check',
