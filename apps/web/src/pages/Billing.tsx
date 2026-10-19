@@ -173,6 +173,13 @@ export default function Billing() {
         <p className="small muted" style={{ margin: 0 }}>
           {t('bill.spendOrder')}
         </p>
+        {/* The balance is shown here in large type; the way to add to it
+            belongs beside it, not only behind the plan section below. */}
+        <div>
+          <Link className="btn btn--primary" to="/pricing?from=/settings/billing">
+            {t('bill.topup')}
+          </Link>
+        </div>
       </section>
 
       <section className="panel stack">

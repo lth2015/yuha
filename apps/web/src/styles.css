@@ -1795,8 +1795,16 @@ textarea.is-full { border-color: var(--danger); }
   mask: var(--icon) center / contain no-repeat;
   --icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M9.6 16.6 5 12l-1.4 1.4 6 6 12-12L20.2 6z'/%3E%3C/svg%3E");
 }
-.pricing__notes { max-width: 720px; margin: var(--s4) auto 0; }
-.pricing__notes ul { margin: 0; padding-left: 18px; color: var(--muted); display: flex; flex-direction: column; gap: 6px; }
+/* Purchase facts: full plan-grid width, one short labelled fact per cell. */
+.pricing__notes { margin-top: var(--s4); padding-top: var(--s6); border-top: 1px solid var(--line); }
+.pricing__notes h2 { margin: 0 0 var(--s4); font-size: var(--t-title); }
+.pricing__facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: var(--s4) var(--s6); margin: 0; }
+.pricing__fact { display: flex; flex-direction: column; gap: 6px; padding-left: 14px; border-left: 2px solid color-mix(in srgb, var(--petal) 55%, transparent); }
+.pricing__fact dt { font-weight: 600; color: var(--ink); font-size: var(--t-body); }
+.pricing__fact dd { margin: 0; color: var(--muted); font-size: var(--t-body); line-height: 1.6; }
+.pricing__legal { margin: var(--s4) 0 0; color: var(--muted); }
+.pricing__legal a { color: var(--link); }
+.row--center { justify-content: center; flex-wrap: wrap; }
 
 /* ---------------------------------------------------------------- auth / mfa */
 .auth-page { min-height: 60vh; display: grid; place-items: center; padding: var(--s8) 0; }
@@ -1837,13 +1845,29 @@ textarea.is-full { border-color: var(--danger); }
 /* Japanese/Chinese labels break between characters; the pill must stay one line. */
 .credit-pill { white-space: nowrap; flex: none; }
 .account__credits { display: none; }
+/* The header pill is the top-up entry: count, then the action. */
+.credit-pill--topup { gap: 10px; padding: 0 6px 0 14px; }
+.credit-pill__cta { display: inline-flex; align-items: center; gap: 2px; min-height: 28px; padding: 0 10px; border-radius: 999px; background: var(--petal-soft); color: var(--link); font-weight: 600; }
+.credit-pill--topup.is-empty { border-color: color-mix(in srgb, var(--petal) 55%, transparent); background: var(--petal-soft); }
+.credit-pill--topup.is-empty .credit-pill__cta { background: var(--petal); color: var(--ink); }
+.account__menu a.account__topup { color: var(--link); font-weight: 600; }
 /* At phone widths logo + language + credits + avatar do not fit on one row:
-   the pill moves into the account menu instead of pushing the avatar off. */
+   the count moves into the account menu, the top-up action stays. */
+.account__lang { display: none; }
 @media (max-width: 480px) {
-  .topnav__account .credit-pill { display: none; }
+  .topnav__account .credit-pill__count { display: none; }
+  .topnav__account .credit-pill--topup { padding: 0; border: none; background: none; min-height: 0; }
+  .topnav__account .credit-pill__cta { min-height: 36px; padding: 0 14px; }
   .account__credits { display: block; }
+  /* Signed in, the header is logo · top-up · avatar; language moves into the menu. */
+  .topnav__account.is-signed-in > .lang-switch { display: none; }
+  .account__lang { display: inline-flex; align-self: flex-start; margin: 4px 12px 6px; }
+  /* `.account__menu button` is a full-width menu row; these are segments. */
+  .account__menu .account__lang .lang-switch__btn { min-height: 32px; padding: 6px 12px; border-radius: 999px; text-align: center; }
+  .account__menu .account__lang .lang-switch__btn:not(.is-active):hover { background: transparent; color: var(--ink); }
 }
 .credit-pill:hover { border-color: var(--ink); }
+.credit-pill--topup:hover .credit-pill__cta { background: var(--petal); color: var(--ink); }
 
 /* mobile tab bar */
 .tabbar { display: none; }
