@@ -148,9 +148,17 @@ jobs:
           workdir="$RUNNER_TEMP/yuha-k8s"
           mkdir -p "$workdir"
           cp deploy/k8s/qa/resources.yaml deploy/k8s/qa/migration.yaml "$workdir/"
-          sed -i "s#sha256:0000000000000000000000000000000000000000000000000000000000000000#$API_DIGEST#g" "$workdir/resources.yaml"
-          sed -i "s#sha256:0000000000000000000000000000000000000000000000000000000000000000#$WORKER_DIGEST#g" "$workdir/resources.yaml"
-          sed -i "s#sha256:0000000000000000000000000000000000000000000000000000000000000000#$MIGRATION_DIGEST#g" "$workdir/migration.yaml"
+          placeholder=sha256:0000000000000000000000000000000000000000000000000000000000000000
+          sed -i "s#music/api@$placeholder#music/api@$API_DIGEST#g" "$workdir/resources.yaml"
+          sed -i "s#music/worker@$placeholder#music/worker@$WORKER_DIGEST#g" "$workdir/resources.yaml"
+          sed -i "s#music/migration@$placeholder#music/migration@$MIGRATION_DIGEST#g" "$workdir/migration.yaml"
+          grep -Fq "music/api@$API_DIGEST" "$workdir/resources.yaml"
+          grep -Fq "music/worker@$WORKER_DIGEST" "$workdir/resources.yaml"
+          grep -Fq "music/migration@$MIGRATION_DIGEST" "$workdir/migration.yaml"
+          if grep -Fq "$placeholder" "$workdir/resources.yaml" "$workdir/migration.yaml"; then
+            echo "::error::An image digest placeholder remains in the deployment manifests."
+            exit 1
+          fi
 
           # Migration is a hard gate. Apply only the objects it needs first;
           # Deployments, Services, HPAs and Ingress must not start yet.
