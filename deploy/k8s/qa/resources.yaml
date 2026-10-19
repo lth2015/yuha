@@ -469,8 +469,6 @@ spec:
             objectAlias: LEGAL_ENTITY_NAME
           - path: LEGAL_ENTITY_REPRESENTATIVE
             objectAlias: LEGAL_ENTITY_REPRESENTATIVE
-          - path: LEGAL_ENTITY_ADDRESS
-            objectAlias: LEGAL_ENTITY_ADDRESS
           - path: LEGAL_ENTITY_CONTACT
             objectAlias: LEGAL_ENTITY_CONTACT
           - path: LEGAL_ENTITY_PHONE
@@ -505,8 +503,6 @@ spec:
           key: LEGAL_ENTITY_NAME
         - objectName: LEGAL_ENTITY_REPRESENTATIVE
           key: LEGAL_ENTITY_REPRESENTATIVE
-        - objectName: LEGAL_ENTITY_ADDRESS
-          key: LEGAL_ENTITY_ADDRESS
         - objectName: LEGAL_ENTITY_CONTACT
           key: LEGAL_ENTITY_CONTACT
         - objectName: LEGAL_ENTITY_PHONE
@@ -583,8 +579,6 @@ spec:
             objectAlias: LEGAL_ENTITY_NAME
           - path: LEGAL_ENTITY_REPRESENTATIVE
             objectAlias: LEGAL_ENTITY_REPRESENTATIVE
-          - path: LEGAL_ENTITY_ADDRESS
-            objectAlias: LEGAL_ENTITY_ADDRESS
           - path: LEGAL_ENTITY_CONTACT
             objectAlias: LEGAL_ENTITY_CONTACT
           - path: LEGAL_ENTITY_PHONE
@@ -619,8 +613,6 @@ spec:
           key: LEGAL_ENTITY_NAME
         - objectName: LEGAL_ENTITY_REPRESENTATIVE
           key: LEGAL_ENTITY_REPRESENTATIVE
-        - objectName: LEGAL_ENTITY_ADDRESS
-          key: LEGAL_ENTITY_ADDRESS
         - objectName: LEGAL_ENTITY_CONTACT
           key: LEGAL_ENTITY_CONTACT
         - objectName: LEGAL_ENTITY_PHONE

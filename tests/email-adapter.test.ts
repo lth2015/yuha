@@ -77,7 +77,6 @@ describe('what production will and will not start with', () => {
   const base = {
     DATABASE_URL: 'mysql://u:p@localhost:3306/x',
     LEGAL_ENTITY_NAME: 'テスト株式会社',
-    LEGAL_ENTITY_ADDRESS: '東京都渋谷区1-1-1',
     LEGAL_ENTITY_CONTACT: 'support@example.test',
     DATABASE_SSL: 'true',
   };

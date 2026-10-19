@@ -102,8 +102,10 @@ export function Tokushoho() {
           </dd>
         </div>
         <div>
+          {/* Withheld from the page and provided on request (counsel,
+              2026-10-19); the API does not serve it at all. */}
           <dt>所在地</dt>
-          <dd>{d.address}</dd>
+          <dd>ご請求があった場合には、下記メールアドレス宛てにご連絡いただければ遅滞なく開示いたします。</dd>
         </div>
         <div>
           <dt>電話番号</dt>

@@ -13,7 +13,6 @@ interface Disclosure {
   isPlaceholder: boolean;
   entityName: string;
   representative: string;
-  address: string;
   contact: string;
   notice: string | null;
 }
@@ -219,7 +218,6 @@ export function CheckoutConfirm() {
           <h2 style={{ fontSize: 16, margin: 0 }}>{t('checkout.seller')}</h2>
           <div className="small muted">
             <div>{disclosure.entityName}</div>
-            <div>{disclosure.address}</div>
             <div>{disclosure.contact}</div>
           </div>
           {disclosure.isPlaceholder && (

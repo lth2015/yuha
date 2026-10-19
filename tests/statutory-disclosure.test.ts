@@ -3,9 +3,9 @@
  * saying unset.
  *
  * 特定商取引法 requires the 運営統括責任者 and a telephone number. `loadConfig`
- * requires neither: production starts on LEGAL_ENTITY_NAME, _ADDRESS and
- * _CONTACT, and `legalEntityConfigured` — which the draft banner reads — is
- * derived from the same three. So a deployment that sets those three and not
+ * requires neither: production starts on LEGAL_ENTITY_NAME and _CONTACT, and
+ * `legalEntityConfigured` — which the draft banner reads — is derived from the
+ * same two. So a deployment that sets those two and not
  * the other two boots, reports `isPlaceholder: false`, shows no banner, and
  * renders `運営統括責任者: (not configured)` as a statutory disclosure. That is
  * the name of the person responsible for the business, published as a string
@@ -68,15 +68,24 @@ describe('the statutory rows 特商法 requires and loadConfig does not', () => 
     });
   }
 
-  it('the three loadConfig does require are printed without a guard', () => {
+  it('the two loadConfig does require are printed without a guard', () => {
     // Not a style point: production cannot start without these, so a guard
     // here would be dead code pretending to be a safeguard.
     for (const [label, field] of [
       ['販売業者', 'd.entityName'],
-      ['所在地', 'd.address'],
       ['メールアドレス', 'd.contact'],
     ] as const) {
       expect(cell(label).replace(/\s+/g, ' ').trim()).toBe(`{${field}}`);
     }
+  });
+
+  it('所在地 is disclosed on request, not printed', () => {
+    // Counsel (2026-10-19): an individual operator's address may be withheld
+    // from the page, provided it is given without delay when asked for. So
+    // the row stays — it says how to get the address — and prints none.
+    const dd = cell('所在地');
+    expect(dd).not.toMatch(/\bd\.address\b/);
+    expect(dd).toContain('請求');
+    expect(dd).toContain('遅滞なく');
   });
 });

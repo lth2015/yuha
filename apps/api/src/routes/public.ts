@@ -162,8 +162,8 @@ export default async function publicRoutes(app: FastifyInstance, opts: { ctx: Ap
      * It used to be a live company's name, address and privacy mailbox, so
      * every demo and every local checkout published that company as the
      * operator of this service and as the controller of its users' personal
-     * data — `Legal.tsx` renders "{entityName} ({address}) operates YUHA and
-     * is the controller of the personal data described below", and the
+     * data — `Legal.tsx` renders "{entityName} operates YUHA and is the
+     * controller of the personal data described below", and the
      * 特商法 page puts the same block under 販売業者. A default should never
      * be able to name somebody; production refuses to start without the real
      * values (SEC-13), and until they are set this says so in the field
@@ -171,11 +171,12 @@ export default async function publicRoutes(app: FastifyInstance, opts: { ctx: Ap
      */
     entityName: ctx.config.LEGAL_ENTITY_NAME ?? 'YUHA (operator not configured)',
     representative: ctx.config.LEGAL_ENTITY_REPRESENTATIVE ?? '(not configured)',
-    address: ctx.config.LEGAL_ENTITY_ADDRESS ?? '(not configured)',
+    // No address. The operator's is withheld and provided on request — the
+    // 特商法 page says so in its 所在地 row — and config has no field for it.
     contact: ctx.config.LEGAL_ENTITY_CONTACT ?? '(not configured)',
     phone: ctx.config.LEGAL_ENTITY_PHONE ?? '—',
     notice: ctx.config.legalEntityConfigured
       ? null
-      : 'Company details shown from configuration defaults. Before real charging, replace with the registered legal-entity block (representative, address, contact) and counsel-reviewed terms.',
+      : 'Company details shown from configuration defaults. Before real charging, replace with the registered legal-entity block (name, representative, contact) and counsel-reviewed terms.',
   }));
 }
