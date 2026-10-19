@@ -101,7 +101,7 @@ worker 的配置同样要查：按 Job 文件顶部的说明换成 `qa-music-wor
 回退切换 PR（`RUN_MODE` 回到 integration）时，**同时**把 ConfigMap 的 `PAYMENTS_ADAPTER` 改回 `simulated`、
 把 secret 的 `STRIPE_SECRET_KEY` 换回非 live 值——integration 模式见到 `sk_live_` 会拒绝启动。
 
-## 收款之前还没解决的
+## 法务
 
-法务页面全部带着「Draft — pending legal review」横幅（`apps/web/src/pages/Legal.tsx` 的 `LEGAL_TEXT_REVIEWED = false`）。
-正式收款前应由律师确认条款，并在同一个提交里把它改为 `true`。
+律师已审阅条款、隐私政策、公司信息页和特商法页（运营方 2026-10-19 确认），`LEGAL_TEXT_REVIEWED` 由 lth2015/yuha#5 改为 `true`。
+特商法页的「支払方法」「返品・キャンセル」两栏也在 #5 中补齐。之后改动这些页面的文字，不在这次审阅范围内。
