@@ -16,7 +16,7 @@ import { productionReadiness, scrub } from '../apps/api/src/services/production-
 const today = {
   RUN_MODE: 'integration',
   NODE_ENV: 'production',
-  DATABASE_URL: 'mysql://u:p@db.example:3306/yuha',
+  DATABASE_URL: 'mysql://dbuser:dbpassword-must-not-print@localhost:3306/yuha',
   AUTH_ADAPTER: 'google',
   GOOGLE_CLIENT_ID: 'gid',
   GOOGLE_CLIENT_SECRET: 'gsecret-should-not-print',
@@ -71,7 +71,7 @@ describe('production readiness of an environment', () => {
       'gsecret-should-not-print',
       'session-secret-should-not-print',
       'whsec_mustnotprint',
-      'u:p@db.example',
+      'dbpassword-must-not-print',
     ]) {
       expect(out).not.toContain(secret);
     }
