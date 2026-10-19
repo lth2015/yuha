@@ -328,6 +328,7 @@ kind: Ingress
 metadata:
   name: yuha-api
   annotations:
+    alb.ingress.kubernetes.io/certificate-arn: arn:aws:acm:ap-northeast-1:654654578710:certificate/a9decadf-3e72-4bae-a2f2-67e918902fb6
     alb.ingress.kubernetes.io/healthcheck-path: /health
     alb.ingress.kubernetes.io/listen-ports: '[{"HTTPS":443}]'
     alb.ingress.kubernetes.io/load-balancer-attributes: idle_timeout.timeout_seconds=60
