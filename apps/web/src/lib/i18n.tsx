@@ -2613,6 +2613,16 @@ export function I18nProvider({ children }: { children: ReactNode }) {
  *
  * Call `t(key, params)` first for the text slots, then this for the elements.
  */
+/**
+ * One dictionary string in a fixed language. For the 特商法 page, which stays
+ * Japanese whatever the reader chose, and must say exactly what the
+ * confirmation screen says in Japanese — reading the same entry is what keeps
+ * the two statutory surfaces from drifting apart.
+ */
+export function textIn(lang: Lang, key: string): string {
+  return DICTS[lang][key] ?? key;
+}
+
 export function rich(text: string, nodes: Record<string, ReactNode>): ReactNode[] {
   return text.split(/(\{[a-zA-Z]+\})/).map((part, i) => {
     const slot = /^\{([a-zA-Z]+)\}$/.exec(part)?.[1];

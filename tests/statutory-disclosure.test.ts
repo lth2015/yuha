@@ -89,3 +89,23 @@ describe('the statutory rows 特商法 requires and loadConfig does not', () => 
     expect(dd).toContain('遅滞なく');
   });
 });
+
+describe('the rows counsel reviewed are filled, not marked', () => {
+  it('返品・キャンセル says what the confirmation screen says, from the same entries', () => {
+    const dd = cell('返品・キャンセル');
+    expect(dd).not.toContain('<Pending');
+    for (const key of ['checkout.cancel.oneTime', 'checkout.cancel.sub', 'checkout.refund']) {
+      expect(dd).toContain(`textIn('ja', '${key}')`);
+    }
+  });
+
+  it('支払方法 lists what this deployment can actually take', () => {
+    const dd = cell('支払方法');
+    expect(dd).not.toContain('<Pending');
+    // Card only when a card purchase can complete here; the stablecoins the
+    // runtime says are on; and a sentence, not an empty list, when neither.
+    expect(dd).toContain('{card &&');
+    expect(dd).toContain('stablecoins.length > 0');
+    expect(dd).toContain('{!card && stablecoins.length === 0');
+  });
+});
