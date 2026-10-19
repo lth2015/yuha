@@ -811,29 +811,22 @@ const MUTATIONS = [
     tests: ['tests/stripe-catalogue.test.ts'],
   },
   {
-    // A credit-pack checkout started where card payment cannot finish: the
-    // pending order and the "demo mode only" dead end on yuha.studio.
-    name: 'a-card-checkout-starts-where-cards-cannot-finish',
-    file: 'apps/api/src/services/billing.ts',
-    from: "  if (!features.cardPaymentsEnabled) {\n    throw new AppError('CARD_PAYMENTS_CLOSED'",
-    to: "  if (false) {\n    throw new AppError('CARD_PAYMENTS_CLOSED'",
-    tests: ['tests/card-payments-closed.test.ts'],
-  },
-  {
-    name: 'a-licence-checkout-starts-where-cards-cannot-finish',
-    file: 'apps/api/src/services/market.ts',
-    from: "  if (!(await ctx.features()).cardPaymentsEnabled) {",
+    // A test secret key reported as fine for production: the live/test pair
+    // that loadConfig deliberately allows outside production, and Checkout
+    // cannot use.
+    name: 'a-test-stripe-key-passes-the-production-check',
+    file: 'apps/api/src/services/production-readiness.ts',
+    from: "  if (stripe.secretKey === 'test') {",
     to: "  if (false) {",
-    tests: ['tests/card-payments-closed.test.ts'],
+    tests: ['tests/production-readiness.test.ts'],
   },
   {
-    // Simulated payments counted as "card payment works" everywhere, which
-    // is the exact misreading the integration deployment made.
-    name: 'simulated-payments-count-as-open-outside-the-demo',
-    file: 'apps/api/src/config.ts',
-    from: "    cardPaymentsEnabled: cfg.adapters.payments === 'stripe' || cfg.mode === 'demo',",
-    to: "    cardPaymentsEnabled: true,",
-    tests: ['tests/card-payments-closed.test.ts'],
+    // The report echoing what it was given — a secret in a terminal and a ticket.
+    name: 'the-production-check-prints-values',
+    file: 'apps/api/src/services/production-readiness.ts',
+    from: "    out = out.split(value).join(`<${key}>`);",
+    to: '    void key;',
+    tests: ['tests/production-readiness.test.ts'],
   },
   {
     // The operator's address printed back onto the 特商法 page. Withheld on

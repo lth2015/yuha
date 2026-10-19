@@ -1,0 +1,92 @@
+# One-off: would yuha.studio start, and sell, in production mode with the
+# configuration it has RIGHT NOW? Not applied by the deploy workflow — an
+# operator runs it by hand before the RUN_MODE cutover. Starts nothing, writes
+# nothing, prints no value. See deploy/PRODUCTION_CUTOVER.md.
+#
+# Why a fresh pod and not `kubectl exec` into the running API: a container
+# reads its environment once, at start. After the ConfigMap is edited, the
+# running pods still hold the old values, so an exec would check the past.
+# This pod starts with the current ConfigMap and the current secret mount —
+# exactly what the API will see after the cutover — with RUN_MODE forced to
+# production.
+#
+#   image=$(kubectl -n qa-music get deploy yuha-api \
+#     -o jsonpath='{.spec.template.spec.containers[0].image}')
+#   sed "s#__API_IMAGE__#$image#" deploy/k8s/qa/production-check.yaml \
+#     | kubectl -n qa-music apply -f -
+#   kubectl -n qa-music wait --for=condition=complete --timeout=120s job/yuha-production-check \
+#     || kubectl -n qa-music wait --for=condition=failed --timeout=5s job/yuha-production-check
+#   kubectl -n qa-music logs job/yuha-production-check
+#   kubectl -n qa-music delete job yuha-production-check
+#
+# To check the WORKER's configuration, change the ConfigMap below to
+# qa-music-worker-config, the SecretProviderClass to yuha-worker-secrets and
+# the service account to worker (it is the one allowed to read that secret).
+# The API image carries the same `loadConfig`, so the report applies.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: yuha-production-check
+  labels:
+    app.kubernetes.io/name: yuha
+    component: production-check
+spec:
+  backoffLimit: 0
+  ttlSecondsAfterFinished: 3600
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: yuha
+        component: production-check
+    spec:
+      restartPolicy: Never
+      serviceAccountName: api
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        fsGroup: 10001
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: check
+          image: __API_IMAGE__
+          command: ["node", "api/dist/check-production.js"]
+          env:
+            - name: RUN_MODE
+              value: "production"
+            - name: NODE_ENV
+              value: "production"
+            - name: APP_SECRET_DIR
+              value: /app/app-secrets
+          envFrom:
+            - configMapRef:
+                name: qa-music-api-config
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+            - name: aws-secrets
+              mountPath: /app/app-secrets
+              readOnly: true
+            - name: database-secrets
+              mountPath: /app/secrets
+              readOnly: true
+      volumes:
+        - name: tmp
+          emptyDir: {}
+        - name: aws-secrets
+          csi:
+            driver: secrets-store.csi.k8s.io
+            readOnly: true
+            volumeAttributes:
+              secretProviderClass: yuha-api-secrets
+        - name: database-secrets
+          csi:
+            driver: secrets-store.csi.k8s.io
+            readOnly: true
+            volumeAttributes:
+              secretProviderClass: yuha-database-secrets
