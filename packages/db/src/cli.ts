@@ -1,7 +1,7 @@
 /**
  * Migration CLI: `pnpm db:migrate` / `pnpm db:reset`.
- * Reads the RDS JSON credentials mounted under the shared application secret
- * directory so migration uses the same database source as API and Worker.
+ * Uses the mounted RDS credentials in the cluster, or DATABASE_URL for local
+ * development and CI.
  */
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -35,7 +35,9 @@ function readDatabaseUrl(): string | undefined {
   }
 }
 
-const url = readDatabaseUrl();
+const url = process.env.DATABASE_SECRET_FILE
+  ? readDatabaseUrl()
+  : process.env.DATABASE_URL ?? readDatabaseUrl();
 if (!url) {
   console.error(
     `MySQL connection settings are incomplete. Expected mounted username/password plus DATABASE_HOST, DATABASE_PORT, and DATABASE_NAME: ${credentialsFile}`,
