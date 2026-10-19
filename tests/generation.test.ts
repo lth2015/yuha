@@ -64,12 +64,16 @@ async function dispatchOutbox(): Promise<number> {
 }
 
 /** Runs the worker until the job reaches a terminal state, or the budget runs out. */
-async function runToCompletion(jobId: string, maxSteps = 6): Promise<JobRow> {
+async function runToCompletion(
+  jobId: string,
+  maxSteps = 6,
+  jobLog: Parameters<typeof runJobStep>[0]['log'] = log,
+): Promise<JobRow> {
   for (let i = 0; i < maxSteps; i += 1) {
     const job = await getJob(jobId);
     if (!job) throw new Error('job vanished');
     if (['DELIVERED', 'FAILED', 'REJECTED', 'CANCELLED'].includes(job.state)) return job;
-    await runJobStep({ ctx: h.ctx, owner: `test-${i}`, log }, jobId);
+    await runJobStep({ ctx: h.ctx, owner: `test-${i}`, log: jobLog }, jobId);
   }
   return (await getJob(jobId))!;
 }
@@ -203,9 +207,20 @@ describe('worker pipeline', () => {
     const user = await h.createUser({ credits: 2 });
     const { jobId } = (await post(user, defaultBody, 'key-deliver')).json();
 
-    const job = await runToCompletion(jobId);
+    const steps: string[] = [];
+    const job = await runToCompletion(jobId, 6, (_level, msg, fields) => {
+      if (fields?.jobId === jobId) steps.push(msg);
+    });
     expect(job.state).toBe('DELIVERED');
     expect(job.track_id).not.toBeNull();
+    expect(steps).toEqual(expect.arrayContaining([
+      'generation job started',
+      'intent resolved',
+      'music provider completed',
+      'audio quarantined',
+      'audio verified',
+      'delivered',
+    ]));
 
     const balance = await getBalance(user.id);
     expect(balance).toMatchObject({ available: 1, reserved: 0, consumed: 1 });
@@ -257,9 +272,17 @@ describe('worker pipeline', () => {
     // The fault marker travels in the brief, so the production code path runs.
     const { jobId } = (await post(user, { ...defaultBody, prompt: '__FAULT_REJECT__' }, 'key-reject')).json();
 
-    const job = await runToCompletion(jobId);
+    const steps: string[] = [];
+    const job = await runToCompletion(jobId, 6, (_level, msg, fields) => {
+      if (fields?.jobId === jobId) steps.push(msg);
+    });
     expect(job.state).toBe('REJECTED');
     expect(job.track_id).toBeNull();
+    expect(steps).toEqual(expect.arrayContaining([
+      'generation job started',
+      'intent resolved',
+      'music provider rejected',
+    ]));
 
     // Released, not consumed: a provider rejection is not the user's fault.
     expect(await getBalance(user.id)).toMatchObject({ available: 2, consumed: 0 });

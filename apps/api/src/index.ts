@@ -44,13 +44,12 @@ async function main(): Promise<void> {
 
   app.log.info(
     {
+      component: 'api',
       mode: config.mode,
-      adapters: config.adapters,
-      commercialDelivery: false,
+      music: ctx.music.capabilities().providerId,
+      queue: ctx.queue.kind,
     },
-    config.isDemo
-      ? 'LOOPSCENE API started in DEMO mode — simulated payments, synthetic audio, no commercial licence'
-      : `LOOPSCENE API started in ${config.mode} mode`,
+    'api started',
   );
 }
 

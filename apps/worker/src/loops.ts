@@ -65,8 +65,10 @@ export function isolatedStep(log: LoopLog) {
 
 export function makeLogger(component: string) {
   return (level: 'info' | 'warn' | 'error', msg: string, fields: Record<string, unknown> = {}) => {
-    // Structured JSON so CloudWatch queries work; no prompts, no secrets.
-    console.log(JSON.stringify({ level, component, msg, ts: new Date().toISOString(), ...fields }));
+    // Provider and RPC errors can embed credentials in URLs; keep the error, not the URL.
+    console.log(JSON.stringify({ level, component, msg, ts: new Date().toISOString(), ...fields }, (_key, value) =>
+      typeof value === 'string' ? value.replace(/https?:\/\/[^\s"']+/g, '[redacted-url]') : value,
+    ));
   };
 }
 
@@ -186,6 +188,7 @@ export async function outboxLoop(deps: LoopDeps): Promise<void> {
         try {
           await ctx.queue.send({ body: { ...row.payload, outboxId: row.id, eventType: row.event_type } });
           await markDispatched(row.id);
+          log('info', 'outbox dispatched', { outboxId: row.id, jobId: row.aggregate_id, eventType: row.event_type });
           dispatched += 1;
         } catch (err) {
           await markDispatchFailed({
@@ -287,6 +290,7 @@ export async function generationLoop(deps: LoopDeps): Promise<void> {
 export async function pollingLoop(deps: LoopDeps): Promise<void> {
   const { ctx, owner, log } = deps;
   while (!deps.stopped()) {
+    let jobId: string | null = null;
     try {
       const job = await withTx(async (tx) =>
         claimJob({ owner, leaseSeconds: ctx.config.JOB_LEASE_SECONDS }, tx),
@@ -295,9 +299,10 @@ export async function pollingLoop(deps: LoopDeps): Promise<void> {
         await sleep(2000);
         continue;
       }
+      jobId = job.id;
       await runJobStep(deps, job.id);
     } catch (err) {
-      log('error', 'polling loop error', { err: describeError(err) });
+      log('error', 'polling loop error', { jobId, err: describeError(err) });
       await sleep(2000);
     }
   }
