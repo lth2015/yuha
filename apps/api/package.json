@@ -17,6 +17,7 @@
     "dev": "tsx watch --env-file-if-exists=../../.env src/index.ts",
     "start": "node dist/index.js",
     "seed": "tsx --env-file-if-exists=../../.env src/seed.ts",
+    "catalogue:sync": "tsx --env-file-if-exists=../../.env src/sync-catalogue.ts",
     "openapi": "tsx --env-file-if-exists=../../.env src/openapi/emit.ts",
     "check:prices": "tsx --env-file-if-exists=../../.env src/check-prices.ts"
   },

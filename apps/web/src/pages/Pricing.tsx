@@ -23,6 +23,14 @@ const PLAN_COPY: Record<string, { tag: string; bullets: string[]; highlight?: bo
   },
 };
 
+/** Literal keys, so `check:i18n` can see every one of them in use. */
+const NOTES = [
+  ['price.note1.title', 'price.note1'],
+  ['price.note2.title', 'price.note2'],
+  ['price.note3.title', 'price.note3'],
+  ['price.note4.title', 'price.note4'],
+] as const;
+
 /**
  * Plans. Amounts come from the server catalogue (PAY-01): the checkout request
  * sends only the product key; the price can never be edited client-side.
@@ -237,21 +245,44 @@ export default function Pricing() {
       {products !== null && plans.length === 0 && (
         <div className="empty" role="status">
           <p>{t('price.noPlans')}</p>
-          <Link to="/create" className="btn">
-            {t('price.noPlansAction')}
-          </Link>
+          {/* Retry first: an empty catalogue is almost always a server-side
+              state that clears on its own, and "go back to writing" alone sent
+              someone who had just run out of credits away with nothing. */}
+          <div className="row row--center">
+            <button type="button" className="btn btn--primary" onClick={() => setAttempt((n) => n + 1)}>
+              {t('price.noPlansRetry')}
+            </button>
+            <Link to="/create" className="btn btn--ghost">
+              {t('price.noPlansAction')}
+            </Link>
+          </div>
         </div>
       )}
 
-      <div className="pricing__notes panel">
-        <h2>{t('price.notes')}</h2>
-        <ul className="small">
-          <li>{t('price.note1')}</li>
-          <li>{t('price.note2')}</li>
-          <li>{t('price.note3')}</li>
-          <li>{t('price.note4')}</li>
-        </ul>
-      </div>
+      {/*
+        What a buyer should know, as four short facts rather than one paragraph
+        of bullets. It was a narrow centred panel headed 「先把话说在前面」, which
+        read as a warning and sat at half the width of the plans above it, so
+        the eye went past it. Each fact now leads with what it is about, the
+        grid lines up with the plans, and the statutory pages are one click
+        away from the place the decision is made.
+      */}
+      <section className="pricing__notes" aria-labelledby="pricing-notes-title">
+        <h2 id="pricing-notes-title">{t('price.notes')}</h2>
+        <dl className="pricing__facts">
+          {NOTES.map(([title, body]) => (
+            <div key={title} className="pricing__fact">
+              <dt>{t(title)}</dt>
+              <dd>{t(body)}</dd>
+            </div>
+          ))}
+        </dl>
+        <p className="pricing__legal small">
+          {t('price.notesLegal')} <Link to="/legal/terms">{t('footer.terms')}</Link>
+          {' · '}
+          <Link to="/legal/tokushoho">{t('footer.tokushoho')}</Link>
+        </p>
+      </section>
     </div>
   );
 }
