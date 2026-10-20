@@ -165,6 +165,7 @@ export class SimulatedPaymentsAdapter implements PaymentsAdapter {
       customerId: s.customerId,
       amountTotal: s.amountMinor,
       currency: s.currency,
+      receiptUrl: s.paymentStatus === 'paid' ? `https://pay.stripe.test/receipts/${s.sessionId}` : null,
     };
   }
 
