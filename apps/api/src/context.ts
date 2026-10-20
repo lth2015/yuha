@@ -69,6 +69,27 @@ export interface AppContext {
   features(): Promise<FeatureFlags>;
 }
 
+/**
+ * What a song's usage record says the buyer may and may not do — Terms §4,
+ * in the Terms' own words, because the record is shown to the customer as
+ * their licence and must not say more or less than the contract.
+ *
+ * These were `[]` for the http adapter (how the self-hosted ACE-Step model is
+ * reached). Unseen while MUSIC_COMMERCIAL_DELIVERY was off — delivery writes
+ * a "preview only" line instead — and an empty licence on every paid song the
+ * moment it was switched on. If Terms §4 changes, change this with it: a
+ * record is frozen per song at generation time.
+ */
+const TERMS_ALLOWED_USES = [
+  'Personal and creator content by the account holder',
+  'Monetised posts on the platforms the plan states',
+] as const;
+const TERMS_PROHIBITED_USES = [
+  'Reselling the audio itself as a music or stock product',
+  'Presenting it as a human performance',
+  'Using it to train competing music models',
+] as const;
+
 function buildMusic(cfg: AppConfig): MusicProvider {
   if (cfg.adapters.music === 'demo') {
     return new DemoMusicProvider({
@@ -119,8 +140,8 @@ function buildMusic(cfg: AppConfig): MusicProvider {
     contractVersion: cfg.MUSIC_CONTRACT_VERSION!,
     licenseVersion: cfg.MUSIC_LICENSE_VERSION!,
     territory: 'JP',
-    allowedUses: [],
-    prohibitedUses: [],
+    allowedUses: [...TERMS_ALLOWED_USES],
+    prohibitedUses: [...TERMS_PROHIBITED_USES],
     submitPath: cfg.MUSIC_SUBMIT_PATH!,
     pollPath: cfg.MUSIC_POLL_PATH!,
     ...(cfg.MUSIC_CANCEL_PATH ? { cancelPath: cfg.MUSIC_CANCEL_PATH } : {}),
