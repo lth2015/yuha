@@ -18,6 +18,11 @@ interface SessionState {
   signIn(token: string, me: MeView): void;
   signOut(): void;
   refreshEntitlements(): Promise<void>;
+  /**
+   * Hand the session a balance a page has just fetched itself, so the header
+   * cannot show a different number from the page beneath it.
+   */
+  acceptEntitlements(fresh: EntitlementsView): void;
   refreshMe(): Promise<void>;
 }
 
@@ -68,6 +73,32 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   }, [refreshMe, refreshEntitlements]);
 
   /*
+   * The balance in the header is a copy, taken at sign-in and after the
+   * flows that know they spent or bought something. Anything else that moves
+   * it — an operator's gift, a refund, a purchase finished in another tab, a
+   * renewal overnight — left the header on the old number until a reload:
+   * "可用 15 次" over a billing page that said 25. Coming back to the tab is
+   * the moment someone looks again, so that is when it is re-read; at most
+   * once every few seconds, because focus events arrive in bursts.
+   */
+  useEffect(() => {
+    let last = 0;
+    const onVisible = () => {
+      if (document.visibilityState !== 'visible' || !getToken()) return;
+      const now = Date.now();
+      if (now - last < 5_000) return;
+      last = now;
+      void refreshEntitlements();
+    };
+    document.addEventListener('visibilitychange', onVisible);
+    window.addEventListener('focus', onVisible);
+    return () => {
+      document.removeEventListener('visibilitychange', onVisible);
+      window.removeEventListener('focus', onVisible);
+    };
+  }, [refreshEntitlements]);
+
+  /*
    * The fetch layer clears a rejected token; this clears the rest of the
    * session so the UI stops claiming somebody is signed in.
    */
@@ -96,7 +127,17 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const value = useMemo<SessionState>(
-    () => ({ runtime, me, entitlements, loading, signIn, signOut, refreshEntitlements, refreshMe }),
+    () => ({
+      runtime,
+      me,
+      entitlements,
+      loading,
+      signIn,
+      signOut,
+      refreshEntitlements,
+      acceptEntitlements: setEntitlements,
+      refreshMe,
+    }),
     [runtime, me, entitlements, loading, signIn, signOut, refreshEntitlements, refreshMe],
   );
 

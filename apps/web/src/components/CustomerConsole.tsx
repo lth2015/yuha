@@ -86,7 +86,7 @@ function newAttemptKey(): string {
 
 export function CustomerConsole() {
   const { t, lang } = useI18n();
-  const { me } = useSession();
+  const { me, refreshEntitlements } = useSession();
   const [email, setEmail] = useState('');
   const [found, setFound] = useState<{ items: Found[]; more: boolean } | null>(null);
   const [detail, setDetail] = useState<Detail | null>(null);
@@ -148,6 +148,7 @@ export function CustomerConsole() {
     if (!detail) return;
     const fresh = await apiFetch<Detail>(`/v1/admin/users/${detail.userId}`);
     setDetail(fresh);
+    if (fresh.userId === me?.userId) void refreshEntitlements();
     setFound((f) =>
       f
         ? {
@@ -197,6 +198,8 @@ export function CustomerConsole() {
       const fresh = await apiFetch<Detail>(`/v1/admin/users/${detail.userId}`);
       setDetail(fresh);
       setDone(res);
+      // Gifting yourself moves the balance in your own header too.
+      if (fresh.userId === me?.userId) void refreshEntitlements();
       // The search list carries its own `available` column, which is now a
       // screen-width away from the balance that just changed.
       setFound((f) =>
