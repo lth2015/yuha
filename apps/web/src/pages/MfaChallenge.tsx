@@ -73,22 +73,27 @@ export default function MfaChallenge() {
           </div>
         ) : (
         <form className="stack" onSubmit={submit} noValidate>
-          <div>
+          <div className="mfa-code">
             <label htmlFor="mfa-code">{t('mfa.code')}</label>
+            {/* Text, not numeric: the same box takes a recovery code, which
+                is hex (`a1b2-c3d4`), and a numeric keypad on a phone has no
+                a–f. The server accepts it with or without the hyphen. */}
             <input
               id="mfa-code"
               type="text"
-              inputMode="numeric"
+              inputMode="text"
               autoComplete="one-time-code"
-              pattern="[0-9]*"
+              autoCapitalize="off"
+              autoCorrect="off"
+              spellCheck={false}
+              maxLength={12}
               value={code}
               onChange={(e) => setCode(e.target.value.replace(/[\s-]/g, ''))}
               placeholder="123456"
               autoFocus
-              style={{ fontSize: 24, letterSpacing: '0.35em', textAlign: 'center', maxWidth: 240, margin: '0 auto' }}
               aria-describedby="mfa-help"
             />
-            <p id="mfa-help" className="small muted" style={{ textAlign: 'center', marginBottom: 0 }}>
+            <p id="mfa-help" className="small muted">
               {t('mfa.lost')}
             </p>
           </div>

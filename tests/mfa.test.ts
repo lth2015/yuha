@@ -207,6 +207,40 @@ describe('MFA lifecycle over HTTP', () => {
     expect(again.statusCode).toBe(401);
   });
 
+  it('accepts a recovery code however it is typed: no hyphen, capitals, spaces', async () => {
+    // The sign-in page strips hyphens and spaces before sending, and a phone
+    // keyboard capitalises. The codes are issued as `a1b2-c3d4` and stored as
+    // the hash of exactly that, so every code typed on the page was refused —
+    // the one way back in for somebody who has lost their phone.
+    const email = 'mfa-typed@example.test';
+    const { user, secret } = await enrollFor(email);
+    const confirm = await h.app.inject({
+      method: 'POST',
+      url: '/v1/auth/mfa/confirm',
+      headers: user.authHeader,
+      payload: { code: totpAt(secret, Date.now()) } as never,
+    });
+    const codes = confirm.json().recoveryCodes as string[];
+    const login = () =>
+      h.app.inject({
+        method: 'POST',
+        url: '/v1/auth/dev-login',
+        payload: { email, ageConfirmed: true, termsAccepted: true, marketingOptIn: false } as never,
+      });
+    const verify = async (code: string) =>
+      h.app.inject({
+        method: 'POST',
+        url: '/v1/auth/mfa/verify',
+        payload: { challengeToken: (await login()).json().challengeToken, code } as never,
+      });
+
+    const asThePageSendsIt = codes[0]!.replace('-', '');
+    expect((await verify(asThePageSendsIt)).statusCode).toBe(200);
+    expect((await verify(` ${codes[1]!.toUpperCase().replace('-', ' ')} `)).statusCode).toBe(200);
+    // Still single-use in its other spelling.
+    expect((await verify(codes[0]!)).statusCode).toBe(401);
+  });
+
   it('disable requires a valid code; unenrolled accounts sign in directly', async () => {
     const { user, secret } = await enrollFor('mfa-d@example.test');
     await h.app.inject({
