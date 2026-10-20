@@ -1211,6 +1211,9 @@ textarea.is-full { border-color: var(--danger); }
 .player-bar__inner { position: relative; max-width: 1248px; margin: 0 auto; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 2fr) minmax(0, 1fr); align-items: center; gap: var(--s4); min-height: 84px; padding: 10px 24px; }
 .player-bar__now { display: flex; align-items: center; gap: 12px; min-width: 0; border-radius: 12px; }
 .player-bar__now .cover-art { width: 48px; height: 48px; border-radius: 12px; flex: none; }
+/* A 44-48px thumbnail has no room for the 温度 reading: it was clipped to
+   "87°Y". The song page and Now Playing show it at a size it fits. */
+.player-bar .cover-art__index { display: none; }
 .player-bar__titles { display: flex; flex-direction: column; min-width: 0; }
 .player-bar__title { font-weight: 500; font-size: var(--t-body); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: flex; align-items: center; gap: 8px; }
 .player-bar__artist { font-size: var(--t-caption); color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -2472,7 +2475,3 @@ textarea.is-full { border-color: var(--danger); }
   box-shadow: var(--shadow-raised);
 }
 .chart__tiprow .num { margin-left: auto; color: var(--ink); }
-
-/* A 44-48px thumbnail has no room for the 温度 reading: it was clipped to
-   "87°Y". The song page and Now Playing show it at a size it fits. */
-.player-bar .cover-art__index { display: none; }
