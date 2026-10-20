@@ -20,15 +20,20 @@ Every failure returns the same shape:
 ```
 
 `code` is a stable machine-readable value from `packages/contracts/src/errors.ts`.
-The web app maps every code to Japanese text **and a concrete next step**
-(UI-12); the mapping is typed over the full union, so adding a code without
-adding copy is a compile error. Messages never contain secrets, stack traces or
-raw prompts.
+The web app maps every code to text in Chinese, Japanese and English **and a
+concrete next step** (UI-12); the mapping is typed over the full union, so
+adding a code without adding copy is a compile error. Messages never contain
+secrets, stack traces or raw prompts.
+
+The table lists the codes a client meets most often; `errors.ts` is the
+complete list and the source of truth for each status.
 
 | Code | HTTP | Meaning |
 | --- | --- | --- |
 | `UNAUTHENTICATED` | 401 | Missing, malformed or expired token |
 | `FORBIDDEN` | 403 | Authenticated but not permitted |
+| `ACCOUNT_SUSPENDED` | 403 | An operator suspended the account. Returned by every authenticated route **and at sign-in** (dev login, the Google exchange, MFA verify), so no session is minted; the web client drops its token on it and the sign-in page says why |
+| `MFA_REQUIRED` | 403 | A staff route, and the account has no second factor enrolled yet |
 | `AGE_NOT_CONFIRMED` | 403 | 18+ confirmation required before generating or buying |
 | `VALIDATION_FAILED` | 400 | Request body or query failed schema validation |
 | `PROMPT_BLOCKED` | 422 | Input outside accepted scope; `details.appealable` is always true |
@@ -41,6 +46,7 @@ raw prompts.
 | `JOB_NOT_CANCELLABLE` | 409 | Already finished, or already submitted upstream |
 | `TRACK_SUSPENDED` | 423 | Paused pending a rights review |
 | `SUBSCRIPTIONS_DISABLED` | 403 | Subscriptions built but not yet open |
+| `SUBSCRIPTION_NOT_FOUND` | 404 | Absent, or someone else's subscription |
 | `WEBHOOK_SIGNATURE_INVALID` | 400 | Signature verification failed; nothing changed |
 | `SERVICE_DISABLED` | 503 | Operator paused the feature |
 | `INTERNAL_ERROR` | 500 | Unexpected; logged server-side with the request id |
@@ -263,6 +269,13 @@ with (PAY-01). Card entry happens on the provider's hosted page.
 Server-verified state. `entitlementGranted` is driven by the verified payment,
 never by the browser reaching the success URL (PAY-02).
 
+`receiptUrl` is the Charge's receipt for a one-time card payment and the first
+invoice's hosted page for a subscription, recorded when the order is paid (a
+Checkout Session has no receipt of its own). For a card order paid before that
+was recorded, `GET /v1/orders` fetches up to three missing links from Stripe
+**after** answering, so the list is never held up by Stripe and the next call
+shows them. Stablecoin orders have none.
+
 ### `GET /v1/orders/:id/payments`
 Payment, fee, refund and net amounts for reconciliation (PAY-11).
 
@@ -279,6 +292,21 @@ Balance, per-batch detail with expiry, and subscription state including
 Sets cancel-at-period-end **server-side first**; success is reported only after
 the provider confirms. Idempotent. A failure leaves the subscription untouched
 and returns an error rather than an optimistic success (PAY-08).
+
+### `POST /v1/subscription/portal`
+
+```json
+{ "subscriptionId": "…" }
+```
+
+Returns `{ "url": "…" }`, a one-time link into Stripe's Customer Portal for
+the customer this subscription bills: change the card, download invoices. The
+caller's own subscription only (`SUBSCRIPTION_NOT_FOUND` otherwise). The
+return address is built server-side from `PUBLIC_WEB_URL` (`/settings/billing`);
+nothing in the request becomes part of a URL. Until the portal has been
+configured in the Stripe dashboard, Stripe refuses and this answers
+`SERVICE_DISABLED`; Stripe's reason goes to the log, not the response. 10 per
+minute.
 
 ### `POST /api/webhooks/stripe` (also `POST /v1/webhooks/stripe`)
 Signature verified over the **raw body** with the endpoint's own secret. Verified
@@ -356,10 +384,15 @@ never from a token claim.
 | `GET /v1/admin/deletions` | support | Account deletion queue (SEC-11) |
 | `POST /v1/admin/deletions/:id/verify` | **admin** | Confirm the requester owns the account |
 | `POST /v1/admin/deletions/:id/execute` | **admin** | Carry out the erasure |
-| `GET /v1/admin/audit-logs` | support | Audit trail |
+| `GET /v1/admin/audit-logs` | support | Audit trail (raw rows) |
+| `GET /v1/admin/stats?granularity=&from=&to=` | support | The dashboard: page views and visitors, signups, generations (delivered / failed / in progress), paid orders and revenue by card / JPYC / USDC, card refunds, credits granted by source and consumed. `granularity` is `day` (default) · `week` (ISO, keyed by its Monday) · `month` · `year`; buckets are Japan-time and zero-filled, with `previous` totals for the same-length span before. Default span ends today (JST): 30 days, 12 weeks, 12 months or 5 years. More than 400 buckets is refused. Stablecoin refunds are settled by hand and are not in `refunds` |
+| `GET /v1/admin/orders?status=&method=&email=&from=&to=&before=&limit=` | support | Orders across every account, newest first. `method` is `card` · `jpyc` · `usdc`; `email` is a prefix; `from`/`to` are JST days; `before` (ISO time) pages, and `more` says there is another page. Each row says whether delivery is held for review and carries the Stripe payment intent |
+| `GET /v1/admin/audit?action=&email=&before=&limit=` | support | The audit log with actor and subject emails resolved. `action` is a prefix (`user.` for suspensions and role changes); `email` matches actor or subject |
 | `GET /v1/admin/order-reviews` | support | Card orders whose delivery is held pending a person (⑥) |
 | `GET /v1/admin/users?email=…` | support / admin | Accounts matching an email. **Prefix only**, three characters minimum, deleted accounts excluded — see `findUsersByEmail` for why it is not a substring search |
-| `GET /v1/admin/users/:id` | support / admin | One account: balance, its credit batches with source and expiry, and orders. Both lists are capped and carry `creditsTruncated` / `ordersTruncated`. Reads are written to `audit_logs` |
+| `GET /v1/admin/users/:id` | support / admin | One account: balance, its credit batches with source and expiry, orders, its last 20 generations, and what operators have done to it (from `audit_logs`, lookups excluded). The batch and order lists are capped and carry `creditsTruncated` / `ordersTruncated`. Reads are written to `audit_logs` |
+| `POST /v1/admin/users/:id/suspend` · `/reactivate` | **admin** | Suspend or lift a suspension — reason required. Takes effect on the account's next request and refuses its next sign-in (`ACCOUNT_SUSPENDED`). Never yourself, never another administrator, never a deleted account; a repeat answers `changed: false` and writes no second audit row. Does not cancel subscriptions or refund — that is done in Stripe |
+| `POST /v1/admin/users/:id/role` | **admin** | `{ "role": "user" \| "support" \| "admin", "reason": "…" }`. Not your own role, and only on an active account |
 | `POST /v1/admin/users/:id/grant` | **admin** | Gives credits away. Reason required (≤200 — it also lands in `ledger_entries.reason`, which is VARCHAR(255)). Optional `idempotencyKey` makes a retry a retry rather than a second gift, answering `replayed: true`. Capped per gift and per operator per rolling day (`ADMIN_GRANT_MAX_UNITS`, `ADMIN_GRANT_MAX_UNITS_PER_DAY`); recorded as `operator_gift`, never as `compensation`. Refuses a deleted or suspended account |
 | `POST /v1/admin/users/:id/compensate` | support / admin | A make-good for a failure of ours. Capped at 20 per call and at `ADMIN_COMPENSATION_MAX_UNITS_PER_DAY` per operator per rolling day, recorded as `compensation`. Refuses a deleted or suspended account. Deliberately open to support where `grant` is not |
 | `POST /v1/admin/order-reviews/:id/decide` | **admin** | Release and deliver, or refuse — reason required. Refusing does not refund; that happens in Stripe |
@@ -390,6 +423,18 @@ Runtime switches can only **narrow** what configuration already permits. An
 operator cannot enable commercial delivery from the console.
 
 ---
+
+## Telemetry
+
+First-party only: rows go to `analytics_events` in our own database, and no
+third-party collector is involved. All three answer `202` with an empty body,
+and a failure to record is logged, never returned.
+
+| Endpoint | Auth | Purpose |
+| --- | --- | --- |
+| `POST /v1/client-errors` | none | A browser crash caught by the error boundary. Unauthenticated on purpose: a crash on the sign-in screen is the one most worth hearing about |
+| `POST /v1/previews` | optional | Ten seconds of a song were actually heard — the day-one activation metric |
+| `POST /v1/visits` | optional | A page was shown; the dashboard's visit numbers. Body `{ visitorId, path, refHost? }`: `visitorId` is a random UUID the browser made and keeps in localStorage (not the account, not an IP); `path` is stored without query string or fragment and with identifier-like segments collapsed to `:id`, because a link-shared song's id is the key to it; `refHost` is only the referring site's host. Staff and demo traffic are marked internal and not counted. 120 per minute |
 
 ## Development only
 
