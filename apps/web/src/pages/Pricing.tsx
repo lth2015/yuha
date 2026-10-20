@@ -1,13 +1,12 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import type { ProductView } from '@yuha/contracts';
-import { apiFetch, newIdempotencyKey } from '../lib/api';
 import { fetchProducts } from '../lib/catalog';
 import { useI18n } from '../lib/i18n';
 import { LOCALES, formatMoney, formatPerUnit } from '../lib/money';
 import { useSession } from '../lib/session';
 import { safeInternalPath } from '../lib/paths';
-import { cardPaymentsEnabled, purchaseRoute, stablecoinOfferedFor } from '../lib/purchase';
+import { canBePaid, methodsOpenAnywhere, unavailableReason } from '../lib/purchase';
 import { ErrorNotice } from '../components/common';
 import { CHECKOUT_RETURN_KEY } from './Checkout';
 
@@ -44,7 +43,6 @@ export default function Pricing() {
   const { me, runtime } = useSession();
   const [products, setProducts] = useState<ProductView[] | null>(null);
   const [error, setError] = useState<unknown>(null);
-  const [busyKey, setBusyKey] = useState<string | null>(null);
 
   const [attempt, setAttempt] = useState(0);
 
@@ -53,17 +51,24 @@ export default function Pricing() {
     fetchProducts().then(setProducts).catch(setError);
   }, [attempt]);
 
-  const cardOpen = cardPaymentsEnabled(runtime);
-  const routeFor = (priceKey: string) =>
-    purchaseRoute({ cardPaymentsEnabled: cardOpen, stablecoinOffered: stablecoinOfferedFor(runtime, priceKey) });
-
-  const buy = async (priceKey: string) => {
+  /*
+   * Every plan goes to the same place: the confirmation screen, where the
+   * buyer chooses how to pay from what the server says this product accepts
+   * (docs/PAYMENTS_DESIGN.md). A plan card says what you buy, never how.
+   *
+   * This used to decide per button — straight to Stripe here, to the wallet
+   * there, closed on the next card — which is how one card offered JPYC and
+   * its neighbours did not. It also skipped the confirmation screen for card
+   * purchases, which is the screen that states the seller, renewal and
+   * cancellation terms before the obligation arises.
+   */
+  const buy = (priceKey: string) => {
     if (!me) {
       navigate(`/auth?next=/pricing`);
       return;
     }
     // Park where they came from before leaving for the payment provider, so
-    // the confirmation screen can send them back to the draft they left.
+    // the post-payment screen can send them back to the draft they left.
     try {
       // `safeInternalPath`, not a prefix check of its own: `/\host` passed
       // `startsWith('/') && !startsWith('//')`, and browsers read it as //host.
@@ -76,45 +81,7 @@ export default function Pricing() {
     } catch {
       /* private browsing — the return path is a nicety, not a requirement */
     }
-    if (routeFor(priceKey) === 'stablecoin') {
-      // Straight to the confirmation screen, which offers only the wallet
-      // here. No order yet: a card order would be one nobody can pay.
-      navigate(`/checkout/confirm?price=${encodeURIComponent(priceKey)}`);
-      return;
-    }
-    setBusyKey(priceKey);
-    setError(null);
-    try {
-      /*
-       * The key goes in the *body*. `createCheckoutRequest` validates it
-       * there, and passing it as `apiFetch`'s option only sets the
-       * `idempotency-key` header — so every purchase from this page was
-       * rejected with VALIDATION_FAILED and the button did nothing. The
-       * generic "fix the fields marked in red" that surfaced instead is
-       * nonsense on a page with no fields.
-       *
-       * `Checkout.tsx` has always sent it correctly. Same endpoint, two call
-       * sites, one of them wrong — exactly how /v1/products was broken.
-       */
-      const res = await apiFetch<{ orderId: string; checkoutUrl: string; simulated: boolean }>('/v1/checkout', {
-        method: 'POST',
-        body: { priceKey, idempotencyKey: newIdempotencyKey('checkout') },
-      });
-      if (res.simulated) {
-        // `price` matters: the confirm screen reads it and defaulted to
-        // `drop_5`, so subscribing to a ¥2,980 plan showed a ¥980 confirmation
-        // and bought the cheaper pack, leaving the first order orphaned.
-        navigate(
-          `/checkout/confirm?order_id=${res.orderId}&price=${encodeURIComponent(priceKey)}&simulated=1`,
-        );
-      } else {
-        window.location.href = res.checkoutUrl;
-      }
-    } catch (err) {
-      setError(err);
-    } finally {
-      setBusyKey(null);
-    }
+    navigate(`/checkout/confirm?price=${encodeURIComponent(priceKey)}`);
   };
 
   const freeTrial = runtime?.features.freeTrialEnabled;
@@ -139,6 +106,14 @@ export default function Pricing() {
     .filter((p) => PLAN_COPY[p.priceKey])
     .sort((a, b) => a.amountMinor - b.amountMinor);
   const qrWallets = runtime?.features.qrWalletsEnabled === true;
+  /*
+   * How you can pay, said once for the page — under the plans, not on each
+   * card. Derived from the same server answer the buttons use, so it cannot
+   * list a method no plan accepts.
+   */
+  const openMethods = methodsOpenAnywhere(plans);
+  const methodLabel = (m: string) =>
+    m === 'card' ? (qrWallets ? t('price.methods.cardWallets') : t('price.methods.card')) : m.toUpperCase();
 
   return (
     <div className="stack stack--loose pricing">
@@ -152,13 +127,6 @@ export default function Pricing() {
 
       <ErrorNotice error={error} onRetry={() => setAttempt((n) => n + 1)} />
 
-      {/* Said before anyone presses a button, not discovered after it. */}
-      {!cardOpen && (
-        <div className="alert alert--info" role="status">
-          {t('price.cardClosed')}
-          {stablecoinOfferedFor(runtime, 'drop_5') && ` ${t('price.cardClosedStablecoin')}`}
-        </div>
-      )}
 
       {/*
         Skeletons mean "loading". A failed catalogue read left `products` null,
@@ -212,21 +180,19 @@ export default function Pricing() {
                   </p>
                   <p className="plan__unit">{t('price.perSong', { amount: formatPerUnit(p.amountMinor, p.units, p.currency, locale) })}</p>
                   <p className="plan__tagline">{t(copy.tag)}</p>
-                  {/* Said here rather than discovered on Stripe's page. */}
-                  {qrWallets && (
-                    <p className="plan__pay">
-                      {p.kind === 'subscription' ? t('price.pay.sub') : t('price.pay.oneTime')}
-                    </p>
-                  )}
                   <ul className="plan__bullets">
                     {copy.bullets.map((b) => (
                       <li key={b}>{t(b)}</li>
                     ))}
                   </ul>
-                  {p.available && routeFor(p.priceKey) === 'closed' ? (
+                  {p.available && !canBePaid(p) ? (
                     <span className="plan__current">
-                      {t('price.soon')}
-                      <span className="plan__soonwhy">{t('price.cardClosedWhy')}</span>
+                      {t('price.unavailable')}
+                      <span className="plan__soonwhy">
+                        {unavailableReason(p) === 'no_auto_renewal'
+                          ? t('price.unavailable.noAutoRenewal')
+                          : t('price.unavailable.cardClosed')}
+                      </span>
                     </span>
                   ) : p.available ? (
                     <button
@@ -244,15 +210,8 @@ export default function Pricing() {
                       aria-labelledby={`plan-${p.priceKey}-cta plan-${p.priceKey}-name`}
                       className={`btn btn--block${copy?.highlight ? ' btn--primary' : ''}`}
                       onClick={() => buy(p.priceKey)}
-                      disabled={busyKey === p.priceKey}
                     >
-                      {busyKey === p.priceKey
-                        ? t('price.opening')
-                        : p.kind === 'subscription'
-                          ? t('price.subscribe')
-                          : routeFor(p.priceKey) === 'stablecoin'
-                            ? t('price.buyStablecoin')
-                            : t('price.buy')}
+                      {p.kind === 'subscription' ? t('price.subscribe') : t('price.buy')}
                     </button>
                   ) : (
                     // Say *why* it is unavailable. "Coming soon" with no reason
@@ -266,6 +225,13 @@ export default function Pricing() {
             );
           })}
         </div>
+      )}
+
+      {openMethods.length > 0 && plans.length > 0 && (
+        <p className="pricing__methods small" role="note">
+          {t('price.methods', { list: openMethods.map(methodLabel).join(' · ') })}
+          {openMethods.some((m) => m !== 'card') && ` ${t('price.methods.stablecoinNote')}`}
+        </p>
       )}
 
       {/* A catalogue that produced no renderable plan is stated, not drawn as

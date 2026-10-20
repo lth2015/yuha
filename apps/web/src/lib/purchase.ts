@@ -1,43 +1,59 @@
-import type { RuntimeInfo } from '@yuha/contracts';
+import type { PaymentMethodKey, PaymentMethodView, ProductView, RuntimeInfo } from '@yuha/contracts';
 
 /**
- * Where a buy button goes, decided once for every page that has one.
+ * How a product can be paid for — read from the server, never decided here.
  *
- * Three pages start a purchase — the pricing grid, the confirmation screen and
- * a song's licence button — and each used to decide on its own. When card
- * payment could not complete (simulated payments outside the demo, as on
- * yuha.studio), all three still sent the buyer to the card path, and each
- * ended at "this page is for demo mode only". The answer is a property of the
- * deployment and the product, so it is computed in one place.
+ * docs/PAYMENTS_DESIGN.md is the rule and `apps/api/src/services/payment-methods.ts`
+ * computes it into `ProductView.paymentMethods`. This file used to decide on
+ * its own: a fallback chain per button ("card, else stablecoin, else closed")
+ * plus a hardcoded list of the two price keys the wallet could pay for. That
+ * is how the pricing grid ended up with "pay with JPYC" on one card and
+ * "card payment is closed" on the two beside it — each button picking its own
+ * channel, from rules the server held a different copy of.
  *
- *   card        → the card checkout (Stripe, or the demo's simulation)
- *   stablecoin  → the only channel that can complete here
- *   closed      → nothing can; say so on the button instead of leading anywhere
+ * So the browser does three things only: list the methods it was given, say
+ * whether any is available, and say why not when none is.
  */
-export type PurchaseRoute = 'card' | 'stablecoin' | 'closed';
 
-export function purchaseRoute(p: { cardPaymentsEnabled: boolean; stablecoinOffered: boolean }): PurchaseRoute {
-  if (p.cardPaymentsEnabled) return 'card';
-  return p.stablecoinOffered ? 'stablecoin' : 'closed';
+/** A response from an API that has not rolled yet carries no methods: card only, as before. */
+export function paymentMethodsOf(p: Pick<ProductView, 'paymentMethods'>): PaymentMethodView[] {
+  return p.paymentMethods ?? [{ method: 'card', available: true, reason: null }];
+}
+
+export function firstAvailableMethod(p: Pick<ProductView, 'paymentMethods'>): PaymentMethodKey | null {
+  return paymentMethodsOf(p).find((m) => m.available)?.method ?? null;
+}
+
+export function canBePaid(p: Pick<ProductView, 'paymentMethods'>): boolean {
+  return firstAvailableMethod(p) !== null;
 }
 
 /**
- * Only what the quote endpoint accepts: `QUOTABLE_PRODUCTS` on the server is
- * DROP and Licence. A wallet offer on a subscription is a button the next
- * request refuses.
+ * Why nothing can pay for this, when nothing can. A subscription with only
+ * stablecoins open says so (and points at top-up packs); otherwise it is the
+ * card that is closed.
  */
-export function stablecoinOfferedFor(runtime: RuntimeInfo | null | undefined, priceKey: string): boolean {
-  return (
-    !!runtime?.stablecoin.enabled &&
-    runtime.stablecoin.tokens.length > 0 &&
-    (priceKey === 'drop_5' || priceKey === 'market_license')
-  );
+export function unavailableReason(
+  p: Pick<ProductView, 'paymentMethods'>,
+): 'card_closed' | 'no_auto_renewal' | null {
+  if (canBePaid(p)) return null;
+  const methods = paymentMethodsOf(p);
+  if (methods.some((m) => m.reason === 'no_auto_renewal')) return 'no_auto_renewal';
+  return 'card_closed';
+}
+
+/** Every method open anywhere in a catalogue, for the one-line summary on the pricing page. */
+export function methodsOpenAnywhere(products: Array<Pick<ProductView, 'paymentMethods'>>): PaymentMethodKey[] {
+  const order: PaymentMethodKey[] = ['card', 'jpyc', 'usdc'];
+  const open = new Set(products.flatMap((p) => paymentMethodsOf(p).filter((m) => m.available).map((m) => m.method)));
+  return order.filter((k) => open.has(k));
 }
 
 /**
  * While the runtime descriptor is still loading, assume cards work: the API
  * refuses with CARD_PAYMENTS_CLOSED before writing anything if they do not,
- * and that error has its own message.
+ * and that error has its own message. Used by the 特商法 page, which states
+ * the accepted methods for the deployment as a whole.
  */
 export function cardPaymentsEnabled(runtime: RuntimeInfo | null | undefined): boolean {
   return runtime?.features.cardPaymentsEnabled !== false;

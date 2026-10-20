@@ -15,7 +15,6 @@
 import { randomUUID } from 'node:crypto';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { query } from '@yuha/db';
-import { purchaseRoute } from '../apps/web/src/lib/purchase.js';
 import { createHarness, resetData, teardown, type Harness } from './helpers/harness.js';
 
 let integration: Harness;
@@ -94,17 +93,20 @@ describe('the API refuses to start one, before writing anything', () => {
   });
 });
 
-describe('where a buy button sends someone', () => {
-  it('to the card checkout when cards work', () => {
-    expect(purchaseRoute({ cardPaymentsEnabled: true, stablecoinOffered: true })).toBe('card');
-    expect(purchaseRoute({ cardPaymentsEnabled: true, stablecoinOffered: false })).toBe('card');
+describe('the catalogue says, per product, that card cannot pay', () => {
+  it('lists card as closed on every product outside the demo with simulated payments', async () => {
+    const res = await integration.app.inject({ method: 'GET', url: '/v1/products' });
+    const items = res.json().items as Array<{ priceKey: string; paymentMethods: Array<{ method: string; available: boolean; reason: string | null }> }>;
+    expect(items.length).toBeGreaterThan(0);
+    for (const p of items) {
+      expect(p.paymentMethods).toEqual([{ method: 'card', available: false, reason: 'card_closed' }]);
+    }
   });
 
-  it('to the stablecoin path when only that works', () => {
-    expect(purchaseRoute({ cardPaymentsEnabled: false, stablecoinOffered: true })).toBe('stablecoin');
-  });
-
-  it('nowhere when neither does — a closed button, not a dead end', () => {
-    expect(purchaseRoute({ cardPaymentsEnabled: false, stablecoinOffered: false })).toBe('closed');
+  it('lists card as open in the demo, where the simulated round trip is the point', async () => {
+    const res = await demo.app.inject({ method: 'GET', url: '/v1/products' });
+    for (const p of res.json().items as Array<{ paymentMethods: unknown }>) {
+      expect(p.paymentMethods).toEqual([{ method: 'card', available: true, reason: null }]);
+    }
   });
 });

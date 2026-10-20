@@ -9,6 +9,23 @@ import { EntitlementSource, OrderKind, OrderStatus, SubscriptionStatus } from '.
 export const ProductKey = z.enum(['drop_5', 'pro_monthly', 'premier_monthly', 'market_license']);
 export type ProductKey = z.infer<typeof ProductKey>;
 
+/**
+ * One way to pay for one product, as the server decided it
+ * (apps/api/src/services/payment-methods.ts, docs/PAYMENTS_DESIGN.md).
+ *
+ *   card_closed      the deployment has no card channel open
+ *   no_auto_renewal  a subscription renews automatically; stablecoins cannot,
+ *                    so a stablecoin buyer tops up with a one-time pack
+ */
+export const PaymentMethodKey = z.enum(['card', 'jpyc', 'usdc']);
+export type PaymentMethodKey = z.infer<typeof PaymentMethodKey>;
+export const paymentMethodView = z.object({
+  method: PaymentMethodKey,
+  available: z.boolean(),
+  reason: z.enum(['card_closed', 'no_auto_renewal']).nullable(),
+});
+export type PaymentMethodView = z.infer<typeof paymentMethodView>;
+
 export const productView = z.object({
   priceKey: ProductKey,
   priceVersion: z.number().int().positive(),
@@ -22,6 +39,12 @@ export const productView = z.object({
   validityDays: z.number().int().positive().nullable(),
   autoRenew: z.boolean(),
   available: z.boolean(),
+  /*
+   * Optional on the wire only so a web bundle that reaches the CDN before the
+   * API pods have rolled does not drop every product as malformed. The API
+   * always sends it; a client that gets none treats card as the only way.
+   */
+  paymentMethods: z.array(paymentMethodView).optional(),
 });
 export type ProductView = z.infer<typeof productView>;
 

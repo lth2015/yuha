@@ -97,9 +97,18 @@ describe('stablecoin configuration', () => {
     expect(() => on({ STABLECOIN_RECEIVER_ADDRESS: '0xnope' })).toThrow(/not an Ethereum address/);
   });
 
-  it('refuses USDC, which has no rate provider', () => {
-    // Enabling it would mean quoting a JPY price from a constant.
-    expect(() => on({ STABLECOIN_USDC_ENABLED: 'true' })).toThrow(/USDC is not quotable yet/);
+  it('accepts USDC now that it is priced from two live USD/JPY sources', () => {
+    // It used to be refused here: there was no rate source and the only
+    // alternative was a constant. A rate that cannot be trusted now refuses
+    // the QUOTE (services/stablecoin-rate.ts), not the deployment.
+    const cfg = on({ STABLECOIN_USDC_ENABLED: 'true' });
+    expect(cfg.STABLECOIN_USDC_ENABLED).toBe(true);
+    expect(cfg.STABLECOIN_USDC_BUFFER_BPS).toBe(100);
+  });
+
+  it('refuses a USDC buffer outside 0–1000 basis points', () => {
+    expect(() => on({ STABLECOIN_USDC_ENABLED: 'true', STABLECOIN_USDC_BUFFER_BPS: '1001' })).toThrow(/STABLECOIN_USDC_BUFFER_BPS/);
+    expect(() => on({ STABLECOIN_USDC_ENABLED: 'true', STABLECOIN_USDC_BUFFER_BPS: '-1' })).toThrow(/STABLECOIN_USDC_BUFFER_BPS/);
   });
 
   it('refuses to be enabled with no currency at all', () => {

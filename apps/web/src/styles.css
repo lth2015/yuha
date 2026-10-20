@@ -2112,7 +2112,6 @@ textarea.is-full { border-color: var(--danger); }
   color: var(--faint);
   font-variant-numeric: tabular-nums;
 }
-.plan__pay { margin: -2px 0 0; font-size: var(--t-caption); color: var(--faint); line-height: 1.5; }
 .plan__current { display: flex; flex-direction: column; gap: 4px; font-size: var(--t-caption); color: var(--muted); }
 .plan__soonwhy { font-size: var(--t-caption); color: var(--faint); line-height: 1.5; }
 
@@ -2395,3 +2394,21 @@ textarea.is-full { border-color: var(--danger); }
 @media (max-width: 767px) {
   .studio__score { display: none; }
 }
+
+/* ---- payment methods (docs/PAYMENTS_DESIGN.md) ---------------------------
+   One list on the confirmation screen, every method the server listed for the
+   product; unavailable ones stay visible, disabled, with their reason. */
+.pay-methods { display: grid; gap: var(--s3); }
+.pay-method {
+  display: flex; flex-direction: column; align-items: flex-start; gap: 4px;
+  width: 100%; padding: var(--s3) var(--s4); text-align: left;
+  border: 1px solid var(--control-line); border-radius: var(--r-control);
+  background: var(--surface); color: var(--ink); font: inherit; cursor: pointer;
+}
+.pay-method:hover:not(:disabled) { border-color: var(--ink); }
+.pay-method.is-selected { border-color: var(--petal); box-shadow: 0 0 0 1px var(--petal); background: var(--petal-soft); }
+.pay-method:disabled { cursor: not-allowed; background: var(--surface-soft); }
+.pay-method:disabled .pay-method__name { color: var(--muted); }
+.pay-method__name { font-weight: 600; font-size: var(--t-body); }
+.pay-method__note { color: var(--muted); line-height: 1.5; }
+.pricing__methods { margin: 0; text-align: center; color: var(--muted); }

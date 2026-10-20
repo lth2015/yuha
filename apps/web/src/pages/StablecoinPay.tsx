@@ -76,6 +76,9 @@ interface QuoteResponse {
   payer: string;
   expiresAt: string;
   roundedUp: boolean;
+  /** JPY per token as the source gave it, and the buffer on top; null for JPYC. */
+  rateText?: string | null;
+  rateBufferBps?: number | null;
 }
 
 interface PreparedTransfer {
@@ -117,7 +120,15 @@ export function StablecoinPay() {
   const [account, setAccount] = useState<string | null>(null);
   const [chainId, setChainId] = useState<number | null>(null);
   const [verified, setVerified] = useState<VerifiedWallet[]>([]);
-  const [tokenKey, setTokenKey] = useState<string>(() => tokens[0]?.key ?? 'jpyc');
+  /*
+   * The currency chosen on the confirmation screen, when it is one this
+   * deployment has on; otherwise the first that is. Choosing JPYC or USDC
+   * happens once, on the confirmation screen, with every other method.
+   */
+  const askedToken = params.get('token');
+  const [tokenKey, setTokenKey] = useState<string>(
+    () => tokens.find((x) => x.key === askedToken)?.key ?? tokens[0]?.key ?? 'jpyc',
+  );
   const [quote, setQuote] = useState<QuoteResponse | null>(null);
   const [txHash, setTxHash] = useState<string | null>(null);
   const [typedHash, setTypedHash] = useState('');
@@ -573,6 +584,18 @@ export function StablecoinPay() {
                   <th>{t('scpay.price.label')}</th>
                   <td className="num">{formatMoney(quote.priceJpy, 'jpy', LOCALES[lang])}</td>
                 </tr>
+                {/* A converted amount is never shown without how it was converted. */}
+                {quote.rateText && (
+                  <tr>
+                    <th>{t('scpay.rate.label')}</th>
+                    <td className="small">
+                      {t('scpay.rate.value', {
+                        rate: quote.rateText,
+                        buffer: String((quote.rateBufferBps ?? 0) / 100),
+                      })}
+                    </td>
+                  </tr>
+                )}
                 <tr>
                   <th>{t('scpay.receiver.label')}</th>
                   <td className="small" style={{ fontFamily: 'var(--mono)', wordBreak: 'break-all' }}>

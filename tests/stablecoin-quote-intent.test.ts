@@ -140,7 +140,7 @@ describe('a JPYC quote', () => {
     expect(res.statusCode).toBeGreaterThanOrEqual(400);
   });
 
-  it('refuses USDC, which has no rate source yet', async () => {
+  it('refuses USDC on a deployment that has it switched off', async () => {
     const user = await h.createUser({ email: 'q5@example.jp' });
     const payer = await linkWallet(user, accountA);
     const res = await quote(user, { priceKey: 'drop_5', idempotencyKey: 'idem-0005', tokenKey: 'usdc', payer });
