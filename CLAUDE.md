@@ -16,8 +16,8 @@ Terraform resources, the dev database in `docker-compose.yml`) still read
 `loopscene`; renaming those forces resource recreation, so it is a separate,
 deliberate decision. Do not "tidy" either group.
 
-**Apache-2.0, stewarded by NEXT, operated by someone else.** The code is
-donated to the NEXT technical community (<https://www.netx.world/>), which is
+**Apache-2.0, stewarded by NETX, operated by someone else.** The code is
+donated to the NETX technical community (<https://www.netx.world/>), which is
 the upstream steward: `LICENSE`, `NOTICE`, `GOVERNANCE.md`, `CONTRIBUTING.md`.
 The service at yuha.studio was **not** donated — the Stripe account, the
 特定商取引法 販売業者, the privacy controller, refunds and support all stay with
@@ -31,7 +31,7 @@ its operator. Two consequences bind every change you make:
   test fixture, not a comment. They come from the deployment's secret store.
   `pnpm check:stewardship` fails on either, row by row; its header is equally
   explicit about what a green run does *not* establish.
-- NEXT's own legal particulars are nowhere in this repository on purpose:
+- NETX's own legal particulars are nowhere in this repository on purpose:
   netx.world publishes none, so there is nothing to copy and nothing to infer.
   If a file needs them, they come from the executed agreement, not from you.
 

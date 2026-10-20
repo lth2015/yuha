@@ -1,6 +1,6 @@
 # Governance
 
-YUHA's code is donated to the **NEXT technical community**
+YUHA's code is donated to the **NETX technical community**
 (<https://www.netx.world/>), which becomes its upstream steward. The service
 that sells songs at yuha.studio is **not** donated and keeps running under its
 present operator. This file exists to keep those two from being confused later,
@@ -19,7 +19,7 @@ moves, are matters for the agreement and not for this file — so if you are
 reading this to find out where upstream *is*, ask, rather than inferring it
 from a remote.
 
-NEXT's own legal particulars — the steward's registered name, its seat, its
+NETX's own legal particulars — the steward's registered name, its seat, its
 registration number, its legal form — are **deliberately not written anywhere
 in this repository**. netx.world, read on 2026-10-08, publishes none of them,
 and the donation agreement is the document that names them. Nothing here

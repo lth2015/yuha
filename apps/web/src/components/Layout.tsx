@@ -110,7 +110,7 @@ function SiteFooter() {
       </span>
       {/*
         The steward credit belongs in the fine print, not in the link row.
-        The code is Apache-2.0 and stewarded by the NEXT community; the
+        The code is Apache-2.0 and stewarded by the NETX community; the
         service is operated by whoever `LEGAL_ENTITY_*` names, and conflating
         the two on a page a consumer reads is the failure mode worth avoiding
         here. So this line credits the *code*, and /legal carries the split in
