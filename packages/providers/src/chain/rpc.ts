@@ -94,6 +94,12 @@ function parseLog(raw: unknown): RawLog {
 }
 
 /** One node. Parsing lives here so a malformed answer fails loudly, not later. */
+/**
+ * Below this many blocks a refused eth_getLogs is not a range limit — no
+ * provider caps that low — so the error is the node's, and it is thrown.
+ */
+const MIN_LOG_SPAN = 8n;
+
 export class ChainNode {
   constructor(private readonly transport: JsonRpcTransport) {}
 
@@ -164,7 +170,58 @@ export class ChainNode {
     };
   }
 
+  /**
+   * The widest eth_getLogs range this node has been seen to answer after a
+   * wider one was refused; null until a refusal has been followed by a
+   * smaller success. Readable so the scanner can say so in its log.
+   */
+  logSpanLimit: bigint | null = null;
+
+  /**
+   * eth_getLogs over the window, in pieces the node will answer.
+   *
+   * Providers cap the range per request and refuse wider ones — Chainstack's
+   * Developer plan answers 403 above 100 blocks — and the error does not say
+   * so in any standard way. The scanner asked for 451 blocks, every pass
+   * failed, and the only way out was a hand-set STABLECOIN_SCAN_MAX_SPAN.
+   *
+   * So a refused request is halved and tried again, and the size is only
+   * REMEMBERED once a smaller request has succeeded: an outage refuses every
+   * size, reaches the floor, and throws as before without leaving the node
+   * stuck on tiny requests once it recovers. Every block in the window is
+   * still asked for, once; the union and every check downstream see the
+   * same answer they would have seen in one request.
+   */
   async logs(params: {
+    fromBlock: bigint;
+    toBlock: bigint;
+    address: string | string[];
+    topics: (string | string[] | null)[];
+  }): Promise<RawLog[]> {
+    const out: RawLog[] = [];
+    let from = params.fromBlock;
+    while (from <= params.toBlock) {
+      const remaining = params.toBlock - from + 1n;
+      let size = this.logSpanLimit !== null && this.logSpanLimit < remaining ? this.logSpanLimit : remaining;
+      let refusedOnce = false;
+      for (;;) {
+        const to = from + size - 1n;
+        try {
+          out.push(...(await this.logsOnce({ ...params, fromBlock: from, toBlock: to })));
+          if (refusedOnce) this.logSpanLimit = size;
+          from = to + 1n;
+          break;
+        } catch (err) {
+          if (size <= MIN_LOG_SPAN) throw err;
+          refusedOnce = true;
+          size = size / 2n;
+        }
+      }
+    }
+    return out;
+  }
+
+  private async logsOnce(params: {
     fromBlock: bigint;
     toBlock: bigint;
     address: string | string[];
