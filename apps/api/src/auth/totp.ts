@@ -110,8 +110,20 @@ export function generateRecoveryCodes(): string[] {
   });
 }
 
+/**
+ * Hashes a recovery code in its canonical spelling, `xxxx-xxxx` lower case.
+ *
+ * Codes are issued and stored as `a1b2-c3d4`, and this used to hash whatever
+ * arrived after a trim. The sign-in page strips hyphens and spaces before
+ * sending and phone keyboards capitalise, so every code typed there hashed to
+ * something that matched nothing: the way back in for someone who has lost
+ * their phone did not work. The canonical form is the issued one, so the
+ * hashes already stored stay valid.
+ */
 export function hashRecoveryCode(code: string): string {
-  return createHash('sha256').update(code.trim().toLowerCase()).digest('hex');
+  const bare = code.replace(/[\s-]/g, '').toLowerCase();
+  const canonical = /^[0-9a-f]{8}$/.test(bare) ? `${bare.slice(0, 4)}-${bare.slice(4)}` : code.trim().toLowerCase();
+  return createHash('sha256').update(canonical).digest('hex');
 }
 
 // ------------------------------------------------------- secret encryption

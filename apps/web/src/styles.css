@@ -2465,3 +2465,12 @@ textarea.is-full { border-color: var(--danger); }
   box-shadow: var(--shadow-raised);
 }
 .chart__tiprow .num { margin-left: auto; color: var(--ink); }
+
+/* Two-step sign-in code: one centred column. The hint used to sit flush
+   under the box and collide with its focus ring (outline-offset 3px). */
+.mfa-code { display: flex; flex-direction: column; align-items: center; gap: var(--s2); text-align: center; }
+.mfa-code input {
+  width: 100%; max-width: 280px;
+  font-size: var(--t-heading); letter-spacing: 0.3em; text-align: center;
+}
+.mfa-code p { margin: var(--s1) 0 0; }
