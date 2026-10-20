@@ -42,7 +42,7 @@ const SUBSCRIPTION_STATUS: Record<string, { key: string; tone: string }> = {
  * the interface never optimistically claims a cancellation that did not happen.
  */
 export default function Billing() {
-  const { entitlements, refreshEntitlements } = useSession();
+  const { entitlements, refreshEntitlements, acceptEntitlements } = useSession();
   const [orders, setOrders] = useState<OrderRow[]>([]);
   const [ent, setEnt] = useState<EntitlementsView | null>(null);
   const [error, setError] = useState<unknown>(null);
@@ -62,12 +62,14 @@ export default function Billing() {
       ]);
       setOrders(o.items);
       setEnt(e);
+      // The same figures in the header, or it keeps the number from sign-in.
+      acceptEntitlements(e);
     } catch (err) {
       setError(err);
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [acceptEntitlements]);
 
   useEffect(() => {
     void load();
