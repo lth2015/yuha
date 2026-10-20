@@ -126,6 +126,7 @@ export async function stablecoinScanLoop(deps: LoopDeps): Promise<void> {
    * being able to ask is a retry. They were the same code path.
    */
   let tokensVerified = false;
+  const spanReported = new Map<string, string>();
 
   while (!deps.stopped()) {
     try {
@@ -149,6 +150,15 @@ export async function stablecoinScanLoop(deps: LoopDeps): Promise<void> {
       }
 
       const pass = await runStablecoinScanPass(ctx, reader, log);
+      // Said once per change: a node that caps eth_getLogs is now scanned in
+      // pieces, which is fine, and worth one line rather than a mystery.
+      for (const node of [reader.primary, reader.secondary]) {
+        const limit = node.logSpanLimit?.toString() ?? null;
+        if (limit !== null && spanReported.get(node.label) !== limit) {
+          spanReported.set(node.label, limit);
+          log('info', 'stablecoin scan: node caps eth_getLogs, scanning in pieces', { node: node.label, blocks: limit });
+        }
+      }
       if (pass.found > 0) {
         log('info', 'stablecoin scan pass', {
           fromBlock: pass.window?.fromBlock.toString(),
