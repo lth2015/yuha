@@ -5,6 +5,7 @@ import { formatJst, formatMoney, useSession } from '../lib/session';
 import { LOCALES } from '../lib/money';
 import { mayDecidePayments } from '../lib/stablecoin';
 import { Badge, ErrorNotice } from './common';
+import { AccountControls } from './admin/AccountControls';
 
 /**
  * Finding a customer, and giving them credits.
@@ -66,6 +67,8 @@ interface Detail {
     status: string;
     createdAt: string;
   }>;
+  recentJobs?: Array<{ jobId: string; state: string; errorCode: string | null; trackId: string | null; createdAt: string }>;
+  activity?: Array<{ action: string; actorEmail: string | null; reason: string; createdAt: string }>;
 }
 
 interface GiftDone {
@@ -138,6 +141,23 @@ export function CustomerConsole() {
     } finally {
       setBusy(false);
     }
+  };
+
+  /** Re-read the open record and keep the search row's figures in step. */
+  const refresh = async () => {
+    if (!detail) return;
+    const fresh = await apiFetch<Detail>(`/v1/admin/users/${detail.userId}`);
+    setDetail(fresh);
+    setFound((f) =>
+      f
+        ? {
+            ...f,
+            items: f.items.map((u) =>
+              u.userId === fresh.userId ? { ...u, available: fresh.balance.available, status: fresh.status, role: fresh.role } : u,
+            ),
+          }
+        : f,
+    );
   };
 
   const gift = async () => {
@@ -215,7 +235,11 @@ export function CustomerConsole() {
         }}
       >
         <input
-          type="email"
+          // A prefix is a valid search (the API matches `email_active LIKE
+          // 'needle%'`), and `type="email"` made the browser refuse one.
+          type="search"
+          inputMode="email"
+          autoComplete="off"
           value={email}
           onChange={(e) => setEmail(e.target.value)}
           placeholder={t('admin.cust.search.placeholder')}
@@ -280,6 +304,16 @@ export function CustomerConsole() {
               {t('admin.cust.balance.consumed')}: {detail.balance.consumed}
             </span>
           </div>
+
+          <AccountControls
+            key={detail.userId}
+            userId={detail.userId}
+            role={detail.role}
+            status={detail.status}
+            isSelf={detail.userId === me?.userId}
+            isAdmin={mayGift}
+            onChanged={refresh}
+          />
 
           <div className="stack" style={{ gap: 'var(--s2)' }}>
             <h3 style={{ fontSize: 15, margin: 0 }}>{t('admin.cust.credits.h3')}</h3>
@@ -356,6 +390,50 @@ export function CustomerConsole() {
               </div>
             )}
           </div>
+
+          {detail.recentJobs && (
+            <div className="stack" style={{ gap: 'var(--s2)' }}>
+              <h3 style={{ fontSize: 15, margin: 0 }}>{t('admin.cust.jobs.h3')}</h3>
+              {detail.recentJobs.length === 0 ? (
+                <p className="muted small">{t('admin.cust.jobs.none')}</p>
+              ) : (
+                <div className="table-wrap">
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>{t('admin.orders.col.when')}</th>
+                        <th>{t('admin.cust.jobs.col.state')}</th>
+                        <th>{t('admin.cust.jobs.col.error')}</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {detail.recentJobs.map((j) => (
+                        <tr key={j.jobId}>
+                          <td className="small muted">{formatJst(j.createdAt, true)}</td>
+                          <td className="small">{j.state}</td>
+                          <td className="small muted">{j.errorCode ?? '—'}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          )}
+
+          {detail.activity && detail.activity.length > 0 && (
+            <div className="stack" style={{ gap: 'var(--s2)' }}>
+              <h3 style={{ fontSize: 15, margin: 0 }}>{t('admin.cust.activity.h3')}</h3>
+              <ul className="small" style={{ margin: 0, paddingLeft: 18 }}>
+                {detail.activity.map((a, i) => (
+                  <li key={`${a.createdAt}-${i}`}>
+                    <span className="muted">{formatJst(a.createdAt, true)}</span> · <code>{a.action}</code> ·{' '}
+                    {a.actorEmail ?? '—'} · {a.reason}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
 
           <div className="stack" style={{ gap: 'var(--s2)' }}>
             <h3 style={{ fontSize: 15, margin: 0 }}>{t('admin.cust.gift.h3')}</h3>

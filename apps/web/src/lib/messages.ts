@@ -36,6 +36,7 @@ export const ERROR_MESSAGES: Record<ErrorCode, UserMessage> = {
   UNAUTHENTICATED: msg('UNAUTHENTICATED', 'info'),
   FORBIDDEN: msg('FORBIDDEN', 'error'),
   EMAIL_NOT_ALLOWED: msg('EMAIL_NOT_ALLOWED', 'warn'),
+  ACCOUNT_SUSPENDED: msg('ACCOUNT_SUSPENDED', 'error'),
   AGE_NOT_CONFIRMED: msg('AGE_NOT_CONFIRMED', 'warn'),
   TERMS_NOT_ACCEPTED: msg('TERMS_NOT_ACCEPTED', 'warn'),
   VALIDATION_FAILED: msg('VALIDATION_FAILED', 'warn'),

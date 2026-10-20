@@ -187,6 +187,27 @@ export async function setMarketingOptIn(
   );
 }
 
+/**
+ * Suspends or reactivates an account. Never touches a deleted one — an
+ * executed erasure is not something an operator can undo by "unbanning" the
+ * anonymised row it left — and reports whether the row actually changed,
+ * read from the WHERE clause rather than from `affectedRows`, which counts
+ * rows matched under CLIENT_FOUND_ROWS (see CLAUDE.md).
+ */
+export async function setUserStatus(
+  params: { userId: string; from: 'active' | 'suspended'; to: 'active' | 'suspended' },
+  tx?: PoolConnection,
+): Promise<boolean> {
+  const before = await queryOne<{ status: string }>(`SELECT status FROM users WHERE id = ? AND deleted_at IS NULL`, [params.userId], tx);
+  if (!before || before.status !== params.from) return false;
+  await execute(
+    `UPDATE users SET status = ?, updated_at = UTC_TIMESTAMP(3) WHERE id = ? AND status = ? AND deleted_at IS NULL`,
+    [params.to, params.userId, params.from],
+    tx,
+  );
+  return true;
+}
+
 export async function setRole(
   params: { userId: string; role: UserRole },
   tx?: PoolConnection,

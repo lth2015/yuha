@@ -1,4 +1,5 @@
 import type { FastifyInstance } from 'fastify';
+import { z } from 'zod';
 import { clientErrorReport, previewReport } from '@yuha/contracts';
 import { trackEvent } from '@yuha/db';
 import type { AppContext } from '../context.js';
@@ -22,6 +23,32 @@ import type { AppContext } from '../context.js';
  * existing `analytics_events` table already carries the §11.1 contract these
  * rows must obey.
  */
+const visitReport = z.object({
+  visitorId: z.string().uuid(),
+  path: z.string().min(1).max(500).startsWith('/'),
+  refHost: z
+    .string()
+    .max(253)
+    .regex(/^[a-z0-9.-]+$/i)
+    .optional(),
+});
+
+/**
+ * The page, not the thing on it. Query string and fragment go (either can
+ * carry a token), and any segment that looks like an identifier becomes
+ * `:id`: a song's id is, for a song shared by link, the key that opens it,
+ * and an analytics row is no place to keep keys. What the dashboard needs is
+ * "the song page", which this still says.
+ */
+function visitPath(raw: string): string {
+  const bare = raw.split('?')[0]!.split('#')[0]!;
+  return bare
+    .split('/')
+    .map((seg) => (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(seg) || /^[A-Za-z0-9_-]{16,}$/.test(seg) ? ':id' : seg))
+    .join('/')
+    .slice(0, 200);
+}
+
 export default async function telemetryRoutes(app: FastifyInstance, opts: { ctx: AppContext }) {
   const { ctx } = opts;
 
@@ -104,6 +131,51 @@ export default async function telemetryRoutes(app: FastifyInstance, opts: { ctx:
         req.log.error({ err }, 'could not record a preview_10s event');
       });
 
+      return reply.status(202).send();
+    },
+  );
+
+  /**
+   * POST /v1/visits — a page was shown. The dashboard's visit numbers.
+   *
+   * Self-hosted and anonymous on purpose. The browser sends a random visitor
+   * id it made up and keeps in localStorage — not the account id, not an IP,
+   * not a fingerprint — plus the path (without query string, which can carry
+   * tokens) and, when it came from another site, only that site's host.
+   * Nothing leaves this server: no third-party collector is involved.
+   *
+   * Staff browsing is marked internal, along with all demo traffic, so the
+   * people running the service do not inflate its numbers. A visitor id that
+   * is not a UUID is refused rather than stored: the column is a pseudonymous
+   * reference, and a free-text field there would become a place to put an
+   * email address.
+   */
+  app.post(
+    '/v1/visits',
+    {
+      preHandler: app.optionalAuth,
+      config: {
+        // One per route change on the client. Generous enough for someone
+        // clicking around quickly; a floor under a client that loops.
+        rateLimit: { max: 120, timeWindow: '1 minute' },
+      },
+    },
+    async (req, reply) => {
+      const body = visitReport.parse(req.body);
+      const staff = req.user?.role === 'admin' || req.user?.role === 'support';
+      await trackEvent({
+        name: 'page_view',
+        userRef: body.visitorId,
+        props: {
+          path: visitPath(body.path),
+          signed_in: Boolean(req.user),
+          ...(body.refHost ? { ref_host: body.refHost } : {}),
+        },
+        runMode: ctx.config.mode,
+        isInternal: ctx.config.isDemo || staff,
+      }).catch((err) => {
+        req.log.error({ err }, 'could not record a page_view event');
+      });
       return reply.status(202).send();
     },
   );

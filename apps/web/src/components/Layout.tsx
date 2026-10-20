@@ -14,6 +14,7 @@ import { createInFlightGuard, PENDING_AFTER_MS } from '../lib/in-flight';
 import { NowPlaying } from './NowPlaying';
 import { PlayerBar } from './PlayerBar';
 import { PageTitleContext, pageTitleKey } from '../lib/title';
+import { reportVisit } from '../lib/visits';
 
 /**
  * YUHA app shell — top navigation per the acceptance spec: 88px desktop / 72px
@@ -228,6 +229,10 @@ export function Layout({ children }: { children: ReactNode }) {
   useDismiss(accountRef, menuOpen, closeMenu);
 
   useEffect(() => setMenuOpen(false), [location.pathname]);
+
+  // One page view per route, for the operator dashboard (lib/visits.ts says
+  // exactly what is and is not sent).
+  useEffect(() => reportVisit(location.pathname), [location.pathname]);
 
 
   /*
