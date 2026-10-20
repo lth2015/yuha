@@ -2,7 +2,7 @@
 /**
  * The steward of the code is not the operator of the service.
  *
- * YUHA's code is Apache-2.0 and stewarded upstream by the NEXT community
+ * YUHA's code is Apache-2.0 and stewarded upstream by the NETX community
  * (GOVERNANCE.md). The service at yuha.studio was not donated with it: the
  * Stripe account, the 特定商取引法 販売業者, the privacy controller, refunds
  * and support all stay with its operator, a sole proprietor. Both halves break

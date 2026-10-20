@@ -11,7 +11,7 @@
 <p align="center">
   <img src="https://img.shields.io/badge/license-Apache--2.0-blue.svg" alt="Apache-2.0">
   <img src="https://img.shields.io/badge/node-%E2%89%A5%2022.13-brightgreen.svg" alt="Node 22.13+">
-  <img src="https://img.shields.io/badge/stewarded%20by-NEXT%20community-ff6a3d.svg" alt="Stewarded by the NEXT community">
+  <img src="https://img.shields.io/badge/stewarded%20by-NETX%20community-ff6a3d.svg" alt="Stewarded by the NETX community">
 </p>
 
 <p align="center">
@@ -107,9 +107,9 @@ OAuth with TOTP, rights-complaint handling, and an operations console.
 
 ---
 
-## Donated to the NEXT technical community
+## Donated to the NETX technical community
 
-YUHA's code has been donated to the **NEXT technical community**
+YUHA's code has been donated to the **NETX technical community**
 (<https://www.netx.world/>), which is its upstream steward: it holds this
 repository and decides what is merged and released.
 

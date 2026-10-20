@@ -146,7 +146,7 @@ jobs:
         run: pnpm check:contrast
 
       - name: Stewardship
-        # The code is Apache-2.0 and stewarded by the NEXT community; the
+        # The code is Apache-2.0 and stewarded by the NETX community; the
         # service is operated by someone else, and the 特定商取引法 block names
         # that someone. Both halves are easy to break quietly — a steward's
         # name in a statutory disclosure is a false disclosure, and an
