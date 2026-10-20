@@ -1,8 +1,10 @@
 import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
+import { isIP } from 'node:net';
 import { z } from 'zod';
 import { GOOGLE_CALLBACK_PATH, GOOGLE_WEB_RETURN_PATH } from './auth/google-paths.js';
 import { RunMode } from '@yuha/contracts';
+import { isPublicAddress } from '@yuha/providers';
 
 /**
  * Configuration and mode validation (PROJECT_TASK.md §3).
@@ -285,7 +287,8 @@ const envSchema = z.object({
    * SSRF guard refuses twice over — not https, and a private address. This
    * lifts exactly those two checks for hosts already on
    * `MUSIC_ALLOWED_AUDIO_HOSTS`; see the note in providers/net/fetch-audio.ts
-   * for what that gives up. Refused outright in production below.
+   * for what that gives up. Production only permits the single configured
+   * Spark IP and retains the private-address check.
    */
   MUSIC_ALLOW_INSECURE_SELF_HOSTED: bool(false),
   DEMO_FIXTURES_DIR: z.string().optional(),
@@ -684,10 +687,20 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     }
     if (e.DEV_AUTH_SECRET) problems.push('DEV_AUTH_SECRET must not be set in production');
     if (e.MUSIC_ALLOW_INSECURE_SELF_HOSTED) {
-      problems.push(
-        'MUSIC_ALLOW_INSECURE_SELF_HOSTED must not be set in production: it turns off the https ' +
-          'and private-address checks on provider audio URLs (SEC-05)',
-      );
+      let sparkHost: string | undefined;
+      try {
+        const base = new URL(e.MUSIC_BASE_URL ?? '');
+        if (base.protocol === 'http:' && isIP(base.hostname) && isPublicAddress(base.hostname)) {
+          sparkHost = base.hostname;
+        }
+      } catch { /* The regular HTTP adapter validation reports a missing URL. */ }
+      if (adapters.music !== 'http' || e.MUSIC_PROVIDER_ID !== 'ace-step-spark' ||
+          !sparkHost || e.MUSIC_ALLOWED_AUDIO_HOSTS?.trim() !== sparkHost) {
+        problems.push(
+          'MUSIC_ALLOW_INSECURE_SELF_HOSTED in production requires the HTTP ace-step-spark provider ' +
+            'and exactly one audio host matching the public MUSIC_BASE_URL IP',
+        );
+      }
     }
     if (!e.LEGAL_ENTITY_NAME || !e.LEGAL_ENTITY_CONTACT) {
       // SEC-13: placeholder disclosure is fine for a demo, never for real selling.
@@ -980,13 +993,13 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
         );
       }
     }
-    if (e.STRIPE_SECRET_KEY?.startsWith('sk_live_') && mode !== 'production') {
+    if (/^(sk|rk)_live_/.test(e.STRIPE_SECRET_KEY ?? '') && mode !== 'production') {
       problems.push(`a live Stripe key cannot be used in ${mode} mode`);
     }
-    if (e.STRIPE_SECRET_KEY?.startsWith('sk_test_') && mode === 'production') {
+    if (/^(sk|rk)_test_/.test(e.STRIPE_SECRET_KEY ?? '') && mode === 'production') {
       problems.push('production mode requires a live Stripe key, not a test key');
     }
-  } else if (mode !== 'production' && e.STRIPE_SECRET_KEY?.startsWith('sk_live_')) {
+  } else if (mode !== 'production' && /^(sk|rk)_live_/.test(e.STRIPE_SECRET_KEY ?? '')) {
     problems.push('a live Stripe key is present outside production mode — remove it');
   }
 

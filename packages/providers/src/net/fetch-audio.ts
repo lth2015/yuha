@@ -23,11 +23,8 @@ import { isIP } from 'node:net';
  *
  * What it costs, stated rather than glossed: with it on, an allow-listed
  * *public* hostname whose DNS has been poisoned to a private address would
- * also be fetched, because the check is off for every allow-listed host and
- * not only for the self-hosted one. That is why `loadConfig` refuses the flag
- * outright in production mode, the same way it refuses the dev auth adapter
- * and the demo music provider — this is a development affordance and is not
- * permitted to reach a deployed environment.
+ * also be fetched outside production. Production can permit plain HTTP to
+ * one configured Spark IP while keeping the private-address check enabled.
  */
 export class UnsafeUrlError extends Error {
   readonly reason: string;
@@ -76,10 +73,12 @@ export interface FetchAudioOptions {
   /**
    * Permit plain http and private addresses for allow-listed hosts.
    *
-   * Off unless an operator sets it, and refused in production by `loadConfig`.
+   * Off unless an operator sets it; production narrows the allowed host.
    * See the note at the top of this file for exactly what it gives up.
    */
   allowInsecureSelfHosted?: boolean;
+  /** Keep the private-address check even when HTTP is permitted. */
+  allowPrivateAddresses?: boolean;
 }
 
 export async function assertSafeUrl(rawUrl: string, opts: FetchAudioOptions): Promise<URL> {
@@ -111,7 +110,7 @@ export async function assertSafeUrl(rawUrl: string, opts: FetchAudioOptions): Pr
   if (!addresses.length) {
     throw new UnsafeUrlError('dns_failure', `could not resolve ${host}`);
   }
-  if (!selfHosted) {
+  if (!selfHosted || opts.allowPrivateAddresses === false) {
     for (const a of addresses) {
       if (!isPublicAddress(a.address)) {
         throw new UnsafeUrlError('private_address', `${host} resolves to a non-public address`);

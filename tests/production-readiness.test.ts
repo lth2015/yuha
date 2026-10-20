@@ -11,6 +11,9 @@
  */
 import { describe, expect, it } from 'vitest';
 import { productionReadiness, scrub } from '../apps/api/src/services/production-readiness.js';
+import { StripePaymentsAdapter } from '../packages/providers/src/payments/stripe.js';
+import { loadConfig } from '../apps/api/src/config.js';
+import { assertSafeUrl } from '../packages/providers/src/net/fetch-audio.js';
 
 /** Roughly what yuha.studio's API pod reads today, with invented values. */
 const today = {
@@ -47,6 +50,79 @@ describe('production readiness of an environment', () => {
     // so it is not a start-up check — but Checkout cannot work with the pair.
     const all = productionReadiness(today).problems.map((p) => p.what).join('\n');
     expect(all).toMatch(/STRIPE_SECRET_KEY is a test key/);
+  });
+
+  it('recognises a restricted live key as live in the production preflight', () => {
+    const r = productionReadiness({ ...today, STRIPE_SECRET_KEY: 'rk_live_example' });
+    expect(r.stripe.secretKey).toBe('live');
+    expect(r.problems.map((p) => p.what).join('\n')).not.toMatch(/STRIPE_SECRET_KEY is a test key/);
+  });
+
+  it('reports a restricted test key as test and an unknown key as invalid', () => {
+    const test = productionReadiness({ ...today, STRIPE_SECRET_KEY: 'rk_test_example' });
+    expect(test.stripe.secretKey).toBe('test');
+    expect(test.problems.map((p) => p.what).join('\n')).toMatch(/STRIPE_SECRET_KEY is a test key/);
+    const unknown = productionReadiness({ ...today, STRIPE_SECRET_KEY: 'unknown_example' });
+    expect(unknown.ready).toBe(false);
+    expect(unknown.problems.map((p) => p.what).join('\n')).toMatch(/not a recognised live key/);
+  });
+
+  it('accepts a restricted live key only in production', () => {
+    const options = { secretKey: 'rk_live_example', webhookSecret: 'whsec_example' };
+    expect(() => new StripePaymentsAdapter({ ...options, expectLiveMode: true })).not.toThrow();
+    expect(() => new StripePaymentsAdapter({ ...options, expectLiveMode: false })).toThrow(/outside production/);
+    expect(() => new StripePaymentsAdapter({ ...options, secretKey: 'rk_test_example', expectLiveMode: true }))
+      .toThrow(/live Stripe/);
+    expect(() => new StripePaymentsAdapter({ ...options, secretKey: 'unknown_example', expectLiveMode: true }))
+      .toThrow(/live Stripe/);
+  });
+
+  it('keeps restricted live keys out of non-production mode even with simulated payments', () => {
+    const env = {
+      ...today,
+      AUTH_ADAPTER: 'dev',
+      STORAGE_SIGNING_SECRET: 'storage-secret-example',
+      PUBLIC_API_URL: 'https://yuha.example',
+    };
+    expect(() => loadConfig({ ...env, STRIPE_SECRET_KEY: 'rk_live_example' }))
+      .toThrow(/live Stripe key/);
+    expect(() => loadConfig({ ...env, STRIPE_SECRET_KEY: 'rk_test_example' }))
+      .not.toThrow();
+  });
+
+  it('permits the configured HTTP Spark host in production but not a different host', () => {
+    const spark = {
+      ...today,
+      MUSIC_ADAPTER: 'http',
+      MUSIC_PROVIDER_ID: 'ace-step-spark',
+      MUSIC_BASE_URL: 'http://121.101.82.116:8583',
+      MUSIC_ALLOWED_AUDIO_HOSTS: '121.101.82.116',
+      MUSIC_ALLOW_INSECURE_SELF_HOSTED: 'true',
+    };
+    const accepted = productionReadiness(spark).problems.map((p) => p.what).join('\n');
+    expect(accepted).not.toMatch(/MUSIC_ALLOW_INSECURE_SELF_HOSTED/);
+    const rejected = productionReadiness({ ...spark, MUSIC_ALLOWED_AUDIO_HOSTS: '169.254.169.254' })
+      .problems.map((p) => p.what).join('\n');
+    expect(rejected).toMatch(/MUSIC_ALLOW_INSECURE_SELF_HOSTED/);
+    const privateBase = productionReadiness({
+      ...spark,
+      MUSIC_BASE_URL: 'http://169.254.169.254:8583',
+      MUSIC_ALLOWED_AUDIO_HOSTS: '169.254.169.254',
+    }).problems.map((p) => p.what).join('\n');
+    expect(privateBase).toMatch(/MUSIC_ALLOW_INSECURE_SELF_HOSTED/);
+  });
+
+  it('still blocks private and metadata addresses when allowing HTTP in production', async () => {
+    const options = {
+      allowedHosts: ['8.8.8.8', '169.254.169.254'],
+      maxBytes: 1024,
+      timeoutMs: 1000,
+      allowInsecureSelfHosted: true,
+      allowPrivateAddresses: false,
+    };
+    await expect(assertSafeUrl('http://8.8.8.8/audio.mp3', options)).resolves.toBeInstanceOf(URL);
+    await expect(assertSafeUrl('http://169.254.169.254/latest/meta-data/', options))
+      .rejects.toThrow(/non-public/);
   });
 
   it('says where each fix is made: the ConfigMap, the secret, or the manifest', () => {

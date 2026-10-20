@@ -18,7 +18,7 @@ live 的顺序和逐项清单。
 3. **同名时 ConfigMap 赢。** 应用只用 secret 文件补「环境里还没有的变量」（`resolveEnv`），
    所以 ConfigMap 里一个旧值会盖住 secret 里的新值。
 
-另外：integration 模式下应用**拒绝启动**于 `sk_live_` 密钥，而 10-19 部署后 pod 正常起来了——
+另外：integration 模式下应用**拒绝启动**于 `sk_live_` 或 `rk_live_` 密钥，而 10-19 部署后 pod 正常起来了——
 说明当时 secret 里的 `STRIPE_SECRET_KEY` 还不是 live key（空或测试 key），线上却在发 `pk_live_`。
 
 ## 每个变量放在哪里
@@ -56,10 +56,15 @@ live 的顺序和逐项清单。
   `invoice.paid`、`invoice.payment_succeeded`、`invoice.payment_failed`。
   它的签名密钥（`whsec_…`）进 secret 的 `STRIPE_WEBHOOK_SECRET`。
 
-**secret**：`STRIPE_SECRET_KEY` = `sk_live_…`；删除 `DEV_AUTH_SECRET`（生产模式拒绝它存在）和 `LEGAL_ENTITY_ADDRESS`（已不使用）。
+**secret**：`STRIPE_SECRET_KEY` = `sk_live_…` 或已授予所需 API 权限的 `rk_live_…`；删除 `DEV_AUTH_SECRET`（生产模式拒绝它存在）和 `LEGAL_ENTITY_ADDRESS`（已不使用）。
 
 **ConfigMap**（API 和 worker 两个都要）：`PAYMENTS_ADAPTER=stripe`、`STRIPE_PUBLISHABLE_KEY=pk_live_…`（与 secret key 同一个 Stripe 账户）、
 四个 `STRIPE_PRICE_ID_*`、`DATABASE_SSL=true`、`EMAIL_ADAPTER=ses`（或 `smtp`）及其配置、不要把 `ADMIN_MFA_REQUIRED` 设为 false。
+
+当前 Spark 只有 HTTP。生产模式可显式保留 `MUSIC_ALLOW_INSECURE_SELF_HOSTED=true`，但仅限
+`MUSIC_ADAPTER=http`、`MUSIC_PROVIDER_ID=ace-step-spark`，且 `MUSIC_ALLOWED_AUDIO_HOSTS`
+必须只含与 `MUSIC_BASE_URL` 相同的一个 IP。Worker 仍拒绝私网及云元数据地址；HTTP
+链路没有传输加密，公网中间人仍可能篡改音频。应尽快给 Spark 配 HTTPS。
 
 ## 检查命令
 
@@ -99,7 +104,7 @@ worker 的配置同样要查：按 Job 文件顶部的说明换成 `qa-music-wor
 ## 回滚
 
 回退切换 PR（`RUN_MODE` 回到 integration）时，**同时**把 ConfigMap 的 `PAYMENTS_ADAPTER` 改回 `simulated`、
-把 secret 的 `STRIPE_SECRET_KEY` 换回非 live 值——integration 模式见到 `sk_live_` 会拒绝启动。
+把 secret 的 `STRIPE_SECRET_KEY` 换回非 live 值——integration 模式见到 `sk_live_` 或 `rk_live_` 都会拒绝启动。
 
 ## 法务
 

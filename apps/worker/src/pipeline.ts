@@ -433,8 +433,9 @@ async function processAudio(
         allowedHosts: hosts,
         maxBytes,
         timeoutMs: ctx.config.MUSIC_TIMEOUT_MS,
-        // Only ever true outside production — loadConfig refuses it there.
+        // Production permits HTTP only to the configured Spark IP, never private addresses.
         allowInsecureSelfHosted: ctx.config.MUSIC_ALLOW_INSECURE_SELF_HOSTED,
+        allowPrivateAddresses: ctx.config.mode !== 'production',
       });
     }
   } catch (err) {

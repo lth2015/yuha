@@ -137,8 +137,12 @@ export function productionReadiness(env: NodeJS.ProcessEnv): Readiness {
         : 'unrecognised'
       : 'unset',
   };
+  if (resolved.STRIPE_SECRET_KEY?.trim().startsWith('rk_live_')) stripe.secretKey = 'live';
+  if (resolved.STRIPE_SECRET_KEY?.trim().startsWith('rk_test_')) stripe.secretKey = 'test';
   if (stripe.secretKey === 'test') {
-    problems.push({ what: 'STRIPE_SECRET_KEY is a test key; production charges need sk_live_', where: 'secret: STRIPE_SECRET_KEY' });
+    problems.push({ what: 'STRIPE_SECRET_KEY is a test key; production charges need a live key', where: 'secret: STRIPE_SECRET_KEY' });
+  } else if (stripe.secretKey !== 'live') {
+    problems.push({ what: 'STRIPE_SECRET_KEY is not a recognised live key (sk_live_ or rk_live_)', where: 'secret: STRIPE_SECRET_KEY' });
   }
   if (stripe.publishableKey !== 'live') {
     problems.push({

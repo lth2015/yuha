@@ -34,12 +34,12 @@ export class StripePaymentsAdapter implements PaymentsAdapter {
   private readonly webhookSecret: string;
 
   constructor(opts: StripeOptions) {
-    const isLive = opts.secretKey.startsWith('sk_live_');
+    const isLive = opts.secretKey.startsWith('sk_live_') || opts.secretKey.startsWith('rk_live_');
     if (isLive && !opts.expectLiveMode) {
       throw new Error('a live Stripe secret key was supplied outside production mode');
     }
     if (!isLive && opts.expectLiveMode) {
-      throw new Error('production mode requires a live Stripe secret key, not a test key');
+      throw new Error('production mode requires a live Stripe API key');
     }
     /*
      * The API version is configurable and defaults to the SDK's own.
