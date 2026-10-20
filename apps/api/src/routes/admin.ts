@@ -1,6 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
-import { AppError, idempotencyKeySchema } from '@yuha/contracts';
+import { AppError, UserRole, idempotencyKeySchema } from '@yuha/contracts';
 import {
   compensateUnits,
   getUser,
@@ -10,6 +10,12 @@ import {
   getRightsCase,
   listAccountDeletions,
   listAuditLogs,
+  listAuditForConsole,
+  listOrdersForConsole,
+  statsReport,
+  jstToday,
+  jstDayStartUtc,
+  bucketKeys,
   listRightsCases,
   listSettings,
   markAccountDeletionVerified,
@@ -28,6 +34,7 @@ import type { AppContext } from '../context.js';
 import { executeAccountDeletion } from '../services/deletion.js';
 import { decideHeldOrder, heldOrderQueue } from '../services/order-review.js';
 import { findCustomers, getCustomer, giftCredits } from '../services/operator-grant.js';
+import { changeRole, reactivateAccount, suspendAccount } from '../services/account-admin.js';
 
 /**
  * Operations console API (UI-15).
@@ -83,6 +90,91 @@ export default async function adminRoutes(app: FastifyInstance, opts: { ctx: App
           ? 'demo mode: すべての金額・件数はシミュレーションです。事業成果の証拠にはなりません。'
           : '上流コストの一部は契約確定前の予算前提値です。is_estimate 列を確認してください。',
     };
+  });
+
+  // ------------------------------------------------------------ dashboard
+
+  /**
+   * GET /v1/admin/stats?granularity=day|week|month|year&from=YYYY-MM-DD&to=YYYY-MM-DD
+   *
+   * Visits, sign-ups, generations, paid orders and revenue (by card / JPYC /
+   * USDC), refunds and credits, in Japan-time buckets, with totals for the
+   * range and for the same span immediately before it. What each number
+   * counts is written once, in packages/db/src/admin-stats.ts.
+   *
+   * Without dates: the last 30 days by day, 12 weeks by week, 12 months by
+   * month, 5 years by year — each ending today in Japan.
+   */
+  const DEFAULT_SPAN_DAYS = { day: 30, week: 12 * 7, month: 365, year: 5 * 365 } as const;
+  app.get('/v1/admin/stats', { preHandler: staff }, async (req) => {
+    const ymd = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
+    const q = z
+      .object({
+        granularity: z.enum(['day', 'week', 'month', 'year']).default('day'),
+        from: ymd.optional(),
+        to: ymd.optional(),
+      })
+      .parse(req.query);
+    const to = q.to ?? jstToday();
+    const from =
+      q.from ??
+      new Date(Date.parse(`${to}T00:00:00Z`) - (DEFAULT_SPAN_DAYS[q.granularity] - 1) * 86_400_000)
+        .toISOString()
+        .slice(0, 10);
+    if (from > to) throw new AppError('VALIDATION_FAILED', '`from` is after `to`');
+    // Bounded by bucket count rather than by days: 400 daily buckets is a
+    // chart nobody can read, while ten years by month is fine.
+    if (bucketKeys(from, to, q.granularity).length > 400) {
+      throw new AppError('VALIDATION_FAILED', 'that range has too many buckets for this granularity — pick a coarser one');
+    }
+    return statsReport({ granularity: q.granularity, from, to });
+  });
+
+  // --------------------------------------------------------------- orders
+
+  /** Orders across all accounts, newest first, with how each was paid. */
+  app.get('/v1/admin/orders', { preHandler: staff }, async (req) => {
+    const ymd = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
+    const q = z
+      .object({
+        status: z.enum(['pending', 'paid', 'failed', 'refunded', 'partially_refunded', 'canceled']).optional(),
+        method: z.enum(['card', 'jpyc', 'usdc']).optional(),
+        email: z.string().trim().min(1).max(320).optional(),
+        from: ymd.optional(),
+        to: ymd.optional(),
+        before: z.string().datetime().optional(),
+        limit: z.coerce.number().int().min(1).max(200).default(50),
+      })
+      .parse(req.query);
+    return listOrdersForConsole({
+      ...(q.status ? { status: q.status } : {}),
+      ...(q.method ? { method: q.method } : {}),
+      ...(q.email ? { email: q.email } : {}),
+      ...(q.from ? { from: jstDayStartUtc(q.from) } : {}),
+      ...(q.to ? { to: new Date(jstDayStartUtc(q.to).getTime() + 86_400_000) } : {}),
+      ...(q.before ? { before: new Date(q.before) } : {}),
+      limit: q.limit,
+    });
+  });
+
+  // ------------------------------------------------------------ audit log
+
+  /** The audit log with the people resolved, for the console's audit tab. */
+  app.get('/v1/admin/audit', { preHandler: staff }, async (req) => {
+    const q = z
+      .object({
+        action: z.string().trim().min(1).max(64).optional(),
+        email: z.string().trim().min(1).max(320).optional(),
+        before: z.string().datetime().optional(),
+        limit: z.coerce.number().int().min(1).max(200).default(100),
+      })
+      .parse(req.query);
+    return listAuditForConsole({
+      ...(q.action ? { action: q.action } : {}),
+      ...(q.email ? { email: q.email } : {}),
+      ...(q.before ? { before: new Date(q.before) } : {}),
+      limit: q.limit,
+    });
   });
 
   // ---------------------------------------------------------------- jobs
@@ -237,6 +329,34 @@ export default async function adminRoutes(app: FastifyInstance, opts: { ctx: App
    * Issues make-good credits. Never edits an existing consumption row — a new
    * compensation batch is created, so the original flow stays auditable (§6.2).
    */
+  /*
+   * Suspend, reactivate, change role. Admin only, reason required, audited in
+   * the same transaction as the change — services/account-admin.ts says what
+   * a suspension does and does not do, and why each guard exists.
+   */
+  app.post('/v1/admin/users/:id/suspend', { preHandler: adminOnly }, async (req) => {
+    const { id } = z.object({ id: z.string().uuid() }).parse(req.params);
+    const body = reasoned.parse(req.body);
+    return suspendAccount({ actor: { id: req.user!.id, role: req.user!.role }, userId: id, reason: body.reason });
+  });
+
+  app.post('/v1/admin/users/:id/reactivate', { preHandler: adminOnly }, async (req) => {
+    const { id } = z.object({ id: z.string().uuid() }).parse(req.params);
+    const body = reasoned.parse(req.body);
+    return reactivateAccount({ actor: { id: req.user!.id, role: req.user!.role }, userId: id, reason: body.reason });
+  });
+
+  app.post('/v1/admin/users/:id/role', { preHandler: adminOnly }, async (req) => {
+    const { id } = z.object({ id: z.string().uuid() }).parse(req.params);
+    const body = reasoned.extend({ role: UserRole }).parse(req.body);
+    return changeRole({
+      actor: { id: req.user!.id, role: req.user!.role },
+      userId: id,
+      role: body.role,
+      reason: body.reason,
+    });
+  });
+
   app.post('/v1/admin/users/:id/compensate', { preHandler: staff }, async (req) => {
     /*
      * Validated and guarded the same way as `grant`, which it was not.

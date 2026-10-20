@@ -32,9 +32,7 @@ export default fp(async function authPlugin(
       throw new AppError('UNAUTHENTICATED', 'a bearer token is required');
     }
     const user = await adapter.verify(header.slice('Bearer '.length).trim());
-    if (user.status !== 'active' || user.deleted_at) {
-      throw new AppError('FORBIDDEN', 'this account is not active');
-    }
+    refuseInactive(user);
     req.user = user;
   });
 
@@ -86,3 +84,21 @@ export default fp(async function authPlugin(
     }
   });
 });
+
+/**
+ * The one test for "may this account act at all", used by every request and
+ * by every place a session is minted (dev login, the Google exchange, the MFA
+ * verify). Sign-in used to skip it, so a suspended person signed in
+ * successfully and then watched every screen fail.
+ */
+export function refuseInactive(user: { status: string; deleted_at: Date | null }): void {
+  if (user.deleted_at || user.status === 'deleted') {
+    throw new AppError('FORBIDDEN', 'this account is not active');
+  }
+  if (user.status === 'suspended') {
+    throw new AppError('ACCOUNT_SUSPENDED', 'this account has been suspended');
+  }
+  if (user.status !== 'active') {
+    throw new AppError('FORBIDDEN', 'this account is not active');
+  }
+}

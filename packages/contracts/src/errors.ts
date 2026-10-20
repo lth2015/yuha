@@ -14,6 +14,7 @@ export const ERROR_CODES = [
   'MFA_NOT_ENROLLED',
   'MFA_REQUIRED',
   'EMAIL_NOT_ALLOWED',
+  'ACCOUNT_SUSPENDED',
   // request shape
   'VALIDATION_FAILED',
   'PROMPT_TOO_LONG',
@@ -75,6 +76,9 @@ const STATUS_BY_CODE: Record<ErrorCode, number> = {
   // Authenticated, and not allowed through until a second factor exists.
   MFA_REQUIRED: 403,
   EMAIL_NOT_ALLOWED: 403,
+  // An operator suspended the account. Its own code so the sign-in page can say
+  // so, instead of a generic "forbidden" on every screen.
+  ACCOUNT_SUSPENDED: 403,
   VALIDATION_FAILED: 400,
   PROMPT_TOO_LONG: 400,
   PROMPT_BLOCKED: 422,

@@ -2412,3 +2412,56 @@ textarea.is-full { border-color: var(--danger); }
 .pay-method__name { font-weight: 600; font-size: var(--t-body); }
 .pay-method__note { color: var(--muted); line-height: 1.5; }
 .pricing__methods { margin: 0; text-align: center; color: var(--muted); }
+
+/* ---- operator console --------------------------------------------------- */
+.admin-tabs { display: flex; flex-wrap: wrap; gap: 4px; border-bottom: 1px solid var(--line); }
+.admin-tabs__tab {
+  padding: 10px 14px; margin-bottom: -1px; border-bottom: 2px solid transparent;
+  color: var(--muted); font-size: var(--t-body); font-weight: 500;
+}
+.admin-tabs__tab:hover { color: var(--ink); }
+.admin-tabs__tab.is-active { color: var(--ink); border-bottom-color: var(--petal); }
+.admin-filters { flex-wrap: wrap; gap: var(--s2); align-items: center; }
+/* Form controls are full-width by default; in a filter row that wraps, that put
+   every control on its own line. */
+.admin-filters > select,
+.admin-filters > input:not([type="checkbox"]) { width: auto; flex: 1 1 180px; max-width: 280px; }
+
+.dash__controls { display: flex; flex-wrap: wrap; gap: var(--s3); align-items: center; justify-content: space-between; }
+.dash__range { display: flex; flex-wrap: wrap; gap: var(--s2); align-items: center; }
+.dash__actions { display: flex; gap: var(--s2); }
+/* Eight tiles: four by two on a desk, two by four on a phone — never six and
+   a lonely two. */
+.dash__tiles { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--s3); }
+@media (min-width: 900px) { .dash__tiles { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+.dash__tile {
+  display: flex; flex-direction: column; gap: 2px; padding: var(--s3) var(--s4);
+  border: 1px solid var(--line); border-radius: var(--r-control); background: var(--surface-solid);
+}
+.dash__tilelabel { color: var(--muted); font-size: var(--t-caption); }
+.dash__tilevalue { font-size: var(--t-heading); font-weight: 600; color: var(--ink); }
+.dash__tiledelta { color: var(--muted); }
+.dash__charts { display: grid; grid-template-columns: repeat(auto-fit, minmax(420px, 1fr)); gap: var(--s4); }
+@media (max-width: 620px) { .dash__charts { grid-template-columns: minmax(0, 1fr); } }
+
+.chart {
+  margin: 0; padding: var(--s3) var(--s4); border: 1px solid var(--line);
+  border-radius: var(--r-control); background: var(--surface-solid); min-width: 0;
+}
+.chart__head { display: flex; flex-wrap: wrap; justify-content: space-between; gap: var(--s2); margin-bottom: var(--s2); }
+.chart__title { font-weight: 600; font-size: var(--t-body); color: var(--ink); }
+.chart__legend { display: flex; flex-wrap: wrap; gap: var(--s3); }
+.chart__key, .chart__tiprow { display: inline-flex; align-items: center; gap: 6px; color: var(--muted); font-size: var(--t-caption); }
+.chart__swatch { width: 10px; height: 10px; border-radius: 3px; flex: none; }
+.chart__plot { position: relative; width: 100%; }
+.chart__plot svg { display: block; }
+.chart__grid { stroke: var(--line); stroke-width: 1; }
+.chart__axis { fill: var(--muted); font-size: var(--t-caption); }
+.chart__hoverband { fill: color-mix(in srgb, var(--surface-soft) 70%, transparent); }
+.chart__tip {
+  position: absolute; top: 4px; width: 180px; padding: 8px 10px; pointer-events: none;
+  display: flex; flex-direction: column; gap: 4px; font-size: var(--t-caption); color: var(--ink);
+  background: var(--surface-solid); border: 1px solid var(--line-strong); border-radius: 10px;
+  box-shadow: var(--shadow-raised);
+}
+.chart__tiprow .num { margin-left: auto; color: var(--ink); }

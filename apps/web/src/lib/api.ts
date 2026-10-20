@@ -152,7 +152,9 @@ function errorFrom(res: Response, text: string): ApiError {
    * failed with "you need to sign in" until they found Sign out in the menu or
    * reloaded by hand. The event is what turns that into an actual sign-out.
    */
-  if (res.status === 401) {
+  // A suspension is the same for the session: the token is no use any more,
+  // and the sign-in page is where the reason can be shown.
+  if (res.status === 401 || code === 'ACCOUNT_SUSPENDED') {
     setToken(null);
     try {
       window.dispatchEvent(new Event(SESSION_EXPIRED_EVENT));

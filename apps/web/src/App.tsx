@@ -174,6 +174,14 @@ export default function App() {
                   </RequireAuth>
                 }
               />
+              <Route
+                path="/admin/:tab"
+                element={
+                  <RequireAuth roles={['admin', 'support']}>
+                    <Admin />
+                  </RequireAuth>
+                }
+              />
 
               {/* Public on purpose: a rights holder must not need an account. */}
               <Route path="/help/rights" element={<Rights />} />

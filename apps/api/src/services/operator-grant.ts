@@ -12,6 +12,8 @@ import {
   withTxRetry,
   writeAuditLog,
   type UserRow,
+  listAuditForConsole,
+  query,
 } from '@yuha/db';
 import type { AppContext } from '../context.js';
 
@@ -56,6 +58,8 @@ export interface OperatorUserView {
   creditsTruncated: boolean;
   /** True when there are more orders than this view carries. */
   ordersTruncated: boolean;
+  recentJobs: Array<{ jobId: string; state: string; errorCode: string | null; trackId: string | null; createdAt: string }>;
+  activity: Array<{ action: string; actorEmail: string | null; reason: string; createdAt: string }>;
   credits: Array<{
     batchId: string;
     source: string;
@@ -132,13 +136,21 @@ export async function getCustomer(userId: string): Promise<OperatorUserView> {
 
   const BATCHES = 100;
   const ORDERS = 50;
-  const [balance, batches, orders] = await Promise.all([
+  const [balance, batches, orders, recentJobs, activity] = await Promise.all([
     getBalance(userId),
     // Bounded, and the caller is told when the view is partial. Unbounded,
     // this loaded every batch an account had ever held — and a gift mints a
     // new one each time, so the count grows with operator activity.
     listBatches(userId, undefined, BATCHES + 1),
     listOrders(userId, ORDERS + 1),
+    // What they have been making, and what operators have done to the
+    // account — the two things worth knowing before a gift or a suspension.
+    query<{ id: string; state: string; error_code: string | null; created_at: Date; track_id: string | null }>(
+      `SELECT id, state, error_code, created_at, track_id FROM generation_jobs
+        WHERE user_id = ? ORDER BY created_at DESC LIMIT 20`,
+      [userId],
+    ),
+    listAuditForConsole({ limit: 20, subjectUserId: userId }),
   ]);
 
   return {
@@ -162,6 +174,18 @@ export async function getCustomer(userId: string): Promise<OperatorUserView> {
       expiresAt: b.expires_at?.toISOString() ?? null,
       createdAt: b.created_at.toISOString(),
     })),
+    recentJobs: recentJobs.map((j) => ({
+      jobId: j.id,
+      state: j.state,
+      errorCode: j.error_code,
+      trackId: j.track_id,
+      createdAt: j.created_at.toISOString(),
+    })),
+    activity: activity.items
+      // Opening the record is audited too; listing every look would drown the
+      // changes that matter.
+      .filter((a) => a.action !== 'customer.opened')
+      .map((a) => ({ action: a.action, actorEmail: a.actorEmail, reason: a.reason, createdAt: a.createdAt })),
     orders: orders.slice(0, ORDERS).map((o) => ({
       orderId: o.id,
       priceKey: o.price_key,
