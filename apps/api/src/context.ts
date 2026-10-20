@@ -277,6 +277,7 @@ function buildChainReader(cfg: AppConfig): DualChainReader | undefined {
     // The label, never the URL: an alert naming the disagreeing node must not
     // print an API key.
     new ChainNode(httpTransport({ label: 'polygon-secondary', url: cfg.POLYGON_RPC_SECONDARY_URL })),
+    cfg.STABLECOIN_RPC_MODE,
   );
 }
 

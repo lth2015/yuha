@@ -283,7 +283,9 @@ export async function probeFinality(node: ChainNode): Promise<FinalityProbe> {
 export type Agreement<T> = { agreed: true; value: T } | { agreed: false; reason: string };
 
 /**
- * Two nodes, and what it means for them to agree.
+ * Two nodes, and what it means for them to agree. The explicit
+ * `single_secondary` mode uses only the secondary endpoint for every read;
+ * its `agreed` results mean locally validated, not independently corroborated.
  *
  * The distinction that matters: finalized HEIGHTS are not compared for
  * equality. Two nodes advance independently and would essentially never report
@@ -299,10 +301,17 @@ export class DualChainReader {
   constructor(
     readonly primary: ChainNode,
     readonly secondary: ChainNode,
+    readonly mode: 'dual' | 'single_secondary' = 'dual',
   ) {}
 
   /** Both nodes' finalized height, reduced to the lower of the two. */
   async finalizedHeight(): Promise<Agreement<bigint>> {
+    if (this.mode === 'single_secondary') {
+      const probe = await probeFinality(this.secondary);
+      return probe.supported && probe.height !== undefined
+        ? { agreed: true, value: probe.height }
+        : { agreed: false, reason: `${this.secondary.label}: ${probe.reason}` };
+    }
     const probes = await Promise.all([probeFinality(this.primary), probeFinality(this.secondary)]);
     const broken = probes.findIndex((p) => !p.supported);
     if (broken >= 0) {
@@ -323,6 +332,12 @@ export class DualChainReader {
    * caller then used came from the primary alone.
    */
   async agreedHeader(height: bigint): Promise<Agreement<BlockHeader>> {
+    if (this.mode === 'single_secondary') {
+      const header = await this.secondary.blockAt(height);
+      if (!header) return { agreed: false, reason: `${this.secondary.label} has no block at ${height}` };
+      if (header.number !== height) return { agreed: false, reason: `${this.secondary.label} answered about block ${header.number} when asked for ${height}` };
+      return { agreed: true, value: header };
+    }
     const [a, b] = await Promise.all([this.primary.blockAt(height), this.secondary.blockAt(height)]);
     if (!a || !b) {
       const missing = !a ? this.primary.label : this.secondary.label;
@@ -370,6 +385,12 @@ export class DualChainReader {
    * those would be a halt dressed up as a check.
    */
   async agreedReceipt(hash: string): Promise<Agreement<RawReceipt>> {
+    if (this.mode === 'single_secondary') {
+      const receipt = await this.secondary.receipt(hash);
+      return receipt
+        ? { agreed: true, value: { ...receipt, logs: byLogIndex(receipt.logs) } }
+        : { agreed: false, reason: `${this.secondary.label} has no receipt for ${hash}` };
+    }
     const [a, b] = await Promise.all([this.primary.receipt(hash), this.secondary.receipt(hash)]);
     if (!a || !b) {
       const missing = !a ? this.primary.label : this.secondary.label;
@@ -435,6 +456,12 @@ export class DualChainReader {
    * agreed receipt and must not be tempted to take them from here.
    */
   async agreedTransaction(hash: string): Promise<Agreement<RawTransaction>> {
+    if (this.mode === 'single_secondary') {
+      const transaction = await this.secondary.transaction(hash);
+      return transaction
+        ? { agreed: true, value: transaction }
+        : { agreed: false, reason: `${this.secondary.label} has no transaction ${hash}` };
+    }
     const [a, b] = await Promise.all([this.primary.transaction(hash), this.secondary.transaction(hash)]);
     if (!a || !b) {
       const missing = !a ? this.primary.label : this.secondary.label;
@@ -469,6 +496,9 @@ export class DualChainReader {
    * it exists to close.
    */
   async agreedCall(params: { to: string; data: string }): Promise<Agreement<string>> {
+    if (this.mode === 'single_secondary') {
+      return { agreed: true, value: await this.secondary.call(params) };
+    }
     const [a, b] = await Promise.all([this.primary.call(params), this.secondary.call(params)]);
     if (a.toLowerCase() !== b.toLowerCase()) {
       return {
@@ -501,6 +531,7 @@ export class DualChainReader {
     address: string | string[];
     topics: (string | string[] | null)[];
   }): Promise<RawLog[]> {
+    if (this.mode === 'single_secondary') return this.secondary.logs(params);
     const [a, b] = await Promise.all([this.primary.logs(params), this.secondary.logs(params)]);
     const seen = new Map<string, RawLog>();
     for (const log of [...a, ...b]) {
@@ -526,7 +557,8 @@ function byLogIndex(logs: readonly RawLog[]): RawLog[] {
  */
 export async function verifyChainIds(reader: DualChainReader, expected: number): Promise<string[]> {
   const problems: string[] = [];
-  for (const node of [reader.primary, reader.secondary]) {
+  const nodes = reader.mode === 'single_secondary' ? [reader.secondary] : [reader.primary, reader.secondary];
+  for (const node of nodes) {
     try {
       const id = await node.chainId();
       if (id !== expected) problems.push(`${node.label} is chain ${id}, not ${expected}`);

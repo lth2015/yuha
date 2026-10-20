@@ -160,6 +160,9 @@ const envSchema = z.object({
   STABLECOIN_ENABLED: bool(false),
   STABLECOIN_JPYC_ENABLED: bool(false),
   STABLECOIN_USDC_ENABLED: bool(false),
+  // Emergency opt-in: trust the secondary provider alone for every chain read.
+  // The default still requires two independent providers to agree.
+  STABLECOIN_RPC_MODE: z.enum(['dual', 'single_secondary']).default('dual'),
   STABLECOIN_CHAIN_ID: num(137).pipe(z.number().int().positive()),
   STABLECOIN_RECEIVER_ADDRESS: z.string().optional(),
   /*

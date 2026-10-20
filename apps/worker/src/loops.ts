@@ -105,6 +105,9 @@ export async function stablecoinScanLoop(deps: LoopDeps): Promise<void> {
     log('error', 'stablecoin scan not started: two RPC endpoints are required');
     return;
   }
+  if (ctx.config.STABLECOIN_RPC_MODE === 'single_secondary') {
+    log('warn', 'stablecoin single-provider mode active: Polygon reads trust only the secondary RPC');
+  }
 
   /*
    * Ask the contracts what they are before watching for payments.

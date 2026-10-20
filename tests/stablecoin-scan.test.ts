@@ -267,6 +267,18 @@ async function quoted(email: string): Promise<{ user: TestUser; orderId: string 
 }
 
 describe('a payment nobody reported', () => {
+  it('settles from the secondary alone when single-provider mode is explicitly selected', async () => {
+    const { user } = await quoted('scan-single-secondary@example.jp');
+    const broken = new ChainNode({
+      label: 'primary-unavailable',
+      async request() { throw new Error('primary must not be contacted'); },
+    });
+    const reader = new DualChainReader(broken, node('secondary', good()), 'single_secondary');
+    const pass = await runStablecoinScanPass(h.ctx, reader, silent);
+    expect(pass.settled[0]?.kind).toBe('fulfilled');
+    expect((await balanceOf(user.id)).available).toBe(5);
+  });
+
   it('is found by the scan and credited', async () => {
     const { user } = await quoted('scan-ok@example.jp');
     const pass = await runStablecoinScanPass(h.ctx, pair(good()), silent);

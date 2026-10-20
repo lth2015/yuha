@@ -74,6 +74,12 @@ describe('stablecoin configuration', () => {
     const cfg = on();
     expect(cfg.STABLECOIN_ENABLED).toBe(true);
     expect(cfg.POLYGON_RPC_PRIMARY_URL).toBe(RPC_A);
+    expect(cfg.STABLECOIN_RPC_MODE).toBe('dual');
+  });
+
+  it('requires an explicit opt-in for single-provider verification', () => {
+    expect(on({ STABLECOIN_RPC_MODE: 'single_secondary' }).STABLECOIN_RPC_MODE).toBe('single_secondary');
+    expect(() => on({ STABLECOIN_RPC_MODE: 'single_primary' })).toThrow(/STABLECOIN_RPC_MODE/);
   });
 
   it('refuses the same URL twice — a node cannot disagree with itself', () => {
