@@ -2371,7 +2371,14 @@ textarea.is-full { border-color: var(--danger); }
   .player-bar__controls .btn-icon--main { width: 44px; height: 44px; }
   .player-bar__rail { position: absolute; left: 0; right: 0; top: -9px; max-width: none; gap: 0; }
   .player-bar__time { display: none; }
-  .player-bar__seek { min-height: 18px; }
+  /*
+   * The line sits ON the bar's top edge. `top: -9px` with an 18px min-height
+   * assumed the browser honoured that height; iOS Safari draws a range input
+   * taller and with its own margin, so the line landed inside the bar and the
+   * thumb sat on the title. Fixed height, no margin, centred on the edge.
+   */
+  .player-bar__rail { top: 0; height: 18px; transform: translateY(-50%); }
+  .player-bar__seek { display: block; height: 18px; min-height: 0; margin: 0; padding: 0; }
   .player-bar__seek::-webkit-slider-runnable-track { height: 3px; border-radius: 0; }
   .player-bar__seek::-webkit-slider-thumb { width: 10px; height: 10px; margin-top: -3.5px; }
   .player-bar__seek::-moz-range-track, .player-bar__seek::-moz-range-progress { height: 3px; border-radius: 0; }
@@ -2465,3 +2472,7 @@ textarea.is-full { border-color: var(--danger); }
   box-shadow: var(--shadow-raised);
 }
 .chart__tiprow .num { margin-left: auto; color: var(--ink); }
+
+/* A 44-48px thumbnail has no room for the 温度 reading: it was clipped to
+   "87°Y". The song page and Now Playing show it at a size it fits. */
+.player-bar .cover-art__index { display: none; }
