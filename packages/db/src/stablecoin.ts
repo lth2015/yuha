@@ -176,6 +176,8 @@ export interface StablecoinQuoteRow {
   rate_provider: string | null;
   rate_source_at: Date | null;
   rate_observed_at: Date | null;
+  rate_buffer_bps: number | null;
+  rate_reference_text: string | null;
   rounded_up: boolean;
   start_block: string | number;
   config_version: number;
@@ -199,7 +201,8 @@ export interface StablecoinIntentRow {
 
 const QUOTE_COLUMNS = `id, order_id, user_id, token_key, chain_id, token_address, token_decimals,
   receiver, payer, price_jpy, amount_atomic, rate_text, rate_provider, rate_source_at,
-  rate_observed_at, rounded_up, start_block, config_version, expires_at, created_at`;
+  rate_observed_at, rate_buffer_bps, rate_reference_text, rounded_up, start_block, config_version,
+  expires_at, created_at`;
 
 /*
  * An explicit column list, and the fifth time this codebase has been bitten by
@@ -246,6 +249,8 @@ export async function insertQuoteWithIntent(
     rateProvider: string | null;
     rateSourceAt: Date | null;
     rateObservedAt: Date | null;
+    rateBufferBps: number | null;
+    rateReferenceText: string | null;
     roundedUp: boolean;
     startBlock: bigint;
     configVersion: number;
@@ -259,8 +264,8 @@ export async function insertQuoteWithIntent(
     `INSERT INTO stablecoin_quotes
        (id, order_id, user_id, token_key, chain_id, token_address, token_decimals, receiver, payer,
         price_jpy, amount_atomic, rate_text, rate_provider, rate_source_at, rate_observed_at,
-        rounded_up, start_block, config_version, expires_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        rate_buffer_bps, rate_reference_text, rounded_up, start_block, config_version, expires_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       quoteId,
       params.orderId,
@@ -277,6 +282,8 @@ export async function insertQuoteWithIntent(
       params.rateProvider,
       params.rateSourceAt,
       params.rateObservedAt,
+      params.rateBufferBps,
+      params.rateReferenceText,
       params.roundedUp ? 1 : 0,
       params.startBlock.toString(),
       params.configVersion,

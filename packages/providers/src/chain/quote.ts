@@ -39,6 +39,12 @@ export interface QuoteInput {
   token: TokenSpec;
   /** JPY per one whole token. Null is only valid for a 1:1 quoted currency. */
   rate: DecimalRate | null;
+  /**
+   * Basis points added on top of a rate-converted price, to cover the rate
+   * moving while a quote is open (100 = 1%). Never applied to JPYC, which is
+   * quoted 1:1 by policy and has no rate to move. Whole basis points, 0–1000.
+   */
+  bufferBps?: number;
 }
 
 export interface QuotedAmount {
@@ -65,12 +71,20 @@ export function quoteAmountAtomic(input: QuoteInput): QuotedAmount {
     throw new Error(`quote: ${input.token.key} needs a rate; there is no fallback`);
   }
 
-  // ceil(price * 10^decimals / rate), with the rate's scale folded in so the
-  // whole thing is one integer division:
-  //   price * 10^decimals * 10^scale / scaled
-  const numerator = BigInt(input.priceJpy) * unit * 10n ** BigInt(input.rate.scale);
-  const amountAtomic = (numerator + input.rate.scaled - 1n) / input.rate.scaled;
-  return { amountAtomic, rounded: numerator % input.rate.scaled !== 0n };
+  const bufferBps = input.bufferBps ?? 0;
+  if (!Number.isInteger(bufferBps) || bufferBps < 0 || bufferBps > 1000) {
+    throw new Error('quote: buffer must be a whole number of basis points between 0 and 1000');
+  }
+
+  // ceil(price * (1 + buffer) * 10^decimals / rate), with the rate's scale and
+  // the buffer folded in so the whole thing is one integer division:
+  //   price * (10000 + bps) * 10^decimals * 10^scale / (scaled * 10000)
+  // Rounded up, so a customer is never asked for one atomic unit less than
+  // the price — an underpayment ends in manual review.
+  const numerator = BigInt(input.priceJpy) * BigInt(10_000 + bufferBps) * unit * 10n ** BigInt(input.rate.scale);
+  const denominator = input.rate.scaled * 10_000n;
+  const amountAtomic = (numerator + denominator - 1n) / denominator;
+  return { amountAtomic, rounded: numerator % denominator !== 0n };
 }
 
 export interface RateObservation {
@@ -102,13 +116,28 @@ export function rateUsable(params: {
   nowMs: number;
   maxAgeSeconds: number;
   maxDivergenceBps: number;
+  /**
+   * How old a source's OWN timestamp may be, for a source that publishes on a
+   * schedule rather than continuously (a daily reference rate). Read when the
+   * observation carries `sourceTimestampMs`; a fresh read of a week-old
+   * publication is still a week old.
+   */
+  maxSourceAgeSeconds?: number;
 }): RateVerdict {
-  const { primary, secondary, nowMs, maxAgeSeconds, maxDivergenceBps } = params;
+  const { primary, secondary, nowMs, maxAgeSeconds, maxDivergenceBps, maxSourceAgeSeconds } = params;
   if (!primary || !secondary) return { usable: false, reason: 'unconfirmed' };
 
   const maxAgeMs = maxAgeSeconds * 1000;
   if (nowMs - primary.observedAtMs > maxAgeMs || nowMs - secondary.observedAtMs > maxAgeMs) {
     return { usable: false, reason: 'stale' };
+  }
+  if (maxSourceAgeSeconds !== undefined) {
+    const limitMs = maxSourceAgeSeconds * 1000;
+    for (const o of [primary, secondary]) {
+      if (o.sourceTimestampMs !== undefined && nowMs - o.sourceTimestampMs > limitMs) {
+        return { usable: false, reason: 'stale' };
+      }
+    }
   }
 
   // Compared on a common scale, in integers, in basis points of the primary.

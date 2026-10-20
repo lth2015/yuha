@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { TITLE_MAX_CODEPOINTS, type LyricTimings, type ProductView, type TrackView } from '@yuha/contracts';
-import { apiFetch, newIdempotencyKey } from '../lib/api';
+import { apiFetch } from '../lib/api';
 import { clampToCodePoints } from '../lib/codepoints';
 import { createInFlightGuard, PENDING_AFTER_MS } from '../lib/in-flight';
 import { formatTime, usePlayer } from '../lib/player';
@@ -9,7 +9,7 @@ import { fetchProducts, findLicenceProduct } from '../lib/catalog';
 import { useI18n } from '../lib/i18n';
 import { LOCALES, formatMoney } from '../lib/money';
 import { useSession } from '../lib/session';
-import { cardPaymentsEnabled, purchaseRoute, stablecoinOfferedFor } from '../lib/purchase';
+import { canBePaid } from '../lib/purchase';
 import { CoverArt } from '../components/CoverArt';
 import { ErrorNotice } from '../components/common';
 import { Score } from '../components/Score';
@@ -54,7 +54,6 @@ export default function SongDetail() {
   const [actionError, setActionError] = useState<unknown>(null);
   const [busy, setBusy] = useState(false);
   const [licenseProduct, setLicenseProduct] = useState<ProductView | null>(null);
-  const [licensing, setLicensing] = useState(false);
   /*
    * Renaming. The title was chosen once, at generation, by someone who had not
    * heard the song yet, so it is the one piece of a finished song that most
@@ -276,36 +275,15 @@ export default function SongDetail() {
     }
   };
 
-  const licenseRoute = purchaseRoute({
-    cardPaymentsEnabled: cardPaymentsEnabled(runtime),
-    stablecoinOffered: stablecoinOfferedFor(runtime, 'market_license'),
-  });
-
-  const buyLicense = async () => {
-    if (licensing || !me || licenseRoute === 'closed') return;
-    if (licenseRoute === 'stablecoin') {
-      // The confirmation screen takes the wallet path for a licence when
-      // given the song; no card order is opened that nobody could pay.
-      navigate(`/checkout/confirm?price=market_license&track=${encodeURIComponent(song.trackId)}`);
-      return;
-    }
-    setLicensing(true);
-    setActionError(null);
-    try {
-      const res = await apiFetch<{ orderId: string; checkoutUrl: string; simulated: boolean }>(
-        `/v1/market/tracks/${song.trackId}/license`,
-        { method: 'POST', idempotencyKey: newIdempotencyKey('license') },
-      );
-      if (res.simulated) {
-        window.location.href = `/checkout/simulate?session_id=${new URL(res.checkoutUrl).searchParams.get('session_id')}&order_id=${res.orderId}`;
-      } else {
-        window.location.href = res.checkoutUrl;
-      }
-    } catch (err) {
-      setActionError(err);
-    } finally {
-      setLicensing(false);
-    }
+  /*
+   * Through the confirmation screen, like every other purchase: it states the
+   * seller and terms and offers the methods the server lists for the licence
+   * (docs/PAYMENTS_DESIGN.md). This button used to pick a channel itself.
+   */
+  const licenseOpen = licenseProduct !== null && canBePaid(licenseProduct);
+  const buyLicense = () => {
+    if (!me || !licenseOpen) return;
+    navigate(`/checkout/confirm?price=market_license&track=${encodeURIComponent(song.trackId)}`);
   };
 
   return (
@@ -499,13 +477,13 @@ export default function SongDetail() {
                   type="button"
                   className="text-action is-strong"
                   onClick={buyLicense}
-                  disabled={licensing || !me || licenseProduct === null || licenseRoute === 'closed'}
+                  disabled={!me || licenseProduct === null || !licenseOpen}
                   /* No `title`: it is not a reliable accessible name and never
                      reaches touch users. The one here was also a hardcoded
                      Chinese literal promising "创作者获得 70%" — a revenue share
                      migration 0005 removed. The string outlived the feature. */
                   aria-label={
-                    licenseRoute === 'closed'
+                    licenseProduct && !licenseOpen
                       ? t('song.license.cardClosed')
                       : licenseProduct
                       ? t('song.license.aria', {
@@ -514,9 +492,7 @@ export default function SongDetail() {
                       : t('song.license.unavailable')
                   }
                 >
-                  {licensing
-                    ? t('song.licensing')
-                    : licenseRoute === 'closed'
+                  {licenseProduct && !licenseOpen
                       ? t('song.license.cardClosed')
                     : licenseProduct
                       ? t('song.license', {

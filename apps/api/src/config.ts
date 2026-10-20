@@ -188,6 +188,24 @@ const envSchema = z.object({
   STABLECOIN_SCAN_START_BLOCK: optionalNum(),
   STABLECOIN_QUOTE_TTL_SECONDS: num(600).pipe(z.number().int().min(60).max(3600)),
   /*
+   * USDC pricing. One USDC is priced as one US dollar (product decision,
+   * 2026-10-20) and converted from the JPY list price at USD/JPY, read from
+   * two independent sources — see packages/providers/src/fx/usd-jpy.ts.
+   *
+   *   BUFFER_BPS             added on top for the rate moving while a quote is
+   *                          open. 100 = 1%, the agreed default. Stored on
+   *                          every quote, so changing it never re-prices one.
+   *   MAX_DIVERGENCE_BPS     how far the intraday primary may sit from the daily
+   *                          reference before quoting stops. The reference is a
+   *                          day old by design, so this is a broken-feed guard,
+   *                          not a precision claim.
+   *   REFERENCE_MAX_AGE_HOURS how old the reference's own publication date may
+   *                          be. 96 covers a weekend plus a holiday.
+   */
+  STABLECOIN_USDC_BUFFER_BPS: num(100).pipe(z.number().int().min(0).max(1000)),
+  STABLECOIN_RATE_MAX_DIVERGENCE_BPS: num(300).pipe(z.number().int().min(1).max(2000)),
+  STABLECOIN_RATE_REFERENCE_MAX_AGE_HOURS: num(96).pipe(z.number().int().min(1).max(336)),
+  /*
    * How long after a quote expires its payment slot is still held.
    *
    * Not a courtesy. A payment is only SEEN once its block is finalized and the
@@ -1034,14 +1052,12 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
       problems.push('the two Polygon RPC URLs are identical; a node cannot disagree with itself');
     }
     /*
-     * USDC needs a rate source and there is no fallback by design: quoting it
-     * from a hardcoded number would charge a customer the wrong amount for a
-     * product priced in yen. Until the provider is implemented and its usage
-     * rights confirmed, enabling USDC is refused rather than approximated.
+     * USDC used to be refused here outright: there was no rate source, and
+     * quoting from a hardcoded number would charge the wrong amount for a
+     * product priced in yen. It now quotes from two live USD/JPY sources and
+     * refuses a QUOTE (not the deployment) whenever they are missing, stale or
+     * disagree — `services/stablecoin-rate.ts`. There is still no fallback.
      */
-    if (e.STABLECOIN_USDC_ENABLED) {
-      problems.push('USDC is not quotable yet: no rate provider is implemented (see docs/STABLECOIN_V1_PLAN.md)');
-    }
   }
 
   if (e.FEATURE_FREE_TRIAL_ENABLED && e.FREE_TRIAL_UNITS > 2) {

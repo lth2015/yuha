@@ -6,7 +6,8 @@ import { useI18n } from '../lib/i18n';
 import { formatMoney, formatJst, useSession } from '../lib/session';
 import { LOCALES } from '../lib/money';
 import { safeInternalPath } from '../lib/paths';
-import { cardPaymentsEnabled, purchaseRoute, stablecoinOfferedFor } from '../lib/purchase';
+import { firstAvailableMethod, paymentMethodsOf, unavailableReason } from '../lib/purchase';
+import type { PaymentMethodKey } from '@yuha/contracts';
 import { Badge, ErrorNotice, Loading } from '../components/common';
 
 interface Disclosure {
@@ -25,6 +26,13 @@ interface Disclosure {
  * renewal and cancellation terms to all be visible at the moment the payment
  * obligation is created — so they are on this page, not behind a link.
  */
+/** Literal keys, so `check:i18n` sees each one in use. */
+const METHOD_COPY: Record<PaymentMethodKey, { name: string; note: string }> = {
+  card: { name: 'checkout.method.card', note: 'checkout.method.cardNote' },
+  jpyc: { name: 'checkout.method.jpyc', note: 'checkout.method.jpycNote' },
+  usdc: { name: 'checkout.method.usdc', note: 'checkout.method.usdcNote' },
+};
+
 export function CheckoutConfirm() {
   const [params] = useSearchParams();
   const navigate = useNavigate();
@@ -40,14 +48,11 @@ export function CheckoutConfirm() {
   const [submitting, setSubmitting] = useState(false);
   const [idempotencyKey] = useState(() => newIdempotencyKey('checkout'));
   /*
-   * Card unless the customer says otherwise.
-   *
-   * The choice is offered only when the runtime descriptor says the channel is
-   * on AND this product can be paid for that way — DROP and Licence; the two
-   * subscriptions stay on Stripe, so offering a wallet for them would be a
-   * button that leads to a refusal.
+   * The buyer's choice among the methods the server listed for this product.
+   * Null until they pick; the effective choice falls back to the first
+   * available one, so a product with a single way to pay needs no click.
    */
-  const [method, setMethod] = useState<'card' | 'stablecoin'>('card');
+  const [picked, setPicked] = useState<PaymentMethodKey | null>(null);
 
   useEffect(() => {
     void (async () => {
@@ -77,24 +82,22 @@ export function CheckoutConfirm() {
   }, [priceKey]);
 
   /*
-   * Only for what the quote endpoint will actually accept. `QUOTABLE_PRODUCTS`
-   * on the server is DROP and Licence; a wallet button on a subscription would
-   * be an offer the next request refuses, which reads as a broken page rather
-   * than an unavailable option.
-   *
-   * Computed here rather than beside the markup so that the ACTION and the
-   * chooser are decided by the same expression. A guard that only the renderer
-   * can see is how a page ends up doing something it does not offer.
+   * What can pay for this, exactly as the server decided it
+   * (services/payment-methods.ts, docs/PAYMENTS_DESIGN.md). The chooser and
+   * the action below read the same value, so this page cannot offer a method
+   * it would not use or use one it did not offer.
    */
-  const stablecoinOffered = stablecoinOfferedFor(runtime, priceKey);
-  const cardOpen = cardPaymentsEnabled(runtime);
-  const route = purchaseRoute({ cardPaymentsEnabled: cardOpen, stablecoinOffered });
-  // With card payment closed the wallet is not a choice, it is the way.
-  const payWith: 'card' | 'stablecoin' = route === 'stablecoin' ? 'stablecoin' : method;
+  const methods = product ? paymentMethodsOf(product) : [];
+  const fallback = product ? firstAvailableMethod(product) : null;
+  const payWith: PaymentMethodKey | null =
+    picked && methods.some((m) => m.method === picked && m.available) ? picked : fallback;
+  const closedReason = product ? unavailableReason(product) : null;
+  const isStablecoin = payWith === 'jpyc' || payWith === 'usdc';
 
   const proceed = async () => {
-    if (route === 'closed') return;
-    if (payWith === 'stablecoin' && stablecoinOffered) {
+    if (!payWith) return;
+    const track = params.get('track');
+    if (isStablecoin) {
       /*
        * The obligation is created on the next page, by asking for a quote —
        * which is why the amount, the contents, the delivery timing and the
@@ -102,17 +105,29 @@ export function CheckoutConfirm() {
        * there. 消費者庁's 最終確認画面 guidance is about the moment the
        * obligation arises, and for this channel that moment is the quote.
        */
-      const track = params.get('track');
-      navigate(`/checkout/stablecoin?price=${encodeURIComponent(priceKey)}${track ? `&track=${encodeURIComponent(track)}` : ''}`);
+      navigate(
+        `/checkout/stablecoin?price=${encodeURIComponent(priceKey)}&token=${payWith}${track ? `&track=${encodeURIComponent(track)}` : ''}`,
+      );
       return;
     }
     setSubmitting(true);
     setError(null);
     try {
-      const res = await apiFetch<{ orderId: string; checkoutUrl: string; simulated: boolean }>(
-        '/v1/checkout',
-        { method: 'POST', body: { priceKey, idempotencyKey } },
-      );
+      /*
+       * A licence is checked out against its song, through its own endpoint;
+       * everything else through /v1/checkout. Both are the card channel and
+       * both answer with the provider's hosted page.
+       */
+      const res =
+        priceKey === 'market_license' && track
+          ? await apiFetch<{ orderId: string; checkoutUrl: string; simulated: boolean }>(
+              `/v1/market/tracks/${encodeURIComponent(track)}/license`,
+              { method: 'POST', idempotencyKey },
+            )
+          : await apiFetch<{ orderId: string; checkoutUrl: string; simulated: boolean }>('/v1/checkout', {
+              method: 'POST',
+              body: { priceKey, idempotencyKey },
+            });
       // Card entry always happens on the payment provider's hosted page.
       window.location.href = res.checkoutUrl;
     } catch (err) {
@@ -238,43 +253,38 @@ export function CheckoutConfirm() {
         </section>
       )}
 
-      {route === 'stablecoin' && (
-        <div className="alert alert--info" role="status">
-          {t('checkout.cardClosedStablecoin')}
-        </div>
-      )}
-      {route === 'closed' && (
-        <div className="alert alert--info" role="status">
-          {t('checkout.cardClosed')}
-        </div>
-      )}
-
-      {stablecoinOffered && cardOpen && (
-        <section className="panel stack">
-          <h2 style={{ fontSize: 20, margin: 0 }}>{t('checkout.method.title')}</h2>
-          <div className="row">
+      <section className="panel stack" aria-labelledby="pay-method-title">
+        <h2 id="pay-method-title" style={{ fontSize: 20, margin: 0 }}>
+          {t('checkout.method.title')}
+        </h2>
+        <div className="pay-methods" role="radiogroup" aria-labelledby="pay-method-title">
+          {methods.map((m) => (
             <button
+              key={m.method}
               type="button"
-              className={method === 'card' ? 'btn btn--primary' : 'btn'}
-              aria-pressed={method === 'card'}
-              onClick={() => setMethod('card')}
+              role="radio"
+              aria-checked={payWith === m.method}
+              className={`pay-method${payWith === m.method ? ' is-selected' : ''}`}
+              disabled={!m.available}
+              onClick={() => setPicked(m.method)}
             >
-              {t('checkout.method.card')}
+              <span className="pay-method__name">{t(METHOD_COPY[m.method].name)}</span>
+              <span className="pay-method__note small">
+                {m.available
+                  ? t(METHOD_COPY[m.method].note)
+                  : m.reason === 'no_auto_renewal'
+                    ? t('checkout.method.noAutoRenewal')
+                    : t('checkout.method.cardClosed')}
+              </span>
             </button>
-            <button
-              type="button"
-              className={method === 'stablecoin' ? 'btn btn--primary' : 'btn'}
-              aria-pressed={method === 'stablecoin'}
-              onClick={() => setMethod('stablecoin')}
-            >
-              {t('checkout.method.stablecoin')}
-            </button>
+          ))}
+        </div>
+        {closedReason && (
+          <div className="alert alert--info" role="status">
+            {closedReason === 'no_auto_renewal' ? t('checkout.closed.noAutoRenewal') : t('checkout.closed.cardClosed')}
           </div>
-          <p className="small muted">
-            {method === 'card' ? t('checkout.method.cardNote') : t('checkout.method.stablecoinNote')}
-          </p>
-        </section>
-      )}
+        )}
+      </section>
 
       <div className="checkbox-row">
         <input
@@ -305,20 +315,23 @@ export function CheckoutConfirm() {
       <button
         type="button"
         className="btn btn--primary btn--block"
-        disabled={!agreed || submitting || !product.available || route === 'closed'}
+        disabled={!agreed || submitting || !product.available || !payWith}
         onClick={() => void proceed()}
       >
         {submitting
           ? t('checkout.submitting')
-          : payWith === 'stablecoin'
-            ? t('checkout.payStablecoin')
+          : isStablecoin
+            ? t('checkout.payStablecoin', { token: (payWith ?? '').toUpperCase() })
             : t('checkout.pay', { amount: formatMoney(product.amountMinor, product.currency, LOCALES[lang]) })}
       </button>
 
-      <p className="small muted" style={{ margin: 0, textAlign: 'center' }}>
-        {payWith === 'stablecoin' ? t('checkout.stablecoinFooter') : t('checkout.cardNote')}
-        {runtime?.demo && payWith === 'card' && t('checkout.demoNote')}
-      </p>
+      {/* About the method that will be used; nothing to say when none can be. */}
+      {payWith && (
+        <p className="small muted" style={{ margin: 0, textAlign: 'center' }}>
+          {isStablecoin ? t('checkout.stablecoinFooter') : t('checkout.cardNote')}
+          {runtime?.demo && payWith === 'card' && t('checkout.demoNote')}
+        </p>
+      )}
     </div>
   );
 }

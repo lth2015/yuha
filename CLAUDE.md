@@ -65,6 +65,13 @@ Rules of engagement:
 
 ## Scope decisions
 
+- **Payments follow one rule: [docs/PAYMENTS_DESIGN.md](docs/PAYMENTS_DESIGN.md).**
+  What you buy (top-up pack / subscription / song licence) and how you pay
+  (card / JPYC / USDC) are separate; the matrix is computed once in
+  `apps/api/src/services/payment-methods.ts` and only rendered by the web app.
+  Subscriptions are card-only because a stablecoin cannot be charged monthly;
+  stablecoin buyers top up. Never add a per-price-key list of who may pay how.
+
 - **No public feed, no likes, no visible counters.** There is no browsable
   feed and no like system: no list endpoint, no Explore page, and migration
   0005 dropped `song_likes` and `tracks.like_count`. Songs are private, and

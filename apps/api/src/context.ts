@@ -26,10 +26,20 @@ import {
   ChainNode,
   DualChainReader,
   httpTransport,
+  readCoinbaseUsdJpy,
+  readFrankfurterUsdJpy,
+  type RateObservation,
 } from '@yuha/providers';
 import { getSetting, initDb } from '@yuha/db';
 import { baseFeatures, type AppConfig, type FeatureFlags } from './config.js';
 import { resolveFromRoot } from './paths.js';
+
+export interface UsdJpySource {
+  /** The rate a USDC quote is computed from. */
+  primary(): Promise<RateObservation>;
+  /** An independent reading the primary must agree with. Never priced from. */
+  reference(): Promise<RateObservation>;
+}
 
 export interface AppContext {
   config: AppConfig;
@@ -47,6 +57,12 @@ export interface AppContext {
    * (a reorg, a stale receipt, two nodes at odds) can be arranged at all.
    */
   chain: DualChainReader | undefined;
+  /**
+   * Two independent USD/JPY readings, for quoting USDC. An adapter for the
+   * same reason `chain` is one: the cases that matter — a feed down, a stale
+   * reference, the two disagreeing — can only be arranged with fakes.
+   */
+  fx: UsdJpySource;
   email: EmailAdapter;
   audio: AudioProcessor;
   /** Reads the operator-editable switches on top of the static config. */
@@ -282,6 +298,10 @@ export function createContext(config: AppConfig): AppContext {
     queue: buildQueue(config),
     payments: buildPayments(config),
     chain: buildChainReader(config),
+    fx: {
+      primary: () => readCoinbaseUsdJpy(),
+      reference: () => readFrankfurterUsdJpy(),
+    },
     email: buildEmail(config),
     audio: new AudioProcessor(),
     async features(): Promise<FeatureFlags> {

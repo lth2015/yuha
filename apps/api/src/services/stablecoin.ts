@@ -27,6 +27,8 @@ import type { AppContext } from '../context.js';
 import { assertConfiguredTokensVerified, SCAN_STREAM } from './stablecoin-scan.js';
 import { createPurchaseOrder } from './purchase-cap.js';
 import { stablecoinTokenFor } from './stablecoin-tokens.js';
+import { stablecoinAllowedFor } from './payment-methods.js';
+import { usdcJpyRate } from './stablecoin-rate.js';
 import { getPublicTrack, hasLicense } from '@yuha/db';
 
 /**
@@ -41,9 +43,6 @@ import { getPublicTrack, hasLicense } from '@yuha/db';
  * therefore creates or reuses the order itself, under the same
  * (user, idempotency key) uniqueness the card path uses.
  */
-
-/** DROP and Licence only. Subscriptions stay on Stripe in v1. */
-const QUOTABLE_PRODUCTS = new Set(['drop_5', 'market_license']);
 
 function tokenFor(ctx: AppContext, key: string): TokenSpec {
   // One list of currencies for the whole deployment — see stablecoin-tokens.ts
@@ -75,6 +74,13 @@ export interface QuoteResult {
   /** Atomic units as a decimal string. Never a number: 18 decimals do not fit. */
   amountAtomic: string;
   priceJpy: number;
+  /**
+   * JPY per token the amount was computed from, exactly as the source gave it,
+   * and the buffer applied on top. Both null for JPYC, which has no rate. Shown
+   * to the buyer so a USDC amount is never a number without its derivation.
+   */
+  rateText: string | null;
+  rateBufferBps: number | null;
   receiver: string;
   payer: string;
   expiresAt: string;
@@ -95,6 +101,8 @@ function viewQuote(q: StablecoinQuoteRow): QuoteResult {
     payer: toDisplayAddress(q.payer),
     expiresAt: q.expires_at.toISOString(),
     roundedUp: q.rounded_up,
+    rateText: q.rate_text,
+    rateBufferBps: q.rate_buffer_bps === null ? null : Number(q.rate_buffer_bps),
   };
 }
 
@@ -121,10 +129,6 @@ export async function createStablecoinQuote(
   // treats it as established, so this is where "the client said so" stops.
   const wallet = await getVerifiedWallet({ userId: params.userId, chainId: token.chainId, address: payer });
   if (!wallet) throw new AppError('VALIDATION_FAILED', 'prove control of that wallet first');
-
-  if (!QUOTABLE_PRODUCTS.has(params.priceKey)) {
-    throw new AppError('VALIDATION_FAILED', 'that product cannot be paid for in stablecoin yet');
-  }
 
   /*
    * A licence sale needs the track AND its author on the order.
@@ -155,6 +159,18 @@ export async function createStablecoinQuote(
   }
   const product = await getActiveProduct(params.priceKey);
   if (!product || !product.active) throw new AppError('NOT_FOUND', 'that product is not available');
+  /*
+   * The same rule the pricing page and the confirmation screen render from
+   * (services/payment-methods.ts). It used to be a list of two price keys
+   * here and a copy of that list in the browser, so a product added to one
+   * was missing from the other.
+   */
+  if (!stablecoinAllowedFor(product.kind)) {
+    throw new AppError(
+      'VALIDATION_FAILED',
+      'a subscription renews automatically and cannot be paid for in stablecoin — buy a top-up pack instead',
+    );
+  }
   if (product.currency !== 'jpy') {
     // Quoting is defined against a JPY list price; a catalogue in another
     // currency would need its own conversion policy, not a silent one.
@@ -194,12 +210,20 @@ export async function createStablecoinQuote(
   if (!ctx.chain) throw new AppError('SERVICE_DISABLED', 'stablecoin payments are not configured');
   await assertConfiguredTokensVerified(ctx, ctx.chain);
 
+  /*
+   * JPYC consults no rate at all — one token per yen is pricing policy. USDC
+   * is priced as one US dollar: the JPY list price at USD/JPY, read live from
+   * two independent sources that must agree, plus the configured buffer.
+   * Read here, before the transaction, so no database lock is held across
+   * two network calls.
+   */
+  const rate = token.key === 'jpyc' ? null : await usdcJpyRate(ctx);
+  const bufferBps = rate ? ctx.config.STABLECOIN_USDC_BUFFER_BPS : null;
   const { amountAtomic, rounded } = quoteAmountAtomic({
     priceJpy: product.amount_minor,
     token,
-    // JPYC consults no rate at all. USDC is refused at config validation
-    // until a provider exists, so there is no path here that needs one yet.
-    rate: null,
+    rate: rate?.chosen.rate ?? null,
+    bufferBps: bufferBps ?? 0,
   });
 
   const expiresAt = new Date(Date.now() + ctx.config.STABLECOIN_QUOTE_TTL_SECONDS * 1000);
@@ -301,10 +325,13 @@ export async function createStablecoinQuote(
         payer,
         priceJpy: product.amount_minor,
         amountAtomic: amountAtomic.toString(),
-        rateText: null,
-        rateProvider: null,
-        rateSourceAt: null,
-        rateObservedAt: null,
+        rateText: rate?.chosen.rate.text ?? null,
+        rateProvider: rate?.chosen.provider ?? null,
+        rateSourceAt:
+          rate?.chosen.sourceTimestampMs !== undefined && rate ? new Date(rate.chosen.sourceTimestampMs) : null,
+        rateObservedAt: rate ? new Date(rate.chosen.observedAtMs) : null,
+        rateBufferBps: bufferBps,
+        rateReferenceText: rate ? `${rate.reference.provider}=${rate.reference.rate.text}` : null,
         roundedUp: rounded,
         /*
          * Where the scanner has reached, so this quote cannot be settled by a

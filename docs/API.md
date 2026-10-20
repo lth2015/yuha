@@ -100,6 +100,10 @@ Publishable configuration only — no secret is ever exposed here.
 ### `GET /v1/products`
 Price catalogue: tax-inclusive JPY, unit count, validity, renewal behaviour.
 `available: false` for products that exist but are not open (subscriptions).
+`paymentMethods` lists how each product can be paid — `card`, and each enabled
+stablecoin (`jpyc`, `usdc`) — with `available` and, when unavailable, a
+`reason` (`card_closed`, `no_auto_renewal`). This is the only source the web
+app uses to offer a payment method; see docs/PAYMENTS_DESIGN.md.
 
 ### `GET /v1/samples`
 Landing-page samples with a `provenance` string stating where the audio came
@@ -316,7 +320,7 @@ told us or reports what we have seen on the chain.
 | `GET /v1/payments/stablecoin/wallets` | The caller's own verified wallets, so the interface knows whether to ask for a signature |
 | `POST /v1/payments/stablecoin/wallet-challenge` | A SIWE-style message to sign; single-use nonce, short expiry |
 | `POST /v1/payments/stablecoin/wallet-verify` | Recovers the address from the signature and records the wallet. One wallet belongs to one account per chain |
-| `POST /v1/payments/stablecoin/quote` | Creates or reuses the order and issues a priced quote, valid for `STABLECOIN_QUOTE_TTL_SECONDS`. Carries `amountAtomic` as a **string**, with `tokenDecimals` |
+| `POST /v1/payments/stablecoin/quote` | Creates or reuses the order and issues a priced quote, valid for `STABLECOIN_QUOTE_TTL_SECONDS`. Carries `amountAtomic` as a **string**, with `tokenDecimals`. USDC quotes also carry `rateText` (USD/JPY as the source wrote it) and `rateBufferBps`; both are `null` for JPYC. A USDC quote is refused with `SERVICE_DISABLED` (and `details.reason`: `unconfirmed` / `stale` / `divergent`) when the rate cannot be trusted — see docs/PAYMENTS_DESIGN.md §4 |
 | `POST /v1/orders/:id/stablecoin-prepare` | The `transfer` calldata, built from the stored quote. The amount, token and receiver are the server's |
 | `POST /v1/orders/:id/stablecoin-transaction` | A reported hash. A hint about **where to look**, never an instruction: attribution comes from the open intent of the transaction's own sender, so a hash copied from a block explorer resolves to that sender's order or to nothing. 202 means "we looked and there is nothing to act on yet" |
 | `GET /v1/orders/:id/payment-status` | The order's status, the intent's state, and `entitlementGranted` — which is what "paid" means to a customer |

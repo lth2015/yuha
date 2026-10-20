@@ -1,6 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
-import { AppError } from '@yuha/contracts';
+import { AppError, ProductKey } from '@yuha/contracts';
 import type { AppContext } from '../context.js';
 import { listVerifiedWallets } from '@yuha/db';
 import { toDisplayAddress } from '@yuha/providers';
@@ -118,7 +118,11 @@ export default async function stablecoinRoutes(app: FastifyInstance, opts: { ctx
     async (req) => {
       const body = z
         .object({
-          priceKey: z.enum(['drop_5', 'market_license']),
+          // Any catalogue key. Which of them stablecoin may pay for is decided
+          // in one place (services/payment-methods.ts), and this used to be a
+          // third copy of that list: a product added to the rule would still
+          // have been refused here as "validation failed".
+          priceKey: ProductKey,
           idempotencyKey: z.string().min(8).max(128),
           tokenKey: z.enum(['jpyc', 'usdc']),
           payer: addressSchema,

@@ -21,8 +21,9 @@ import {
 import type { AppContext } from '../context.js';
 import { internalUrl } from '../internal-path.js';
 import { createPurchaseOrder } from './purchase-cap.js';
+import { paymentMethodsFor, paymentRails, type PaymentRails } from './payment-methods.js';
 
-export function toProductView(row: ProductRow, available: boolean): ProductView {
+export function toProductView(row: ProductRow, available: boolean, rails?: PaymentRails): ProductView {
   return {
     priceKey: row.price_key as ProductView['priceKey'],
     priceVersion: row.version,
@@ -35,16 +36,18 @@ export function toProductView(row: ProductRow, available: boolean): ProductView 
     validityDays: row.validity_days,
     autoRenew: row.auto_renew,
     available,
+    ...(rails ? { paymentMethods: paymentMethodsFor(row.kind, rails) } : {}),
   };
 }
 
 export async function listProducts(ctx: AppContext): Promise<ProductView[]> {
   const features = await ctx.features();
   const rows = await listActiveProducts();
+  const rails = paymentRails(ctx.config, features.cardPaymentsEnabled);
   return rows.map((r) =>
     // Subscriptions are fully built but stay closed to the public until the
     // repeat-purchase threshold is met (§7).
-    toProductView(r, r.kind === 'subscription' ? features.subscriptionsEnabled : true),
+    toProductView(r, r.kind === 'subscription' ? features.subscriptionsEnabled : true, rails),
   );
 }
 
