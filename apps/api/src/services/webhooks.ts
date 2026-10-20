@@ -194,7 +194,8 @@ async function handleCheckoutCompleted(ctx: AppContext, event: StripeEventLike):
       {
         orderId: order.id,
         paymentIntentId: live?.paymentIntentId ?? (session['payment_intent'] as string | null),
-        receiptUrl: (session['receipt_url'] as string | null) ?? null,
+        // The session has no receipt field of its own; see retrieveCheckoutSession.
+        receiptUrl: live?.receiptUrl ?? null,
         customerId: live?.customerId ?? (session['customer'] as string | null),
       },
       tx,

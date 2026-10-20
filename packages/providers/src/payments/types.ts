@@ -110,6 +110,12 @@ export interface PaymentsAdapter {
     customerId: string | null;
     amountTotal: number | null;
     currency: string | null;
+    /**
+     * Where the customer's receipt is. A Checkout Session has no receipt of
+     * its own: it is the Charge's `receipt_url` for a one-time payment, and
+     * the first invoice's hosted page for a subscription.
+     */
+    receiptUrl: string | null;
   } | null>;
   retrieveSubscription(subscriptionId: string): Promise<{
     status: string;

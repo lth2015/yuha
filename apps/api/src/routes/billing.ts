@@ -4,7 +4,7 @@ import {
   cancelSubscriptionRequest,
   createCheckoutRequest,
 } from '@yuha/contracts';
-import { listOrders, recordWebhookEvent, listPayments } from '@yuha/db';
+import { listOrders, recordWebhookEvent, listPayments, setOrderReceiptIfMissing } from '@yuha/db';
 import { SimulatedPaymentsAdapter } from '@yuha/providers';
 import type { AppContext } from '../context.js';
 import { STRIPE_WEBHOOK_PATHS, STRIPE_WEBHOOK_PRIMARY_PATH } from '../webhook-paths.js';
@@ -42,6 +42,23 @@ export default async function billingRoutes(app: FastifyInstance, opts: { ctx: A
 
   app.get('/v1/orders', { preHandler: app.requireAuth }, async (req) => {
     const rows = await listOrders(req.user!.id);
+    /*
+     * Receipts missing from orders paid before they were recorded: fetched
+     * from Stripe BEHIND this answer, a few per visit, so the history never
+     * waits on Stripe and the next visit shows them. Only card orders that
+     * were paid and have a session to ask about.
+     */
+    const missing = rows
+      .filter((o) => o.receipt_url === null && o.paid_at !== null && o.stripe_checkout_session_id)
+      .slice(0, 3);
+    if (missing.length > 0) {
+      void Promise.all(
+        missing.map(async (o) => {
+          const live = await ctx.payments.retrieveCheckoutSession(o.stripe_checkout_session_id!);
+          if (live?.receiptUrl) await setOrderReceiptIfMissing({ orderId: o.id, receiptUrl: live.receiptUrl });
+        }),
+      ).catch((err) => req.log.warn({ err }, 'could not backfill receipt links'));
+    }
     return {
       items: rows.map((o) => ({
         orderId: o.id,
