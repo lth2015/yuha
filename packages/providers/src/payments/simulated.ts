@@ -186,6 +186,11 @@ export class SimulatedPaymentsAdapter implements PaymentsAdapter {
     };
   }
 
+  /** There is no portal to visit in a simulation; it comes straight back. */
+  async createBillingPortalSession(params: { customerId: string; returnUrl: string }) {
+    return { url: params.returnUrl };
+  }
+
   async cancelSubscriptionAtPeriodEnd(subscriptionId: string) {
     const sub = await this.retrieveSubscription(subscriptionId);
     return { cancelAtPeriodEnd: true, effectiveAt: sub?.currentPeriodEnd ?? null };

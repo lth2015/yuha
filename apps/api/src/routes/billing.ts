@@ -1,4 +1,5 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
+import { z } from 'zod';
 import {
   AppError,
   cancelSubscriptionRequest,
@@ -10,6 +11,7 @@ import type { AppContext } from '../context.js';
 import { STRIPE_WEBHOOK_PATHS, STRIPE_WEBHOOK_PRIMARY_PATH } from '../webhook-paths.js';
 import {
   cancelSubscription,
+  openBillingPortal,
   createCheckout,
   getEntitlements,
   getOrderView,
@@ -98,6 +100,21 @@ export default async function billingRoutes(app: FastifyInstance, opts: { ctx: A
 
   app.get('/v1/entitlements', { preHandler: app.requireAuth }, async (req) =>
     getEntitlements(req.user!.id),
+  );
+
+  app.post(
+    '/v1/subscription/portal',
+    { preHandler: app.requireAuth, config: { rateLimit: { max: 10, timeWindow: '1 minute' } } },
+    async (req) => {
+      const body = z.object({ subscriptionId: z.string().uuid() }).parse(req.body);
+      try {
+        return await openBillingPortal(ctx, { userId: req.user!.id, subscriptionId: body.subscriptionId });
+      } catch (err) {
+        const cause = (err as { cause?: unknown }).cause;
+        if (cause) req.log.warn({ err: cause }, 'stripe refused a customer portal session');
+        throw err;
+      }
+    },
   );
 
   app.post('/v1/subscription/cancel', { preHandler: app.requireAuth }, async (req) => {

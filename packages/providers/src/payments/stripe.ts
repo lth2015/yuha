@@ -223,6 +223,14 @@ export class StripePaymentsAdapter implements PaymentsAdapter {
     }
   }
 
+  async createBillingPortalSession(params: { customerId: string; returnUrl: string }) {
+    const s = await this.stripe.billingPortal.sessions.create({
+      customer: params.customerId,
+      return_url: params.returnUrl,
+    });
+    return { url: s.url };
+  }
+
   async cancelSubscriptionAtPeriodEnd(subscriptionId: string, idempotencyKey: string) {
     const s = (await this.stripe.subscriptions.update(
       subscriptionId,
