@@ -3,13 +3,34 @@
  * These are the properties the karaoke display depends on.
  */
 import { describe, expect, it } from 'vitest';
-import { activeLineIndex, buildLyricTimeline, lineProgress } from '../apps/web/src/lib/lyrics.js';
+import { activeLineIndex, buildLyricTimeline, lineProgress, resolveLyricTimings } from '../apps/web/src/lib/lyrics.js';
 
 const LYRICS = `[Verse]
 City lights blur into gold
 I drive until the morning breaks
 [Chorus]
 We are electric, we are alive`;
+
+describe('player timeline selection', () => {
+  it('keeps every original lyric when a stored alignment omitted a sung line', () => {
+    const timeline = resolveLyricTimings('[verse]\n晚风吹过\n（别走）\n等你回来', 30, {
+      source: 'aligned', aligner: 'legacy-aligner', lines: [
+        { section: 'verse', text: '晚风吹过', start: 2, end: 5 },
+        { section: 'verse', text: '等你回来', start: 8, end: 12 },
+      ],
+    });
+    expect(timeline.lines.map((line) => line.text)).toEqual(['晚风吹过', '（别走）', '等你回来']);
+    expect(timeline.source).toBe('estimated');
+  });
+
+  it('preserves a complete owner-corrected timeline', () => {
+    const timings = { source: 'corrected' as const, aligner: 'manual', lines: [
+      { section: 'verse', text: '晚风吹过', start: 4, end: 8 },
+      { section: 'verse', text: '（别走）', start: 11, end: 13 },
+    ] };
+    expect(resolveLyricTimings('[verse]\n晚风吹过\n（别走）', 30, timings)).toBe(timings);
+  });
+});
 
 describe('buildLyricTimeline', () => {
   it('lays every line on a monotone axis that fits the song', () => {

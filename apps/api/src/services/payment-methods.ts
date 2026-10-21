@@ -1,6 +1,8 @@
 import type { PaymentMethodView } from '@yuha/contracts';
 import type { AppConfig } from '../config.js';
-import { enabledStablecoinTokens } from './stablecoin-tokens.js';
+import { acceptingStablecoinTokens } from './stablecoin-tokens.js';
+import type { FeatureFlags } from '../config.js';
+import type { TokenSpec } from '@yuha/providers';
 
 /**
  * How a product may be paid for. The one place that decides it.
@@ -25,13 +27,17 @@ import { enabledStablecoinTokens } from './stablecoin-tokens.js';
  */
 export interface PaymentRails {
   card: boolean;
-  stablecoins: Array<'jpyc' | 'usdc'>;
+  stablecoins: Array<TokenSpec['key']>;
 }
 
-export function paymentRails(config: AppConfig, cardPaymentsEnabled: boolean): PaymentRails {
+/**
+ * From the runtime switches, not config alone: a currency an operator has
+ * paused (NETX) stops being offered on the next request, without a deploy.
+ */
+export function paymentRails(config: AppConfig, features: FeatureFlags): PaymentRails {
   return {
-    card: cardPaymentsEnabled,
-    stablecoins: enabledStablecoinTokens(config).map((t) => t.key),
+    card: features.cardPaymentsEnabled,
+    stablecoins: acceptingStablecoinTokens(config, features).map((t) => t.key),
   };
 }
 

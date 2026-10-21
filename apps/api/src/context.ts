@@ -23,6 +23,7 @@ import {
   type QueueAdapter,
   type StorageAdapter,
   type TextProvider,
+  BSC_CHAIN_ID,
   ChainNode,
   DualChainReader,
   httpTransport,
@@ -33,6 +34,14 @@ import {
 import { getSetting, initDb } from '@yuha/db';
 import { baseFeatures, type AppConfig, type FeatureFlags } from './config.js';
 import { resolveFromRoot } from './paths.js';
+
+
+/**
+ * The runtime setting that holds the NETX pause, written only by
+ * `PUT /v1/admin/netx-payments` and deliberately not one of the keys the
+ * generic settings endpoint accepts.
+ */
+export const NETX_PAUSE_SETTING = 'netx_payments';
 
 export interface UsdJpySource {
   /** The rate a USDC quote is computed from. */
@@ -57,6 +66,13 @@ export interface AppContext {
    * (a reorg, a stale receipt, two nodes at odds) can be arranged at all.
    */
   chain: DualChainReader | undefined;
+  /**
+   * Readers for the other chains a token lives on, by chain id — BNB Smart
+   * Chain (56) for NETX. `chain` stays the Polygon reader so nothing that only
+   * ever meant Polygon had to change; anything that acts for a TOKEN asks
+   * `readerFor(ctx, token.chainId)`, which looks in both.
+   */
+  otherChains: Map<number, DualChainReader>;
   /**
    * Two independent USD/JPY readings, for quoting USDC. An adapter for the
    * same reason `chain` is one: the cases that matter — a feed down, a stale
@@ -302,6 +318,27 @@ function buildChainReader(cfg: AppConfig): DualChainReader | undefined {
   );
 }
 
+function buildOtherChains(cfg: AppConfig): Map<number, DualChainReader> {
+  const chains = new Map<number, DualChainReader>();
+  if (cfg.BSC_RPC_PRIMARY_URL && cfg.BSC_RPC_SECONDARY_URL) {
+    chains.set(
+      BSC_CHAIN_ID,
+      new DualChainReader(
+        new ChainNode(httpTransport({ label: 'bsc-primary', url: cfg.BSC_RPC_PRIMARY_URL })),
+        new ChainNode(httpTransport({ label: 'bsc-secondary', url: cfg.BSC_RPC_SECONDARY_URL })),
+        cfg.BSC_RPC_MODE,
+      ),
+    );
+  }
+  return chains;
+}
+
+/** The reader for the chain a token lives on, or undefined when that chain is not configured. */
+export function readerFor(ctx: Pick<AppContext, 'config' | 'chain' | 'otherChains'>, chainId: number): DualChainReader | undefined {
+  if (chainId === ctx.config.STABLECOIN_CHAIN_ID) return ctx.chain;
+  return ctx.otherChains.get(chainId);
+}
+
 export function createContext(config: AppConfig): AppContext {
   initDb({
     connectionString: config.DATABASE_URL,
@@ -320,6 +357,7 @@ export function createContext(config: AppConfig): AppContext {
     queue: buildQueue(config),
     payments: buildPayments(config),
     chain: buildChainReader(config),
+    otherChains: buildOtherChains(config),
     fx: {
       primary: () => readCoinbaseUsdJpy(),
       reference: () => readFrankfurterUsdJpy(),
@@ -333,6 +371,10 @@ export function createContext(config: AppConfig): AppContext {
         'feature_overrides',
         {},
       );
+      // The NETX pause has a key of its own (NETX_PAUSE_SETTING): inside
+      // `feature_overrides` it was erased by every whole-object write of the
+      // other switches, which is how the generation runbook writes them.
+      const netx = await getSetting<{ accepting?: boolean }>(NETX_PAUSE_SETTING, {});
       return {
         subscriptionsEnabled: statics.subscriptionsEnabled && overrides.subscriptionsEnabled !== false,
         freeTrialEnabled: statics.freeTrialEnabled && overrides.freeTrialEnabled !== false,
@@ -342,6 +384,7 @@ export function createContext(config: AppConfig): AppContext {
         realPaymentsEnabled: statics.realPaymentsEnabled,
         cardPaymentsEnabled: statics.cardPaymentsEnabled,
         generationEnabled: overrides.generationEnabled !== false,
+        netxPaymentsEnabled: statics.netxPaymentsEnabled && netx.accepting !== false,
       };
     },
   };

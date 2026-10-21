@@ -1,3 +1,4 @@
+import { OpenGenerations, QueueStatus } from '../components/GenerationQueue';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import type { JobView, TrackView } from '@yuha/contracts';
@@ -271,12 +272,14 @@ export default function Home() {
         {/* Their own description, being written to tape. The written region is
             the job's real phase — nothing here moves on a timer. */}
         <Score
-          text={prompt}
+          text={job.prompt}
           progress={failed ? undefined : fractionOfPhase(job.phase)}
           className="wait-page__score"
           height={200}
           label={t('wait.scoreAria')}
         />
+
+        <QueueStatus job={job} onUpdate={setJob} onCancelled={startAnother} />
 
         <ol className="wait-page__rail">
           {JOB_PHASES.map((phase, i) => (
@@ -307,6 +310,7 @@ export default function Home() {
 
   return (
     <div className="stack">
+      {me && <OpenGenerations onResume={setJob} />}
       <section className="hero">
         <div className="hero__copy">
           <p className="eyebrow">{t('hero.eyebrow')}</p>

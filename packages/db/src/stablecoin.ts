@@ -367,7 +367,13 @@ export async function findOpenIntentForOrder(
  * the filter belongs here now rather than after something does.
  */
 export async function findExpiredOpenIntents(
-  params: { graceSeconds: number; limit?: number } = { graceSeconds: 0 },
+  /**
+   * `chainId` scopes the sweep to one chain's loop. Without it, a chain whose
+   * nodes were down — its scanner halted, payments unseen — would still have
+   * its quotes expired by the other chain's loop, from under a payment that
+   * may already be on the way.
+   */
+  params: { graceSeconds: number; limit?: number; chainId?: number } = { graceSeconds: 0 },
 ): Promise<StablecoinIntentRow[]> {
   return query<StablecoinIntentRow>(
     // Written out with the alias rather than reusing INTENT_COLUMNS: `id` and
@@ -380,9 +386,10 @@ export async function findExpiredOpenIntents(
       WHERE i.open_key IS NOT NULL
         AND q.expires_at <= UTC_TIMESTAMP(3) - INTERVAL ? SECOND
         AND i.state NOT IN ('submitted', 'confirming')
+        AND (? IS NULL OR i.chain_id = ?)
       ORDER BY q.expires_at
       LIMIT ?`,
-    [params.graceSeconds, params.limit ?? 100],
+    [params.graceSeconds, params.chainId ?? null, params.chainId ?? null, params.limit ?? 100],
   );
 }
 
@@ -417,8 +424,8 @@ export async function closeIntent(
 export async function markIntentPrepared(
   params: { intentId: string; predictedNonce: number | null },
   tx?: PoolConnection,
-): Promise<void> {
-  await execute(
+): Promise<boolean> {
+  const result = await execute(
     `UPDATE stablecoin_intents
         SET state = 'prepared', predicted_nonce = ?, prepared_at = UTC_TIMESTAMP(3),
             updated_at = UTC_TIMESTAMP(3)
@@ -426,6 +433,7 @@ export async function markIntentPrepared(
     [params.predictedNonce, params.intentId],
     tx,
   );
+  return result.affectedRows > 0;
 }
 
 // -------------------------------------------------------- payment evidence
@@ -613,6 +621,8 @@ export interface ReviewItem {
   payer: string;
   chain_id: number;
   token_key: string;
+  /** The precision the customer was quoted in — the scale of both amounts. */
+  token_decimals: number;
   /** What the order asked for. */
   expected_atomic: string;
   price_jpy: number;
@@ -642,6 +652,7 @@ const REVIEW_SELECT = `SELECT i.id            AS intent_id,
             i.payer,
             i.chain_id,
             q.token_key,
+            q.token_decimals,
             q.amount_atomic AS expected_atomic,
             q.price_jpy,
             q.expires_at    AS quote_expires_at,

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { lrcFileName, markCorrected, setLineStart, shiftTimings, toLrc, type LyricTimings } from '@yuha/contracts';
 import { useI18n } from '../lib/i18n';
-import { activeLineIndex, buildLyricTimeline, lineProgress } from '../lib/lyrics';
+import { activeLineIndex, resolveLyricTimings, lineProgress } from '../lib/lyrics';
 import { usePlayer } from '../lib/player';
 
 /**
@@ -42,10 +42,7 @@ export function SyncedLyrics({
    * two computations that can drift.
    */
   const timeline: LyricTimings = useMemo(
-    () =>
-      timings?.lines?.length
-        ? timings
-        : { source: 'estimated', aligner: 'estimated-v1', lines: buildLyricTimeline(lyrics, duration).lines },
+    () => resolveLyricTimings(lyrics, duration, timings),
     [timings, lyrics, duration],
   );
   /*

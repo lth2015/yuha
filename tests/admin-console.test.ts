@@ -51,7 +51,7 @@ async function catalogueVersion(priceKey: string): Promise<number> {
   return Number(row!.version);
 }
 
-async function insertPaidOrder(userId: string, paidAt: string, method: 'card' | 'jpyc' | 'usdc', amount = 980): Promise<string> {
+async function insertPaidOrder(userId: string, paidAt: string, method: 'card' | 'jpyc' | 'usdc' | 'netx', amount = 980): Promise<string> {
   const id = randomUUID();
   await query(
     `INSERT INTO orders (id, user_id, price_key, price_version, kind, amount_minor, currency, status, idempotency_key, metadata, payment_method, paid_at, created_at)
@@ -62,9 +62,9 @@ async function insertPaidOrder(userId: string, paidAt: string, method: 'card' | 
     await query(
       `INSERT INTO stablecoin_quotes (id, order_id, user_id, token_key, chain_id, token_address, token_decimals, receiver, payer,
          price_jpy, amount_atomic, start_block, config_version, expires_at)
-       VALUES (?, ?, ?, ?, 137, '0x0000000000000000000000000000000000000001', 6,
+       VALUES (?, ?, ?, ?, ?, '0x0000000000000000000000000000000000000001', 6,
          '0x0000000000000000000000000000000000000002', '0x0000000000000000000000000000000000000003', ?, '1', 1, 1, ?)`,
-      [randomUUID(), id, userId, method, amount, paidAt],
+      [randomUUID(), id, userId, method, method === 'netx' ? 56 : 137, amount, paidAt],
     );
   }
   return id;
@@ -109,16 +109,17 @@ describe('the dashboard', () => {
     expect(body.buckets.map((b: { paidOrders: { count: number } }) => b.paidOrders.count)).toEqual([0, 1, 1]);
   });
 
-  it('splits paid orders and revenue by card, JPYC and USDC', async () => {
+  it('splits paid orders and revenue by card, JPYC, USDC and NETX', async () => {
     const u = await h.createUser({ email: 'mixed@example.test' });
     await insertPaidOrder(u.id, '2026-10-20 03:00:00', 'card', 980);
     await insertPaidOrder(u.id, '2026-10-20 03:00:00', 'jpyc', 980);
     await insertPaidOrder(u.id, '2026-10-20 03:00:00', 'usdc', 980);
     await insertPaidOrder(u.id, '2026-10-20 03:00:00', 'usdc', 980);
+    await insertPaidOrder(u.id, '2026-10-20 03:00:00', 'netx', 980);
 
     const body = (await get(admin, '/v1/admin/stats?granularity=day&from=2026-10-20&to=2026-10-20')).json();
-    expect(body.totals.paidOrders).toEqual({ count: 4, card: 1, jpyc: 1, usdc: 2 });
-    expect(body.totals.revenueJpy).toEqual({ total: 3920, card: 980, jpyc: 980, usdc: 1960 });
+    expect(body.totals.paidOrders).toEqual({ count: 5, card: 1, jpyc: 1, usdc: 2, netx: 1 });
+    expect(body.totals.revenueJpy).toEqual({ total: 4900, card: 980, jpyc: 980, usdc: 1960, netx: 980 });
   });
 
   it('labels a week by the Monday it starts on and fills empty buckets with zeros', async () => {

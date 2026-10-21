@@ -24,6 +24,7 @@ import queue
 import re
 import shutil
 import subprocess
+import tempfile
 import threading
 import time
 import uuid
@@ -392,7 +393,8 @@ def render(req: dict, out_dir: Path, *, seed: Optional[int] = None, tag_style: O
         return render_v15(req, out_dir, seed=seed, tag_style=tag_style or "v2", infer_steps=infer_steps, model=v15_model)
     pipe = get_pipeline()
     out_dir.mkdir(parents=True, exist_ok=True)
-    wav_path = out_dir / f"take-{seed if seed is not None else 'r'}.wav"
+    invocation_dir = Path(tempfile.mkdtemp(prefix="render-", dir=out_dir)).resolve()
+    wav_path = invocation_dir / f"take-{seed if seed is not None else 'r'}.wav"
     lg = LYRIC_GUIDANCE if lyric_guidance is None else lyric_guidance
     kwargs = dict(
         audio_duration=float(req["duration_seconds"]),
@@ -422,16 +424,17 @@ def render(req: dict, out_dir: Path, *, seed: Optional[int] = None, tag_style: O
     if not any(p.kind == p.VAR_KEYWORD for p in sig.parameters.values()):
         kwargs = {k: v for k, v in kwargs.items() if k in sig.parameters}
     result = pipe(**kwargs)
-    if wav_path.exists():
+    if wav_path.is_file():
         return wav_path
     if isinstance(result, (list, tuple)):
         for r in result:
-            if isinstance(r, str) and r.endswith(".wav") and Path(r).exists():
-                return Path(r)
-    cands = sorted(out_dir.glob("*.wav")) + sorted(Path(".").glob("outputs/*.wav"))
-    if not cands:
-        raise RuntimeError("ACE-Step returned no wav file")
-    return cands[-1]
+            if isinstance(r, str) and r.endswith(".wav"):
+                candidate = Path(r).resolve()
+                if candidate.is_relative_to(invocation_dir) and candidate.is_file():
+                    return candidate
+    # A directory scan can pick another take or another person's song. Only
+    # an output explicitly associated with this invocation is deliverable.
+    raise RuntimeError("ACE-Step returned no wav file")
 
 
 def _probe_seconds(path: Path) -> float:

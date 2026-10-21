@@ -380,6 +380,8 @@ never from a token claim.
 | `GET /v1/admin/rights-cases` | support | Case queue (reporter email masked below admin) |
 | `POST /v1/admin/rights-cases/:id/resolve` | **admin** | Dismiss / uphold / restore |
 | `GET /v1/admin/settings` · `PUT /v1/admin/settings/:key` | **admin** | Runtime switches |
+| `GET /v1/admin/netx-payments` | support | NETX configuration, acceptance state and fixed yen price |
+| `PUT /v1/admin/netx-payments` | **admin** | `{ accepting, reason }`; pause/resume new NETX quotes. Existing quotes and scanning continue. Uses the separate `netx_payments` setting |
 | `GET /v1/admin/reconciliation` | support | Ledger discrepancies |
 | `GET /v1/admin/deletions` | support | Account deletion queue (SEC-11) |
 | `POST /v1/admin/deletions/:id/verify` | **admin** | Confirm the requester owns the account |
@@ -463,3 +465,25 @@ signature.
 
 Separately, `MAX_CONCURRENT_JOBS_PER_USER` (default 2) caps unfinished jobs and
 returns `RATE_LIMITED` before any reservation is attempted.
+
+
+### Generation waiting line
+
+`POST /v1/generations`, `GET /v1/jobs/:id` and `GET /v1/jobs` include
+`queuePosition: number | null`. It is a snapshot of the owner's position among
+unfinished jobs on the same provider, not a promised wait time. During an
+active dispatch the phase is `generating` and the position is null, even if
+the provider has not acknowledged submission yet. Lists batch the position
+query and never return other users' job data.
+
+`POST /v1/jobs/:id/cancel` returns `cancelled: true` only after cancellation
+and credit release commit. An active dispatch may return false while the
+worker checks the cancellation before its music call; an already submitted
+job remains governed by the provider's real outcome.
+
+`GET /v1/admin/overview` includes `operations.generationFailures`, a seven-day
+aggregate of `{code, state, count}` for FAILED/REJECTED jobs. The adjacent
+technical success rate uses finished jobs only; the dashboard's submission
+cohort delivery share also contains jobs still in progress and is labelled
+separately. No historical success-rate improvement is inferred from a local
+fixture or a current `/healthz` snapshot.

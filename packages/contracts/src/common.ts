@@ -81,10 +81,20 @@ export const runtimeInfo = z.object({
    */
   stablecoin: z.object({
     enabled: z.boolean(),
+    /**
+     * The Polygon chain, kept for clients that predate NETX. A token's own
+     * `chainId` is the one to switch the wallet to: NETX is on BNB Smart
+     * Chain (56), JPYC and USDC on Polygon.
+     */
     chainId: z.number().int().positive(),
     tokens: z.array(
       z.object({
-        key: z.enum(['jpyc', 'usdc']),
+        key: z.enum(['jpyc', 'usdc', 'netx']),
+        chainId: z.number().int().positive(),
+        /** False for NETX: a crypto-asset whose price moves, not a stablecoin. */
+        stablecoin: z.boolean(),
+        /** Yen per whole token when the price is fixed (NETX); null when it is not. */
+        yenPerToken: z.number().positive().nullable(),
         address: z.string(),
         decimals: z.number().int().nonnegative(),
         label: z.string(),

@@ -24,6 +24,7 @@ interface SessionState {
    */
   acceptEntitlements(fresh: EntitlementsView): void;
   refreshMe(): Promise<void>;
+  refreshRuntime(): Promise<RuntimeInfo>;
 }
 
 const SessionContext = createContext<SessionState | null>(null);
@@ -33,6 +34,12 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   const [me, setMe] = useState<MeView | null>(null);
   const [entitlements, setEntitlements] = useState<EntitlementsView | null>(null);
   const [loading, setLoading] = useState(true);
+
+  const refreshRuntime = useCallback(async () => {
+    const fresh = await apiFetch<RuntimeInfo>('/v1/runtime');
+    setRuntime(fresh);
+    return fresh;
+  }, []);
 
   const refreshMe = useCallback(async () => {
     if (!getToken()) {
@@ -62,7 +69,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     void (async () => {
       try {
-        setRuntime(await apiFetch<RuntimeInfo>('/v1/runtime'));
+        await refreshRuntime();
       } catch {
         setRuntime(null);
       }
@@ -70,7 +77,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       await refreshEntitlements();
       setLoading(false);
     })();
-  }, [refreshMe, refreshEntitlements]);
+  }, [refreshMe, refreshEntitlements, refreshRuntime]);
 
   /*
    * The balance in the header is a copy, taken at sign-in and after the
@@ -84,10 +91,11 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     let last = 0;
     const onVisible = () => {
-      if (document.visibilityState !== 'visible' || !getToken()) return;
+      if (document.visibilityState !== 'visible') return;
       const now = Date.now();
       if (now - last < 5_000) return;
       last = now;
+      void refreshRuntime().catch(() => undefined);
       void refreshEntitlements();
     };
     document.addEventListener('visibilitychange', onVisible);
@@ -96,7 +104,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       document.removeEventListener('visibilitychange', onVisible);
       window.removeEventListener('focus', onVisible);
     };
-  }, [refreshEntitlements]);
+  }, [refreshEntitlements, refreshRuntime]);
 
   /*
    * The fetch layer clears a rejected token; this clears the rest of the
@@ -137,8 +145,9 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       refreshEntitlements,
       acceptEntitlements: setEntitlements,
       refreshMe,
+      refreshRuntime,
     }),
-    [runtime, me, entitlements, loading, signIn, signOut, refreshEntitlements, refreshMe],
+    [runtime, me, entitlements, loading, signIn, signOut, refreshEntitlements, refreshMe, refreshRuntime],
   );
 
   return <SessionContext.Provider value={value}>{children}</SessionContext.Provider>;

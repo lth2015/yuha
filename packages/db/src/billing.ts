@@ -343,6 +343,11 @@ export async function getOrder(id: string, tx?: PoolConnection): Promise<OrderRo
   return queryOne<OrderRow>(`SELECT ${ORDER_COLUMNS} FROM orders WHERE id = ?`, [id], tx);
 }
 
+/** Serialize changes that hand a payment to a wallet or replace its quote. */
+export async function lockOrder(id: string, tx: PoolConnection): Promise<void> {
+  await query(`SELECT id FROM orders WHERE id = ? FOR UPDATE`, [id], tx);
+}
+
 export async function findOrderBySession(
   sessionId: string,
   tx?: PoolConnection,

@@ -326,6 +326,7 @@ export interface OperationsSnapshot {
   /** Technical success rate over the window; target ≥95% (§12.3). */
   technicalSuccessRate: Measured<number>;
   budgetSpentTodayMinor: number;
+  generationFailures: Array<{ code: string; state: string; count: number }>;
 }
 
 export async function operationsSnapshot(budgetWindowHours = 24): Promise<OperationsSnapshot> {
@@ -357,6 +358,12 @@ export async function operationsSnapshot(budgetWindowHours = 24): Promise<Operat
   const jobsByState: Record<string, number> = {};
   for (const s of states) jobsByState[s.state] = num(s.n);
 
+  const failures = await query<{ code: string; state: string; n: number }>(
+    `SELECT COALESCE(error_code, 'unclassified') AS code, state, COUNT(*) AS n
+      FROM generation_jobs WHERE state IN ('FAILED','REJECTED')
+      AND finished_at >= DATE_SUB(UTC_TIMESTAMP(3), INTERVAL 7 DAY)
+      GROUP BY error_code, state ORDER BY n DESC, code, state LIMIT 30`,
+  );
   const finished = num(row?.['finished']);
   const oldest = row?.['oldest'];
 
@@ -373,5 +380,6 @@ export async function operationsSnapshot(budgetWindowHours = 24): Promise<Operat
       'no finished jobs in the last 7 days',
     ),
     budgetSpentTodayMinor: num(row?.['spend']),
+    generationFailures: failures.map((f) => ({ code: f.code, state: f.state, count: num(f.n) })),
   };
 }

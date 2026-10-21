@@ -1,5 +1,5 @@
 import type { AppContext } from '@yuha/api';
-import { expireStaleIntents, needsOperator, runStablecoinScanPass, verifyConfiguredTokens } from '@yuha/api';
+import { enabledTokensOn, expireStaleIntents, needsOperator, readerFor, runStablecoinScanPass, verifyConfiguredTokens } from '@yuha/api';
 import { describeError } from '@yuha/contracts';
 import {
   processWebhookEvent,
@@ -96,17 +96,32 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
  * where every two seconds would not.
  */
 export async function stablecoinScanLoop(deps: LoopDeps): Promise<void> {
-  const { ctx, log } = deps;
+  const { ctx } = deps;
   if (!ctx.config.STABLECOIN_ENABLED) return;
-  const reader = ctx.chain;
+  /*
+   * One loop per chain that has a currency switched on: Polygon for JPYC and
+   * USDC, BNB Smart Chain for NETX. Each has its own reader, cursor and
+   * expiry sweep, so one chain's outage does not stop — or expire quotes
+   * on — the other.
+   */
+  const chains = [ctx.config.STABLECOIN_CHAIN_ID, ...ctx.otherChains.keys()].filter(
+    (id, i, all) => all.indexOf(id) === i && enabledTokensOn(ctx.config, id).length > 0,
+  );
+  await Promise.all(chains.map((chainId) => chainScanLoop(deps, chainId)));
+}
+
+async function chainScanLoop(deps: LoopDeps, chainId: number): Promise<void> {
+  const { ctx } = deps;
+  const log: LoopDeps['log'] = (level, msg, extra) => deps.log(level, msg, { chainId, ...extra });
+  const reader = readerFor(ctx, chainId);
   if (!reader) {
     // Configuration refuses to start without both endpoints, so reaching this
     // means the refusal was bypassed rather than that they are optional.
     log('error', 'stablecoin scan not started: two RPC endpoints are required');
     return;
   }
-  if (ctx.config.STABLECOIN_RPC_MODE === 'single_secondary') {
-    log('warn', 'stablecoin single-provider mode active: Polygon reads trust only the secondary RPC');
+  if (reader.mode === 'single_secondary') {
+    log('warn', 'stablecoin single-provider mode active: reads on this chain trust only the secondary RPC');
   }
 
   /*
@@ -131,7 +146,7 @@ export async function stablecoinScanLoop(deps: LoopDeps): Promise<void> {
   while (!deps.stopped()) {
     try {
       if (!tokensVerified) {
-        const problems = await verifyConfiguredTokens(ctx, reader).catch((err) => [
+        const problems = await verifyConfiguredTokens(ctx, reader, chainId).catch((err) => [
           { token: 'chain' as const, kind: 'unavailable' as const, reason: describeError(err) },
         ]);
         for (const p of problems) {
@@ -149,7 +164,7 @@ export async function stablecoinScanLoop(deps: LoopDeps): Promise<void> {
         tokensVerified = true;
       }
 
-      const pass = await runStablecoinScanPass(ctx, reader, log);
+      const pass = await runStablecoinScanPass(ctx, reader, log, chainId);
       // Said once per change: a node that caps eth_getLogs is now scanned in
       // pieces, which is fine, and worth one line rather than a mystery.
       for (const node of [reader.primary, reader.secondary]) {
@@ -177,7 +192,7 @@ export async function stablecoinScanLoop(deps: LoopDeps): Promise<void> {
        * nothing open to attribute it to. The grace period is the real fix; the
        * ordering is free and removes the worst instance of the race.
        */
-      const freed = await expireStaleIntents({ graceSeconds: ctx.config.STABLECOIN_INTENT_GRACE_SECONDS });
+      const freed = await expireStaleIntents({ graceSeconds: ctx.config.STABLECOIN_INTENT_GRACE_SECONDS, chainId });
       if (freed > 0) log('info', 'stablecoin quotes expired', { intents: freed });
     } catch (err) {
       // Never fatal: an RPC outage must not take the worker down, and the

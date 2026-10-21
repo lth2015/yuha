@@ -106,8 +106,8 @@ export interface StatsBucket {
   visitors: number;
   signups: number;
   generations: { submitted: number; delivered: number; failed: number };
-  paidOrders: { count: number; card: number; jpyc: number; usdc: number };
-  revenueJpy: { total: number; card: number; jpyc: number; usdc: number };
+  paidOrders: { count: number; card: number; jpyc: number; usdc: number; netx: number };
+  revenueJpy: { total: number; card: number; jpyc: number; usdc: number; netx: number };
   refundsJpy: number;
   creditsGranted: { total: number; purchased: number; subscription: number; trial: number; gift: number; compensation: number; other: number };
   creditsConsumed: number;
@@ -122,8 +122,8 @@ function emptyBucket(key: string): StatsBucket {
     visitors: 0,
     signups: 0,
     generations: { submitted: 0, delivered: 0, failed: 0 },
-    paidOrders: { count: 0, card: 0, jpyc: 0, usdc: 0 },
-    revenueJpy: { total: 0, card: 0, jpyc: 0, usdc: 0 },
+    paidOrders: { count: 0, card: 0, jpyc: 0, usdc: 0, netx: 0 },
+    revenueJpy: { total: 0, card: 0, jpyc: 0, usdc: 0, netx: 0 },
     refundsJpy: 0,
     creditsGranted: { total: 0, purchased: 0, subscription: 0, trial: 0, gift: 0, compensation: 0, other: 0 },
     creditsConsumed: 0,
@@ -136,6 +136,19 @@ function emptyBucket(key: string): StatsBucket {
  * that (a payment settled through manual review has no confirmed intent), the
  * token of its latest quote, which is what the buyer was asked to send.
  */
+/**
+ * The method a row's SQL answer stands for. Every currency by name: this was a
+ * two-way test with `card` as the else, so the first token added after it —
+ * NETX — would have been counted, silently, as card revenue.
+ */
+export type ConsolePaymentMethod = 'card' | 'jpyc' | 'usdc' | 'netx';
+const CONSOLE_METHODS: readonly ConsolePaymentMethod[] = ['card', 'jpyc', 'usdc', 'netx'];
+export function paymentMethodOf(raw: string): ConsolePaymentMethod {
+  if ((CONSOLE_METHODS as readonly string[]).includes(raw)) return raw as ConsolePaymentMethod;
+  // A token key this list does not know yet is still not a card payment.
+  throw new Error(`unknown payment method "${raw}" — add it to CONSOLE_METHODS`);
+}
+
 const ORDER_METHOD_SQL = `
   CASE WHEN o.payment_method = 'stablecoin' THEN COALESCE(
     (SELECT q.token_key FROM stablecoin_intents i JOIN stablecoin_quotes q ON q.id = i.quote_id
@@ -214,7 +227,7 @@ async function collect(fromUtc: Date, toUtc: Date, granularity: Granularity | nu
   for (const r of jobs) at(r.k).generations = { submitted: n(r.submitted), delivered: n(r.delivered), failed: n(r.failed) };
   for (const r of orders) {
     const b = at(r.k);
-    const m = r.method === 'usdc' ? 'usdc' : r.method === 'jpyc' ? 'jpyc' : 'card';
+    const m = paymentMethodOf(r.method);
     b.paidOrders[m] += n(r.c);
     b.paidOrders.count += n(r.c);
     b.revenueJpy[m] += n(r.amount);

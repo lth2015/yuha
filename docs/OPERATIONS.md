@@ -292,13 +292,28 @@ A track under an open case cannot be deleted by its owner, so evidence survives.
 
 ## 8. Pausing generation
 
-Without a deploy:
+Without a deploy. This writes the whole `feature_overrides` object; the NETX
+pause is a separate setting (below) and is not touched by it.
 
 ```bash
 curl -X PUT https://$HOST/v1/admin/settings/feature_overrides \
   -H "Authorization: Bearer $ADMIN" -H 'content-type: application/json' \
   -d '{"value": {"generationEnabled": false}, "reason": "provider outage, ref INC-123"}'
 ```
+
+### Pausing NETX
+
+Console → 運用指標 → NETX card, with a reason; or:
+
+```bash
+curl -X PUT https://$HOST/v1/admin/netx-payments \
+  -H "Authorization: Bearer $ADMIN" -H 'content-type: application/json' \
+  -d '{"accepting": false, "reason": "market below ¥20, ref OPS-123"}'
+```
+
+New NETX quotes stop at once; payments for quotes already issued are still
+found and credited. Pause rather than setting `STABLECOIN_NETX_ENABLED=false`,
+which also stops the BSC scanner (docs/NETX_PAYMENT.md §4).
 
 New generation stops; order lookup, the library and existing downloads continue
 to work (§12.3 requires exactly that split).

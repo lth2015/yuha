@@ -3,6 +3,7 @@ import { NavLink, useParams } from 'react-router-dom';
 import { apiFetch } from '../lib/api';
 import { useI18n } from '../lib/i18n';
 import { formatMoney, formatJst, useSession } from '../lib/session';
+import { NetxSwitch } from '../components/admin/NetxSwitch';
 import { Badge, ErrorNotice, Loading } from '../components/common';
 import { CustomerConsole } from '../components/CustomerConsole';
 import { HeldOrderConsole } from '../components/HeldOrderConsole';
@@ -29,6 +30,7 @@ interface Overview {
     ledgerDiscrepancies: number;
     technicalSuccessRate: Measured;
     budgetSpentTodayMinor: number;
+    generationFailures: Array<{ code: string; state: string; count: number }>;
   };
   cost: {
     deliveredCount: number;
@@ -176,6 +178,7 @@ function OverviewPanel({ part }: { part: 'ops' | 'review' }) {
         <Badge>{overview.mode}</Badge>
         <Badge tone={isAdmin ? 'badge--accent' : ''}>{me?.role}</Badge>
       </div>
+      <NetxSwitch isAdmin={isAdmin} />
       <section className="stack">
         <h2 style={{ fontSize: 18 }}>{t('admin.ops.h2')}</h2>
         <div className="grid">
@@ -224,6 +227,17 @@ function OverviewPanel({ part }: { part: 'ops' | 'review' }) {
             </span>
           </div>
           <Metric label={t('admin.ops.successRate')} m={ops.technicalSuccessRate} />
+        </div>
+
+        <p className="small muted">{t('admin.ops.rateBasis')}</p>
+        <div className="card stack">
+          <h3>{t('admin.ops.failures')}</h3>
+          {ops.generationFailures?.length ? <div className="table-wrap"><table>
+            <thead><tr><th>{t('admin.ops.reason')}</th><th>{t('admin.jobs.state')}</th><th>{t('admin.jobs.count')}</th></tr></thead>
+            <tbody>{ops.generationFailures.map((f) => <tr key={`${f.state}:${f.code}`}>
+              <td className="num">{f.code}</td><td>{f.state}</td><td className="num">{f.count}</td>
+            </tr>)}</tbody>
+          </table></div> : <p className="muted small">{t('admin.ops.noFailures')}</p>}
         </div>
 
         <div className="table-wrap">

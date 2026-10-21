@@ -4,7 +4,7 @@ import type { RuntimeInfo } from '@yuha/contracts';
 import type { AppContext } from '../context.js';
 import { resolveFromRoot } from '../paths.js';
 import { freeTrialAvailable } from '../services/billing.js';
-import { enabledStablecoinTokens } from '../services/stablecoin-tokens.js';
+import { acceptingStablecoinTokens } from '../services/stablecoin-tokens.js';
 import { toDisplayAddress } from '@yuha/providers';
 
 /**
@@ -67,8 +67,13 @@ export default async function publicRoutes(app: FastifyInstance, opts: { ctx: Ap
          * drifting apart would mean watching one contract and accepting
          * another; the same applies to what the browser is told to pay.
          */
-        tokens: enabledStablecoinTokens(ctx.config).map((t) => ({
+        // Accepting now — a paused currency (NETX) disappears from the page
+        // on the next load. Each with its own chain to switch the wallet to.
+        tokens: acceptingStablecoinTokens(ctx.config, features).map((t) => ({
           key: t.key,
+          chainId: t.chainId,
+          stablecoin: t.stablecoin,
+          yenPerToken: t.pricing.kind === 'fixed-yen' ? t.pricing.yenPerToken : null,
           address: toDisplayAddress(t.address),
           decimals: t.decimals,
           label: t.label,

@@ -81,6 +81,18 @@ describe('the challenge', () => {
     expect(res.statusCode).toBeGreaterThanOrEqual(400);
   });
 
+  it('is not issued for BNB Smart Chain while NETX is off — a signing prompt for a chain nothing uses', async () => {
+    const user = await h.createUser({ email: 'wallet-bsc-off@example.test' });
+    const res = await h.app.inject({
+      method: 'POST',
+      url: '/v1/payments/stablecoin/wallet-challenge',
+      headers: { ...user.authHeader, ...freshIp() },
+      payload: { address: privateKeyToAccount(KEY_A).address, chainId: 56 } as never,
+    });
+    expect(res.statusCode, res.body).toBe(400);
+    expect(res.json().error.code).toBe('VALIDATION_FAILED');
+  });
+
   it('needs a session at all', async () => {
     const res = await h.app.inject({
       method: 'POST',

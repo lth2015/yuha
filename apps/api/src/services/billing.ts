@@ -43,7 +43,7 @@ export function toProductView(row: ProductRow, available: boolean, rails?: Payme
 export async function listProducts(ctx: AppContext): Promise<ProductView[]> {
   const features = await ctx.features();
   const rows = await listActiveProducts();
-  const rails = paymentRails(ctx.config, features.cardPaymentsEnabled);
+  const rails = paymentRails(ctx.config, features);
   return rows.map((r) =>
     // Subscriptions are fully built but stay closed to the public until the
     // repeat-purchase threshold is met (§7).

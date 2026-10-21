@@ -19,7 +19,7 @@ interface Row {
   email: string;
   priceKey: string;
   kind: string;
-  method: 'card' | 'jpyc' | 'usdc';
+  method: 'card' | 'jpyc' | 'usdc' | 'netx';
   amountMinor: number;
   refundedMinor: number;
   currency: string;
@@ -32,7 +32,7 @@ interface Row {
 }
 
 const STATUSES = ['', 'pending', 'paid', 'refunded', 'partially_refunded', 'failed', 'canceled'] as const;
-const METHODS = ['', 'card', 'jpyc', 'usdc'] as const;
+const METHODS = ['', 'card', 'jpyc', 'usdc', 'netx'] as const;
 
 export function OrdersPanel() {
   const { t, lang } = useI18n();

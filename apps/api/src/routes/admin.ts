@@ -24,13 +24,15 @@ import {
   reporting,
   setLicenseStatus,
   setSetting,
+  getSetting,
   setTrackState,
   updateRightsCase,
   withTx,
   withTxRetry,
   writeAuditLog,
 } from '@yuha/db';
-import type { AppContext } from '../context.js';
+import { NETX_BSC } from '@yuha/providers';
+import { NETX_PAUSE_SETTING, type AppContext } from '../context.js';
 import { executeAccountDeletion } from '../services/deletion.js';
 import { decideHeldOrder, heldOrderQueue } from '../services/order-review.js';
 import { findCustomers, getCustomer, giftCredits } from '../services/operator-grant.js';
@@ -138,7 +140,7 @@ export default async function adminRoutes(app: FastifyInstance, opts: { ctx: App
     const q = z
       .object({
         status: z.enum(['pending', 'paid', 'failed', 'refunded', 'partially_refunded', 'canceled']).optional(),
-        method: z.enum(['card', 'jpyc', 'usdc']).optional(),
+        method: z.enum(['card', 'jpyc', 'usdc', 'netx']).optional(),
         email: z.string().trim().min(1).max(320).optional(),
         from: ymd.optional(),
         to: ymd.optional(),
@@ -557,6 +559,51 @@ export default async function adminRoutes(app: FastifyInstance, opts: { ctx: App
       after: { value: body.value },
     });
     return { key, value: body.value };
+  });
+
+  /*
+   * NETX: pause and resume (docs/NETX_PAYMENT.md §4).
+   *
+   * Its own endpoint AND its own setting key (`NETX_PAUSE_SETTING`). It
+   * first lived inside `feature_overrides`, which is one object holding every
+   * switch and which the generic settings PUT replaces whole — so the
+   * generation runbook (docs/OPERATIONS.md §8) silently resumed a paused NETX
+   * at a fixed price below the market. A key of its own has one writer, and
+   * the write is a single value, so there is nothing to merge or to lose.
+   *
+   * Pausing stops NETX being offered and quoted on the next request. It does
+   * not stop the scanner: a buyer who was quoted and has paid is still
+   * credited. Resuming cannot turn on what configuration has off.
+   */
+  app.get('/v1/admin/netx-payments', { preHandler: staff }, async () => {
+    const features = await ctx.features();
+    return {
+      configured: ctx.config.STABLECOIN_ENABLED && ctx.config.STABLECOIN_NETX_ENABLED,
+      accepting: features.netxPaymentsEnabled,
+      yenPerToken: NETX_BSC.pricing.kind === 'fixed-yen' ? NETX_BSC.pricing.yenPerToken : null,
+    };
+  });
+
+  app.put('/v1/admin/netx-payments', { preHandler: adminOnly }, async (req) => {
+    const body = reasoned.extend({ accepting: z.boolean() }).parse(req.body);
+    const before = await getSetting<{ accepting?: boolean }>(NETX_PAUSE_SETTING, {});
+    await setSetting({ key: NETX_PAUSE_SETTING, value: { accepting: body.accepting }, updatedBy: req.user!.id, reason: body.reason });
+    await writeAuditLog({
+      actorId: req.user!.id,
+      actorRole: req.user!.role,
+      action: body.accepting ? 'payments.netx_resumed' : 'payments.netx_paused',
+      subjectType: 'setting',
+      subjectId: NETX_PAUSE_SETTING,
+      reason: body.reason,
+      before: { accepting: before.accepting !== false },
+      after: { accepting: body.accepting },
+    });
+    const features = await ctx.features();
+    return {
+      configured: ctx.config.STABLECOIN_ENABLED && ctx.config.STABLECOIN_NETX_ENABLED,
+      accepting: features.netxPaymentsEnabled,
+      yenPerToken: NETX_BSC.pricing.kind === 'fixed-yen' ? NETX_BSC.pricing.yenPerToken : null,
+    };
   });
 
   // ------------------------------------------------------ reconciliation

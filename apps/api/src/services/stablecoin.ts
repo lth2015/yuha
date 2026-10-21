@@ -1,6 +1,7 @@
 import { AppError } from '@yuha/contracts';
 import {
   closeIntent,
+  findLatestIntentForOrder,
   findOpenIntentForOrder,
   findOpenIntentForPayer,
   findOrderByIdempotencyKey,
@@ -11,8 +12,9 @@ import {
   getChainCursor,
   getVerifiedWallet,
   insertQuoteWithIntent,
+  lockOrder,
   markIntentPrepared,
-  withTx,
+  withTxRetry,
   type OrderRow,
   type StablecoinIntentRow,
   type StablecoinQuoteRow,
@@ -23,10 +25,10 @@ import {
   toDisplayAddress,
   type TokenSpec,
 } from '@yuha/providers';
-import type { AppContext } from '../context.js';
+import { readerFor, type AppContext } from '../context.js';
 import { assertConfiguredTokensVerified, SCAN_STREAM } from './stablecoin-scan.js';
 import { createPurchaseOrder } from './purchase-cap.js';
-import { stablecoinTokenFor } from './stablecoin-tokens.js';
+import { acceptingStablecoinTokens, scanStartBlockFor, stablecoinTokenFor } from './stablecoin-tokens.js';
 import { stablecoinAllowedFor } from './payment-methods.js';
 import { usdcJpyRate } from './stablecoin-rate.js';
 import { getPublicTrack, hasLicense } from '@yuha/db';
@@ -118,6 +120,11 @@ export async function createStablecoinQuote(
   },
 ): Promise<QuoteResult> {
   const token = tokenFor(ctx, params.tokenKey);
+  // Enabled is not enough: an operator may have paused this currency (NETX,
+  // whose price is fixed while its market moves). Only NEW quotes stop.
+  if (!acceptingStablecoinTokens(ctx.config, await ctx.features()).some((t) => t.key === token.key)) {
+    throw new AppError('SERVICE_DISABLED', 'payments in that currency are paused');
+  }
   const receiver = receiverFor(ctx);
   const payer = params.payer.toLowerCase();
 
@@ -207,8 +214,10 @@ export async function createStablecoinQuote(
    * only in the worker is the point: this function is where the amount a
    * customer is asked to pay comes from.
    */
-  if (!ctx.chain) throw new AppError('SERVICE_DISABLED', 'stablecoin payments are not configured');
-  await assertConfiguredTokensVerified(ctx, ctx.chain);
+  // The token's own chain: NETX is checked against BNB Smart Chain, not Polygon.
+  const reader = readerFor(ctx, token.chainId);
+  if (!reader) throw new AppError('SERVICE_DISABLED', 'stablecoin payments are not configured');
+  await assertConfiguredTokensVerified(ctx, reader, token.chainId);
 
   /*
    * JPYC consults no rate at all — one token per yen is pricing policy. USDC
@@ -217,7 +226,9 @@ export async function createStablecoinQuote(
    * Read here, before the transaction, so no database lock is held across
    * two network calls.
    */
-  const rate = token.key === 'jpyc' ? null : await usdcJpyRate(ctx);
+  // Only a market-priced token consults a rate. NETX's price is fixed (¥20)
+  // and must not fail because a USD/JPY feed is down.
+  const rate = token.pricing.kind === 'usd-market' ? await usdcJpyRate(ctx) : null;
   const bufferBps = rate ? ctx.config.STABLECOIN_USDC_BUFFER_BPS : null;
   const { amountAtomic, rounded } = quoteAmountAtomic({
     priceJpy: product.amount_minor,
@@ -241,13 +252,13 @@ export async function createStablecoinQuote(
    * until something is watching the chain for it.
    */
   const cursor = await getChainCursor({ chainId: token.chainId, stream: SCAN_STREAM });
-  const configured = ctx.config.STABLECOIN_SCAN_START_BLOCK;
+  const configured = scanStartBlockFor(ctx.config, token.chainId);
   const scanFrom = cursor ?? (configured === undefined ? undefined : BigInt(configured));
   if (scanFrom === undefined) {
     throw new AppError('SERVICE_DISABLED', 'stablecoin payments are not being watched for yet — try again shortly');
   }
 
-  return withTx(async (tx) => {
+  return withTxRetry(async (tx) => {
     const order =
       existing ??
       (await createPurchaseOrder(
@@ -272,6 +283,17 @@ export async function createStablecoinQuote(
         },
         tx,
       ));
+
+    // Prepare and re-quote must observe each other's committed state. Without
+    // the shared order lock, a quoted intent can become prepared after the
+    // cross-chain guard reads it but before that guard cancels it.
+    await lockOrder(order.id, tx);
+    const current = await getOrderForUser(order.id, params.userId, tx);
+    if (!current) throw new AppError('NOT_FOUND', 'order not found');
+    if (['paid', 'refunded', 'partially_refunded'].includes(current.status)) {
+      throw new AppError('CONFLICT', 'this order can no longer be paid');
+    }
+    assertNotCardClaimed(current);
 
     /*
      * A re-quote for the SAME order supersedes the old one: the previous
@@ -310,6 +332,21 @@ export async function createStablecoinQuote(
      */
     const openForOrder = await findOpenIntentForOrder(order.id, tx);
     if (openForOrder && openForOrder.id !== openForPayer?.id) {
+      /*
+       * Except across chains once the wallet has the transfer. A `prepared`
+       * intent means the calldata was handed to a wallet and the payment may
+       * already be on its way; superseding it with a quote on the OTHER chain
+       * closed the only intent that payment could attach to, and sent the
+       * customer's report of it to a chain that has never seen it. They can
+       * finish it, or let the quote expire and start again.
+       */
+      if (openForOrder.chain_id !== token.chainId && openForOrder.state !== 'quoted') {
+        throw new AppError(
+          'CONFLICT',
+          'a payment for this order may already be on its way on another network — finish it, or wait for its quote to expire',
+          { orderId: order.id },
+        );
+      }
       await closeIntent({ intentId: openForOrder.id, state: 'cancelled' }, tx);
     }
 
@@ -396,39 +433,44 @@ export async function prepareStablecoinPayment(
   if (!ctx.config.STABLECOIN_ENABLED) {
     throw new AppError('SERVICE_DISABLED', 'stablecoin payments are not available');
   }
-  const order = await getOrderForUser(params.orderId, params.userId);
-  if (!order) throw new AppError('NOT_FOUND', 'order not found');
-  // The same set the quote path refuses, and for the same reason: handing a
-  // wallet live transfer calldata for a refunded order invites a payment that
-  // `markOrderPaid` will not accept.
-  if (['paid', 'refunded', 'partially_refunded'].includes(order.status)) {
-    throw new AppError('CONFLICT', 'this order can no longer be paid');
-  }
+  return withTxRetry(async (tx) => {
+    await lockOrder(params.orderId, tx);
+    const order = await getOrderForUser(params.orderId, params.userId, tx);
+    if (!order) throw new AppError('NOT_FOUND', 'order not found');
+    // The same set the quote path refuses, and for the same reason: handing a
+    // wallet live transfer calldata for a refunded order invites a payment that
+    // `markOrderPaid` will not accept.
+    if (['paid', 'refunded', 'partially_refunded'].includes(order.status)) {
+      throw new AppError('CONFLICT', 'this order can no longer be paid');
+    }
 
-  const intent = await findOpenIntentForOrder(params.orderId);
-  if (!intent) throw new AppError('NOT_FOUND', 'no live quote for this order — ask for a new one');
-  const quote = await getQuote(intent.quote_id);
-  if (!quote) throw new AppError('NOT_FOUND', 'quote not found');
-  if (quote.expires_at.getTime() <= Date.now()) {
-    throw new AppError('CONFLICT', 'that quote has expired — ask for a new one');
-  }
+    const intent = await findOpenIntentForOrder(params.orderId, tx);
+    if (!intent) throw new AppError('NOT_FOUND', 'no live quote for this order — ask for a new one');
+    const quote = await getQuote(intent.quote_id, tx);
+    if (!quote) throw new AppError('NOT_FOUND', 'quote not found');
+    if (quote.expires_at.getTime() <= Date.now()) {
+      throw new AppError('CONFLICT', 'that quote has expired — ask for a new one');
+    }
 
-  // Built from the stored quote, not from anything in the request: the amount,
-  // the receiver and the token are the server's, and the wallet is handed
-  // calldata it can check rather than fields it has to assemble.
-  const data = encodeTransferCalldata(quote.receiver, BigInt(quote.amount_atomic));
-  await markIntentPrepared({ intentId: intent.id, predictedNonce: null });
+    // Built from the stored quote, not from anything in the request: the amount,
+    // the receiver and the token are the server's, and the wallet is handed
+    // calldata it can check rather than fields it has to assemble.
+    const data = encodeTransferCalldata(quote.receiver, BigInt(quote.amount_atomic));
+    if (!(await markIntentPrepared({ intentId: intent.id, predictedNonce: null }, tx))) {
+      throw new AppError('CONFLICT', 'that payment is no longer open — ask for a new quote');
+    }
 
-  return {
-    chainId: quote.chain_id,
-    to: toDisplayAddress(quote.token_address),
-    data,
-    value: '0',
-    amountAtomic: quote.amount_atomic,
-    receiver: toDisplayAddress(quote.receiver),
-    expiresAt: quote.expires_at.toISOString(),
-    predictedNonce: null,
-  };
+    return {
+      chainId: quote.chain_id,
+      to: toDisplayAddress(quote.token_address),
+      data,
+      value: '0',
+      amountAtomic: quote.amount_atomic,
+      receiver: toDisplayAddress(quote.receiver),
+      expiresAt: quote.expires_at.toISOString(),
+      predictedNonce: null,
+    };
+  });
 }
 
 export interface PaymentStatus {
@@ -446,6 +488,12 @@ export interface PaymentStatus {
    */
   entitlementGranted: boolean;
   intent: { state: string; expiresAt: string | null } | null;
+  /**
+   * The chain the order was quoted on, from its latest intent (open or not);
+   * null before any quote. A reported transaction hash is looked up there —
+   * a NETX payment is on BNB Smart Chain, not Polygon.
+   */
+  chainId: number | null;
 }
 
 export async function stablecoinPaymentStatus(
@@ -455,7 +503,9 @@ export async function stablecoinPaymentStatus(
   if (!order) throw new AppError('NOT_FOUND', 'order not found');
   const intent: StablecoinIntentRow | undefined = await findOpenIntentForOrder(params.orderId);
   const quote = intent ? await getQuote(intent.quote_id) : undefined;
+  const latest = intent ?? (await findLatestIntentForOrder(params.orderId));
   return {
+    chainId: latest?.chain_id ?? null,
     orderId: order.id,
     orderStatus: order.status,
     paymentMethod: order.payment_method,

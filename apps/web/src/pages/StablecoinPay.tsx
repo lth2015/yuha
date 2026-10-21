@@ -8,6 +8,7 @@ import {
   countdown,
   explorerTxUrl,
   formatAtomic,
+  chainCopy,
   knownChainParams,
   parseChainId,
   payStep,
@@ -109,11 +110,10 @@ export function StablecoinPay() {
   const [params] = useSearchParams();
   const priceKey = params.get('price') ?? 'drop_5';
   const trackId = params.get('track');
-  const { runtime, refreshEntitlements } = useSession();
+  const { runtime, refreshEntitlements, refreshRuntime } = useSession();
   const { t, lang } = useI18n();
 
   const stablecoin = runtime?.stablecoin;
-  const wantChainId = stablecoin?.chainId ?? 0;
   const tokens = stablecoin?.tokens ?? [];
 
   const [hasProvider, setHasProvider] = useState(() => injectedProvider() !== null);
@@ -121,15 +121,22 @@ export function StablecoinPay() {
   const [chainId, setChainId] = useState<number | null>(null);
   const [verified, setVerified] = useState<VerifiedWallet[]>([]);
   /*
-   * The currency chosen on the confirmation screen, when it is one this
-   * deployment has on; otherwise the first that is. Choosing JPYC or USDC
-   * happens once, on the confirmation screen, with every other method.
+   * Preserve the explicit currency chosen on the confirmation screen. A
+   * temporarily unavailable currency must never become a different payment.
    */
   const askedToken = params.get('token');
   const [tokenKey, setTokenKey] = useState<string>(
-    () => tokens.find((x) => x.key === askedToken)?.key ?? tokens[0]?.key ?? 'jpyc',
+    () => askedToken ?? tokens[0]?.key ?? 'jpyc',
   );
+  /*
+   * The network to be on is the chosen currency's, not the deployment's: NETX
+   * is on BNB Smart Chain, JPYC and USDC on Polygon. Once quoted, the quote's
+   * own chain is the one the amount was computed for.
+   */
+  const selectedToken = tokens.find((x) => x.key === tokenKey);
   const [quote, setQuote] = useState<QuoteResponse | null>(null);
+  const wantChainId = quote?.chainId ?? selectedToken?.chainId ?? stablecoin?.chainId ?? 0;
+  const net = chainCopy(wantChainId) ?? { network: `chain ${wantChainId}`, gas: '—' };
   const [txHash, setTxHash] = useState<string | null>(null);
   const [typedHash, setTypedHash] = useState('');
   const [status, setStatus] = useState<PaymentStatusResponse | null>(null);
@@ -139,12 +146,25 @@ export function StablecoinPay() {
   const [error, setError] = useState<unknown>(null);
   const [problem, setProblem] = useState<WalletProblem | null>(null);
   const [idempotencyKey] = useState(() => newIdempotencyKey('scpay'));
+  const [methodsChecked, setMethodsChecked] = useState(false);
+  const [methodsError, setMethodsError] = useState<unknown>(null);
+  const [methodsRound, setMethodsRound] = useState(0);
+
+  useEffect(() => {
+    let active = true;
+    setMethodsChecked(false);
+    void refreshRuntime().then(
+      () => { if (active) { setMethodsError(null); setMethodsChecked(true); } },
+      (err: unknown) => { if (active) { setMethodsError(err); setMethodsChecked(true); } },
+    );
+    return () => { active = false; };
+  }, [refreshRuntime, methodsRound]);
 
   // The token choice can only be one the server says is on; a stale default
   // would ask for a quote in a currency this deployment has switched off.
   useEffect(() => {
-    if (tokens.length > 0 && !tokens.some((x) => x.key === tokenKey)) setTokenKey(tokens[0]!.key);
-  }, [tokens, tokenKey]);
+    if (!askedToken && !quote && tokens.length > 0 && !tokens.some((x) => x.key === tokenKey)) setTokenKey(tokens[0]!.key);
+  }, [tokens, tokenKey, askedToken, quote]);
 
   /** Everything that can go wrong with a wallet becomes a dictionary key. */
   const fromWallet = useCallback((err: unknown) => {
@@ -351,9 +371,30 @@ export function StablecoinPay() {
       const prepared = await apiFetch<PreparedTransfer>(`/v1/orders/${quote.orderId}/stablecoin-prepare`, {
         method: 'POST',
       });
+      /*
+       * The same calldata is valid on every chain the token address exists
+       * on, and the receiver is the same address on Polygon and on BNB Smart
+       * Chain — so a wallet that changed network between render and signing
+       * would send real money where no quote is waiting. Asked again here,
+       * immediately before signing, and pinned in the request, which wallets
+       * refuse to sign on any other chain.
+       */
+      const onChain = parseChainId(await p.request({ method: 'eth_chainId' }));
+      if (onChain !== prepared.chainId) {
+        setChainId(onChain);
+        return;
+      }
       const hash = (await p.request({
         method: 'eth_sendTransaction',
-        params: [{ from: account, to: prepared.to, data: prepared.data, value: '0x0' }],
+        params: [
+          {
+            from: account,
+            to: prepared.to,
+            data: prepared.data,
+            value: '0x0',
+            chainId: `0x${prepared.chainId.toString(16)}`,
+          },
+        ],
       })) as string;
       setTxHash(hash);
       await report(quote.orderId, hash);
@@ -448,12 +489,13 @@ export function StablecoinPay() {
 
   /* ------------------------------------------------------------ the render */
 
-  if (!runtime) return <Loading />;
-  if (!stablecoin?.enabled || tokens.length === 0) {
+  if (!methodsChecked) return <Loading />;
+  if (!quote && (!runtime || !stablecoin?.enabled || !selectedToken || methodsError)) {
     return (
       <div className="stack" style={{ maxWidth: 620, margin: '0 auto' }}>
         <h1 style={{ fontSize: 26 }}>{t('scpay.title')}</h1>
         <p className="muted">{t('scpay.unavailable')}</p>
+        <ErrorNotice error={methodsError} onRetry={() => setMethodsRound((r) => r + 1)} />
         <Link className="btn" to="/pricing">
           {t('pay.backToPricing')}
         </Link>
@@ -470,7 +512,7 @@ export function StablecoinPay() {
 
       {problem && (
         <div className="alert alert--warn" role="alert" aria-live="assertive">
-          {t(`scpay.err.${problem}`)}
+          {t(`scpay.err.${problem}`, { network: net.network, gas: net.gas })}
         </div>
       )}
       <ErrorNotice error={error} />
@@ -512,14 +554,14 @@ export function StablecoinPay() {
 
           {step === 'switch-chain' && (
             <>
-              <p className="muted">{t('scpay.switch.note', { chain: String(wantChainId) })}</p>
+              <p className="muted">{t('scpay.switch.note', { chain: String(wantChainId), network: net.network })}</p>
               <button
                 type="button"
                 className="btn btn--primary"
                 disabled={busy !== null}
                 onClick={() => void switchChain()}
               >
-                {busy === 'switch' ? t('scpay.working') : t('scpay.switch.cta')}
+                {busy === 'switch' ? t('scpay.working') : t('scpay.switch.cta', { network: net.network })}
               </button>
             </>
           )}
@@ -598,7 +640,7 @@ export function StablecoinPay() {
                 )}
                 <tr>
                   <th>{t('scpay.receiver.label')}</th>
-                  <td className="small" style={{ fontFamily: 'var(--mono)', wordBreak: 'break-all' }}>
+                  <td className="small" style={{ fontFamily: 'var(--mono)', wordBreak: 'break-all', whiteSpace: 'normal' }}>
                     {quote.receiver}
                   </td>
                 </tr>
@@ -632,7 +674,7 @@ export function StablecoinPay() {
                 >
                   {busy === 'send' ? t('scpay.working') : t('scpay.send.cta')}
                 </button>
-                <p className="small muted">{t('scpay.send.note')}</p>
+                <p className="small muted">{t('scpay.send.note', { gas: net.gas })}</p>
 
                 <details>
                   <summary>{t('scpay.manual.title')}</summary>
