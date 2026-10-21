@@ -620,6 +620,8 @@ export interface ReviewItem {
   payer: string;
   chain_id: number;
   token_key: string;
+  /** The precision the customer was quoted in — the scale of both amounts. */
+  token_decimals: number;
   /** What the order asked for. */
   expected_atomic: string;
   price_jpy: number;
@@ -649,6 +651,7 @@ const REVIEW_SELECT = `SELECT i.id            AS intent_id,
             i.payer,
             i.chain_id,
             q.token_key,
+            q.token_decimals,
             q.amount_atomic AS expected_atomic,
             q.price_jpy,
             q.expires_at    AS quote_expires_at,

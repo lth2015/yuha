@@ -6,6 +6,8 @@ import { Badge, ErrorNotice } from '../common';
 interface NetxStatus {
   configured: boolean;
   accepting: boolean;
+  /** The fixed rate, from the server — never a literal in the copy. */
+  yenPerToken: number | null;
 }
 
 /**
@@ -70,7 +72,7 @@ export function NetxSwitch({ isAdmin }: { isAdmin: boolean }) {
         </Badge>
       </div>
       <p className="small muted" style={{ margin: 0 }}>
-        {status.configured ? t('admin.netx.note') : t('admin.netx.notConfigured')}
+        {status.configured ? t('admin.netx.note', { yen: String(status.yenPerToken ?? '') }) : t('admin.netx.notConfigured')}
       </p>
       <ErrorNotice error={error} />
       {status.configured && isAdmin && (

@@ -153,11 +153,8 @@ const MUTATIONS = [
   {
     name: 'a-re-quote-leaves-the-orders-other-slot-open',
     file: `${S}/stablecoin.ts`,
-    from: `    const openForOrder = await findOpenIntentForOrder(order.id, tx);
-    if (openForOrder && openForOrder.id !== openForPayer?.id) {
-      await closeIntent({ intentId: openForOrder.id, state: 'cancelled' }, tx);
-    }`,
-    to: '    void findOpenIntentForOrder;',
+    from: "      await closeIntent({ intentId: openForOrder.id, state: 'cancelled' }, tx);",
+    to: '      void closeIntent;',
     tests: ['tests/stablecoin-quote-intent.test.ts'],
   },
   {
@@ -359,6 +356,46 @@ const MUTATIONS = [
     from: '  return { jpyc: false, usdc: false, netx: !features.netxPaymentsEnabled };',
     to: '  void features;\n  return { jpyc: false, usdc: false, netx: false };',
     tests: ['tests/netx-payments.test.ts'],
+  },
+  {
+    // A NETX hash reported by the customer, looked up on Polygon.
+    name: 'a-reported-hash-is-looked-up-on-the-wrong-chain',
+    file: 'apps/api/src/routes/stablecoin.ts',
+    from: '      const reader = readerFor(ctx, chainId);',
+    to: '      const reader = ctx.chain;',
+    tests: ['tests/netx-scan.test.ts'],
+  },
+  {
+    // One chain's sweep closing the other chain's quotes.
+    name: 'expiry-is-not-scoped-to-its-chain',
+    file: 'packages/db/src/stablecoin.ts',
+    from: '        AND (? IS NULL OR i.chain_id = ?)',
+    to: '        AND (? IS NULL OR ? IS NOT NULL)',
+    tests: ['tests/netx-scan.test.ts'],
+  },
+  {
+    // A cross-chain re-quote orphaning a transfer the wallet was already handed.
+    name: 'a-requote-on-the-other-chain-strands-a-sent-payment',
+    file: `${S}/stablecoin.ts`,
+    from: "      if (openForOrder.chain_id !== token.chainId && openForOrder.state !== 'quoted') {",
+    to: '      if (openForOrder.chain_id !== openForOrder.chain_id) {',
+    tests: ['tests/netx-payments.test.ts'],
+  },
+  {
+    // Signing prompts for BNB Smart Chain on a deployment that does not use it.
+    name: 'wallets-are-proved-on-a-chain-nothing-uses',
+    file: `${S}/stablecoin-tokens.ts`,
+    from: '  return chainId === cfg.STABLECOIN_CHAIN_ID || (chainId === BSC_CHAIN_ID && cfg.STABLECOIN_NETX_ENABLED);',
+    to: '  return chainId === cfg.STABLECOIN_CHAIN_ID || chainId === BSC_CHAIN_ID;',
+    tests: ['tests/stablecoin-wallet.test.ts'],
+  },
+  {
+    // A refund signed by hand in the wrong token: JPYC and NETX share 18 decimals.
+    name: 'the-queue-does-not-say-which-token',
+    file: `${S}/stablecoin-admin.ts`,
+    from: '      asset: assetAt(o.chain_id, o.token_address),',
+    to: '      asset: null,',
+    tests: ['tests/netx-scan.test.ts'],
   },
   {
     name: 'a-wallet-listing-shows-everybodys-wallets',

@@ -81,10 +81,14 @@ export function Tokushoho() {
    * not every accepted token is a stablecoin, and this row used to call every
    * token one. With no crypto-asset on, the page renders exactly as reviewed;
    * the 暗号資産 line exists only while one is accepted, and its wording goes
-   * to counsel before such a token is switched on (the token payment plan in
-   * docs/, section 7).
-   * The token's name reaches this page only as a runtime label, never as text
-   * written in this file.
+   * to counsel before such a token is switched on (docs/NETX_PAYMENT.md §7). steward-disclosure-ok
+   *
+   * Said plainly rather than left to the label: the token named on that line
+   * is NETX, the steward community's own token, so this page DOES show the steward-disclosure-ok
+   * steward's name — as a means of payment, not as a party to the sale. The steward-disclosure-ok
+   * label arriving at runtime keeps it out of `check:stewardship`'s view; this
+   * waiver is the written decision that check asks for instead, and counsel
+   * confirms the wording before the token is enabled in production.
    */
   const tokens = runtime?.stablecoin.enabled ? runtime.stablecoin.tokens : [];
   const stablecoins = tokens.filter((x) => x.stablecoin).map((x) => x.label);

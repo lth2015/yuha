@@ -9,6 +9,8 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { privateKeyToAccount } from 'viem/accounts';
 import { getChainCursor, query } from '@yuha/db';
+import { expireStaleIntents } from '../apps/api/src/services/stablecoin-scan.js';
+import { settleStablecoinObservation } from '../apps/api/src/services/stablecoin-settle.js';
 import {
   ChainNode,
   DualChainReader,
@@ -16,6 +18,7 @@ import {
   TRANSFER_TOPIC,
   addressTopic,
   encodeTransferCalldata,
+  type ChainObservation,
   type JsonRpcParams,
 } from '@yuha/providers';
 import { runStablecoinScanPass, SCAN_STREAM } from '../apps/api/src/services/stablecoin-scan.js';
@@ -166,5 +169,90 @@ describe('a NETX payment on BNB Smart Chain', () => {
     const [order] = await query<{ status: string }>(`SELECT status FROM orders WHERE id = ?`, [orderId]);
     expect(order!.status).toBe('paid');
     expect((await balanceOf(user.id)).available).toBe(5);
+  });
+});
+
+describe('a NETX hash the customer reports', () => {
+  it('is looked up on BNB Smart Chain — Polygon has never heard of it', async () => {
+    const { user, orderId } = await quotedInNetx('netx-report@example.test');
+    // ctx.chain (Polygon) is a stub that knows no transaction at all; only the
+    // BSC reader can find TX. Asking the wrong chain answers 202 "not found".
+    const res = await h.app.inject({
+      method: 'POST',
+      url: `/v1/orders/${orderId}/stablecoin-transaction`,
+      headers: { ...user.authHeader, ...freshIp() },
+      payload: { txHash: TX } as never,
+    });
+    expect(res.statusCode, res.body).toBe(200);
+    expect(res.json()).toMatchObject({ outcome: 'fulfilled' });
+    expect((await balanceOf(user.id)).available).toBe(5);
+  });
+});
+
+describe('expiring stale quotes', () => {
+  it('closes only the chain it is asked about', async () => {
+    const { orderId: bscOrder } = await quotedInNetx('netx-expire@example.test');
+    // A Polygon intent, quoted and expired at the same moment.
+    const other = await h.createUser({ email: 'polygon-expire@example.test' });
+    const [bscIntent] = await query<{ quote_id: string }>(`SELECT quote_id FROM stablecoin_intents WHERE order_id = ?`, [bscOrder]);
+    await query(
+      `INSERT INTO orders (id, user_id, price_key, price_version, kind, amount_minor, currency, status, idempotency_key, metadata, payment_method)
+       SELECT UUID(), ?, price_key, price_version, kind, amount_minor, currency, 'pending', CONCAT('poly-', UUID()), '{}', 'stablecoin' FROM orders WHERE id = ?`,
+      [other.id, bscOrder],
+    );
+    const [polyOrder] = await query<{ id: string }>(`SELECT id FROM orders WHERE user_id = ?`, [other.id]);
+    await query(
+      `INSERT INTO stablecoin_quotes (id, order_id, user_id, token_key, chain_id, token_address, token_decimals, receiver, payer, price_jpy, amount_atomic, start_block, config_version, expires_at)
+       SELECT UUID(), ?, ?, 'jpyc', 137, '0xe7c3d8c9a439fede00d2600032d5db0be71c3c29', 18, receiver, '0x1111111111111111111111111111111111111111', price_jpy, '980000000000000000000', 1, 1, expires_at FROM stablecoin_quotes WHERE id = ?`,
+      [polyOrder!.id, other.id, bscIntent!.quote_id],
+    );
+    const [polyQuote] = await query<{ id: string }>(`SELECT id FROM stablecoin_quotes WHERE order_id = ?`, [polyOrder!.id]);
+    await query(
+      `INSERT INTO stablecoin_intents (id, quote_id, order_id, chain_id, payer, state, open_key, order_open_key)
+       VALUES (UUID(), ?, ?, 137, '0x1111111111111111111111111111111111111111', 'quoted', '137:0x1111111111111111111111111111111111111111', ?)`,
+      [polyQuote!.id, polyOrder!.id, polyOrder!.id],
+    );
+    await query(`UPDATE stablecoin_quotes SET expires_at = UTC_TIMESTAMP(3) - INTERVAL 1 HOUR`);
+
+    await expireStaleIntents({ graceSeconds: 0, chainId: 56 });
+    const states = await query<{ chain_id: number; state: string }>(`SELECT chain_id, state FROM stablecoin_intents ORDER BY chain_id`);
+    expect(states.map((x) => [x.chain_id, x.state])).toEqual([
+      [56, 'expired'],
+      [137, 'quoted'],
+    ]);
+  });
+});
+
+describe('the operator queue', () => {
+  it('says which chain and token an unattributed NETX transfer is in, even while NETX is paused', async () => {
+    /*
+     * JPYC and NETX both have eighteen decimals. A queue row that showed a raw
+     * amount and a truncated hash left an operator to guess which token to
+     * refund in — 49 of one is ¥980, 49 of the other ¥49.
+     */
+    expect(
+      (await h.app.inject({
+        method: 'PUT', url: '/v1/admin/netx-payments', headers: { ...admin.authHeader, ...freshIp() },
+        payload: { accepting: false, reason: 'market price under twenty yen' } as never,
+      })).statusCode,
+    ).toBe(200);
+    const observation: ChainObservation = {
+      transaction: {
+        hash: TX, chainId: 56, from: PAYER, to: NETX_BSC.address, value: 0n,
+        input: encodeTransferCalldata(RECEIVER, AMOUNT), nonce: 1, blockNumber: 1_000n, blockHash: HASHES[1_000]!,
+      },
+      receipt: { status: 1, blockNumber: 1_000n, blockHash: HASHES[1_000]! },
+      transferLogs: [{ token: NETX_BSC.address, from: PAYER, to: RECEIVER, value: AMOUNT, logIndex: 3, blockNumber: 1_000n }],
+      block: { number: 1_000n, hash: HASHES[1_000]!, timestampMs: Date.now() },
+      canonicalBlockHashAtHeight: HASHES[1_000]!,
+      finalizedBlockNumber: 1_050n,
+    };
+    await settleStablecoinObservation(h.ctx, observation);
+    const res = await h.app.inject({ method: 'GET', url: '/v1/admin/stablecoin-payments', headers: { ...admin.authHeader, ...freshIp() } });
+    expect(res.statusCode, res.body).toBe(200);
+    expect(res.json().unattributed[0]).toMatchObject({
+      chainId: 56,
+      asset: { key: 'netx', label: NETX_BSC.label, decimals: NETX_BSC.decimals },
+    });
   });
 });

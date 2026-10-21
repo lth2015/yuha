@@ -26,10 +26,11 @@ function switchesFor(cfg: AppConfig): Record<TokenSpec['key'], boolean> {
 
 /**
  * The chains this deployment can serve: the configured Polygon chain, and BNB
- * Smart Chain for NETX. A token on any other chain is never offered.
+ * Smart Chain while NETX is switched on. A token on any other chain is never
+ * offered, and no wallet is asked to prove itself on a chain nothing uses.
  */
 export function servedChain(cfg: AppConfig, chainId: number): boolean {
-  return chainId === cfg.STABLECOIN_CHAIN_ID || chainId === BSC_CHAIN_ID;
+  return chainId === cfg.STABLECOIN_CHAIN_ID || (chainId === BSC_CHAIN_ID && cfg.STABLECOIN_NETX_ENABLED);
 }
 
 /**

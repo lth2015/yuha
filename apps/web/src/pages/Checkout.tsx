@@ -272,7 +272,11 @@ export function CheckoutConfirm() {
               <span className="pay-method__name">{t(METHOD_COPY[m.method].name)}</span>
               <span className="pay-method__note small">
                 {m.available
-                  ? t(METHOD_COPY[m.method].note)
+                  ? t(METHOD_COPY[m.method].note, {
+                      // The fixed rate, from the server: the number a buyer is
+                      // charged at is never a literal in a translation.
+                      yen: String(runtime?.stablecoin.tokens.find((x) => x.key === m.method)?.yenPerToken ?? ''),
+                    })
                   : m.reason === 'no_auto_renewal'
                     ? t('checkout.method.noAutoRenewal')
                     : t('checkout.method.cardClosed')}

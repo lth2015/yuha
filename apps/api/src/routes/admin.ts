@@ -31,7 +31,8 @@ import {
   withTxRetry,
   writeAuditLog,
 } from '@yuha/db';
-import type { AppContext } from '../context.js';
+import { NETX_BSC } from '@yuha/providers';
+import { NETX_PAUSE_SETTING, type AppContext } from '../context.js';
 import { executeAccountDeletion } from '../services/deletion.js';
 import { decideHeldOrder, heldOrderQueue } from '../services/order-review.js';
 import { findCustomers, getCustomer, giftCredits } from '../services/operator-grant.js';
@@ -563,11 +564,12 @@ export default async function adminRoutes(app: FastifyInstance, opts: { ctx: App
   /*
    * NETX: pause and resume (docs/NETX_PAYMENT.md §4).
    *
-   * Its own endpoint rather than the generic settings PUT, because
-   * `feature_overrides` is ONE object holding every switch: a client that
-   * read it, flipped one key and wrote it back would clobber whatever another
-   * operator changed in between, and a client that sent only its key would
-   * erase the rest. Here the server merges the one key.
+   * Its own endpoint AND its own setting key (`NETX_PAUSE_SETTING`). It
+   * first lived inside `feature_overrides`, which is one object holding every
+   * switch and which the generic settings PUT replaces whole — so the
+   * generation runbook (docs/OPERATIONS.md §8) silently resumed a paused NETX
+   * at a fixed price below the market. A key of its own has one writer, and
+   * the write is a single value, so there is nothing to merge or to lose.
    *
    * Pausing stops NETX being offered and quoted on the next request. It does
    * not stop the scanner: a buyer who was quoted and has paid is still
@@ -578,28 +580,29 @@ export default async function adminRoutes(app: FastifyInstance, opts: { ctx: App
     return {
       configured: ctx.config.STABLECOIN_ENABLED && ctx.config.STABLECOIN_NETX_ENABLED,
       accepting: features.netxPaymentsEnabled,
+      yenPerToken: NETX_BSC.pricing.kind === 'fixed-yen' ? NETX_BSC.pricing.yenPerToken : null,
     };
   });
 
   app.put('/v1/admin/netx-payments', { preHandler: adminOnly }, async (req) => {
     const body = reasoned.extend({ accepting: z.boolean() }).parse(req.body);
-    const before = await getSetting<Record<string, boolean>>('feature_overrides', {});
-    const after = { ...before, netxPaymentsEnabled: body.accepting };
-    await setSetting({ key: 'feature_overrides', value: after, updatedBy: req.user!.id, reason: body.reason });
+    const before = await getSetting<{ accepting?: boolean }>(NETX_PAUSE_SETTING, {});
+    await setSetting({ key: NETX_PAUSE_SETTING, value: { accepting: body.accepting }, updatedBy: req.user!.id, reason: body.reason });
     await writeAuditLog({
       actorId: req.user!.id,
       actorRole: req.user!.role,
       action: body.accepting ? 'payments.netx_resumed' : 'payments.netx_paused',
       subjectType: 'setting',
-      subjectId: 'feature_overrides',
+      subjectId: NETX_PAUSE_SETTING,
       reason: body.reason,
-      before: { netxPaymentsEnabled: before.netxPaymentsEnabled ?? true },
-      after: { netxPaymentsEnabled: body.accepting },
+      before: { accepting: before.accepting !== false },
+      after: { accepting: body.accepting },
     });
     const features = await ctx.features();
     return {
       configured: ctx.config.STABLECOIN_ENABLED && ctx.config.STABLECOIN_NETX_ENABLED,
       accepting: features.netxPaymentsEnabled,
+      yenPerToken: NETX_BSC.pricing.kind === 'fixed-yen' ? NETX_BSC.pricing.yenPerToken : null,
     };
   });
 

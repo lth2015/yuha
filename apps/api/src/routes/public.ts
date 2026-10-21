@@ -73,6 +73,7 @@ export default async function publicRoutes(app: FastifyInstance, opts: { ctx: Ap
           key: t.key,
           chainId: t.chainId,
           stablecoin: t.stablecoin,
+          yenPerToken: t.pricing.kind === 'fixed-yen' ? t.pricing.yenPerToken : null,
           address: toDisplayAddress(t.address),
           decimals: t.decimals,
           label: t.label,

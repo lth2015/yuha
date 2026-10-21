@@ -35,6 +35,14 @@ import { getSetting, initDb } from '@yuha/db';
 import { baseFeatures, type AppConfig, type FeatureFlags } from './config.js';
 import { resolveFromRoot } from './paths.js';
 
+
+/**
+ * The runtime setting that holds the NETX pause, written only by
+ * `PUT /v1/admin/netx-payments` and deliberately not one of the keys the
+ * generic settings endpoint accepts.
+ */
+export const NETX_PAUSE_SETTING = 'netx_payments';
+
 export interface UsdJpySource {
   /** The rate a USDC quote is computed from. */
   primary(): Promise<RateObservation>;
@@ -363,6 +371,10 @@ export function createContext(config: AppConfig): AppContext {
         'feature_overrides',
         {},
       );
+      // The NETX pause has a key of its own (NETX_PAUSE_SETTING): inside
+      // `feature_overrides` it was erased by every whole-object write of the
+      // other switches, which is how the generation runbook writes them.
+      const netx = await getSetting<{ accepting?: boolean }>(NETX_PAUSE_SETTING, {});
       return {
         subscriptionsEnabled: statics.subscriptionsEnabled && overrides.subscriptionsEnabled !== false,
         freeTrialEnabled: statics.freeTrialEnabled && overrides.freeTrialEnabled !== false,
@@ -372,7 +384,7 @@ export function createContext(config: AppConfig): AppContext {
         realPaymentsEnabled: statics.realPaymentsEnabled,
         cardPaymentsEnabled: statics.cardPaymentsEnabled,
         generationEnabled: overrides.generationEnabled !== false,
-        netxPaymentsEnabled: statics.netxPaymentsEnabled && overrides.netxPaymentsEnabled !== false,
+        netxPaymentsEnabled: statics.netxPaymentsEnabled && netx.accepting !== false,
       };
     },
   };

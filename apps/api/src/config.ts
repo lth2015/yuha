@@ -1070,6 +1070,11 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     if (!e.STABLECOIN_JPYC_ENABLED && !e.STABLECOIN_USDC_ENABLED && !e.STABLECOIN_NETX_ENABLED) {
       problems.push('stablecoin payments are enabled but no currency is');
     }
+    if (e.STABLECOIN_CHAIN_ID === 56) {
+      // Polygon's chain id with BSC's number would make every Polygon token
+      // "on" a chain its contracts do not exist on, and both scanners share it.
+      problems.push('STABLECOIN_CHAIN_ID is the Polygon chain; BNB Smart Chain (56) is set up with the BSC_* settings');
+    }
     if (e.STABLECOIN_NETX_ENABLED) {
       // The same two-node rule as Polygon, for the same reason, on its own pair.
       if (!e.BSC_RPC_PRIMARY_URL || !e.BSC_RPC_SECONDARY_URL) {

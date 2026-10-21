@@ -1,6 +1,7 @@
 # Paying with NETX
 
-Status: in progress, 2026-10-21. Decisions below were made by the product
+Status: built and accepted on a local two-chain setup, 2026-10-21; not yet
+switched on in production (§7). Decisions below were made by the product
 owner on that date; the open items at the end are not decided.
 
 ## 1. What and why
@@ -68,6 +69,19 @@ can only narrow what configuration allows. While it is off:
   amount and sent it is still credited. Switching off must not strand money
   that is already on its way.
 
+The pause has a runtime setting of its own, `netx_payments`, written only by
+`PUT /v1/admin/netx-payments` (admin, with a reason, audited as
+`payments.netx_paused` / `payments.netx_resumed`). It first lived inside
+`feature_overrides`, which the generic settings endpoint replaces whole — so
+the generation runbook (OPERATIONS.md §8) silently resumed a paused NETX.
+
+**Pause, do not switch off.** Setting `STABLECOIN_NETX_ENABLED=false` stops the
+BSC scanner as well: open NETX quotes then never expire, and a payment already
+sent is neither credited nor queued until NETX is switched back on (the saved
+cursor recovers it then). The same holds for Polygon if JPYC and USDC are both
+switched off while NETX stays on. Use config only to retire a currency, after
+its last quote has expired.
+
 ## 5. Two chains
 
 Until now every stablecoin path assumed one chain (Polygon). NETX lives on
@@ -100,27 +114,45 @@ the range splitting from PR #14 keeps a capped provider working.
 | Which tokens | `apps/api/src/services/stablecoin-tokens.ts` | `acceptingStablecoinTokens` (offered and quoted — honours the pause) vs `enabledTokensOn(cfg, chainId)` (scanned — ignores it). |
 | Quote / status | `apps/api/src/services/stablecoin.ts` | Reader and verification per token chain; rate fetched only for `usd-market`; status carries `chainId`. |
 | Scan | `apps/api/src/services/stablecoin-scan.ts`, `apps/worker/src/loops.ts` | One scan loop per chain with enabled tokens, own cursor, own verification, chain-scoped expiry (`findExpiredOpenIntents`). |
-| Pause | `apps/api/src/routes/admin.ts`, `apps/web/src/components/admin/NetxSwitch.tsx` | `GET`/`PUT /v1/admin/netx-payments`; writes `netxPaymentsEnabled` into `feature_overrides` with an audit row. |
+| Pause | `apps/api/src/routes/admin.ts`, `apps/web/src/components/admin/NetxSwitch.tsx` (Admin → 運用指標) | `GET`/`PUT /v1/admin/netx-payments`; writes its own `netx_payments` setting with an audit row. |
+| Re-quote | `apps/api/src/services/stablecoin.ts` | A re-quote on the other chain is refused once the wallet has been handed the transfer (`prepared`). |
+| Operator queue | `apps/api/src/services/stablecoin-admin.ts`, `StablecoinConsole.tsx` | Every review / unattributed / refund-owed row says its chain and token, resolved by the server; tx hashes link to the right explorer. |
+| Wallet send | `StablecoinPay.tsx` | Re-reads `eth_chainId` immediately before signing and pins `chainId` in the transaction. |
 | Console | `packages/db/src/admin-stats.ts`, `admin-lists.ts`, `Dashboard.tsx`, `OrdersPanel.tsx` | NETX as a fourth method in totals, series, CSV and order filter. |
 | Checkout | `Checkout.tsx`, `StablecoinPay.tsx`, `lib/stablecoin.ts`, `i18n.tsx` | NETX option with the fixed-price note; wallet page names the token's chain (switch to BNB Smart Chain, BNB gas, BscScan links). |
 | 特商法 | `apps/web/src/pages/Tokushoho.tsx` | Stablecoins and crypto assets listed separately; the 暗号資産 line appears only while one is accepted. **Wording needs counsel.** |
 
-Tests: `tests/netx-quote.test.ts`, `tests/netx-payments.test.ts`, `tests/netx-scan.test.ts`; mutations `a-fixed-price-consults-the-market` and `pausing-netx-does-nothing`.
+Tests: `tests/netx-quote.test.ts`, `tests/netx-payments.test.ts`, `tests/netx-scan.test.ts`, plus cases in `stablecoin-wallet`, `admin-console`. Mutations: `a-fixed-price-consults-the-market`, `pausing-netx-does-nothing`, `a-reported-hash-is-looked-up-on-the-wrong-chain`, `expiry-is-not-scoped-to-its-chain`, `a-requote-on-the-other-chain-strands-a-sent-payment`, `wallets-are-proved-on-a-chain-nothing-uses`, `the-queue-does-not-say-which-token`.
+
+The fixed rate reaches every screen from the server (`yenPerToken` in the
+runtime descriptor and the admin status), never as a literal in a translation.
 
 ## 7. Before NETX is switched on
 
-1. Read `decimals()` from the contract (BscScan "Token Contract (WITH n
+1. **Confirm the contract is NETX** with the NETX community directly, not
+   only from aggregator listings: the decimals check proves precision, and a
+   look-alike 18-decimal token passes it.
+2. **Read the contract source** on BscScan for a fee on transfer, a
+   blacklist or a pause hook. With a transfer fee the amount reaching us is
+   below the quote and every payment lands in review instead of being
+   credited; a blacklist or pause could freeze funds already received.
+3. Read `decimals()` from the contract (BscScan "Token Contract (WITH n
    Decimals)", or an `eth_call` of `0x313ce567`) and set it in the token
    registry. The worker also checks it against the chain at start and refuses
    to scan on a mismatch, and quoting refuses until that check has passed.
-2. SRE provisions two BSC RPC endpoints from two providers.
-3. Configure, in both api and worker ConfigMaps: the BSC RPC pair, and
+4. SRE provisions two BSC RPC endpoints from two providers.
+5. Configure, in both api and worker ConfigMaps: the BSC RPC pair, and
    `STABLECOIN_NETX_ENABLED=true`. Restart both.
-4. One small real payment (a DROP pack, 49 NETX), checked against BscScan
+6. One small real payment (a DROP pack, 49 NETX), checked against BscScan
    and against the order in the console, before announcing it.
-5. The 特定商取引法 page and the Terms describe the accepted payment methods;
+7. The 特定商取引法 page and the Terms describe the accepted payment methods;
    adding a non-stablecoin token is a change to reviewed legal text and goes
-   to counsel.
+   to counsel. The 暗号資産 line names NETX — the steward community's own
+   token — on the operator's disclosure page, so counsel also confirms that
+   naming it as a means of payment does not suggest the steward is a party to
+   the sale (`Tokushoho.tsx` carries the `steward-disclosure-ok` waiver for it).
+8. Decide who watches the NETX market and when to pause (for example, when it
+   trades below ¥20).
 
 ## 8. Not decided here
 

@@ -320,6 +320,21 @@ export async function createStablecoinQuote(
      */
     const openForOrder = await findOpenIntentForOrder(order.id, tx);
     if (openForOrder && openForOrder.id !== openForPayer?.id) {
+      /*
+       * Except across chains once the wallet has the transfer. A `prepared`
+       * intent means the calldata was handed to a wallet and the payment may
+       * already be on its way; superseding it with a quote on the OTHER chain
+       * closed the only intent that payment could attach to, and sent the
+       * customer's report of it to a chain that has never seen it. They can
+       * finish it, or let the quote expire and start again.
+       */
+      if (openForOrder.chain_id !== token.chainId && openForOrder.state !== 'quoted') {
+        throw new AppError(
+          'CONFLICT',
+          'a payment for this order may already be on its way on another network — finish it, or wait for its quote to expire',
+          { orderId: order.id },
+        );
+      }
       await closeIntent({ intentId: openForOrder.id, state: 'cancelled' }, tx);
     }
 

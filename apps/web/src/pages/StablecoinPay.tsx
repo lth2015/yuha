@@ -359,9 +359,30 @@ export function StablecoinPay() {
       const prepared = await apiFetch<PreparedTransfer>(`/v1/orders/${quote.orderId}/stablecoin-prepare`, {
         method: 'POST',
       });
+      /*
+       * The same calldata is valid on every chain the token address exists
+       * on, and the receiver is the same address on Polygon and on BNB Smart
+       * Chain — so a wallet that changed network between render and signing
+       * would send real money where no quote is waiting. Asked again here,
+       * immediately before signing, and pinned in the request, which wallets
+       * refuse to sign on any other chain.
+       */
+      const onChain = parseChainId(await p.request({ method: 'eth_chainId' }));
+      if (onChain !== prepared.chainId) {
+        setChainId(onChain);
+        return;
+      }
       const hash = (await p.request({
         method: 'eth_sendTransaction',
-        params: [{ from: account, to: prepared.to, data: prepared.data, value: '0x0' }],
+        params: [
+          {
+            from: account,
+            to: prepared.to,
+            data: prepared.data,
+            value: '0x0',
+            chainId: `0x${prepared.chainId.toString(16)}`,
+          },
+        ],
       })) as string;
       setTxHash(hash);
       await report(quote.orderId, hash);

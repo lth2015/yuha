@@ -93,6 +93,8 @@ export const runtimeInfo = z.object({
         chainId: z.number().int().positive(),
         /** False for NETX: a crypto-asset whose price moves, not a stablecoin. */
         stablecoin: z.boolean(),
+        /** Yen per whole token when the price is fixed (NETX); null when it is not. */
+        yenPerToken: z.number().positive().nullable(),
         address: z.string(),
         decimals: z.number().int().nonnegative(),
         label: z.string(),
