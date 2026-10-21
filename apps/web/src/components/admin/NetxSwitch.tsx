@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { apiFetch } from '../../lib/api';
 import { useI18n } from '../../lib/i18n';
 import { Badge, ErrorNotice } from '../common';
+import { useSession } from '../../lib/session';
 
 interface NetxStatus {
   configured: boolean;
@@ -24,6 +25,7 @@ interface NetxStatus {
  */
 export function NetxSwitch({ isAdmin }: { isAdmin: boolean }) {
   const { t } = useI18n();
+  const { refreshRuntime } = useSession();
   const [status, setStatus] = useState<NetxStatus | null>(null);
   const [reason, setReason] = useState('');
   const [busy, setBusy] = useState(false);
@@ -56,6 +58,7 @@ export function NetxSwitch({ isAdmin }: { isAdmin: boolean }) {
         }),
       );
       setReason('');
+      await refreshRuntime();
     } catch (err) {
       setError(err);
     } finally {

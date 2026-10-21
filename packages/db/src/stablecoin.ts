@@ -424,8 +424,8 @@ export async function closeIntent(
 export async function markIntentPrepared(
   params: { intentId: string; predictedNonce: number | null },
   tx?: PoolConnection,
-): Promise<void> {
-  await execute(
+): Promise<boolean> {
+  const result = await execute(
     `UPDATE stablecoin_intents
         SET state = 'prepared', predicted_nonce = ?, prepared_at = UTC_TIMESTAMP(3),
             updated_at = UTC_TIMESTAMP(3)
@@ -433,6 +433,7 @@ export async function markIntentPrepared(
     [params.predictedNonce, params.intentId],
     tx,
   );
+  return result.affectedRows > 0;
 }
 
 // -------------------------------------------------------- payment evidence

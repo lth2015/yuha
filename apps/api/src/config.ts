@@ -462,6 +462,7 @@ const envSchema = z.object({
 
   // --- generation tuning --------------------------------------------------
   JOB_LEASE_SECONDS: int(90),
+  JOB_QUEUE_DEADLINE_SECONDS: int(3600),
   JOB_DELAY_WARNING_SECONDS: int(180),
   JOB_VERIFY_DEADLINE_SECONDS: int(900),
   /*

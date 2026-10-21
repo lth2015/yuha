@@ -3,6 +3,9 @@ import { deliver, failJob, handleLateResult, quarantineKey } from '@yuha/api';
 import { musicIntent, type MusicIntent, type VoiceChoice } from '@yuha/contracts';
 import {
   extendLease,
+  deferJobStep,
+  startMusicDispatch,
+  withTxRetry,
   getJob,
   insertAttempt,
   incrementAttempt,
@@ -36,16 +39,36 @@ export interface PipelineDeps {
 export async function runJobStep(deps: PipelineDeps, jobId: string): Promise<void> {
   const { ctx, owner, log } = deps;
 
-  const job = await getJob(jobId);
+  let job = await getJob(jobId);
   if (!job) {
     log('warn', 'job not found', { jobId });
     return;
   }
   if (['DELIVERED', 'FAILED', 'REJECTED', 'CANCELLED'].includes(job.state)) return;
 
+  if (job.state !== 'QUEUED' && job.next_run_at && job.next_run_at.getTime() > Date.now()) return;
+  if (job.state === 'QUEUED' && !job.cancel_requested_at) {
+    const admitted = await withTxRetry((tx) => startMusicDispatch({
+      jobId, owner, providerId: ctx.music.capabilities().providerId,
+      limit: ctx.music.capabilities().maxConcurrency, leaseSeconds: ctx.config.JOB_LEASE_SECONDS,
+      queueDeadlineSeconds: ctx.config.JOB_QUEUE_DEADLINE_SECONDS,
+    }, tx));
+    if (!admitted) return;
+    job = admitted;
+  }
+  const heartbeat = setInterval(() => {
+    void extendLease({ jobId, owner, leaseSeconds: ctx.config.JOB_LEASE_SECONDS })
+      .catch((err) => log('warn', 'could not renew generation lease', { jobId, error: String(err) }));
+  }, Math.max(1000, ctx.config.JOB_LEASE_SECONDS * 1000 / 3));
+  heartbeat.unref();
   try {
     switch (job.state) {
       case 'QUEUED':
+        if (!job.cancel_requested_at && Date.now() - job.created_at.getTime() >= ctx.config.JOB_QUEUE_DEADLINE_SECONDS * 1000) {
+          await failJob(ctx, { job, to: 'FAILED', errorCode: 'queue_wait_timeout' });
+          log('warn', 'queue wait deadline exceeded; credit released', { jobId });
+          break;
+        }
         await submitJob(deps, job);
         break;
       case 'SUBMITTED':
@@ -57,6 +80,7 @@ export async function runJobStep(deps: PipelineDeps, jobId: string): Promise<voi
         log('warn', 'job in unexpected state for worker', { jobId, state: job.state });
     }
   } finally {
+    clearInterval(heartbeat);
     await releaseLease(jobId, owner).catch(() => undefined);
   }
 }
@@ -87,6 +111,24 @@ async function recordMusicCost(
   });
 }
 
+async function cancelQueuedBeforeSubmission(ctx: AppContext, job: JobRow): Promise<boolean> {
+  return withTx(async (tx) => {
+    const moved = await transitionJob(
+      {
+        jobId: job.id,
+        expectedVersion: job.version,
+        from: 'QUEUED',
+        to: 'CANCELLED',
+        patch: { errorCode: 'cancelled_by_user', clearLease: true },
+      },
+      tx,
+    );
+    if (!moved) return false;
+    await releaseReservation({ userId: job.user_id, jobId: job.id, reason: 'cancelled_by_user' }, tx);
+    return true;
+  });
+}
+
 /**
  * QUEUED → SUBMITTED. Resolves the creative intent, then hands a request to
  * the music provider under a stable idempotency key.
@@ -99,21 +141,7 @@ async function submitJob(deps: PipelineDeps, job: JobRow): Promise<void> {
   // so the cancellation wins. The version guard means only one of the two
   // outcomes can happen — never "cancelled" *and* a charge.
   if (job.cancel_requested_at) {
-    const cancelled = await withTx(async (tx) => {
-      const moved = await transitionJob(
-        {
-          jobId: job.id,
-          expectedVersion: job.version,
-          from: 'QUEUED',
-          to: 'CANCELLED',
-          patch: { errorCode: 'cancelled_by_user', clearLease: true },
-        },
-        tx,
-      );
-      if (!moved) return false;
-      await releaseReservation({ userId: job.user_id, jobId: job.id, reason: 'cancelled_by_user' }, tx);
-      return true;
-    });
+    const cancelled = await cancelQueuedBeforeSubmission(ctx, job);
     if (cancelled) {
       log('info', 'job cancelled before submission', { jobId: job.id });
       return;
@@ -133,7 +161,11 @@ async function submitJob(deps: PipelineDeps, job: JobRow): Promise<void> {
   };
 
   // ---- text model: turn the creator's description into validated parameters
-  const intentResult = await ctx.text.extractIntent({
+  const cached = musicIntent.safeParse(job.resolved_params);
+  const intentResult = cached.success
+    ? { status: 'ok' as const, intent: cached.data, requestId: null, repaired: false,
+        usage: { costMinor: 0, costIsEstimate: true } }
+    : await ctx.text.extractIntent({
     scene: 'daily_log', // The provider derives the real scene from styles.
     mode: input.mode ?? 'simple',
     prompt: input.prompt,
@@ -145,7 +177,7 @@ async function submitJob(deps: PipelineDeps, job: JobRow): Promise<void> {
     durationSeconds: input.durationSeconds,
   });
 
-  await recordCostEvent({
+  if (!cached.success) await recordCostEvent({
     jobId: job.id,
     providerId: ctx.text.providerId,
     providerKind: 'text',
@@ -204,6 +236,14 @@ async function submitJob(deps: PipelineDeps, job: JobRow): Promise<void> {
   }
   const intent = parsed.data;
   log('info', 'intent resolved', { jobId: job.id });
+
+  // Cancellation may have arrived while the text model was running.
+  const current = await getJob(job.id);
+  if (!current || current.state !== 'QUEUED' || current.version !== job.version) return;
+  if (current.cancel_requested_at) {
+    await cancelQueuedBeforeSubmission(ctx, current);
+    return;
+  }
 
   // ---- music provider
   const attemptNo = await withTx(async (tx) => incrementAttempt(job.id, tx));
@@ -327,6 +367,7 @@ async function pollJob(deps: PipelineDeps, job: JobRow): Promise<void> {
   if (!caps.supportsStatusQuery) {
     // Without a status query there is nothing safe to do but wait for the
     // provider's webhook; the reconciler will time the job out eventually.
+    await deferJobStep(job, 30);
     return;
   }
 
@@ -342,9 +383,22 @@ async function pollJob(deps: PipelineDeps, job: JobRow): Promise<void> {
 
   switch (result.status) {
     case 'pending':
+      await deferJobStep(job, 5);
       return;
 
     case 'not_found': {
+      if (job.state === 'UNKNOWN' && job.error_code === 'upstream_429' && caps.supportsIdempotencyKey &&
+          Date.now() - job.created_at.getTime() < ctx.config.JOB_UPSTREAM_DEADLINE_SECONDS * 1000) {
+        // Only retry after the provider confirms absence, with the SAME key.
+        // A timeout/5xx remains ambiguous and keeps its existing verification policy.
+        await withTx((tx) => transitionJob({
+          jobId: job.id, expectedVersion: job.version, from: 'UNKNOWN', to: 'QUEUED',
+          patch: { errorCode: 'capacity_wait', nextRunInSeconds: Math.min(120, 15 * 2 ** Math.min(3, job.attempt_count - 1)) },
+        }, tx));
+        if (attempt) await updateAttempt({ attemptId: attempt.id, status: 'failed', errorCode: 'upstream_429', finished: true });
+        log('info', 'upstream busy; verified absent and queued for retry', { jobId: job.id });
+        return;
+      }
       if (job.state === 'UNKNOWN') {
         // Verified: the provider never accepted it. Safe to fail and refund —
         // this is exactly the evidence GEN-06 requires before acting.
@@ -356,6 +410,7 @@ async function pollJob(deps: PipelineDeps, job: JobRow): Promise<void> {
         });
         log('info', 'verification found no upstream record; credit released', { jobId: job.id });
       }
+      await deferJobStep(job, 10);
       return;
     }
 

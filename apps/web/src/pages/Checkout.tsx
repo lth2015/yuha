@@ -38,7 +38,7 @@ export function CheckoutConfirm() {
   const [params] = useSearchParams();
   const navigate = useNavigate();
   const priceKey = params.get('price') ?? 'drop_5';
-  const { runtime } = useSession();
+  const { runtime, refreshRuntime } = useSession();
   const { t, lang } = useI18n();
 
   const [product, setProduct] = useState<ProductView | null>(null);
@@ -61,6 +61,7 @@ export function CheckoutConfirm() {
         const [products, d] = await Promise.all([
           apiFetch<{ items: ProductView[] }>('/v1/products'),
           apiFetch<Disclosure>('/v1/legal/business-disclosure'),
+          refreshRuntime(),
         ]);
         /*
          * A price key that is not in the catalogue used to set `product` to
@@ -80,7 +81,7 @@ export function CheckoutConfirm() {
         setLoading(false);
       }
     })();
-  }, [priceKey]);
+  }, [priceKey, refreshRuntime]);
 
   /*
    * What can pay for this, exactly as the server decided it

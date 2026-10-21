@@ -30,6 +30,7 @@ interface Overview {
     ledgerDiscrepancies: number;
     technicalSuccessRate: Measured;
     budgetSpentTodayMinor: number;
+    generationFailures: Array<{ code: string; state: string; count: number }>;
   };
   cost: {
     deliveredCount: number;
@@ -226,6 +227,17 @@ function OverviewPanel({ part }: { part: 'ops' | 'review' }) {
             </span>
           </div>
           <Metric label={t('admin.ops.successRate')} m={ops.technicalSuccessRate} />
+        </div>
+
+        <p className="small muted">{t('admin.ops.rateBasis')}</p>
+        <div className="card stack">
+          <h3>{t('admin.ops.failures')}</h3>
+          {ops.generationFailures?.length ? <div className="table-wrap"><table>
+            <thead><tr><th>{t('admin.ops.reason')}</th><th>{t('admin.jobs.state')}</th><th>{t('admin.jobs.count')}</th></tr></thead>
+            <tbody>{ops.generationFailures.map((f) => <tr key={`${f.state}:${f.code}`}>
+              <td className="num">{f.code}</td><td>{f.state}</td><td className="num">{f.count}</td>
+            </tr>)}</tbody>
+          </table></div> : <p className="muted small">{t('admin.ops.noFailures')}</p>}
         </div>
 
         <div className="table-wrap">

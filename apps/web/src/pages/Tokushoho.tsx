@@ -74,7 +74,7 @@ function priceLines(products: ProductView[]): string[] {
 
 export function Tokushoho() {
   const d = useDisclosure();
-  const { runtime } = useSession();
+  const { runtime, refreshRuntime } = useSession();
   const card = cardPaymentsEnabled(runtime);
   /*
    * Stablecoins and other crypto-assets are listed under their own words:
@@ -98,10 +98,11 @@ export function Tokushoho() {
   const [catalogueFailed, setCatalogueFailed] = useState(false);
 
   useEffect(() => {
+    void refreshRuntime().catch(() => undefined);
     fetchProducts()
       .then(setProducts)
       .catch(() => setCatalogueFailed(true));
-  }, []);
+  }, [refreshRuntime]);
 
   if (!d) return <Loading />;
 

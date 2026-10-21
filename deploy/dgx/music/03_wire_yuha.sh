@@ -51,7 +51,7 @@ MUSIC_SUPPORTS_CANCEL=false
 MUSIC_SUPPORTS_WEBHOOK=false
 MUSIC_SUPPORTS_STATUS_QUERY=true
 MUSIC_COMMERCIAL_DELIVERY=false
-# the Spark generates one song at a time; extra jobs queue there (8 max, then 429)
+# The app admits one in-flight song; extra jobs wait durably in its database.
 MUSIC_MAX_CONCURRENCY=1
 MUSIC_DATA_REGION=self-hosted-lan-jp
 # Lyric sync: the Spark service aligns lyrics to the vocal with Whisper.
