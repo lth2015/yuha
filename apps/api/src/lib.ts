@@ -7,7 +7,7 @@
  * Importing this module starts no server.
  */
 export { loadConfig, baseFeatures, ConfigError, type AppConfig, type FeatureFlags } from './config.js';
-export { createContext, type AppContext } from './context.js';
+export { createContext, readerFor, type AppContext } from './context.js';
 export { buildServer } from './server.js';
 export { STRIPE_WEBHOOK_PATHS, STRIPE_WEBHOOK_PRIMARY_PATH, keepsRawBody } from './webhook-paths.js';
 export { parseDevLoginAllowlist, devLoginAllowed, type DevLoginAllowlist } from './auth/allowlist.js';
@@ -72,3 +72,4 @@ export {
   verifyConfiguredTokens,
 } from './services/stablecoin-scan.js';
 export { needsOperator, type SettleOutcome } from './services/stablecoin-settle.js';
+export { enabledTokensOn } from './services/stablecoin-tokens.js';

@@ -58,13 +58,29 @@ export function quoteAmountAtomic(input: QuoteInput): QuotedAmount {
     throw new Error('quote: price must be a positive whole number of yen');
   }
   const unit = 10n ** BigInt(input.token.decimals);
+  const pricing = input.token.pricing;
 
   // JPYC: one token per yen is YUHA's pricing policy, and nothing else enters
   // into it. Deliberately not a rate of 1.0 through the same path — that would
   // make a rate source able to break a quote that does not depend on one, and
   // it is not a claim that the token is redeemable at par on demand.
-  if (input.token.key === 'jpyc') {
+  if (pricing.kind === 'yen') {
     return { amountAtomic: BigInt(input.priceJpy) * unit, rounded: false };
+  }
+
+  // A fixed price (NETX at ¥20) takes no rate and no buffer; anything passed is
+  // ignored, so a caller cannot re-price it by accident. Rounded up, so a price
+  // never costs less than its yen value.
+  if (pricing.kind === 'fixed-yen') {
+    if (!Number.isInteger(pricing.yenPerToken) || pricing.yenPerToken <= 0) {
+      throw new Error(`quote: ${input.token.key} has no usable fixed price`);
+    }
+    const numerator = BigInt(input.priceJpy) * unit;
+    const denominator = BigInt(pricing.yenPerToken);
+    return {
+      amountAtomic: (numerator + denominator - 1n) / denominator,
+      rounded: numerator % denominator !== 0n,
+    };
   }
 
   if (!input.rate) {

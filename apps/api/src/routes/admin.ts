@@ -24,6 +24,7 @@ import {
   reporting,
   setLicenseStatus,
   setSetting,
+  getSetting,
   setTrackState,
   updateRightsCase,
   withTx,
@@ -138,7 +139,7 @@ export default async function adminRoutes(app: FastifyInstance, opts: { ctx: App
     const q = z
       .object({
         status: z.enum(['pending', 'paid', 'failed', 'refunded', 'partially_refunded', 'canceled']).optional(),
-        method: z.enum(['card', 'jpyc', 'usdc']).optional(),
+        method: z.enum(['card', 'jpyc', 'usdc', 'netx']).optional(),
         email: z.string().trim().min(1).max(320).optional(),
         from: ymd.optional(),
         to: ymd.optional(),
@@ -557,6 +558,49 @@ export default async function adminRoutes(app: FastifyInstance, opts: { ctx: App
       after: { value: body.value },
     });
     return { key, value: body.value };
+  });
+
+  /*
+   * NETX: pause and resume (docs/NETX_PAYMENT.md §4).
+   *
+   * Its own endpoint rather than the generic settings PUT, because
+   * `feature_overrides` is ONE object holding every switch: a client that
+   * read it, flipped one key and wrote it back would clobber whatever another
+   * operator changed in between, and a client that sent only its key would
+   * erase the rest. Here the server merges the one key.
+   *
+   * Pausing stops NETX being offered and quoted on the next request. It does
+   * not stop the scanner: a buyer who was quoted and has paid is still
+   * credited. Resuming cannot turn on what configuration has off.
+   */
+  app.get('/v1/admin/netx-payments', { preHandler: staff }, async () => {
+    const features = await ctx.features();
+    return {
+      configured: ctx.config.STABLECOIN_ENABLED && ctx.config.STABLECOIN_NETX_ENABLED,
+      accepting: features.netxPaymentsEnabled,
+    };
+  });
+
+  app.put('/v1/admin/netx-payments', { preHandler: adminOnly }, async (req) => {
+    const body = reasoned.extend({ accepting: z.boolean() }).parse(req.body);
+    const before = await getSetting<Record<string, boolean>>('feature_overrides', {});
+    const after = { ...before, netxPaymentsEnabled: body.accepting };
+    await setSetting({ key: 'feature_overrides', value: after, updatedBy: req.user!.id, reason: body.reason });
+    await writeAuditLog({
+      actorId: req.user!.id,
+      actorRole: req.user!.role,
+      action: body.accepting ? 'payments.netx_resumed' : 'payments.netx_paused',
+      subjectType: 'setting',
+      subjectId: 'feature_overrides',
+      reason: body.reason,
+      before: { netxPaymentsEnabled: before.netxPaymentsEnabled ?? true },
+      after: { netxPaymentsEnabled: body.accepting },
+    });
+    const features = await ctx.features();
+    return {
+      configured: ctx.config.STABLECOIN_ENABLED && ctx.config.STABLECOIN_NETX_ENABLED,
+      accepting: features.netxPaymentsEnabled,
+    };
   });
 
   // ------------------------------------------------------ reconciliation

@@ -1,6 +1,7 @@
 import { AppError } from '@yuha/contracts';
 import {
   closeIntent,
+  findLatestIntentForOrder,
   findOpenIntentForOrder,
   findOpenIntentForPayer,
   findOrderByIdempotencyKey,
@@ -23,10 +24,10 @@ import {
   toDisplayAddress,
   type TokenSpec,
 } from '@yuha/providers';
-import type { AppContext } from '../context.js';
+import { readerFor, type AppContext } from '../context.js';
 import { assertConfiguredTokensVerified, SCAN_STREAM } from './stablecoin-scan.js';
 import { createPurchaseOrder } from './purchase-cap.js';
-import { stablecoinTokenFor } from './stablecoin-tokens.js';
+import { acceptingStablecoinTokens, scanStartBlockFor, stablecoinTokenFor } from './stablecoin-tokens.js';
 import { stablecoinAllowedFor } from './payment-methods.js';
 import { usdcJpyRate } from './stablecoin-rate.js';
 import { getPublicTrack, hasLicense } from '@yuha/db';
@@ -118,6 +119,11 @@ export async function createStablecoinQuote(
   },
 ): Promise<QuoteResult> {
   const token = tokenFor(ctx, params.tokenKey);
+  // Enabled is not enough: an operator may have paused this currency (NETX,
+  // whose price is fixed while its market moves). Only NEW quotes stop.
+  if (!acceptingStablecoinTokens(ctx.config, await ctx.features()).some((t) => t.key === token.key)) {
+    throw new AppError('SERVICE_DISABLED', 'payments in that currency are paused');
+  }
   const receiver = receiverFor(ctx);
   const payer = params.payer.toLowerCase();
 
@@ -207,8 +213,10 @@ export async function createStablecoinQuote(
    * only in the worker is the point: this function is where the amount a
    * customer is asked to pay comes from.
    */
-  if (!ctx.chain) throw new AppError('SERVICE_DISABLED', 'stablecoin payments are not configured');
-  await assertConfiguredTokensVerified(ctx, ctx.chain);
+  // The token's own chain: NETX is checked against BNB Smart Chain, not Polygon.
+  const reader = readerFor(ctx, token.chainId);
+  if (!reader) throw new AppError('SERVICE_DISABLED', 'stablecoin payments are not configured');
+  await assertConfiguredTokensVerified(ctx, reader, token.chainId);
 
   /*
    * JPYC consults no rate at all — one token per yen is pricing policy. USDC
@@ -217,7 +225,9 @@ export async function createStablecoinQuote(
    * Read here, before the transaction, so no database lock is held across
    * two network calls.
    */
-  const rate = token.key === 'jpyc' ? null : await usdcJpyRate(ctx);
+  // Only a market-priced token consults a rate. NETX's price is fixed (¥20)
+  // and must not fail because a USD/JPY feed is down.
+  const rate = token.pricing.kind === 'usd-market' ? await usdcJpyRate(ctx) : null;
   const bufferBps = rate ? ctx.config.STABLECOIN_USDC_BUFFER_BPS : null;
   const { amountAtomic, rounded } = quoteAmountAtomic({
     priceJpy: product.amount_minor,
@@ -241,7 +251,7 @@ export async function createStablecoinQuote(
    * until something is watching the chain for it.
    */
   const cursor = await getChainCursor({ chainId: token.chainId, stream: SCAN_STREAM });
-  const configured = ctx.config.STABLECOIN_SCAN_START_BLOCK;
+  const configured = scanStartBlockFor(ctx.config, token.chainId);
   const scanFrom = cursor ?? (configured === undefined ? undefined : BigInt(configured));
   if (scanFrom === undefined) {
     throw new AppError('SERVICE_DISABLED', 'stablecoin payments are not being watched for yet — try again shortly');
@@ -446,6 +456,12 @@ export interface PaymentStatus {
    */
   entitlementGranted: boolean;
   intent: { state: string; expiresAt: string | null } | null;
+  /**
+   * The chain the order was quoted on, from its latest intent (open or not);
+   * null before any quote. A reported transaction hash is looked up there —
+   * a NETX payment is on BNB Smart Chain, not Polygon.
+   */
+  chainId: number | null;
 }
 
 export async function stablecoinPaymentStatus(
@@ -455,7 +471,9 @@ export async function stablecoinPaymentStatus(
   if (!order) throw new AppError('NOT_FOUND', 'order not found');
   const intent: StablecoinIntentRow | undefined = await findOpenIntentForOrder(params.orderId);
   const quote = intent ? await getQuote(intent.quote_id) : undefined;
+  const latest = intent ?? (await findLatestIntentForOrder(params.orderId));
   return {
+    chainId: latest?.chain_id ?? null,
     orderId: order.id,
     orderStatus: order.status,
     paymentMethod: order.payment_method,

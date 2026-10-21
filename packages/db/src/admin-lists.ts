@@ -1,4 +1,5 @@
 import { query } from './pool.js';
+import { paymentMethodOf, type ConsolePaymentMethod } from './admin-stats.js';
 
 /**
  * The two operator lists that read across accounts: orders and the audit log.
@@ -17,7 +18,7 @@ export interface ConsoleOrderRow {
   email: string;
   priceKey: string;
   kind: string;
-  method: 'card' | 'jpyc' | 'usdc';
+  method: ConsolePaymentMethod;
   amountMinor: number;
   refundedMinor: number;
   currency: string;
@@ -41,7 +42,7 @@ const ORDER_METHOD_SQL = `
 
 export async function listOrdersForConsole(params: {
   status?: string;
-  method?: 'card' | 'jpyc' | 'usdc';
+  method?: ConsolePaymentMethod;
   email?: string;
   /** UTC instants. */
   from?: Date;
@@ -114,7 +115,7 @@ export async function listOrdersForConsole(params: {
       email: r.email,
       priceKey: r.price_key,
       kind: r.kind,
-      method: r.method === 'usdc' ? 'usdc' : r.method === 'jpyc' ? 'jpyc' : 'card',
+      method: paymentMethodOf(r.method),
       amountMinor: Number(r.amount_minor),
       refundedMinor: Number(r.refunded_amount_minor ?? 0),
       currency: r.currency,

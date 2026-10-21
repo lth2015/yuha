@@ -13,7 +13,7 @@ import {
 } from '@yuha/providers';
 import { AppError } from '@yuha/contracts';
 import type { AppContext } from '../context.js';
-import { enabledStablecoinTokens } from './stablecoin-tokens.js';
+import { enabledTokensOn, scanStartBlockFor } from './stablecoin-tokens.js';
 import { settleStablecoinObservation, type SettleOutcome } from './stablecoin-settle.js';
 
 /**
@@ -49,7 +49,7 @@ export const SCAN_STREAM = 'stablecoin_incoming';
  * Money that arrives after the grace has passed is still recorded — in
  * `stablecoin_orphan_transfers`, where an operator can attach it to the order.
  */
-export async function expireStaleIntents(params: { graceSeconds: number; limit?: number }): Promise<number> {
+export async function expireStaleIntents(params: { graceSeconds: number; limit?: number; chainId?: number }): Promise<number> {
   const stale = await findExpiredOpenIntents(params);
   let closed = 0;
   for (const intent of stale) {
@@ -72,8 +72,9 @@ export async function runStablecoinScanPass(
   ctx: AppContext,
   reader: DualChainReader,
   log: (level: 'info' | 'warn' | 'error', msg: string, extra?: Record<string, unknown>) => void,
+  /** Which chain this reader and this pass are for; each chain has its own loop and cursor. */
+  chainId: number = ctx.config.STABLECOIN_CHAIN_ID,
 ): Promise<ScanPass> {
-  const chainId = ctx.config.STABLECOIN_CHAIN_ID;
   const receiver = ctx.config.STABLECOIN_RECEIVER_ADDRESS;
   if (!receiver) throw new Error('scanner started with no receiving address');
 
@@ -94,7 +95,7 @@ export async function runStablecoinScanPass(
   }
 
   const stored = await getChainCursor({ chainId, stream: SCAN_STREAM });
-  const configured = ctx.config.STABLECOIN_SCAN_START_BLOCK;
+  const configured = scanStartBlockFor(ctx.config, chainId);
 
   /*
    * With no cursor and no configured start block, start watching from NOW.
@@ -148,7 +149,7 @@ export async function runStablecoinScanPass(
     fetchLogs: (p) => reader.unionLogs(p),
     chainId,
     receiver,
-    tokenAddresses: tokensInUse(ctx).map((t) => t.address),
+    tokenAddresses: tokensInUse(ctx, chainId).map((t) => t.address),
     window,
   });
 
@@ -205,8 +206,13 @@ function byBlockThenLog(a: IncomingTransfer, b: IncomingTransfer): number {
  * filter and `tokenAt()` drifting apart would mean scanning for one token and
  * accepting another, silently.
  */
-function tokensInUse(ctx: AppContext): TokenSpec[] {
-  return enabledStablecoinTokens(ctx.config);
+/**
+ * What one chain's scanner watches: every ENABLED currency on that chain,
+ * paused or not — a pause stops new quotes, never the watch for a payment
+ * already sent against an earlier one.
+ */
+function tokensInUse(ctx: AppContext, chainId: number): TokenSpec[] {
+  return enabledTokensOn(ctx.config, chainId);
 }
 
 /**
@@ -219,6 +225,7 @@ function tokensInUse(ctx: AppContext): TokenSpec[] {
 export async function verifyConfiguredTokens(
   ctx: AppContext,
   reader: DualChainReader,
+  chainId: number = ctx.config.STABLECOIN_CHAIN_ID,
 ): Promise<TokenShapeProblem[]> {
   /*
    * Both endpoints are asked, and they must agree.
@@ -237,7 +244,7 @@ export async function verifyConfiguredTokens(
     const answer = await reader.agreedCall(params);
     if (!answer.agreed) throw new Error(answer.reason);
     return answer.value;
-  }, tokensInUse(ctx));
+  }, tokensInUse(ctx, chainId));
 
   /*
    * And the endpoints are the chain this build was configured for.
@@ -247,7 +254,7 @@ export async function verifyConfiguredTokens(
    * the two URLs to differ, which two endpoints onto the same wrong chain
    * satisfy perfectly.
    */
-  for (const problem of await verifyChainIds(reader, ctx.config.STABLECOIN_CHAIN_ID)) {
+  for (const problem of await verifyChainIds(reader, chainId)) {
     problems.push({ token: 'chain', kind: 'unavailable', reason: problem });
   }
   return problems;
@@ -274,8 +281,12 @@ export function resetTokenGateForTests(): void {
   tokenGate.clear();
 }
 
-export async function assertConfiguredTokensVerified(ctx: AppContext, reader: DualChainReader): Promise<void> {
-  const key = `${ctx.config.STABLECOIN_CHAIN_ID}:${tokensInUse(ctx)
+export async function assertConfiguredTokensVerified(
+  ctx: AppContext,
+  reader: DualChainReader,
+  chainId: number = ctx.config.STABLECOIN_CHAIN_ID,
+): Promise<void> {
+  const key = `${chainId}:${tokensInUse(ctx, chainId)
     .map((t) => t.address)
     .sort()
     .join(',')}`;
@@ -284,7 +295,7 @@ export async function assertConfiguredTokensVerified(ctx: AppContext, reader: Du
   if (known === 'mismatch') {
     throw new AppError('SERVICE_DISABLED', 'stablecoin payments are misconfigured and have been stopped');
   }
-  const problems = await verifyConfiguredTokens(ctx, reader);
+  const problems = await verifyConfiguredTokens(ctx, reader, chainId);
   if (problems.length === 0) {
     tokenGate.set(key, 'verified');
     return;
@@ -316,8 +327,9 @@ export async function settleReportedTransaction(
   ctx: AppContext,
   reader: DualChainReader,
   txHash: string,
+  /** The chain the order was quoted on; a reported hash is looked up there. */
+  chainId: number = ctx.config.STABLECOIN_CHAIN_ID,
 ): Promise<SettleOutcome | { kind: 'not_found'; reason: string }> {
-  const chainId = ctx.config.STABLECOIN_CHAIN_ID;
   const receiver = ctx.config.STABLECOIN_RECEIVER_ADDRESS;
   if (!receiver) return { kind: 'not_found', reason: 'no receiving wallet is configured' };
 

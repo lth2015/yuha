@@ -1,6 +1,6 @@
 import { AppError } from '@yuha/contracts';
-import { whitelistedTokens, type TokenSpec } from '@yuha/providers';
-import type { AppConfig } from '../config.js';
+import { BSC_CHAIN_ID, whitelistedTokens, type TokenSpec } from '@yuha/providers';
+import type { AppConfig, FeatureFlags } from '../config.js';
 
 /**
  * Which currencies this deployment accepts, in one place.
@@ -20,14 +20,49 @@ function switchesFor(cfg: AppConfig): Record<TokenSpec['key'], boolean> {
   return {
     jpyc: cfg.STABLECOIN_JPYC_ENABLED,
     usdc: cfg.STABLECOIN_USDC_ENABLED,
+    netx: cfg.STABLECOIN_NETX_ENABLED,
   };
+}
+
+/**
+ * The chains this deployment can serve: the configured Polygon chain, and BNB
+ * Smart Chain for NETX. A token on any other chain is never offered.
+ */
+export function servedChain(cfg: AppConfig, chainId: number): boolean {
+  return chainId === cfg.STABLECOIN_CHAIN_ID || chainId === BSC_CHAIN_ID;
+}
+
+/**
+ * The runtime pauses, by key. A `Record` for the same reason as the switches:
+ * a new currency does not compile until somebody decides whether it can be
+ * paused. Only NETX can — its price is fixed while its market moves.
+ */
+function pausedBy(features: FeatureFlags): Record<TokenSpec['key'], boolean> {
+  return { jpyc: false, usdc: false, netx: !features.netxPaymentsEnabled };
+}
+
+/**
+ * Enabled, and not paused by an operator: what may be OFFERED and QUOTED now.
+ *
+ * Distinct from `enabledStablecoinTokens`, which is what the scanner watches.
+ * Pausing a currency must stop new quotes without stopping the watch for a
+ * payment already sent against an earlier one.
+ */
+export function acceptingStablecoinTokens(cfg: AppConfig, features: FeatureFlags): TokenSpec[] {
+  const paused = pausedBy(features);
+  return enabledStablecoinTokens(cfg).filter((t) => !paused[t.key]);
+}
+
+/** Enabled currencies on one chain: what that chain's scanner watches for. */
+export function enabledTokensOn(cfg: AppConfig, chainId: number): TokenSpec[] {
+  return enabledStablecoinTokens(cfg).filter((t) => t.chainId === chainId);
 }
 
 /** Enabled currencies on the configured chain. Empty when the feature is off. */
 export function enabledStablecoinTokens(cfg: AppConfig): TokenSpec[] {
   if (!cfg.STABLECOIN_ENABLED) return [];
   const on = switchesFor(cfg);
-  return whitelistedTokens().filter((t) => t.chainId === cfg.STABLECOIN_CHAIN_ID && on[t.key]);
+  return whitelistedTokens().filter((t) => servedChain(cfg, t.chainId) && on[t.key]);
 }
 
 /**
@@ -43,11 +78,19 @@ export function stablecoinTokenFor(cfg: AppConfig, key: string): TokenSpec {
   }
   const token = whitelistedTokens().find((t) => t.key === key);
   if (!token) throw new AppError('VALIDATION_FAILED', 'unknown currency');
-  if (token.chainId !== cfg.STABLECOIN_CHAIN_ID) {
+  if (!servedChain(cfg, token.chainId)) {
     throw new AppError('SERVICE_DISABLED', 'that currency is not available on the configured chain');
   }
   if (!switchesFor(cfg)[token.key]) {
     throw new AppError('SERVICE_DISABLED', 'that currency is not available yet');
   }
   return token;
+}
+
+/**
+ * Where scanning starts on a chain that has no cursor yet. Per chain because a
+ * block number only means something on the chain it was read from.
+ */
+export function scanStartBlockFor(cfg: AppConfig, chainId: number): number | undefined {
+  return chainId === BSC_CHAIN_ID ? cfg.BSC_SCAN_START_BLOCK : cfg.STABLECOIN_SCAN_START_BLOCK;
 }
