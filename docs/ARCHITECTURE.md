@@ -100,6 +100,35 @@ Two guards make concurrent progress safe:
   worker re-claims it — without holding a database transaction open across the
   network call.
 
+### Shared generation capacity and waiting
+
+`MUSIC_MAX_CONCURRENCY` is a provider-wide limit across users and workers.
+Before either model is called, a short transaction locks that provider's row
+in `generation_dispatch_gates`, counts accepted/uncertain/processing jobs and
+live dispatches, and admits jobs in `(created_at, id)` order. Network calls
+happen after the transaction. The worker renews its lease during long calls.
+For the single GPU Spark deployment, keep `MUSIC_MAX_CONCURRENCY=1`.
+
+A job waiting for capacity stays `QUEUED`; `next_run_at` persists the backoff.
+`dispatch_started_at` distinguishes an active handoff from a cancellable wait:
+the API cannot promise immediate cancellation once the handoff owns capacity.
+The worker rechecks cancellation after text generation, before music submission.
+`JOB_QUEUE_DEADLINE_SECONDS` bounds waiting (one hour by default); expiry releases
+the reserved credit. Pending status reads are spaced by five seconds.
+
+HTTP 429 still enters `UNKNOWN` first. Only a confirmed `not_found` **and** a
+provider supporting stable idempotency keys permit returning to `QUEUED` with
+the same key and an increasing retry delay. The resolved intent is reused.
+Timeouts and 5xx retain their existing verification policy.
+
+Job views expose only the owner's `queuePosition`, including work ahead on the
+same provider. The studio and library can resume open jobs; cancellation never
+claims success merely because the button was pressed.
+
+Apply migration 0021 before starting the new API/worker. Upgrade all workers
+before relying on the limit: old workers do not participate in admission.
+Drain or pause generation before changing provider identity/configuration.
+
 ### UNKNOWN is not a failure
 
 When a submission times out, the provider may well have accepted and started

@@ -1,4 +1,4 @@
-import type { LyricTimings } from '@yuha/contracts';
+import { timingsMatchLyrics, type LyricTimings } from '@yuha/contracts';
 import type { AlignmentProvider, AlignmentRequest, AlignmentResult } from './types.js';
 
 /**
@@ -99,7 +99,11 @@ export class HttpAlignmentProvider implements AlignmentProvider {
           ...(words && words.length ? { words } : {}),
         });
       }
-      return { status: 'ok', timings: { source: 'aligned', lines, aligner: this.cfg.providerId } };
+      const timings: LyricTimings = { source: 'aligned', lines, aligner: this.cfg.providerId };
+      if (!timingsMatchLyrics(req.lyrics, timings)) {
+        return { status: 'failed', reason: 'aligner lyrics mismatch' };
+      }
+      return { status: 'ok', timings };
     } catch (err) {
       return { status: 'failed', reason: (err as Error).message };
     } finally {

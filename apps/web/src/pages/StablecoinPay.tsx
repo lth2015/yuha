@@ -110,7 +110,7 @@ export function StablecoinPay() {
   const [params] = useSearchParams();
   const priceKey = params.get('price') ?? 'drop_5';
   const trackId = params.get('track');
-  const { runtime, refreshEntitlements } = useSession();
+  const { runtime, refreshEntitlements, refreshRuntime } = useSession();
   const { t, lang } = useI18n();
 
   const stablecoin = runtime?.stablecoin;
@@ -121,13 +121,12 @@ export function StablecoinPay() {
   const [chainId, setChainId] = useState<number | null>(null);
   const [verified, setVerified] = useState<VerifiedWallet[]>([]);
   /*
-   * The currency chosen on the confirmation screen, when it is one this
-   * deployment has on; otherwise the first that is. Choosing JPYC or USDC
-   * happens once, on the confirmation screen, with every other method.
+   * Preserve the explicit currency chosen on the confirmation screen. A
+   * temporarily unavailable currency must never become a different payment.
    */
   const askedToken = params.get('token');
   const [tokenKey, setTokenKey] = useState<string>(
-    () => tokens.find((x) => x.key === askedToken)?.key ?? tokens[0]?.key ?? 'jpyc',
+    () => askedToken ?? tokens[0]?.key ?? 'jpyc',
   );
   /*
    * The network to be on is the chosen currency's, not the deployment's: NETX
@@ -147,12 +146,25 @@ export function StablecoinPay() {
   const [error, setError] = useState<unknown>(null);
   const [problem, setProblem] = useState<WalletProblem | null>(null);
   const [idempotencyKey] = useState(() => newIdempotencyKey('scpay'));
+  const [methodsChecked, setMethodsChecked] = useState(false);
+  const [methodsError, setMethodsError] = useState<unknown>(null);
+  const [methodsRound, setMethodsRound] = useState(0);
+
+  useEffect(() => {
+    let active = true;
+    setMethodsChecked(false);
+    void refreshRuntime().then(
+      () => { if (active) { setMethodsError(null); setMethodsChecked(true); } },
+      (err: unknown) => { if (active) { setMethodsError(err); setMethodsChecked(true); } },
+    );
+    return () => { active = false; };
+  }, [refreshRuntime, methodsRound]);
 
   // The token choice can only be one the server says is on; a stale default
   // would ask for a quote in a currency this deployment has switched off.
   useEffect(() => {
-    if (tokens.length > 0 && !tokens.some((x) => x.key === tokenKey)) setTokenKey(tokens[0]!.key);
-  }, [tokens, tokenKey]);
+    if (!askedToken && !quote && tokens.length > 0 && !tokens.some((x) => x.key === tokenKey)) setTokenKey(tokens[0]!.key);
+  }, [tokens, tokenKey, askedToken, quote]);
 
   /** Everything that can go wrong with a wallet becomes a dictionary key. */
   const fromWallet = useCallback((err: unknown) => {
@@ -477,12 +489,13 @@ export function StablecoinPay() {
 
   /* ------------------------------------------------------------ the render */
 
-  if (!runtime) return <Loading />;
-  if (!stablecoin?.enabled || tokens.length === 0) {
+  if (!methodsChecked) return <Loading />;
+  if (!quote && (!runtime || !stablecoin?.enabled || !selectedToken || methodsError)) {
     return (
       <div className="stack" style={{ maxWidth: 620, margin: '0 auto' }}>
         <h1 style={{ fontSize: 26 }}>{t('scpay.title')}</h1>
         <p className="muted">{t('scpay.unavailable')}</p>
+        <ErrorNotice error={methodsError} onRetry={() => setMethodsRound((r) => r + 1)} />
         <Link className="btn" to="/pricing">
           {t('pay.backToPricing')}
         </Link>
@@ -627,7 +640,7 @@ export function StablecoinPay() {
                 )}
                 <tr>
                   <th>{t('scpay.receiver.label')}</th>
-                  <td className="small" style={{ fontFamily: 'var(--mono)', wordBreak: 'break-all' }}>
+                  <td className="small" style={{ fontFamily: 'var(--mono)', wordBreak: 'break-all', whiteSpace: 'normal' }}>
                     {quote.receiver}
                   </td>
                 </tr>

@@ -144,10 +144,10 @@ const MUTATIONS = [
   {
     name: 'prepare-refuses-only-a-paid-order',
     file: `${S}/stablecoin.ts`,
-    from: `  if (['paid', 'refunded', 'partially_refunded'].includes(order.status)) {
-    throw new AppError('CONFLICT', 'this order can no longer be paid');
-  }`,
-    to: `  if (order.status === 'paid') throw new AppError('CONFLICT', 'this order has already been paid');`,
+    from: `    if (['paid', 'refunded', 'partially_refunded'].includes(order.status)) {
+      throw new AppError('CONFLICT', 'this order can no longer be paid');
+    }`,
+    to: `    if (order.status === 'paid') throw new AppError('CONFLICT', 'this order has already been paid');`,
     tests: ['tests/stablecoin-quote-intent.test.ts'],
   },
   {

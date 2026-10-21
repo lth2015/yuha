@@ -12,6 +12,7 @@ import {
   getBalance,
   getJobByIdempotencyKey,
   getJobForUser,
+  queuePositions,
   insertJob,
   insertProject,
   getProjectForUser,
@@ -403,7 +404,7 @@ export function toJobView(ctx: AppContext, job: JobRow): JobView {
     jobId: job.id,
     projectId: job.project_id,
     state: job.state,
-    phase: JOB_STATE_TO_PHASE[job.state],
+    phase: job.state === 'QUEUED' && job.dispatch_started_at ? 'generating' : JOB_STATE_TO_PHASE[job.state],
     mode: input.mode ?? 'simple',
     title: input.title ?? null,
     prompt: input.prompt ?? '',
@@ -421,10 +422,16 @@ export function toJobView(ctx: AppContext, job: JobRow): JobView {
   };
 }
 
+/** Reuse already owner-scoped rows; list views need one queue query, not N+1. */
+export async function getJobViews(ctx: AppContext, jobs: readonly JobRow[]): Promise<JobView[]> {
+  const positions = await queuePositions(jobs);
+  return jobs.map((job) => ({ ...toJobView(ctx, job), queuePosition: positions.get(job.id) ?? null }));
+}
+
 export async function getJobView(ctx: AppContext, jobId: string, userId: string): Promise<JobView> {
   const job = await getJobForUser(jobId, userId);
   if (!job) throw new AppError('NOT_FOUND', 'job not found');
-  return toJobView(ctx, job);
+  return (await getJobViews(ctx, [job]))[0]!;
 }
 
 /**
@@ -458,7 +465,7 @@ export async function cancelGeneration(
     // Only a job that has NOT reached the provider can be cancelled here and
     // now. Anything already submitted keeps running and stays chargeable-or-not
     // according to its real outcome.
-    if (marked.state === 'QUEUED' || marked.state === 'RESERVED') {
+    if ((marked.state === 'QUEUED' && !marked.dispatch_started_at) || marked.state === 'RESERVED') {
       const cancelled = await transitionJob(
         {
           jobId: marked.id,

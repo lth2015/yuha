@@ -11,8 +11,8 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { privateKeyToAccount } from 'viem/accounts';
 import { NETX_BSC } from '@yuha/providers';
 import { ConfigError, loadConfig } from '@yuha/api';
-import { query } from '@yuha/db';
-import { createHarness, resetData, teardown, type Harness, type TestUser, seedScanCursor, verifiedChainStub } from './helpers/harness.js';
+import { query, withTx } from '@yuha/db';
+import { TEST_DATABASE_URL, createHarness, resetData, teardown, type Harness, type TestUser, seedScanCursor, verifiedChainStub } from './helpers/harness.js';
 
 let h: Harness;
 let admin: TestUser;
@@ -137,6 +137,49 @@ describe('NETX as a way to pay', () => {
 });
 
 describe('re-quoting an order on the other chain', () => {
+  it('does not supersede a NETX transfer while its preparation is committing', async () => {
+    const user = await h.createUser({ email: 'netx-concurrent-prepare@example.test' });
+    await linkWallet(user, 56);
+    await linkWallet(user, 137);
+    const first = await quoteNetx(user, 'netx-concurrent-prepare');
+    expect(first.statusCode, first.body).toBe(200);
+    const { orderId } = first.json() as { orderId: string };
+    const [intent] = await query<{ id: string }>(
+      `SELECT id FROM stablecoin_intents WHERE order_id = ? AND open_key IS NOT NULL`, [orderId],
+    );
+    let prepare!: Promise<Awaited<ReturnType<typeof quoteNetx>>>;
+    let requote!: Promise<Awaited<ReturnType<typeof quoteNetx>>>;
+    const waitForRequests = async (count: number) => {
+      const until = Date.now() + 5000;
+      while (Date.now() < until) {
+        const rows = await query<{ Info: string | null; db: string | null }>('SHOW PROCESSLIST');
+        if (rows.filter((r) => r.db === new URL(TEST_DATABASE_URL).pathname.slice(1)
+          && /stablecoin_intents|FROM orders.*FOR UPDATE/s.test(r.Info ?? '')).length >= count) return;
+        await new Promise((resolve) => setTimeout(resolve, 5));
+      }
+      throw new Error('concurrent payment requests did not reach the database barrier');
+    };
+    // Hold the write boundary so both real HTTP requests overlap before
+    // preparation can commit. Assertions below observe only the public API.
+    await withTx(async (tx) => {
+      await query(`SELECT id FROM stablecoin_intents WHERE id = ? FOR UPDATE`, [intent!.id], tx);
+      prepare = h.app.inject({ method: 'POST', url: `/v1/orders/${orderId}/stablecoin-prepare`,
+        headers: { ...user.authHeader, ...freshIp() } }).then((res) => res);
+      await waitForRequests(1);
+      requote = h.app.inject({ method: 'POST', url: '/v1/payments/stablecoin/quote',
+        headers: { ...user.authHeader, ...freshIp() },
+        payload: { priceKey: 'drop_5', idempotencyKey: 'netx-concurrent-prepare', tokenKey: 'jpyc', payer: wallet.address } as never,
+      }).then((res) => res);
+      await waitForRequests(2);
+    });
+    const [prepared, replacement] = await Promise.all([prepare, requote]);
+    expect(prepared.statusCode, prepared.body).toBe(200);
+    expect(prepared.json().chainId).toBe(56);
+    expect(replacement.statusCode, replacement.body).toBe(409);
+    const state = await h.app.inject({ method: 'GET', url: `/v1/orders/${orderId}/payment-status`, headers: user.authHeader });
+    expect(state.json()).toMatchObject({ chainId: 56, intent: { state: 'prepared' } });
+  });
+
   it('is refused once the wallet was handed the NETX transfer — that payment may be on its way', async () => {
     /*
      * A re-quote supersedes the order's open intent. Across chains that meant

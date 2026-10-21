@@ -102,6 +102,13 @@ the browser), and they are why the grid disagreed with itself.
    buyer at top-up packs.
 5. A channel being closed is stated where a channel is chosen, not as a
    banner over products.
+6. Confirmation and wallet pages refresh the runtime payment methods on
+   entry. An explicitly selected currency is never silently replaced by
+   another; previously issued quotes retain their original currency and chain.
+
+Preparing a wallet transfer and replacing an order's quote lock the same order
+row. The cross-chain prepared-intent guard therefore observes committed state,
+including when those two requests overlap.
 
 ## 6. Not decided by this page
 

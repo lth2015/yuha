@@ -7,7 +7,14 @@
  * proxy, sections as pauses) and lay the lines across the song's duration.
  * The result syncs well enough for karaoke display and is deterministic.
  */
-import { SECTION_GAP_SECONDS, sectionName } from '@yuha/contracts';
+import { SECTION_GAP_SECONDS, sectionName, timingsMatchLyrics, type LyricTimings } from '@yuha/contracts';
+
+/** Choose the timeline used by both the player and its LRC export. */
+export function resolveLyricTimings(lyrics: string, duration: number, timings?: LyricTimings | null): LyricTimings {
+  return timings && timingsMatchLyrics(lyrics, timings)
+    ? timings
+    : { source: 'estimated', aligner: 'estimated-v1', lines: buildLyricTimeline(lyrics, duration).lines };
+}
 
 export interface LyricLine {
   /** Section marker ([Verse] etc.) this line belongs to. */

@@ -12,8 +12,9 @@ import {
   getChainCursor,
   getVerifiedWallet,
   insertQuoteWithIntent,
+  lockOrder,
   markIntentPrepared,
-  withTx,
+  withTxRetry,
   type OrderRow,
   type StablecoinIntentRow,
   type StablecoinQuoteRow,
@@ -257,7 +258,7 @@ export async function createStablecoinQuote(
     throw new AppError('SERVICE_DISABLED', 'stablecoin payments are not being watched for yet — try again shortly');
   }
 
-  return withTx(async (tx) => {
+  return withTxRetry(async (tx) => {
     const order =
       existing ??
       (await createPurchaseOrder(
@@ -282,6 +283,17 @@ export async function createStablecoinQuote(
         },
         tx,
       ));
+
+    // Prepare and re-quote must observe each other's committed state. Without
+    // the shared order lock, a quoted intent can become prepared after the
+    // cross-chain guard reads it but before that guard cancels it.
+    await lockOrder(order.id, tx);
+    const current = await getOrderForUser(order.id, params.userId, tx);
+    if (!current) throw new AppError('NOT_FOUND', 'order not found');
+    if (['paid', 'refunded', 'partially_refunded'].includes(current.status)) {
+      throw new AppError('CONFLICT', 'this order can no longer be paid');
+    }
+    assertNotCardClaimed(current);
 
     /*
      * A re-quote for the SAME order supersedes the old one: the previous
@@ -421,39 +433,44 @@ export async function prepareStablecoinPayment(
   if (!ctx.config.STABLECOIN_ENABLED) {
     throw new AppError('SERVICE_DISABLED', 'stablecoin payments are not available');
   }
-  const order = await getOrderForUser(params.orderId, params.userId);
-  if (!order) throw new AppError('NOT_FOUND', 'order not found');
-  // The same set the quote path refuses, and for the same reason: handing a
-  // wallet live transfer calldata for a refunded order invites a payment that
-  // `markOrderPaid` will not accept.
-  if (['paid', 'refunded', 'partially_refunded'].includes(order.status)) {
-    throw new AppError('CONFLICT', 'this order can no longer be paid');
-  }
+  return withTxRetry(async (tx) => {
+    await lockOrder(params.orderId, tx);
+    const order = await getOrderForUser(params.orderId, params.userId, tx);
+    if (!order) throw new AppError('NOT_FOUND', 'order not found');
+    // The same set the quote path refuses, and for the same reason: handing a
+    // wallet live transfer calldata for a refunded order invites a payment that
+    // `markOrderPaid` will not accept.
+    if (['paid', 'refunded', 'partially_refunded'].includes(order.status)) {
+      throw new AppError('CONFLICT', 'this order can no longer be paid');
+    }
 
-  const intent = await findOpenIntentForOrder(params.orderId);
-  if (!intent) throw new AppError('NOT_FOUND', 'no live quote for this order — ask for a new one');
-  const quote = await getQuote(intent.quote_id);
-  if (!quote) throw new AppError('NOT_FOUND', 'quote not found');
-  if (quote.expires_at.getTime() <= Date.now()) {
-    throw new AppError('CONFLICT', 'that quote has expired — ask for a new one');
-  }
+    const intent = await findOpenIntentForOrder(params.orderId, tx);
+    if (!intent) throw new AppError('NOT_FOUND', 'no live quote for this order — ask for a new one');
+    const quote = await getQuote(intent.quote_id, tx);
+    if (!quote) throw new AppError('NOT_FOUND', 'quote not found');
+    if (quote.expires_at.getTime() <= Date.now()) {
+      throw new AppError('CONFLICT', 'that quote has expired — ask for a new one');
+    }
 
-  // Built from the stored quote, not from anything in the request: the amount,
-  // the receiver and the token are the server's, and the wallet is handed
-  // calldata it can check rather than fields it has to assemble.
-  const data = encodeTransferCalldata(quote.receiver, BigInt(quote.amount_atomic));
-  await markIntentPrepared({ intentId: intent.id, predictedNonce: null });
+    // Built from the stored quote, not from anything in the request: the amount,
+    // the receiver and the token are the server's, and the wallet is handed
+    // calldata it can check rather than fields it has to assemble.
+    const data = encodeTransferCalldata(quote.receiver, BigInt(quote.amount_atomic));
+    if (!(await markIntentPrepared({ intentId: intent.id, predictedNonce: null }, tx))) {
+      throw new AppError('CONFLICT', 'that payment is no longer open — ask for a new quote');
+    }
 
-  return {
-    chainId: quote.chain_id,
-    to: toDisplayAddress(quote.token_address),
-    data,
-    value: '0',
-    amountAtomic: quote.amount_atomic,
-    receiver: toDisplayAddress(quote.receiver),
-    expiresAt: quote.expires_at.toISOString(),
-    predictedNonce: null,
-  };
+    return {
+      chainId: quote.chain_id,
+      to: toDisplayAddress(quote.token_address),
+      data,
+      value: '0',
+      amountAtomic: quote.amount_atomic,
+      receiver: toDisplayAddress(quote.receiver),
+      expiresAt: quote.expires_at.toISOString(),
+      predictedNonce: null,
+    };
+  });
 }
 
 export interface PaymentStatus {
