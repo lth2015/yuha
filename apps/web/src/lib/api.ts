@@ -67,7 +67,7 @@ export function setToken(token: string | null): void {
 }
 
 export interface RequestOptions {
-  method?: 'GET' | 'POST' | 'PATCH' | 'DELETE';
+  method?: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
   body?: unknown;
   idempotencyKey?: string;
   signal?: AbortSignal;

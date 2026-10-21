@@ -76,7 +76,20 @@ export function Tokushoho() {
   const d = useDisclosure();
   const { runtime } = useSession();
   const card = cardPaymentsEnabled(runtime);
-  const stablecoins = runtime?.stablecoin.enabled ? runtime.stablecoin.tokens.map((x) => x.label) : [];
+  /*
+   * Stablecoins and other crypto-assets are listed under their own words:
+   * not every accepted token is a stablecoin, and this row used to call every
+   * token one. With no crypto-asset on, the page renders exactly as reviewed;
+   * the 暗号資産 line exists only while one is accepted, and its wording goes
+   * to counsel before such a token is switched on (the token payment plan in
+   * docs/, section 7).
+   * The token's name reaches this page only as a runtime label, never as text
+   * written in this file.
+   */
+  const tokens = runtime?.stablecoin.enabled ? runtime.stablecoin.tokens : [];
+  const stablecoins = tokens.filter((x) => x.stablecoin).map((x) => x.label);
+  const cryptoAssets = tokens.filter((x) => !x.stablecoin).map((x) => x.label);
+  const walletKinds = [stablecoins.length > 0 && 'ステーブルコイン', cryptoAssets.length > 0 && '暗号資産'].filter(Boolean);
   const [products, setProducts] = useState<ProductView[] | null>(null);
   const [catalogueFailed, setCatalogueFailed] = useState(false);
 
@@ -160,7 +173,10 @@ export function Tokushoho() {
               {stablecoins.length > 0 && (
                 <li>ステーブルコイン：{stablecoins.join('、')}（単発パック・ライセンスのみ）</li>
               )}
-              {!card && stablecoins.length === 0 && <li>現在ご利用いただける決済手段はありません。</li>}
+              {cryptoAssets.length > 0 && (
+                <li>暗号資産：{cryptoAssets.join('、')}（単発パック・ライセンスのみ。固定の円換算額でお支払いいただき、金額は購入画面に表示します）</li>
+              )}
+              {!card && tokens.length === 0 && <li>現在ご利用いただける決済手段はありません。</li>}
             </ul>
           </dd>
         </div>
@@ -168,7 +184,7 @@ export function Tokushoho() {
           <dt>支払時期</dt>
           <dd>
             {card && 'お申し込み時に決済代行の画面でお支払いいただきます。'}
-            {stablecoins.length > 0 && 'ステーブルコインの場合は、お申し込み時にお客様ご自身のウォレットから送金していただきます。'}
+            {walletKinds.length > 0 && `${walletKinds.join('・')}の場合は、お申し込み時にお客様ご自身のウォレットから送金していただきます。`}
           </dd>
         </div>
         <div>

@@ -48,6 +48,12 @@ export interface TokenSpec {
   readonly decimals: number;
   readonly label: string;
   readonly pricing: TokenPricing;
+  /**
+   * Whether this is a stablecoin. Said, not inferred: the statutory page lists
+   * stablecoins and other crypto-assets under different words, and calling
+   * NETX a stablecoin there would be a false statement on a legal page.
+   */
+  readonly stablecoin: boolean;
 }
 
 export const JPYC_POLYGON: TokenSpec = {
@@ -57,6 +63,7 @@ export const JPYC_POLYGON: TokenSpec = {
   decimals: 18,
   label: 'JPYC (Polygon PoS)',
   pricing: { kind: 'yen' },
+  stablecoin: true,
 };
 
 export const USDC_POLYGON: TokenSpec = {
@@ -66,6 +73,7 @@ export const USDC_POLYGON: TokenSpec = {
   decimals: 6,
   label: 'USDC (Polygon PoS, native)',
   pricing: { kind: 'usd-market' },
+  stablecoin: true,
 };
 
 /** BNB Smart Chain mainnet. */
@@ -91,6 +99,7 @@ export const NETX_BSC: TokenSpec = {
   decimals: 18,
   label: 'NETX (BNB Smart Chain)',
   pricing: { kind: 'fixed-yen', yenPerToken: 20 },
+  stablecoin: false,
 };
 
 const WHITELISTED_TOKENS: readonly TokenSpec[] = [JPYC_POLYGON, USDC_POLYGON, NETX_BSC];

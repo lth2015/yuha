@@ -117,8 +117,8 @@ describe('the dashboard', () => {
     await insertPaidOrder(u.id, '2026-10-20 03:00:00', 'usdc', 980);
 
     const body = (await get(admin, '/v1/admin/stats?granularity=day&from=2026-10-20&to=2026-10-20')).json();
-    expect(body.totals.paidOrders).toEqual({ count: 4, card: 1, jpyc: 1, usdc: 2 });
-    expect(body.totals.revenueJpy).toEqual({ total: 3920, card: 980, jpyc: 980, usdc: 1960 });
+    expect(body.totals.paidOrders).toEqual({ count: 4, card: 1, jpyc: 1, usdc: 2, netx: 0 });
+    expect(body.totals.revenueJpy).toEqual({ total: 3920, card: 980, jpyc: 980, usdc: 1960, netx: 0 });
   });
 
   it('labels a week by the Monday it starts on and fills empty buckets with zeros', async () => {

@@ -31,6 +31,7 @@ const METHOD_COPY: Record<PaymentMethodKey, { name: string; note: string }> = {
   card: { name: 'checkout.method.card', note: 'checkout.method.cardNote' },
   jpyc: { name: 'checkout.method.jpyc', note: 'checkout.method.jpycNote' },
   usdc: { name: 'checkout.method.usdc', note: 'checkout.method.usdcNote' },
+  netx: { name: 'checkout.method.netx', note: 'checkout.method.netxNote' },
 };
 
 export function CheckoutConfirm() {
@@ -92,7 +93,7 @@ export function CheckoutConfirm() {
   const payWith: PaymentMethodKey | null =
     picked && methods.some((m) => m.method === picked && m.available) ? picked : fallback;
   const closedReason = product ? unavailableReason(product) : null;
-  const isStablecoin = payWith === 'jpyc' || payWith === 'usdc';
+  const isStablecoin = payWith !== null && payWith !== 'card';
 
   const proceed = async () => {
     if (!payWith) return;

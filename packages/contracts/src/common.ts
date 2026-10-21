@@ -91,6 +91,8 @@ export const runtimeInfo = z.object({
       z.object({
         key: z.enum(['jpyc', 'usdc', 'netx']),
         chainId: z.number().int().positive(),
+        /** False for NETX: a crypto-asset whose price moves, not a stablecoin. */
+        stablecoin: z.boolean(),
         address: z.string(),
         decimals: z.number().int().nonnegative(),
         label: z.string(),

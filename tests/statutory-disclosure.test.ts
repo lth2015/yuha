@@ -106,6 +106,6 @@ describe('the rows counsel reviewed are filled, not marked', () => {
     // runtime says are on; and a sentence, not an empty list, when neither.
     expect(dd).toContain('{card &&');
     expect(dd).toContain('stablecoins.length > 0');
-    expect(dd).toContain('{!card && stablecoins.length === 0');
+    expect(dd).toContain('{!card && tokens.length === 0');
   });
 });

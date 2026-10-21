@@ -91,7 +91,21 @@ the range splitting from PR #14 keeps a capped provider working.
 
 ## 6. Where the code changes
 
-(Filled in from the code survey.)
+| Layer | File | What changed |
+| --- | --- | --- |
+| Token | `packages/providers/src/chain/tokens.ts` | `TokenSpec` gains `key`, `pricing` (`yen` / `usd-market` / `fixed-yen`) and an explicit `stablecoin` flag; `NETX_BSC` on chain 56 joins the whitelist. |
+| Quote | `packages/providers/src/chain/quote.ts` | `fixed-yen` is `ceil(priceJpy × 10^decimals / yenPerToken)`; no rate, no buffer. |
+| Config | `apps/api/src/config.ts` | `STABLECOIN_NETX_ENABLED`, `BSC_RPC_PRIMARY_URL` / `BSC_RPC_SECONDARY_URL` (two distinct providers required), `BSC_RPC_MODE`, `BSC_SCAN_START_BLOCK`. Polygon RPC is required only when JPYC or USDC is on. |
+| Readers | `apps/api/src/context.ts` | `ctx.chain` stays Polygon; `ctx.otherChains` holds BSC; `readerFor(ctx, chainId)` picks one. |
+| Which tokens | `apps/api/src/services/stablecoin-tokens.ts` | `acceptingStablecoinTokens` (offered and quoted — honours the pause) vs `enabledTokensOn(cfg, chainId)` (scanned — ignores it). |
+| Quote / status | `apps/api/src/services/stablecoin.ts` | Reader and verification per token chain; rate fetched only for `usd-market`; status carries `chainId`. |
+| Scan | `apps/api/src/services/stablecoin-scan.ts`, `apps/worker/src/loops.ts` | One scan loop per chain with enabled tokens, own cursor, own verification, chain-scoped expiry (`findExpiredOpenIntents`). |
+| Pause | `apps/api/src/routes/admin.ts`, `apps/web/src/components/admin/NetxSwitch.tsx` | `GET`/`PUT /v1/admin/netx-payments`; writes `netxPaymentsEnabled` into `feature_overrides` with an audit row. |
+| Console | `packages/db/src/admin-stats.ts`, `admin-lists.ts`, `Dashboard.tsx`, `OrdersPanel.tsx` | NETX as a fourth method in totals, series, CSV and order filter. |
+| Checkout | `Checkout.tsx`, `StablecoinPay.tsx`, `lib/stablecoin.ts`, `i18n.tsx` | NETX option with the fixed-price note; wallet page names the token's chain (switch to BNB Smart Chain, BNB gas, BscScan links). |
+| 特商法 | `apps/web/src/pages/Tokushoho.tsx` | Stablecoins and crypto assets listed separately; the 暗号資産 line appears only while one is accepted. **Wording needs counsel.** |
+
+Tests: `tests/netx-quote.test.ts`, `tests/netx-payments.test.ts`, `tests/netx-scan.test.ts`; mutations `a-fixed-price-consults-the-market` and `pausing-netx-does-nothing`.
 
 ## 7. Before NETX is switched on
 

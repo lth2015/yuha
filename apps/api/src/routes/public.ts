@@ -72,6 +72,7 @@ export default async function publicRoutes(app: FastifyInstance, opts: { ctx: Ap
         tokens: acceptingStablecoinTokens(ctx.config, features).map((t) => ({
           key: t.key,
           chainId: t.chainId,
+          stablecoin: t.stablecoin,
           address: toDisplayAddress(t.address),
           decimals: t.decimals,
           label: t.label,

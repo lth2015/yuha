@@ -76,13 +76,35 @@ export function knownChainParams(chainId: number): ChainParams | null {
       blockExplorerUrls: ['https://polygonscan.com'],
     };
   }
+  // BNB Smart Chain, for NETX. BNB Chain's own public endpoint and BscScan,
+  // used only to add the network to the wallet, as above.
+  if (chainId === 56) {
+    return {
+      chainId: toHexChainId(56),
+      chainName: 'BNB Smart Chain',
+      nativeCurrency: { name: 'BNB', symbol: 'BNB', decimals: 18 },
+      rpcUrls: ['https://bsc-dataseed.bnbchain.org'],
+      blockExplorerUrls: ['https://bscscan.com'],
+    };
+  }
   return null;
+}
+
+/**
+ * The network's name and its gas currency, for the sentences that tell a buyer
+ * which network to switch to and what they need a little of to send. These
+ * said "Polygon" and "POL" as literals, which is wrong for NETX on BSC.
+ */
+export function chainCopy(chainId: number): { network: string; gas: string } | null {
+  const params = knownChainParams(chainId);
+  return params ? { network: params.chainName, gas: params.nativeCurrency.symbol } : null;
 }
 
 /** A transaction on a chain we can link to, or null when we cannot. */
 export function explorerTxUrl(chainId: number, txHash: string): string | null {
   if (!/^0x[0-9a-fA-F]{64}$/.test(txHash)) return null;
   if (chainId === 137) return `https://polygonscan.com/tx/${txHash}`;
+  if (chainId === 56) return `https://bscscan.com/tx/${txHash}`;
   return null;
 }
 

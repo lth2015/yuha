@@ -137,7 +137,7 @@ const MUTATIONS = [
   {
     name: 'quoting-does-not-ask-the-chain-about-decimals',
     file: `${S}/stablecoin.ts`,
-    from: '  await assertConfiguredTokensVerified(ctx, ctx.chain);',
+    from: '  await assertConfiguredTokensVerified(ctx, reader, token.chainId);',
     to: '  void assertConfiguredTokensVerified;',
     tests: ['tests/stablecoin-review-fixes.test.ts'],
   },
@@ -163,7 +163,7 @@ const MUTATIONS = [
   {
     name: 'the-chain-id-of-the-endpoints-is-never-checked',
     file: `${S}/stablecoin-scan.ts`,
-    from: `  for (const problem of await verifyChainIds(reader, ctx.config.STABLECOIN_CHAIN_ID)) {
+    from: `  for (const problem of await verifyChainIds(reader, chainId)) {
     problems.push({ token: 'chain', kind: 'unavailable', reason: problem });
   }`,
     to: '  void verifyChainIds;',
@@ -339,9 +339,26 @@ const MUTATIONS = [
   {
     name: 'the-browser-is-told-about-currencies-that-are-switched-off',
     file: 'apps/api/src/services/stablecoin-tokens.ts',
-    from: '  return whitelistedTokens().filter((t) => t.chainId === cfg.STABLECOIN_CHAIN_ID && on[t.key]);',
+    from: '  return whitelistedTokens().filter((t) => servedChain(cfg, t.chainId) && on[t.key]);',
     to: '  void on;\n  return [...whitelistedTokens()];',
     tests: ['tests/stablecoin-quote-intent.test.ts'],
+  },
+  {
+    // NETX is priced at a fixed ¥20; quoting it at the USD/JPY rate (the old
+    // "anything but JPYC" branch) would charge a dollar's worth per token.
+    name: 'a-fixed-price-consults-the-market',
+    file: `${S}/stablecoin.ts`,
+    from: "  const rate = token.pricing.kind === 'usd-market' ? await usdcJpyRate(ctx) : null;",
+    to: "  const rate = token.pricing.kind === 'yen' ? null : await usdcJpyRate(ctx);",
+    tests: ['tests/netx-payments.test.ts'],
+  },
+  {
+    // The operator's control when NETX's market falls below its fixed price.
+    name: 'pausing-netx-does-nothing',
+    file: 'apps/api/src/services/stablecoin-tokens.ts',
+    from: '  return { jpyc: false, usdc: false, netx: !features.netxPaymentsEnabled };',
+    to: '  void features;\n  return { jpyc: false, usdc: false, netx: false };',
+    tests: ['tests/netx-payments.test.ts'],
   },
   {
     name: 'a-wallet-listing-shows-everybodys-wallets',

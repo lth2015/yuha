@@ -21,8 +21,8 @@ interface Bucket {
   visitors: number;
   signups: number;
   generations: { submitted: number; delivered: number; failed: number };
-  paidOrders: { count: number; card: number; jpyc: number; usdc: number };
-  revenueJpy: { total: number; card: number; jpyc: number; usdc: number };
+  paidOrders: { count: number; card: number; jpyc: number; usdc: number; netx: number };
+  revenueJpy: { total: number; card: number; jpyc: number; usdc: number; netx: number };
   refundsJpy: number;
   creditsGranted: { total: number; purchased: number; subscription: number; trial: number; gift: number; compensation: number; other: number };
   creditsConsumed: number;
@@ -42,6 +42,8 @@ interface Report {
 const C1 = '#2a78d6';
 const C2 = '#eb6834';
 const C3 = '#1baf7a';
+// Categorical slot 4 (yellow). Validated adjacent to slot 3 in the stack (CVD ΔE 9.1); below 3:1 on the light surface, so the legend and table view carry it (relief rule).
+const C4 = '#eda100';
 const OTHER = '#a9aba4';
 
 const GRANULARITIES: Granularity[] = ['day', 'week', 'month', 'year'];
@@ -104,14 +106,14 @@ export function Dashboard() {
     if (!report) return;
     const head = [
       'bucket', 'page_views', 'visitors', 'signups', 'generations_submitted', 'generations_delivered',
-      'generations_failed', 'paid_orders', 'paid_orders_card', 'paid_orders_jpyc', 'paid_orders_usdc',
-      'revenue_jpy', 'revenue_card_jpy', 'revenue_jpyc_jpy', 'revenue_usdc_jpy', 'refunds_jpy',
+      'generations_failed', 'paid_orders', 'paid_orders_card', 'paid_orders_jpyc', 'paid_orders_usdc', 'paid_orders_netx',
+      'revenue_jpy', 'revenue_card_jpy', 'revenue_jpyc_jpy', 'revenue_usdc_jpy', 'revenue_netx_jpy', 'refunds_jpy',
       'credits_granted', 'credits_consumed',
     ];
     const rows = report.buckets.map((b) => [
       b.key, b.pageViews, b.visitors, b.signups, b.generations.submitted, b.generations.delivered,
-      b.generations.failed, b.paidOrders.count, b.paidOrders.card, b.paidOrders.jpyc, b.paidOrders.usdc,
-      b.revenueJpy.total, b.revenueJpy.card, b.revenueJpy.jpyc, b.revenueJpy.usdc, b.refundsJpy,
+      b.generations.failed, b.paidOrders.count, b.paidOrders.card, b.paidOrders.jpyc, b.paidOrders.usdc, b.paidOrders.netx,
+      b.revenueJpy.total, b.revenueJpy.card, b.revenueJpy.jpyc, b.revenueJpy.usdc, b.revenueJpy.netx, b.refundsJpy,
       b.creditsGranted.total, b.creditsConsumed,
     ]);
     const csv = [head, ...rows].map((r) => r.join(',')).join('\n');
@@ -252,6 +254,7 @@ export function Dashboard() {
                   { key: 'card', label: t('admin.dash.card'), color: C1, values: report.buckets.map((b) => b.revenueJpy.card) },
                   { key: 'jpyc', label: 'JPYC', color: C2, values: report.buckets.map((b) => b.revenueJpy.jpyc) },
                   { key: 'usdc', label: 'USDC', color: C3, values: report.buckets.map((b) => b.revenueJpy.usdc) },
+                  { key: 'netx', label: 'NETX', color: C4, values: report.buckets.map((b) => b.revenueJpy.netx) },
                 ]}
               />
               <BarChart
@@ -288,6 +291,7 @@ export function Dashboard() {
                     <th>{t('admin.dash.card')}</th>
                     <th>JPYC</th>
                     <th>USDC</th>
+                    <th>NETX</th>
                     <th>{t('admin.dash.refunds')}</th>
                     <th>{t('admin.dash.creditsGranted')}</th>
                     <th>{t('admin.dash.creditsConsumed')}</th>
@@ -307,6 +311,7 @@ export function Dashboard() {
                       <td className="num">{yen(b.revenueJpy.card)}</td>
                       <td className="num">{yen(b.revenueJpy.jpyc)}</td>
                       <td className="num">{yen(b.revenueJpy.usdc)}</td>
+                      <td className="num">{yen(b.revenueJpy.netx)}</td>
                       <td className="num">{yen(b.refundsJpy)}</td>
                       <td className="num">{num(b.creditsGranted.total)}</td>
                       <td className="num">{num(b.creditsConsumed)}</td>

@@ -59,7 +59,7 @@ export function enabledTokensOn(cfg: AppConfig, chainId: number): TokenSpec[] {
 }
 
 /** Enabled currencies on the configured chain. Empty when the feature is off. */
-export function enabledStablecoinTokens(cfg: AppConfig): TokenSpec[] {
+function enabledStablecoinTokens(cfg: AppConfig): TokenSpec[] {
   if (!cfg.STABLECOIN_ENABLED) return [];
   const on = switchesFor(cfg);
   return whitelistedTokens().filter((t) => servedChain(cfg, t.chainId) && on[t.key]);

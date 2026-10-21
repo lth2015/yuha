@@ -8,6 +8,7 @@ import {
   countdown,
   explorerTxUrl,
   formatAtomic,
+  chainCopy,
   knownChainParams,
   parseChainId,
   payStep,
@@ -113,7 +114,6 @@ export function StablecoinPay() {
   const { t, lang } = useI18n();
 
   const stablecoin = runtime?.stablecoin;
-  const wantChainId = stablecoin?.chainId ?? 0;
   const tokens = stablecoin?.tokens ?? [];
 
   const [hasProvider, setHasProvider] = useState(() => injectedProvider() !== null);
@@ -129,7 +129,15 @@ export function StablecoinPay() {
   const [tokenKey, setTokenKey] = useState<string>(
     () => tokens.find((x) => x.key === askedToken)?.key ?? tokens[0]?.key ?? 'jpyc',
   );
+  /*
+   * The network to be on is the chosen currency's, not the deployment's: NETX
+   * is on BNB Smart Chain, JPYC and USDC on Polygon. Once quoted, the quote's
+   * own chain is the one the amount was computed for.
+   */
+  const selectedToken = tokens.find((x) => x.key === tokenKey);
   const [quote, setQuote] = useState<QuoteResponse | null>(null);
+  const wantChainId = quote?.chainId ?? selectedToken?.chainId ?? stablecoin?.chainId ?? 0;
+  const net = chainCopy(wantChainId) ?? { network: `chain ${wantChainId}`, gas: '—' };
   const [txHash, setTxHash] = useState<string | null>(null);
   const [typedHash, setTypedHash] = useState('');
   const [status, setStatus] = useState<PaymentStatusResponse | null>(null);
@@ -470,7 +478,7 @@ export function StablecoinPay() {
 
       {problem && (
         <div className="alert alert--warn" role="alert" aria-live="assertive">
-          {t(`scpay.err.${problem}`)}
+          {t(`scpay.err.${problem}`, { network: net.network, gas: net.gas })}
         </div>
       )}
       <ErrorNotice error={error} />
@@ -512,14 +520,14 @@ export function StablecoinPay() {
 
           {step === 'switch-chain' && (
             <>
-              <p className="muted">{t('scpay.switch.note', { chain: String(wantChainId) })}</p>
+              <p className="muted">{t('scpay.switch.note', { chain: String(wantChainId), network: net.network })}</p>
               <button
                 type="button"
                 className="btn btn--primary"
                 disabled={busy !== null}
                 onClick={() => void switchChain()}
               >
-                {busy === 'switch' ? t('scpay.working') : t('scpay.switch.cta')}
+                {busy === 'switch' ? t('scpay.working') : t('scpay.switch.cta', { network: net.network })}
               </button>
             </>
           )}
@@ -632,7 +640,7 @@ export function StablecoinPay() {
                 >
                   {busy === 'send' ? t('scpay.working') : t('scpay.send.cta')}
                 </button>
-                <p className="small muted">{t('scpay.send.note')}</p>
+                <p className="small muted">{t('scpay.send.note', { gas: net.gas })}</p>
 
                 <details>
                   <summary>{t('scpay.manual.title')}</summary>
