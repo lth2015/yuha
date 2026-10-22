@@ -241,7 +241,7 @@ jobs:
     # admin console that was unusable on a phone. Nothing in build-and-test
     # ever looked at a page at phone width.
     runs-on: ubuntu-24.04
-    timeout-minutes: 25
+    timeout-minutes: 30
     env:
       RUN_MODE: demo
       PUBLIC_WEB_URL: http://localhost:5173

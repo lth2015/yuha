@@ -415,66 +415,93 @@ let failures = 0;
 let warnings = 0;
 let checked = 0;
 
-for (const pageDef of PAGES.filter((p) => !only || p.name.includes(only))) {
-  for (const vp of VIEWPORTS) {
-    // Every language at phone widths, where length decides the layout;
-    // Chinese alone above that.
-    for (const lang of vp.width < 600 ? LANGS : ['zh']) {
-      const ctx = await browser.newContext({
-        viewport: { width: vp.width, height: vp.height },
-        isMobile: vp.mobile,
-        hasTouch: vp.mobile,
-        deviceScaleFactor: 1,
-        ...(pageDef.as ? { storageState: states[pageDef.as] } : {}),
-      });
-      await ctx.addInitScript((l) => {
-        try {
-          localStorage.setItem('yuha.lang', l);
-        } catch {
-          /* storage refused: the page's default language is still a layout */
-        }
-      }, lang);
-      const page = await ctx.newPage();
-      await page.goto(`${BASE}${pageDef.path}`, { waitUntil: 'networkidle' });
-      await page.waitForTimeout(400); // web fonts and the first paint of charts
-      const results = [];
-      // The page as it lands, then — for pages with a second state, like a
-      // customer opened from the list — that state too, at both ends.
-      if (pageDef.prepare) {
-        results.push(await page.evaluate(audit, { phone: vp.width < 600, phase: 'top' }));
-        await pageDef.prepare(page);
-        await page.waitForTimeout(300);
-      }
-      for (const phase of ['top', 'bottom']) {
-        await page.evaluate((p) => window.scrollTo(0, p === 'top' ? 0 : document.documentElement.scrollHeight), phase);
-        await page.waitForTimeout(150);
-        results.push(await page.evaluate(audit, { phone: vp.width < 600, phase }));
-      }
-      const problems = [];
-      const seen = new Set();
-      for (const p of results.flatMap((r) => r.problems)) {
-        if (!seen.has(p.rule + p.what)) seen.add(p.rule + p.what) && problems.push(p);
-      }
-      const warns = results[0].warnings;
-      checked++;
-      warnings += warns.length;
-      const where = `${pageDef.name} @ ${vp.name} [${lang}]`;
-      if (problems.length) {
-        failures += problems.length;
-        const shot = join(SHOTS, `${pageDef.name}-${vp.name}-${lang}.png`);
-        await page.evaluate(() => window.scrollTo(0, 0));
-        await page.screenshot({ path: shot, fullPage: true });
-        console.log(`✗ ${where}  (${shot})`);
-        for (const p of problems) console.log(`    ${p.rule.padEnd(8)} ${p.what} — ${p.detail}`);
-        annotate(`UI ${where}`, problems.map((p) => `${p.rule} ${p.what} — ${p.detail}`).join('\n'));
-      } else {
-        console.log(`✓ ${where}`);
-      }
-      if (process.env.UI_WARN) for (const w of warns) console.log(`    warn ${w.rule} ${w.what} — ${w.detail}`);
-      await ctx.close();
+/*
+ * Lanes, not one browser context per page view. The first version opened a
+ * fresh context for each of 216 views, and against the Vite dev server each
+ * one re-fetched the unbundled module graph: 7 minutes here, past the 25-minute
+ * job limit on a two-core CI runner. A lane is one context per (identity,
+ * width, language) that visits its pages in turn — the module graph stays in
+ * the HTTP cache, and every `goto` is still a full load — and a few lanes run
+ * at once.
+ */
+const CONCURRENCY = Number(process.env.UI_CONCURRENCY ?? 3);
+const lanes = [];
+for (const vp of VIEWPORTS) {
+  // Every language at phone widths, where length decides the layout;
+  // Chinese alone above that.
+  for (const lang of vp.width < 600 ? LANGS : ['zh']) {
+    for (const as of [null, 'creator', 'admin']) {
+      const pages = PAGES.filter((p) => p.as === as && (!only || p.name.includes(only)));
+      if (pages.length) lanes.push({ vp, lang, as, pages, lines: [] });
     }
   }
 }
+
+async function runLane(lane) {
+  const { vp, lang, as } = lane;
+  const ctx = await browser.newContext({
+    viewport: { width: vp.width, height: vp.height },
+    isMobile: vp.mobile,
+    hasTouch: vp.mobile,
+    deviceScaleFactor: 1,
+    ...(as ? { storageState: states[as] } : {}),
+  });
+  await ctx.addInitScript((l) => {
+    try {
+      localStorage.setItem('yuha.lang', l);
+    } catch {
+      /* storage refused: the page's default language is still a layout */
+    }
+  }, lang);
+  const page = await ctx.newPage();
+  for (const pageDef of lane.pages) {
+    await page.goto(`${BASE}${pageDef.path}`, { waitUntil: 'networkidle' });
+    await page.waitForTimeout(400); // web fonts and the first paint of charts
+    const results = [];
+    // The page as it lands, then — for pages with a second state, like a
+    // customer opened from the list — that state too, at both ends.
+    if (pageDef.prepare) {
+      results.push(await page.evaluate(audit, { phone: vp.width < 600, phase: 'top' }));
+      await pageDef.prepare(page);
+      await page.waitForTimeout(300);
+    }
+    for (const phase of ['top', 'bottom']) {
+      await page.evaluate((p) => window.scrollTo(0, p === 'top' ? 0 : document.documentElement.scrollHeight), phase);
+      await page.waitForTimeout(150);
+      results.push(await page.evaluate(audit, { phone: vp.width < 600, phase }));
+    }
+    const problems = [];
+    const seen = new Set();
+    for (const p of results.flatMap((r) => r.problems)) {
+      if (!seen.has(p.rule + p.what)) seen.add(p.rule + p.what) && problems.push(p);
+    }
+    const warns = results[0].warnings;
+    checked++;
+    warnings += warns.length;
+    const where = `${pageDef.name} @ ${vp.name} [${lang}]`;
+    if (problems.length) {
+      failures += problems.length;
+      const shot = join(SHOTS, `${pageDef.name}-${vp.name}-${lang}.png`);
+      await page.evaluate(() => window.scrollTo(0, 0));
+      await page.screenshot({ path: shot, fullPage: true });
+      lane.lines.push(`✗ ${where}  (${shot})`);
+      for (const p of problems) lane.lines.push(`    ${p.rule.padEnd(8)} ${p.what} — ${p.detail}`);
+      annotate(`UI ${where}`, problems.map((p) => `${p.rule} ${p.what} — ${p.detail}`).join('\n'));
+    } else {
+      lane.lines.push(`✓ ${where}`);
+    }
+    if (process.env.UI_WARN) for (const w of warns) lane.lines.push(`    warn ${w.rule} ${w.what} — ${w.detail}`);
+  }
+  await ctx.close();
+  console.log(lane.lines.join('\n'));
+}
+
+const queue = [...lanes];
+await Promise.all(
+  Array.from({ length: Math.min(CONCURRENCY, queue.length) }, async () => {
+    while (queue.length) await runLane(queue.shift());
+  }),
+);
 await browser.close();
 
 console.log(
