@@ -253,6 +253,7 @@ export const jobView = z.object({
   trackId: z.string().uuid().nullable(),
   errorCode: z.string().nullable(),
   estimate: jobEstimate,
+  queuePosition: z.number().int().positive().nullable().optional(),
   createdAt: z.string(),
   updatedAt: z.string(),
   /** true while the run mode is demo, so the UI can keep the banner visible. */
@@ -294,6 +295,13 @@ export const lyricTimings = z.object({
   aligner: z.string().max(64),
 });
 export type LyricTimings = z.infer<typeof lyricTimings>;
+
+/** Timings may change when a line is sung, but must never remove or replace its words. */
+export function timingsMatchLyrics(lyrics: string, timings: LyricTimings): boolean {
+  const sung = lyrics.split(/\r?\n/).map((line) => line.trim()).filter((line) => line && sectionName(line) === null);
+  return sung.length > 0 && sung.length === timings.lines.length
+    && sung.every((text, index) => text === timings.lines[index]!.text.trim());
+}
 
 export const trackView = z.object({
   trackId: z.string().uuid(),

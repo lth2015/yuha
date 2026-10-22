@@ -15,6 +15,7 @@ import { NowPlaying } from './NowPlaying';
 import { PlayerBar } from './PlayerBar';
 import { PageTitleContext, pageTitleKey } from '../lib/title';
 import { resolveNowPlayingLyrics } from '../lib/now-playing-lyrics';
+import { reportVisit } from '../lib/visits';
 
 /**
  * YUHA app shell — top navigation per the acceptance spec: 88px desktop / 72px
@@ -110,7 +111,7 @@ function SiteFooter() {
       </span>
       {/*
         The steward credit belongs in the fine print, not in the link row.
-        The code is Apache-2.0 and stewarded by the NEXT community; the
+        The code is Apache-2.0 and stewarded by the NETX community; the
         service is operated by whoever `LEGAL_ENTITY_*` names, and conflating
         the two on a page a consumer reads is the failure mode worth avoiding
         here. So this line credits the *code*, and /legal carries the split in
@@ -233,6 +234,10 @@ export function Layout({ children }: { children: ReactNode }) {
   useDismiss(accountRef, menuOpen, closeMenu);
 
   useEffect(() => setMenuOpen(false), [location.pathname]);
+
+  // One page view per route, for the operator dashboard (lib/visits.ts says
+  // exactly what is and is not sent).
+  useEffect(() => reportVisit(location.pathname), [location.pathname]);
 
 
   /*

@@ -42,13 +42,14 @@ const SUBSCRIPTION_STATUS: Record<string, { key: string; tone: string }> = {
  * the interface never optimistically claims a cancellation that did not happen.
  */
 export default function Billing() {
-  const { entitlements, refreshEntitlements } = useSession();
+  const { entitlements, refreshEntitlements, acceptEntitlements } = useSession();
   const [orders, setOrders] = useState<OrderRow[]>([]);
   const [ent, setEnt] = useState<EntitlementsView | null>(null);
   const [error, setError] = useState<unknown>(null);
   const [loading, setLoading] = useState(true);
   const { t, lang } = useI18n();
   const [cancelling, setCancelling] = useState(false);
+  const [openingPortal, setOpeningPortal] = useState(false);
   const [cancelResult, setCancelResult] = useState<{ effectiveAt: string | null } | null>(null);
 
   const load = useCallback(async () => {
@@ -61,12 +62,14 @@ export default function Billing() {
       ]);
       setOrders(o.items);
       setEnt(e);
+      // The same figures in the header, or it keeps the number from sign-in.
+      acceptEntitlements(e);
     } catch (err) {
       setError(err);
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [acceptEntitlements]);
 
   useEffect(() => {
     void load();
@@ -103,6 +106,28 @@ export default function Billing() {
       setError(err);
     } finally {
       setCancelling(false);
+    }
+  };
+
+  /*
+   * Change the card, download invoices: Stripe's Customer Portal. The
+   * past-due notice has always said "update your payment method", and until
+   * this there was nowhere to do it. A same-tab navigation, not a popup, so
+   * Safari does not block it after the await.
+   */
+  const openPortal = async () => {
+    if (!subscription) return;
+    setOpeningPortal(true);
+    setError(null);
+    try {
+      const { url } = await apiFetch<{ url: string }>('/v1/subscription/portal', {
+        method: 'POST',
+        body: { subscriptionId: subscription.subscriptionId },
+      });
+      window.location.assign(url);
+    } catch (err) {
+      setError(err);
+      setOpeningPortal(false);
     }
   };
 
@@ -226,6 +251,17 @@ export default function Billing() {
                 <div className="small">{t('bill.pastDue')}</div>
               </div>
             )}
+
+            <div className="row" style={{ gap: 'var(--s2)', flexWrap: 'wrap' }}>
+              <button
+                type="button"
+                className={subscription.status === 'past_due' ? 'btn btn--primary' : 'btn btn--secondary'}
+                onClick={() => void openPortal()}
+                disabled={openingPortal}
+              >
+                {openingPortal ? t('bill.portalOpening') : t('bill.portal')}
+              </button>
+            </div>
 
             {cancelResult ? (
               <div className="alert alert--info">

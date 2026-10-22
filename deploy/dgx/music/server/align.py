@@ -17,7 +17,29 @@ import re
 import unicodedata
 from typing import Dict, List, Optional, Sequence, Tuple
 
-SECTION_RE = re.compile(r"^\s*[\[(（【]\s*([^\])）】]+?)\s*[\])）】]\s*$")
+# Keep this grammar in step with packages/contracts/src/sections.ts.
+# Parentheses also carry backing vocals; only known section names are metadata.
+SQUARE_RE = re.compile(r"^\s*\[\s*([^\]]{1,40}?)\s*\]\s*$")
+PAREN_RE = re.compile(r"^\s*\(\s*([^)]{1,40}?)\s*\)\s*$")
+SECTION_NAMES = re.compile(
+    r"^(intro|前奏|序奏|イントロ|pre[\s-]?chorus|预副歌|預副歌|bメロ|"
+    r"chorus|hook|refrain|副歌|高潮|高潮部分|サビ|verse|主歌|詩|バース|aメロ|"
+    r"bridge|桥段|橋段|过渡|過渡|ブリッジ|cメロ|rap|说唱|說唱|饶舌|饒舌|ラップ|"
+    r"interlude|间奏|間奏|中间节奏|中間節奏|instrumental|inst|纯音乐|純音樂|演奏|"
+    r"solo|独奏|獨奏|ソロ|outro|ending|尾奏|结尾|結尾|アウトロ)$", re.IGNORECASE,
+)
+
+
+def section_name(line: str) -> Optional[str]:
+    square = SQUARE_RE.match(line)
+    if square:
+        return square.group(1)
+    paren = PAREN_RE.match(line)
+    if paren:
+        name = re.sub(r"[\s_-]*\d+$", "", paren.group(1)).strip()
+        if SECTION_NAMES.fullmatch(name):
+            return paren.group(1)
+    return None
 
 
 def parse_lyrics(lyrics: str) -> List[Tuple[str, str]]:
@@ -28,9 +50,9 @@ def parse_lyrics(lyrics: str) -> List[Tuple[str, str]]:
         line = raw.strip()
         if not line:
             continue
-        m = SECTION_RE.match(line)
-        if m:
-            section = m.group(1).strip()
+        marker = section_name(line)
+        if marker is not None:
+            section = marker.strip()
             continue
         out.append((section, line))
     return out
@@ -49,6 +71,7 @@ def norm_char(ch: str) -> str:
 
 
 def guess_language(lyrics: str) -> Optional[str]:
+    lyrics = "\n".join(text for _, text in parse_lyrics(lyrics))
     if re.search(r"[぀-ヿ]", lyrics):
         return "ja"
     if re.search(r"[가-힯]", lyrics):

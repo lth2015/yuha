@@ -510,6 +510,37 @@ describe('a contract read, and the chain the endpoints are on', () => {
   });
 });
 
+describe('explicit single-secondary RPC mode', () => {
+  it('uses only the secondary for finality, evidence, logs, calls and chain ID', async () => {
+    const primary = new ChainNode({
+      label: 'unavailable-primary',
+      async request() { throw new Error('primary must not be contacted'); },
+    });
+    const secondary = fakeNode('secondary', {
+      latest: 300,
+      finalized: 280,
+      hashes: { 250: H('a'), 280: H('b'), 300: H('c') },
+      receipts: { '0xaa': { status: hex(1), blockNumber: hex(250), blockHash: H('a'), logs: [] } },
+      txs: { '0xaa': {
+        hash: '0xaa', from: '0x1111111111111111111111111111111111111111',
+        to: '0x2222222222222222222222222222222222222222', value: '0x0',
+        input: '0xa9059cbb', nonce: hex(1), blockNumber: hex(250), blockHash: H('a'), chainId: hex(137),
+      } },
+      logs: [],
+      callResult: '0x06',
+      chainId: 137,
+    });
+    const reader = new DualChainReader(primary, secondary, 'single_secondary');
+    expect(await reader.finalizedHeight()).toEqual({ agreed: true, value: 280n });
+    expect((await reader.agreedHeader(250n)).agreed).toBe(true);
+    expect((await reader.agreedReceipt('0xaa')).agreed).toBe(true);
+    expect((await reader.agreedTransaction('0xaa')).agreed).toBe(true);
+    expect(await reader.agreedCall({ to: '0xabc', data: '0x313ce567' })).toEqual({ agreed: true, value: '0x06' });
+    expect(await reader.unionLogs({ fromBlock: 250n, toBlock: 280n, address: [], topics: [] })).toEqual([]);
+    expect(await verifyChainIds(reader, 137)).toEqual([]);
+  });
+});
+
 describe('parsing what a node sends', () => {
   it('reads block timestamps as milliseconds, not seconds', async () => {
     // The chain speaks seconds and this codebase speaks milliseconds. Getting

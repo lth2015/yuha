@@ -3,12 +3,14 @@ import {
   findOpenIntentForPayer,
   findTransferEvent,
   getQuote,
+  lockOrder,
   markOrderPaid,
   markRefundOwed,
   recordAttempt,
   recordOrphanTransfer,
   recordTransferEvent,
   withTx,
+  withTxRetry,
   type StablecoinIntentRow,
   type StablecoinQuoteRow,
 } from '@yuha/db';
@@ -287,7 +289,10 @@ export async function settleStablecoinObservation(
   }
 
   // fulfil
-  const settled = await withTx(async (tx) => {
+  const settled = await withTxRetry(async (tx) => {
+    // Keep the same order -> intent lock order as quote and prepare. The
+    // evidence insert's foreign key also locks the intent it references.
+    await lockOrder(intent.order_id, tx);
     const { claimed } = await recordTransferEvent(evidenceFrom(observation, quote, payment, evidenceLogIndex, evidenceValue, intent.id), tx);
     /*
      * This decides the OUTCOME, and it is not what makes delivery

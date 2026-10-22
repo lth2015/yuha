@@ -31,13 +31,14 @@ const METHOD_COPY: Record<PaymentMethodKey, { name: string; note: string }> = {
   card: { name: 'checkout.method.card', note: 'checkout.method.cardNote' },
   jpyc: { name: 'checkout.method.jpyc', note: 'checkout.method.jpycNote' },
   usdc: { name: 'checkout.method.usdc', note: 'checkout.method.usdcNote' },
+  netx: { name: 'checkout.method.netx', note: 'checkout.method.netxNote' },
 };
 
 export function CheckoutConfirm() {
   const [params] = useSearchParams();
   const navigate = useNavigate();
   const priceKey = params.get('price') ?? 'drop_5';
-  const { runtime } = useSession();
+  const { runtime, refreshRuntime } = useSession();
   const { t, lang } = useI18n();
 
   const [product, setProduct] = useState<ProductView | null>(null);
@@ -60,6 +61,7 @@ export function CheckoutConfirm() {
         const [products, d] = await Promise.all([
           apiFetch<{ items: ProductView[] }>('/v1/products'),
           apiFetch<Disclosure>('/v1/legal/business-disclosure'),
+          refreshRuntime(),
         ]);
         /*
          * A price key that is not in the catalogue used to set `product` to
@@ -79,7 +81,7 @@ export function CheckoutConfirm() {
         setLoading(false);
       }
     })();
-  }, [priceKey]);
+  }, [priceKey, refreshRuntime]);
 
   /*
    * What can pay for this, exactly as the server decided it
@@ -92,7 +94,7 @@ export function CheckoutConfirm() {
   const payWith: PaymentMethodKey | null =
     picked && methods.some((m) => m.method === picked && m.available) ? picked : fallback;
   const closedReason = product ? unavailableReason(product) : null;
-  const isStablecoin = payWith === 'jpyc' || payWith === 'usdc';
+  const isStablecoin = payWith !== null && payWith !== 'card';
 
   const proceed = async () => {
     if (!payWith) return;
@@ -271,7 +273,11 @@ export function CheckoutConfirm() {
               <span className="pay-method__name">{t(METHOD_COPY[m.method].name)}</span>
               <span className="pay-method__note small">
                 {m.available
-                  ? t(METHOD_COPY[m.method].note)
+                  ? t(METHOD_COPY[m.method].note, {
+                      // The fixed rate, from the server: the number a buyer is
+                      // charged at is never a literal in a translation.
+                      yen: String(runtime?.stablecoin.tokens.find((x) => x.key === m.method)?.yenPerToken ?? ''),
+                    })
                   : m.reason === 'no_auto_renewal'
                     ? t('checkout.method.noAutoRenewal')
                     : t('checkout.method.cardClosed')}

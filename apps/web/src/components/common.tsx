@@ -22,6 +22,7 @@ export function ErrorNotice({ error, onRetry }: { error: unknown; onRetry?: () =
     error instanceof ApiError
       ? (error.details as { hintKey?: string } | undefined)?.hintKey
       : undefined;
+  const mfaMissing = error instanceof ApiError && error.code === 'MFA_REQUIRED';
   const appealable =
     error instanceof ApiError
       ? (error.details as { appealable?: boolean } | undefined)?.appealable
@@ -38,11 +39,20 @@ export function ErrorNotice({ error, onRetry }: { error: unknown; onRetry?: () =
           {t('common.rightsNotice2')}
         </div>
       )}
-      {onRetry && (
-        <div style={{ marginTop: 'var(--s2)' }}>
-          <button type="button" className="btn btn--secondary" onClick={onRetry}>
-            {t('common.retry')}
-          </button>
+      {(mfaMissing || onRetry) && (
+        <div className="row" style={{ marginTop: 'var(--s2)', gap: 'var(--s2)', flexWrap: 'wrap' }}>
+          {/* "Try again" cannot fix a missing second factor; the way out is
+              enrolment, so the notice links straight to it. */}
+          {mfaMissing && (
+            <Link to="/settings/account" className="btn btn--primary">
+              {t('err.MFA_REQUIRED.action')}
+            </Link>
+          )}
+          {onRetry && (
+            <button type="button" className="btn btn--secondary" onClick={onRetry}>
+              {t('common.retry')}
+            </button>
+          )}
         </div>
       )}
     </div>

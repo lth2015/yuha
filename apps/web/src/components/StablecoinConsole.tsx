@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { apiFetch, apiFetchText } from '../lib/api';
 import { useI18n } from '../lib/i18n';
 import { formatJst, useSession } from '../lib/session';
-import { amountGap, formatAtomic, jstMonthRange, mayDecidePayments } from '../lib/stablecoin';
+import { amountGap, chainCopy, explorerTxUrl, formatAtomic, jstMonthRange, mayDecidePayments } from '../lib/stablecoin';
 import { Badge, ErrorNotice } from './common';
 
 /**
@@ -28,7 +28,15 @@ import { Badge, ErrorNotice } from './common';
  *     expression decides whether a button renders and whether the action runs.
  */
 
+/** Which token a row is in, resolved by the server from (chain, address). */
+interface AssetView {
+  key: string;
+  label: string;
+  decimals: number;
+}
+
 interface ReviewItem {
+  asset: AssetView;
   intent_id: string;
   order_id: string;
   user_id: string;
@@ -48,6 +56,8 @@ interface ReviewItem {
 
 interface OrphanRow {
   id: string;
+  chainId: number;
+  asset: AssetView | null;
   txHash: string;
   logIndex: number;
   from: string;
@@ -58,6 +68,8 @@ interface OrphanRow {
 }
 
 interface RefundOwed {
+  chainId: number;
+  asset: AssetView | null;
   txHash: string;
   from: string;
   amountAtomic: string;
@@ -85,20 +97,38 @@ export function StablecoinConsole() {
   const mayDecide = mayDecidePayments(me?.role);
 
   /*
-   * Precision comes from the runtime descriptor, never from a constant in this
-   * bundle. A currency's decimals decide the scale of every number on this
-   * screen, and an operator deciding whether to accept a payment short by one
-   * unit must not be reading a figure this file scaled by itself. When the
-   * token is one we were not told about, the raw atomic figure is shown — a
-   * long number is obviously raw, where a wrongly scaled one is not.
+   * Precision and the token's name come from the SERVER, per row, never from a
+   * constant in this bundle. A currency's decimals decide the scale of every
+   * number on this screen, and an operator deciding whether to accept a
+   * payment short by one unit must not be reading a figure this file scaled by
+   * itself. This used to read the runtime descriptor, which lists only the
+   * currencies being accepted right now — so a paused NETX showed raw figures,
+   * and the refunds list showed no token at all while JPYC and NETX share
+   * eighteen decimals. When the server does not know the token, the raw
+   * atomic figure is shown: a long number is obviously raw, a wrongly scaled
+   * one is not.
    */
-  const tokens = runtime?.stablecoin.tokens ?? [];
-  const decimalsForKey = (key: string): number | null =>
-    tokens.find((x) => x.key === key)?.decimals ?? null;
-  const decimalsForAddress = (address: string): number | null =>
-    tokens.find((x) => x.address.toLowerCase() === address.toLowerCase())?.decimals ?? null;
-  const amountText = (atomic: string, decimals: number | null): string =>
-    decimals === null ? atomic : formatAtomic(atomic, decimals);
+  const amountText = (atomic: string, asset: AssetView | null): string =>
+    asset === null ? atomic : `${formatAtomic(atomic, asset.decimals)} ${asset.key.toUpperCase()}`;
+  const network = (chainId: number): string => chainCopy(chainId)?.network ?? `chain ${chainId}`;
+  const txCell = (chainId: number, hash: string, extra?: string) => {
+    const url = explorerTxUrl(chainId, hash);
+    return (
+      <td className="small" style={{ fontFamily: 'var(--mono)' }}>
+        {url ? (
+          <a href={url} target="_blank" rel="noreferrer">
+            {hash.slice(0, 10)}…
+          </a>
+        ) : (
+          `${hash.slice(0, 10)}…`
+        )}
+        <div className="small muted">
+          {network(chainId)}
+          {extra ? ` · ${extra}` : ''}
+        </div>
+      </td>
+    );
+  };
 
   const load = useCallback(async () => {
     setError(null);
@@ -250,7 +280,6 @@ export function StablecoinConsole() {
             </thead>
             <tbody>
               {queue.payments.map((p) => {
-                const decimals = decimalsForKey(p.token_key);
                 const gap = amountGap(p.expected_atomic, p.received_atomic);
                 return (
                   <tr key={p.intent_id}>
@@ -259,10 +288,11 @@ export function StablecoinConsole() {
                       <div className="small muted">{p.order_status}</div>
                     </td>
                     <td className="num small">
-                      {amountText(p.expected_atomic, decimals)} {p.token_key.toUpperCase()}
+                      {amountText(p.expected_atomic, p.asset)}
+                      <div className="small muted">{network(p.chain_id)}</div>
                     </td>
                     <td className="num small">
-                      {p.received_atomic ? amountText(p.received_atomic, decimals) : '—'}
+                      {p.received_atomic ? amountText(p.received_atomic, p.asset) : '—'}
                     </td>
                     <td className="small">
                       {gap === null ? (
@@ -272,7 +302,7 @@ export function StablecoinConsole() {
                       ) : (
                         <Badge tone="badge--warn">
                           {t(`admin.sc.gap.${gap.direction}`, {
-                            amount: amountText(gap.magnitude, decimals),
+                            amount: amountText(gap.magnitude, p.asset),
                           })}
                         </Badge>
                       )}
@@ -334,11 +364,8 @@ export function StablecoinConsole() {
             <tbody>
               {queue.unattributed.map((o) => (
                 <tr key={o.id}>
-                  <td className="small" style={{ fontFamily: 'var(--mono)' }}>
-                    {o.txHash.slice(0, 10)}…
-                    <div className="small muted">#{o.logIndex}</div>
-                  </td>
-                  <td className="num small">{amountText(o.amountAtomic, decimalsForAddress(o.token))}</td>
+                  {txCell(o.chainId, o.txHash, `#${o.logIndex}`)}
+                  <td className="num small">{amountText(o.amountAtomic, o.asset)}</td>
                   <td className="small" style={{ fontFamily: 'var(--mono)' }}>
                     {o.from.slice(0, 10)}…
                   </td>
@@ -400,7 +427,7 @@ export function StablecoinConsole() {
             <thead>
               <tr>
                 <th>{t('admin.sc.col.tx')}</th>
-                <th>{t('admin.sc.col.amountAtomic')}</th>
+                <th>{t('admin.sc.col.amount')}</th>
                 <th>{t('admin.sc.col.from')}</th>
                 <th>{t('admin.sc.col.order')}</th>
                 <th>{t('admin.sc.col.since')}</th>
@@ -409,10 +436,8 @@ export function StablecoinConsole() {
             <tbody>
               {queue.refundsOwed.map((r) => (
                 <tr key={`${r.txHash}-${r.from}`}>
-                  <td className="small" style={{ fontFamily: 'var(--mono)' }}>
-                    {r.txHash.slice(0, 10)}…
-                  </td>
-                  <td className="num small">{r.amountAtomic}</td>
+                  {txCell(r.chainId, r.txHash)}
+                  <td className="num small">{amountText(r.amountAtomic, r.asset)}</td>
                   <td className="small" style={{ fontFamily: 'var(--mono)' }}>
                     {r.from.slice(0, 10)}…
                   </td>

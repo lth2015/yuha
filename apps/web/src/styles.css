@@ -46,22 +46,16 @@
    * than from a list it has to be told about.
    */
   /* in the page flow, over the light field only */
-  --glass-sunken: rgba(255, 255, 255, 0.68);
+  --glass-sunken: rgba(255, 255, 255, 0.82);
   /* over content that cannot be predicted: sticky nav, bars, menus, sheets */
-  --glass: rgba(255, 255, 255, 0.92);
+  --glass: rgba(255, 255, 255, 0.86);
   /* `.glass--raised`: the same promise, with a whiter face */
   --glass-strong: rgba(255, 255, 255, 0.96);
-  /*
-   * Was a separate 8% ink. `--line` is 10%, which is 1.04:1 away from it —
-   * two names for one colour, and nothing could tell them apart but the eye
-   * reading the stylesheet. An alias rather than a rename: `--glass-edge` says
-   * what it is for at the call sites, and now it cannot drift away from the
-   * line everything else is drawn with.
-   */
-  --glass-edge: var(--line);
+  /* A bright rim for floating glass; controls keep their stronger --line edge. */
+  --glass-edge: rgba(255, 255, 255, 0.78);
   --glass-spec: rgba(255, 255, 255, 0.95);
-  --glass-blur: 24px;
-  --glass-sat: 140%;
+  --glass-blur: 28px;
+  --glass-sat: 160%;
   /* `--surface` stays the name the components already use. */
   --surface: var(--glass);
 
@@ -161,7 +155,7 @@
   --o-disabled: 0.45;
 
   /* On light, elevation is a soft warm shadow (brand: 0 8px 32px ink/6%). */
-  --shadow-raised: 0 8px 32px rgb(32 34 31 / 6%);
+  --shadow-raised: 0 8px 28px rgb(32 34 31 / 8%), 0 1px 3px rgb(32 34 31 / 6%);
   --shadow-card: 0 2px 10px rgb(32 34 31 / 5%);
   --shadow-pop: 0 24px 64px rgb(32 34 31 / 14%);
 
@@ -337,8 +331,8 @@ code { font-family: var(--mono); font-size: 0.86em; background: var(--surface-so
   background-color: var(--glass);
   background-image: linear-gradient(
     to bottom,
-    rgb(255 255 255 / 7%) 0%,
-    rgb(255 255 255 / 2%) 38%,
+    rgb(255 255 255 / 38%) 0%,
+    rgb(255 255 255 / 8%) 38%,
     rgb(255 255 255 / 0%) 100%
   );
   -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-sat));
@@ -386,6 +380,8 @@ code { font-family: var(--mono); font-size: 0.86em; background: var(--surface-so
 .art-panel,
 .plan {
   background-color: var(--glass-sunken);
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
 }
 
 /*
@@ -410,8 +406,8 @@ code { font-family: var(--mono); font-size: 0.86em; background: var(--surface-so
     ),
     linear-gradient(
       to bottom,
-      rgb(255 255 255 / 7%) 0%,
-      rgb(255 255 255 / 2%) 38%,
+      rgb(255 255 255 / 38%) 0%,
+      rgb(255 255 255 / 8%) 38%,
       rgb(255 255 255 / 0%) 100%
     );
   transition: border-color var(--t-ui) var(--ease-ui), box-shadow var(--t-ui) var(--ease-ui);
@@ -444,21 +440,23 @@ html:has(.player-bar) { scroll-padding-bottom: 100px; }
 
 .topnav {
   position: sticky;
-  top: 0;
+  top: 12px;
   z-index: 40;
-  border-bottom: 1px solid var(--glass-edge);
+  width: min(1200px, calc(100% - 40px));
+  margin: 16px auto 0;
+  border-radius: 999px;
 }
 .topnav__inner {
   max-width: 1248px;
   margin: 0 auto;
   padding: 0 24px;
-  height: 88px;
+  height: 72px;
   display: flex;
   align-items: center;
   gap: 32px;
 }
 .topnav__home { display: inline-flex; flex: none; }
-.topnav__nav { display: flex; gap: 28px; margin-left: 12px; }
+.topnav__nav { display: flex; gap: 6px; padding: 4px; margin-left: 0; border-radius: 999px; background: rgb(32 34 31 / 4%); }
 .topnav__link {
   position: relative;
   min-height: var(--tap);
@@ -469,18 +467,9 @@ html:has(.player-bar) { scroll-padding-bottom: 100px; }
   transition: color var(--t-ui) var(--ease-ui);
 }
 .topnav__link:hover { color: var(--ink); }
-.topnav__link.is-active { color: var(--ink); }
-.topnav__link.is-active::after {
-  content: '';
-  position: absolute;
-  left: 50%;
-  bottom: 2px;
-  width: 5px;
-  height: 5px;
-  margin-left: -2.5px;
-  border-radius: 50%;
-  background: var(--ink);
-}
+.topnav__link { padding: 0 18px; border-radius: 999px; }
+.topnav__link.is-active { color: var(--ink); background: rgb(255 255 255 / 90%); box-shadow: inset 0 1px 0 white, var(--shadow-card); }
+.topnav__link.is-active::after { display: none; }
 .topnav__account { margin-left: auto; display: flex; align-items: center; gap: 14px; }
 
 .brand-lockup { display: block; height: auto; color: var(--ink); }
@@ -541,7 +530,8 @@ html:has(.player-bar) { scroll-padding-bottom: 100px; }
 .account__btn:active { transform: scale(0.96); }
 .account__avatar { width: 100%; height: 100%; border-radius: 50%; object-fit: cover; }
 .account__initial { font-weight: 600; color: var(--ink); }
-.account.is-open .account__menu, .account:hover .account__menu, .account__menu:focus-within { opacity: 1; visibility: visible; transform: translateY(0); }
+/* Match aria-expanded: hover/focus must not reopen a menu closed by navigation. */
+.account.is-open .account__menu { opacity: 1; visibility: visible; transform: translateY(0); }
 .account__menu {
   position: absolute; right: 0; top: calc(100% + 10px); min-width: 220px;
   display: flex; flex-direction: column; padding: 8px;
@@ -1211,6 +1201,9 @@ textarea.is-full { border-color: var(--danger); }
 .player-bar__inner { position: relative; max-width: 1248px; margin: 0 auto; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 2fr) minmax(0, 1fr); align-items: center; gap: var(--s4); min-height: 84px; padding: 10px 24px; }
 .player-bar__now { display: flex; align-items: center; gap: 12px; min-width: 0; border-radius: 12px; }
 .player-bar__now .cover-art { width: 48px; height: 48px; border-radius: 12px; flex: none; }
+/* A 44-48px thumbnail has no room for the 温度 reading: it was clipped to
+   "87°Y". The song page and Now Playing show it at a size it fits. */
+.player-bar .cover-art__index { display: none; }
 .player-bar__titles { display: flex; flex-direction: column; min-width: 0; }
 .player-bar__title { font-weight: 500; font-size: var(--t-body); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: flex; align-items: center; gap: 8px; }
 .player-bar__artist { font-size: var(--t-caption); color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -1883,8 +1876,8 @@ textarea.is-full { border-color: var(--danger); }
 @media (max-width: 900px) {
   .app { padding-bottom: calc(60px + env(safe-area-inset-bottom, 0px)); }
   .app:has(.player-bar) { padding-bottom: calc(60px + 64px + env(safe-area-inset-bottom, 0px)); }
-  .topnav { border-radius: 0; }
-  .topnav__inner { height: 72px; gap: 16px; padding: 0 20px; }
+  .topnav { width: calc(100% - 24px); margin-top: 12px; top: 8px; border-radius: 28px; }
+  .topnav__inner { height: 64px; gap: 12px; padding: 0 16px; }
   .topnav__home .brand-lockup { width: 112px !important; }
   .topnav__nav { display: none; }
   /* The composer below is the create surface; a second CTA up here only
@@ -1896,8 +1889,8 @@ textarea.is-full { border-color: var(--danger); }
   .lang-switch { gap: 0; }
   .lang-switch__btn { padding: 6px 9px; font-size: var(--t-caption); }
   .tabbar {
-    display: grid; position: fixed; left: 0; right: 0;
-    bottom: 0; padding-bottom: env(safe-area-inset-bottom, 0px);
+    display: grid; position: fixed; left: 20px; right: 20px;
+    bottom: calc(12px + env(safe-area-inset-bottom, 0px)); padding: 6px; border-radius: 28px;
     z-index: 70; grid-auto-flow: column; grid-auto-columns: 1fr;
     border-top: 1px solid var(--glass-edge);
     min-height: 60px;
@@ -1907,7 +1900,8 @@ textarea.is-full { border-color: var(--danger); }
   }
   .player-bar__right { display: none; }
   .tabbar__link { display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 60px; color: var(--muted); font-size: var(--t-caption); font-weight: 500; }
-  .tabbar__link.is-active { color: var(--ink); }
+  .tabbar__link { min-height: 48px; border-radius: 22px; }
+  .tabbar__link.is-active { color: var(--ink); background: rgb(255 255 255 / 90%); box-shadow: inset 0 1px 0 white, var(--shadow-card); }
 }
 @media (max-width: 767px) {
   .content { padding: var(--s6) 20px var(--s12); }
@@ -2371,7 +2365,14 @@ textarea.is-full { border-color: var(--danger); }
   .player-bar__controls .btn-icon--main { width: 44px; height: 44px; }
   .player-bar__rail { position: absolute; left: 0; right: 0; top: -9px; max-width: none; gap: 0; }
   .player-bar__time { display: none; }
-  .player-bar__seek { min-height: 18px; }
+  /*
+   * The line sits ON the bar's top edge. `top: -9px` with an 18px min-height
+   * assumed the browser honoured that height; iOS Safari draws a range input
+   * taller and with its own margin, so the line landed inside the bar and the
+   * thumb sat on the title. Fixed height, no margin, centred on the edge.
+   */
+  .player-bar__rail { top: 0; height: 18px; transform: translateY(-50%); }
+  .player-bar__seek { display: block; height: 18px; min-height: 0; margin: 0; padding: 0; }
   .player-bar__seek::-webkit-slider-runnable-track { height: 3px; border-radius: 0; }
   .player-bar__seek::-webkit-slider-thumb { width: 10px; height: 10px; margin-top: -3.5px; }
   .player-bar__seek::-moz-range-track, .player-bar__seek::-moz-range-progress { height: 3px; border-radius: 0; }
@@ -2412,3 +2413,89 @@ textarea.is-full { border-color: var(--danger); }
 .pay-method__name { font-weight: 600; font-size: var(--t-body); }
 .pay-method__note { color: var(--muted); line-height: 1.5; }
 .pricing__methods { margin: 0; text-align: center; color: var(--muted); }
+
+/* ---- operator console --------------------------------------------------- */
+.admin-tabs { display: flex; flex-wrap: wrap; gap: 4px; border-bottom: 1px solid var(--line); }
+.admin-tabs__tab {
+  padding: 10px 14px; margin-bottom: -1px; border-bottom: 2px solid transparent;
+  color: var(--muted); font-size: var(--t-body); font-weight: 500;
+}
+.admin-tabs__tab:hover { color: var(--ink); }
+.admin-tabs__tab.is-active { color: var(--ink); border-bottom-color: var(--petal); }
+.admin-filters { flex-wrap: wrap; gap: var(--s2); align-items: center; }
+/* Form controls are full-width by default; in a filter row that wraps, that put
+   every control on its own line. */
+.admin-filters > select,
+.admin-filters > input:not([type="checkbox"]) { width: auto; flex: 1 1 180px; max-width: 280px; }
+
+.dash__controls { display: flex; flex-wrap: wrap; gap: var(--s3); align-items: center; justify-content: space-between; }
+.dash__range { display: flex; flex-wrap: wrap; gap: var(--s2); align-items: center; }
+.dash__actions { display: flex; gap: var(--s2); }
+/* Eight tiles: four by two on a desk, two by four on a phone — never six and
+   a lonely two. */
+.dash__tiles { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--s3); }
+@media (min-width: 900px) { .dash__tiles { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+.dash__tile {
+  display: flex; flex-direction: column; gap: 2px; padding: var(--s3) var(--s4);
+  border: 1px solid var(--line); border-radius: var(--r-control); background: var(--surface-solid);
+}
+.dash__tilelabel { color: var(--muted); font-size: var(--t-caption); }
+.dash__tilevalue { font-size: var(--t-heading); font-weight: 600; color: var(--ink); }
+.dash__tiledelta { color: var(--muted); }
+.dash__charts { display: grid; grid-template-columns: repeat(auto-fit, minmax(420px, 1fr)); gap: var(--s4); }
+@media (max-width: 620px) { .dash__charts { grid-template-columns: minmax(0, 1fr); } }
+
+.chart {
+  margin: 0; padding: var(--s3) var(--s4); border: 1px solid var(--line);
+  border-radius: var(--r-control); background: var(--surface-solid); min-width: 0;
+}
+.chart__head { display: flex; flex-wrap: wrap; justify-content: space-between; gap: var(--s2); margin-bottom: var(--s2); }
+.chart__title { font-weight: 600; font-size: var(--t-body); color: var(--ink); }
+.chart__legend { display: flex; flex-wrap: wrap; gap: var(--s3); }
+.chart__key, .chart__tiprow { display: inline-flex; align-items: center; gap: 6px; color: var(--muted); font-size: var(--t-caption); }
+.chart__swatch { width: 10px; height: 10px; border-radius: 3px; flex: none; }
+.chart__plot { position: relative; width: 100%; }
+.chart__plot svg { display: block; }
+.chart__grid { stroke: var(--line); stroke-width: 1; }
+.chart__axis { fill: var(--muted); font-size: var(--t-caption); }
+.chart__hoverband { fill: color-mix(in srgb, var(--surface-soft) 70%, transparent); }
+.chart__tip {
+  position: absolute; top: 4px; width: 180px; padding: 8px 10px; pointer-events: none;
+  display: flex; flex-direction: column; gap: 4px; font-size: var(--t-caption); color: var(--ink);
+  background: var(--surface-solid); border: 1px solid var(--line-strong); border-radius: 10px;
+  box-shadow: var(--shadow-raised);
+}
+.chart__tiprow .num { margin-left: auto; color: var(--ink); }
+
+/* Two-step sign-in code: one centred column. The hint used to sit flush
+   under the box and collide with its focus ring (outline-offset 3px). */
+.mfa-code { display: flex; flex-direction: column; align-items: center; gap: var(--s2); text-align: center; }
+.mfa-code input {
+  width: 100%; max-width: 280px;
+  font-size: var(--t-heading); letter-spacing: 0.3em; text-align: center;
+}
+.mfa-code p { margin: var(--s1) 0 0; }
+
+/* Floating controls carry the glass; song content stays on a quieter surface. */
+.player-bar { left: 16px; right: 16px; bottom: calc(16px + env(safe-area-inset-bottom, 0px)); max-width: 1200px; margin: 0 auto; border-radius: 28px; padding-bottom: 0; }
+.queue-status { display: flex; align-items: center; gap: 16px; width: min(520px, 100%); margin: 24px auto; padding: 20px 24px; border: 1px solid var(--line); border-radius: 24px; background: var(--surface-solid); text-align: left; box-shadow: var(--shadow-card); }
+.queue-status p { margin: 4px 0 0; }
+.queue-status__orbit { flex: none; width: 32px; height: 32px; border: 3px solid var(--petal-soft); border-top-color: var(--petal-deep); border-radius: 50%; }
+@media (max-width: 900px) {
+  .app { padding-bottom: calc(100px + env(safe-area-inset-bottom, 0px)); }
+  .app:has(.player-bar) { padding-bottom: calc(180px + env(safe-area-inset-bottom, 0px)); }
+  .player-bar { left: 12px; right: 12px; bottom: calc(88px + env(safe-area-inset-bottom, 0px)); border-radius: 24px; }
+  html { scroll-padding-bottom: calc(180px + env(safe-area-inset-bottom, 0px)); }
+}
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .glass, .panel, .topnav, .player-bar, .tabbar, .account__menu, .menu__panel, .now-playing { background-color: var(--surface-solid); }
+}
+
+.queue-status__body { min-width: 0; flex: 1; }
+.queue-status__body > .btn { margin-top: 12px; }
+.open-generations { width: min(880px, 100%); margin: 0 auto; }
+.open-generations h2 { font-size: var(--t-lead); margin: 0; }
+.open-generations__row { display: flex; align-items: center; gap: 16px; padding: 12px 0; border-top: 1px solid var(--line); }
+.open-generations__row > div { min-width: 0; flex: 1; display: flex; flex-direction: column; }
+.open-generations__row strong { font-size: var(--t-body); overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.open-generations__row > .btn { flex: none; }

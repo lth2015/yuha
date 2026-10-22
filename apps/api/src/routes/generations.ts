@@ -8,7 +8,7 @@ import {
 } from '@yuha/contracts';
 import { getBalance, getTrackForUser, listOpenJobs, trackEvent } from '@yuha/db';
 import type { AppContext } from '../context.js';
-import { cancelGeneration, createGeneration, getJobView, toJobView } from '../services/generation.js';
+import { cancelGeneration, createGeneration, getJobViews, getJobView } from '../services/generation.js';
 
 export default async function generationRoutes(app: FastifyInstance, opts: { ctx: AppContext }) {
   const { ctx } = opts;
@@ -52,7 +52,7 @@ export default async function generationRoutes(app: FastifyInstance, opts: { ctx
       // The full job view, so the client can render the progress screen without
       // an immediate follow-up GET.
       return reply.status(202).send({
-        ...toJobView(ctx, result.job),
+        ...await getJobView(ctx, result.job.id, req.user!.id),
         deduplicated: result.deduplicated,
       });
     },
@@ -75,7 +75,7 @@ export default async function generationRoutes(app: FastifyInstance, opts: { ctx
    */
   app.get('/v1/jobs', { preHandler: app.requireAuth }, async (req) => {
     const rows = await listOpenJobs(req.user!.id);
-    return { items: rows.map((r) => toJobView(ctx, r)) };
+    return { items: await getJobViews(ctx, rows) };
   });
 
   const editRequestSchema = z.object({
@@ -174,7 +174,7 @@ export default async function generationRoutes(app: FastifyInstance, opts: { ctx
       });
 
       return reply.status(202).send({
-        ...toJobView(ctx, result.job),
+        ...await getJobView(ctx, result.job.id, req.user!.id),
         deduplicated: result.deduplicated,
         revision: { title: revision.title, styles: revision.styles, hasLyrics: !!revision.lyrics },
       });

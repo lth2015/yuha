@@ -19,7 +19,7 @@ import {
   writeAuditLog,
   type AccountingRow,
 } from '@yuha/db';
-import { sameAddress, toDisplayAddress } from '@yuha/providers';
+import { sameAddress, toDisplayAddress, whitelistedTokens } from '@yuha/providers';
 import { fulfilStablecoinOrder } from './stablecoin-settle.js';
 
 /**
@@ -30,10 +30,39 @@ import { fulfilStablecoinOrder } from './stablecoin-settle.js';
  * reason attached and an audit row behind it.
  */
 
+/**
+ * Which token a row is in, said by the server.
+ *
+ * JPYC and NETX both have eighteen decimals, so a raw amount and a truncated
+ * hash no longer told an operator which token to refund in — and refunds are
+ * signed by hand. Resolved from the whitelist (the constant every quote is
+ * computed from), by chain AND address, so it does not depend on whether a
+ * currency is currently accepted: the console read precision from the runtime
+ * list, which omits a paused NETX. `null` for a token we never accepted —
+ * the console then shows the raw atomic figure, which is obviously raw.
+ */
+export interface AssetView {
+  key: string;
+  label: string;
+  decimals: number;
+}
+
+function assetAt(chainId: number, address: string): AssetView | null {
+  const t = whitelistedTokens().find((x) => x.chainId === chainId && sameAddress(x.address, address));
+  return t ? { key: t.key, label: t.label, decimals: t.decimals } : null;
+}
+
+function assetQuoted(chainId: number, key: string, decimals: number): AssetView {
+  const t = whitelistedTokens().find((x) => x.chainId === chainId && x.key === key);
+  return { key, label: t?.label ?? key.toUpperCase(), decimals };
+}
+
 export async function stablecoinReviewQueue(): Promise<{
-  payments: Awaited<ReturnType<typeof listStablecoinReviews>>;
+  payments: Array<Awaited<ReturnType<typeof listStablecoinReviews>>[number] & { asset: AssetView }>;
   unattributed: Array<{
     id: string;
+    chainId: number;
+    asset: AssetView | null;
     txHash: string;
     logIndex: number;
     from: string;
@@ -42,7 +71,15 @@ export async function stablecoinReviewQueue(): Promise<{
     blockNumber: string;
     reason: string;
   }>;
-  refundsOwed: Array<{ txHash: string; from: string; amountAtomic: string; owedSince: string; orderId: string | null }>;
+  refundsOwed: Array<{
+    chainId: number;
+    asset: AssetView | null;
+    txHash: string;
+    from: string;
+    amountAtomic: string;
+    owedSince: string;
+    orderId: string | null;
+  }>;
 }> {
   const [payments, orphans, owed] = await Promise.all([
     listStablecoinReviews(),
@@ -50,12 +87,14 @@ export async function stablecoinReviewQueue(): Promise<{
     listRefundsOwed(),
   ]);
   return {
-    payments,
+    payments: payments.map((p) => ({ ...p, asset: assetQuoted(p.chain_id, p.token_key, p.token_decimals) })),
     unattributed: orphans.map((o) => ({
       // The id, because an operator can now ACT on these rows. The queue used
       // to carry no identifier at all, which is the honest shape of a list
       // nothing could be done about.
       id: o.id,
+      chainId: o.chain_id,
+      asset: assetAt(o.chain_id, o.token_address),
       txHash: o.tx_hash,
       logIndex: o.log_index,
       from: toDisplayAddress(o.from_address),
@@ -65,6 +104,8 @@ export async function stablecoinReviewQueue(): Promise<{
       reason: o.reason,
     })),
     refundsOwed: owed.map((r) => ({
+      chainId: r.chain_id,
+      asset: assetAt(r.chain_id, r.token_address),
       txHash: r.tx_hash,
       from: toDisplayAddress(r.from_address),
       amountAtomic: r.amount_atomic,

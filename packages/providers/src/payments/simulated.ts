@@ -165,6 +165,7 @@ export class SimulatedPaymentsAdapter implements PaymentsAdapter {
       customerId: s.customerId,
       amountTotal: s.amountMinor,
       currency: s.currency,
+      receiptUrl: s.paymentStatus === 'paid' ? `https://pay.stripe.test/receipts/${s.sessionId}` : null,
     };
   }
 
@@ -183,6 +184,11 @@ export class SimulatedPaymentsAdapter implements PaymentsAdapter {
       priceId: null,
       latestInvoiceId: `in_sim_${s.sessionId.slice(-8)}`,
     };
+  }
+
+  /** There is no portal to visit in a simulation; it comes straight back. */
+  async createBillingPortalSession(params: { customerId: string; returnUrl: string }) {
+    return { url: params.returnUrl };
   }
 
   async cancelSubscriptionAtPeriodEnd(subscriptionId: string) {

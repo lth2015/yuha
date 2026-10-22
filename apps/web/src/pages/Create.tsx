@@ -1,3 +1,4 @@
+import { OpenGenerations, QueueStatus } from '../components/GenerationQueue';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import {
@@ -237,6 +238,7 @@ export default function Create() {
   const { t } = useI18n();
   const [params] = useSearchParams();
   const editTrackId = params.get('edit');
+  const resumeJobId = params.get('job');
   const { me, entitlements, refreshEntitlements, runtime } = useSession();
   /**
    * Hydrated lazily — see the note on the home composer. Loading in one effect
@@ -348,6 +350,15 @@ export default function Create() {
       cancelled = true;
     };
   }, [editTrackId, me]);
+
+  useEffect(() => {
+    if (!resumeJobId || editTrackId || !me) return;
+    let gone = false;
+    apiFetch<JobView>(`/v1/jobs/${encodeURIComponent(resumeJobId)}`)
+      .then((next) => { if (!gone) setJob(next); })
+      .catch((err) => { if (!gone) setError(err); });
+    return () => { gone = true; };
+  }, [resumeJobId, editTrackId, me]);
 
   // ---- job polling with backoff (no request is held open waiting for audio)
   useEffect(() => {
@@ -616,6 +627,8 @@ export default function Create() {
               : t('create.job.failedTech')
             : done
               ? t('create.job.done')
+              : job.phase === 'queued'
+                ? t('create.phase.queued')
               : job.estimate.delayed
                 ? t('create.job.delayed')
                 : t('create.job.eta', {
@@ -623,6 +636,11 @@ export default function Create() {
                     max: job.estimate.maxSeconds,
                   })}
         </p>
+
+        <QueueStatus job={job} onUpdate={setJob} onCancelled={() => {
+          setJob(null); setResult(null); setError(null);
+          idemKey.current = newIdempotencyKey(); navigate('/create');
+        }} />
 
         {/* The same recording surface as the home screen. There were two
             different progress UIs before, so one job looked like different
@@ -643,7 +661,7 @@ export default function Create() {
           something the recording does not contain.
         */}
         <Score
-          text={instructions || [draft.prompt, draft.instrumental ? '' : draft.lyrics].filter((t) => t.trim()).join('\n')}
+          text={[job.prompt, job.mode === 'custom' && job.prompt === draft.prompt && !job.instrumental ? draft.lyrics : ''].filter((t) => t.trim()).join('\n')}
           progress={failed ? undefined : fractionOfPhase(job.phase)}
           className="wait-page__score"
           height={200}
@@ -834,6 +852,7 @@ export default function Create() {
 
   return (
     <div className="studio">
+      {me && <OpenGenerations onResume={setJob} />}
       {head}
 
       {/* Their own words, read as music, before anything else on the page. */}

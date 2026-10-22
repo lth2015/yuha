@@ -34,12 +34,12 @@ export class StripePaymentsAdapter implements PaymentsAdapter {
   private readonly webhookSecret: string;
 
   constructor(opts: StripeOptions) {
-    const isLive = opts.secretKey.startsWith('sk_live_');
+    const isLive = opts.secretKey.startsWith('sk_live_') || opts.secretKey.startsWith('rk_live_');
     if (isLive && !opts.expectLiveMode) {
       throw new Error('a live Stripe secret key was supplied outside production mode');
     }
     if (!isLive && opts.expectLiveMode) {
-      throw new Error('production mode requires a live Stripe secret key, not a test key');
+      throw new Error('production mode requires a live Stripe API key');
     }
     /*
      * The API version is configurable and defaults to the SDK's own.
@@ -162,15 +162,25 @@ export class StripePaymentsAdapter implements PaymentsAdapter {
 
   async retrieveCheckoutSession(sessionId: string) {
     try {
-      const s = await this.stripe.checkout.sessions.retrieve(sessionId);
+      // Expanded for the receipt, which the session itself does not carry:
+      // `receipt_url` is on the Charge (reached through the PaymentIntent's
+      // `latest_charge`), and a subscription's is its first invoice's page.
+      // Expansion turns both fields from ids into objects, hence `idOf`.
+      const s = await this.stripe.checkout.sessions.retrieve(sessionId, {
+        expand: ['payment_intent.latest_charge', 'invoice'],
+      });
+      const intent = typeof s.payment_intent === 'object' ? s.payment_intent : null;
+      const charge = intent && typeof intent.latest_charge === 'object' ? intent.latest_charge : null;
+      const invoice = typeof s.invoice === 'object' ? s.invoice : null;
       return {
         status: s.status ?? 'unknown',
         paymentStatus: s.payment_status ?? 'unknown',
-        paymentIntentId: typeof s.payment_intent === 'string' ? s.payment_intent : null,
+        paymentIntentId: idOf(s.payment_intent),
         subscriptionId: typeof s.subscription === 'string' ? s.subscription : null,
         customerId: typeof s.customer === 'string' ? s.customer : null,
         amountTotal: s.amount_total ?? null,
         currency: s.currency ?? null,
+        receiptUrl: charge?.receipt_url ?? invoice?.hosted_invoice_url ?? null,
       };
     } catch {
       return null;
@@ -211,6 +221,14 @@ export class StripePaymentsAdapter implements PaymentsAdapter {
     } catch {
       return null;
     }
+  }
+
+  async createBillingPortalSession(params: { customerId: string; returnUrl: string }) {
+    const s = await this.stripe.billingPortal.sessions.create({
+      customer: params.customerId,
+      return_url: params.returnUrl,
+    });
+    return { url: s.url };
   }
 
   async cancelSubscriptionAtPeriodEnd(subscriptionId: string, idempotencyKey: string) {
@@ -304,4 +322,10 @@ export class StripePaymentsAdapter implements PaymentsAdapter {
       return null;
     }
   }
+}
+
+/** An expandable Stripe field's id, whether it arrived as an id or as the object. */
+function idOf(v: string | { id: string } | null | undefined): string | null {
+  if (!v) return null;
+  return typeof v === 'string' ? v : v.id;
 }

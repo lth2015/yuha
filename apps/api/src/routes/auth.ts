@@ -3,6 +3,7 @@ import { randomUUID } from 'node:crypto';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { AppError, type MeView } from '@yuha/contracts';
+import { refuseInactive } from '../plugins/auth.js';
 import {
   confirmAgeAndTerms,
   consumeAuthCode,
@@ -231,6 +232,9 @@ export default async function authRoutes(
         externalId,
         email: body.email,
       });
+      // Before the trial grant and the signup event: a suspended account gets
+      // neither, and no session.
+      refuseInactive(user);
       const confirmed = await confirmAgeAndTerms({
         userId: user.id,
         marketingOptIn: body.marketingOptIn,
@@ -337,6 +341,10 @@ export default async function authRoutes(
 
       const identity = await google.exchangeCode({ code: query.code, codeVerifier: state.verifier });
       const user = await google.toUser(identity);
+      // No trial grant for a suspended account. The refusal itself happens at
+      // the exchange, where the SPA can show it; a throw here would land on
+      // the API's JSON error page at the end of a redirect.
+      const active = user.status === 'active' && !user.deleted_at;
       /*
        * This used to call `confirmAgeAndTerms` here, which asserted on the
        * user's behalf that they were 18 and had accepted the terms — without
@@ -360,7 +368,7 @@ export default async function authRoutes(
        * time they signed in with Google. Against the Privacy Policy's own
        * "which you may withdraw at any time", which cuts both ways.
        */
-      await grantTrialIfEligible(ctx, user.id);
+      if (active) await grantTrialIfEligible(ctx, user.id);
       await trackEvent({
         name: 'signup_completed',
         userRef: user.id,
@@ -389,6 +397,7 @@ export default async function authRoutes(
 
         const user = await getUser(consumed.userId);
         if (!user || user.deleted_at) throw new AppError('UNAUTHENTICATED', 'account no longer exists');
+        refuseInactive(user);
 
         // Second factor first: an enrolled account gets a challenge, not a session.
         const challenge = await issueMfaChallenge(ctx, user.id, user.email);
@@ -499,6 +508,7 @@ export default async function authRoutes(
 
       const user = await getUser(userId);
       if (!user || user.deleted_at) throw new AppError('UNAUTHENTICATED', 'account no longer exists');
+      refuseInactive(user);
       const token = sessionIssuerFor(ctx).issue({
         provider: user.auth_provider === 'google' ? 'google' : 'dev',
         externalId: user.external_id,

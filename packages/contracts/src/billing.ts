@@ -17,7 +17,7 @@ export type ProductKey = z.infer<typeof ProductKey>;
  *   no_auto_renewal  a subscription renews automatically; stablecoins cannot,
  *                    so a stablecoin buyer tops up with a one-time pack
  */
-export const PaymentMethodKey = z.enum(['card', 'jpyc', 'usdc']);
+export const PaymentMethodKey = z.enum(['card', 'jpyc', 'usdc', 'netx']);
 export type PaymentMethodKey = z.infer<typeof PaymentMethodKey>;
 export const paymentMethodView = z.object({
   method: PaymentMethodKey,

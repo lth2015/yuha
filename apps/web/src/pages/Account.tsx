@@ -271,7 +271,12 @@ export default function Account() {
             <div className="row">
               <input
                 type="text"
-                inputMode="numeric"
+                // "Code or recovery code": recovery codes are hex, which a
+                // numeric keypad cannot type.
+                inputMode="text"
+                autoCapitalize="off"
+                autoCorrect="off"
+                spellCheck={false}
                 maxLength={16}
                 placeholder={t('acct.disablePlaceholder')}
                 value={mfaCode}

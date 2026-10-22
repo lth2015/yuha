@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import { lazy, Suspense, type ReactNode } from 'react';
 import { BrowserRouter, Navigate, Route, Routes, useLocation } from 'react-router-dom';
 import { Layout } from './components/Layout';
 import { Loading } from './components/common';
@@ -7,12 +7,9 @@ import { PlayerProvider } from './lib/player';
 import { I18nProvider } from './lib/i18n';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { SessionProvider, useSession } from './lib/session';
-import Account from './pages/Account';
-import Admin from './pages/Admin';
 import Auth from './pages/Auth';
 import Billing from './pages/Billing';
 import { CheckoutComplete, CheckoutConfirm, CheckoutSimulate } from './pages/Checkout';
-import { StablecoinPay } from './pages/StablecoinPay';
 import Create from './pages/Create';
 import Export from './pages/Export';
 import GoogleCallback from './pages/GoogleCallback';
@@ -25,6 +22,10 @@ import NotFound from './pages/NotFound';
 import Pricing from './pages/Pricing';
 import Rights from './pages/Rights';
 import SongDetail from './pages/SongDetail';
+
+const Account = lazy(() => import('./pages/Account'));
+const Admin = lazy(() => import('./pages/Admin'));
+const StablecoinPay = lazy(() => import('./pages/StablecoinPay').then((page) => ({ default: page.StablecoinPay })));
 
 /** Sends unauthenticated visitors to sign-in, preserving where they were going. */
 function RequireAuth({ children, roles }: { children: ReactNode; roles?: string[] }) {
@@ -68,6 +69,7 @@ export default function App() {
             {/* Above the routes, so it is the first thing on whatever screen
                 the visitor lands on after signing in. */}
             <ConsentGate />
+            <Suspense fallback={<Loading />}>
             <Routes>
               <Route path="/" element={<Home />} />
               <Route path="/auth" element={<Auth />} />
@@ -174,6 +176,14 @@ export default function App() {
                   </RequireAuth>
                 }
               />
+              <Route
+                path="/admin/:tab"
+                element={
+                  <RequireAuth roles={['admin', 'support']}>
+                    <Admin />
+                  </RequireAuth>
+                }
+              />
 
               {/* Public on purpose: a rights holder must not need an account. */}
               <Route path="/help/rights" element={<Rights />} />
@@ -185,6 +195,7 @@ export default function App() {
 
               <Route path="*" element={<NotFound />} />
             </Routes>
+            </Suspense>
           </Layout>
           </ErrorBoundary>
         </PlayerProvider>

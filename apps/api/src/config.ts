@@ -1,8 +1,10 @@
 import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
+import { isIP } from 'node:net';
 import { z } from 'zod';
 import { GOOGLE_CALLBACK_PATH, GOOGLE_WEB_RETURN_PATH } from './auth/google-paths.js';
 import { RunMode } from '@yuha/contracts';
+import { isPublicAddress } from '@yuha/providers';
 
 /**
  * Configuration and mode validation (PROJECT_TASK.md §3).
@@ -158,6 +160,16 @@ const envSchema = z.object({
   STABLECOIN_ENABLED: bool(false),
   STABLECOIN_JPYC_ENABLED: bool(false),
   STABLECOIN_USDC_ENABLED: bool(false),
+  /**
+   * NETX on BNB Smart Chain (docs/NETX_PAYMENT.md). Needs its own pair of BSC
+   * nodes below. The operator can pause it at runtime without a deploy
+   * (`netxPaymentsEnabled` in feature_overrides); this switch is what allows
+   * it at all.
+   */
+  STABLECOIN_NETX_ENABLED: bool(false),
+  // Emergency opt-in: trust the secondary provider alone for every chain read.
+  // The default still requires two independent providers to agree.
+  STABLECOIN_RPC_MODE: z.enum(['dual', 'single_secondary']).default('dual'),
   STABLECOIN_CHAIN_ID: num(137).pipe(z.number().int().positive()),
   STABLECOIN_RECEIVER_ADDRESS: z.string().optional(),
   /*
@@ -174,6 +186,16 @@ const envSchema = z.object({
    */
   POLYGON_RPC_PRIMARY_URL: z.string().optional(),
   POLYGON_RPC_SECONDARY_URL: z.string().optional(),
+  /**
+   * The BNB Smart Chain pair, for NETX. Two providers cross-checked exactly as
+   * on Polygon; the mode is its own, so a Polygon emergency does not downgrade
+   * BSC verification with it.
+   */
+  BSC_RPC_PRIMARY_URL: z.string().optional(),
+  BSC_RPC_SECONDARY_URL: z.string().optional(),
+  BSC_RPC_MODE: z.enum(['dual', 'single_secondary']).default('dual'),
+  /** Where BSC scanning starts when there is no cursor yet; a Polygon block number means nothing there. */
+  BSC_SCAN_START_BLOCK: optionalNum(),
   /*
    * How far below the finalized head one eth_getLogs call may reach, and how
    * many blocks each pass re-reads.
@@ -285,7 +307,8 @@ const envSchema = z.object({
    * SSRF guard refuses twice over — not https, and a private address. This
    * lifts exactly those two checks for hosts already on
    * `MUSIC_ALLOWED_AUDIO_HOSTS`; see the note in providers/net/fetch-audio.ts
-   * for what that gives up. Refused outright in production below.
+   * for what that gives up. Production only permits the single configured
+   * Spark IP and retains the private-address check.
    */
   MUSIC_ALLOW_INSECURE_SELF_HOSTED: bool(false),
   DEMO_FIXTURES_DIR: z.string().optional(),
@@ -439,6 +462,7 @@ const envSchema = z.object({
 
   // --- generation tuning --------------------------------------------------
   JOB_LEASE_SECONDS: int(90),
+  JOB_QUEUE_DEADLINE_SECONDS: int(3600),
   JOB_DELAY_WARNING_SECONDS: int(180),
   JOB_VERIFY_DEADLINE_SECONDS: int(900),
   /*
@@ -684,10 +708,20 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     }
     if (e.DEV_AUTH_SECRET) problems.push('DEV_AUTH_SECRET must not be set in production');
     if (e.MUSIC_ALLOW_INSECURE_SELF_HOSTED) {
-      problems.push(
-        'MUSIC_ALLOW_INSECURE_SELF_HOSTED must not be set in production: it turns off the https ' +
-          'and private-address checks on provider audio URLs (SEC-05)',
-      );
+      let sparkHost: string | undefined;
+      try {
+        const base = new URL(e.MUSIC_BASE_URL ?? '');
+        if (base.protocol === 'http:' && isIP(base.hostname) && isPublicAddress(base.hostname)) {
+          sparkHost = base.hostname;
+        }
+      } catch { /* The regular HTTP adapter validation reports a missing URL. */ }
+      if (adapters.music !== 'http' || e.MUSIC_PROVIDER_ID !== 'ace-step-spark' ||
+          !sparkHost || e.MUSIC_ALLOWED_AUDIO_HOSTS?.trim() !== sparkHost) {
+        problems.push(
+          'MUSIC_ALLOW_INSECURE_SELF_HOSTED in production requires the HTTP ace-step-spark provider ' +
+            'and exactly one audio host matching the public MUSIC_BASE_URL IP',
+        );
+      }
     }
     if (!e.LEGAL_ENTITY_NAME || !e.LEGAL_ENTITY_CONTACT) {
       // SEC-13: placeholder disclosure is fine for a demo, never for real selling.
@@ -980,13 +1014,13 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
         );
       }
     }
-    if (e.STRIPE_SECRET_KEY?.startsWith('sk_live_') && mode !== 'production') {
+    if (/^(sk|rk)_live_/.test(e.STRIPE_SECRET_KEY ?? '') && mode !== 'production') {
       problems.push(`a live Stripe key cannot be used in ${mode} mode`);
     }
-    if (e.STRIPE_SECRET_KEY?.startsWith('sk_test_') && mode === 'production') {
+    if (/^(sk|rk)_test_/.test(e.STRIPE_SECRET_KEY ?? '') && mode === 'production') {
       problems.push('production mode requires a live Stripe key, not a test key');
     }
-  } else if (mode !== 'production' && e.STRIPE_SECRET_KEY?.startsWith('sk_live_')) {
+  } else if (mode !== 'production' && /^(sk|rk)_live_/.test(e.STRIPE_SECRET_KEY ?? '')) {
     problems.push('a live Stripe key is present outside production mode — remove it');
   }
 
@@ -1034,8 +1068,21 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     } else if (!/^0x[0-9a-fA-F]{40}$/.test(e.STABLECOIN_RECEIVER_ADDRESS)) {
       problems.push('STABLECOIN_RECEIVER_ADDRESS is not an Ethereum address');
     }
-    if (!e.STABLECOIN_JPYC_ENABLED && !e.STABLECOIN_USDC_ENABLED) {
+    if (!e.STABLECOIN_JPYC_ENABLED && !e.STABLECOIN_USDC_ENABLED && !e.STABLECOIN_NETX_ENABLED) {
       problems.push('stablecoin payments are enabled but no currency is');
+    }
+    if (e.STABLECOIN_CHAIN_ID === 56) {
+      // Polygon's chain id with BSC's number would make every Polygon token
+      // "on" a chain its contracts do not exist on, and both scanners share it.
+      problems.push('STABLECOIN_CHAIN_ID is the Polygon chain; BNB Smart Chain (56) is set up with the BSC_* settings');
+    }
+    if (e.STABLECOIN_NETX_ENABLED) {
+      // The same two-node rule as Polygon, for the same reason, on its own pair.
+      if (!e.BSC_RPC_PRIMARY_URL || !e.BSC_RPC_SECONDARY_URL) {
+        problems.push('NETX needs BSC_RPC_PRIMARY_URL and BSC_RPC_SECONDARY_URL (two BNB Smart Chain nodes)');
+      } else if (e.BSC_RPC_PRIMARY_URL === e.BSC_RPC_SECONDARY_URL) {
+        problems.push('the two BNB Smart Chain RPC URLs are identical; a node cannot disagree with itself');
+      }
     }
     /*
      * Both nodes are required, and they must not be the same URL.
@@ -1046,9 +1093,10 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
      * Whether two different URLs are really two different companies is not
      * something config can see; that one is on the person setting it.
      */
-    if (!e.POLYGON_RPC_PRIMARY_URL || !e.POLYGON_RPC_SECONDARY_URL) {
+    const polygonTokens = e.STABLECOIN_JPYC_ENABLED || e.STABLECOIN_USDC_ENABLED;
+    if (polygonTokens && (!e.POLYGON_RPC_PRIMARY_URL || !e.POLYGON_RPC_SECONDARY_URL)) {
       problems.push('stablecoin payments need POLYGON_RPC_PRIMARY_URL and POLYGON_RPC_SECONDARY_URL');
-    } else if (e.POLYGON_RPC_PRIMARY_URL === e.POLYGON_RPC_SECONDARY_URL) {
+    } else if (polygonTokens && e.POLYGON_RPC_PRIMARY_URL === e.POLYGON_RPC_SECONDARY_URL) {
       problems.push('the two Polygon RPC URLs are identical; a node cannot disagree with itself');
     }
     /*
@@ -1110,6 +1158,12 @@ export interface FeatureFlags {
    */
   cardPaymentsEnabled: boolean;
   generationEnabled: boolean;
+  /**
+   * Whether NETX is accepted for NEW quotes. Configuration allows it; an
+   * operator can pause it (and resume) at runtime. Pausing never stops the
+   * scanner watching for NETX already on its way.
+   */
+  netxPaymentsEnabled: boolean;
 }
 
 export function baseFeatures(cfg: AppConfig): FeatureFlags {
@@ -1125,5 +1179,6 @@ export function baseFeatures(cfg: AppConfig): FeatureFlags {
     realPaymentsEnabled: cfg.adapters.payments === 'stripe',
     cardPaymentsEnabled: cfg.adapters.payments === 'stripe' || cfg.mode === 'demo',
     generationEnabled: true,
+    netxPaymentsEnabled: cfg.STABLECOIN_ENABLED && cfg.STABLECOIN_NETX_ENABLED,
   };
 }

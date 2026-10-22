@@ -1,7 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { AppError, ProductKey } from '@yuha/contracts';
-import type { AppContext } from '../context.js';
+import { readerFor, type AppContext } from '../context.js';
 import { listVerifiedWallets } from '@yuha/db';
 import { toDisplayAddress } from '@yuha/providers';
 import { issueWalletChallenge, verifyWalletChallenge } from '../services/stablecoin-wallet.js';
@@ -11,6 +11,7 @@ import {
   stablecoinPaymentStatus,
 } from '../services/stablecoin.js';
 import { settleReportedTransaction } from '../services/stablecoin-scan.js';
+import { servedChain } from '../services/stablecoin-tokens.js';
 import {
   decideOrphanTransfer,
   decideStablecoinReview,
@@ -48,6 +49,11 @@ export default async function stablecoinRoutes(app: FastifyInstance, opts: { ctx
       const body = z
         .object({ address: addressSchema, chainId: z.number().int().positive() })
         .parse(req.body);
+      // Only chains a currency is served on. A wallet proved on some other
+      // chain would be a row nothing can ever use, and a signing prompt for it.
+      if (!servedChain(ctx.config, body.chainId)) {
+        throw new AppError('VALIDATION_FAILED', 'that chain is not used for payments here');
+      }
       const issued = await issueWalletChallenge(ctx, {
         userId: req.user!.id,
         chainId: body.chainId,
@@ -124,7 +130,7 @@ export default async function stablecoinRoutes(app: FastifyInstance, opts: { ctx
           // have been refused here as "validation failed".
           priceKey: ProductKey,
           idempotencyKey: z.string().min(8).max(128),
-          tokenKey: z.enum(['jpyc', 'usdc']),
+          tokenKey: z.enum(['jpyc', 'usdc', 'netx']),
           payer: addressSchema,
           trackId: z.string().uuid().optional(),
         })
@@ -169,8 +175,11 @@ export default async function stablecoinRoutes(app: FastifyInstance, opts: { ctx
        */
       const status = await stablecoinPaymentStatus({ userId: req.user!.id, orderId: id });
 
-      if (!ctx.chain) throw new AppError('SERVICE_DISABLED', 'stablecoin payments are not available');
-      const outcome = await settleReportedTransaction(ctx, ctx.chain, body.txHash);
+      // On the chain the order was quoted on: a NETX hash means nothing to Polygon.
+      const chainId = status.chainId ?? ctx.config.STABLECOIN_CHAIN_ID;
+      const reader = readerFor(ctx, chainId);
+      if (!reader) throw new AppError('SERVICE_DISABLED', 'stablecoin payments are not available');
+      const outcome = await settleReportedTransaction(ctx, reader, body.txHash, chainId);
 
       if (outcome.kind === 'not_found') {
         // 202: we looked, and there is nothing to act on yet. Not an error on

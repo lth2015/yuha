@@ -27,6 +27,7 @@ import {
   ChainNode,
   DualChainReader,
   JPYC_POLYGON,
+  NETX_BSC,
   USDC_POLYGON,
 } from '@yuha/providers';
 
@@ -338,6 +339,7 @@ export function verifiedChainStub(chainId = 137): DualChainReader {
     const a = to.toLowerCase();
     if (a === JPYC_POLYGON.address) return JPYC_POLYGON.decimals;
     if (a === USDC_POLYGON.address) return USDC_POLYGON.decimals;
+    if (a === NETX_BSC.address) return NETX_BSC.decimals;
     return undefined;
   };
   const node = (label: string) =>

@@ -19,9 +19,20 @@ let raf = 0;
 let smoothed = 0;
 const listeners = new Set<Listener>();
 
+let lastPlaying: boolean | null = null;
+
 function loop() {
   raf = requestAnimationFrame(loop);
-  if (!analyser || !freq) return;
+  if (!analyser || !freq) {
+    // No tap (iOS, or it failed): still tell consumers when playback starts
+    // and stops — they fall back to that — but only on a change, not per frame.
+    const playing = attached ? !attached.paused : false;
+    if (playing !== lastPlaying) {
+      lastPlaying = playing;
+      for (const l of listeners) l(0, playing);
+    }
+    return;
+  }
   analyser.getByteFrequencyData(freq);
   // Average of the low-mid bins (roughly the rhythm band) → 0..1.
   let sum = 0;
@@ -34,10 +45,35 @@ function loop() {
   for (const l of listeners) l(Math.min(1, smoothed), playing);
 }
 
+/**
+ * Whether this browser may route the player through Web Audio at all.
+ *
+ * Not on iPhone or iPad. `createMediaElementSource` moves the element's sound
+ * into the AudioContext, and iOS plays Web Audio on the RINGER channel: with
+ * the silent switch on — most phones, most of the time — the song plays in
+ * total silence while the progress bar moves. A plain <audio> element plays on
+ * the media channel and ignores the switch. iOS also suspends an AudioContext
+ * when the screen locks, which stopped the music on lock. Every iOS browser is
+ * WebKit, so Chrome on iPhone is the same case.
+ *
+ * iPadOS reports itself as a Mac; a Mac with a touch screen is the tell.
+ * Visuals there fall back to the playing/paused state, as they already do
+ * whenever the tap fails.
+ */
+export function mayTapAudio(nav: { userAgent: string; maxTouchPoints?: number }): boolean {
+  if (/\b(iPhone|iPad|iPod)\b/.test(nav.userAgent)) return false;
+  if (/\bMacintosh\b/.test(nav.userAgent) && (nav.maxTouchPoints ?? 0) > 1) return false;
+  return true;
+}
+
 /** Taps the given audio element exactly once per page load. */
 export function attachBeat(audio: HTMLAudioElement): void {
   if (attached === audio) return;
   attached = audio;
+  if (typeof navigator !== 'undefined' && !mayTapAudio(navigator)) {
+    if (!raf && typeof requestAnimationFrame !== 'undefined') loop();
+    return;
+  }
   try {
     audio.crossOrigin = 'anonymous';
     const AC = window.AudioContext ?? (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
@@ -54,6 +90,7 @@ export function attachBeat(audio: HTMLAudioElement): void {
   } catch {
     // Untappable audio: consumers degrade to playing-state animation.
     analyser = null;
+    if (!raf) loop();
   }
 }
 
@@ -65,5 +102,7 @@ export function subscribeBeat(listener: Listener): () => void {
 
 /** Resume the AudioContext after a user gesture (autoplay policy). */
 export function wakeBeat(): void {
-  if (ctx?.state === 'suspended') void ctx.resume();
+  // Not only 'suspended': WebKit also has 'interrupted' (a call, another app
+  // taking audio), and a context in it is just as silent.
+  if (ctx && ctx.state !== 'running' && ctx.state !== 'closed') void ctx.resume();
 }

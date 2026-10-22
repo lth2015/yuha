@@ -23,12 +23,37 @@
  */
 const POLYGON_CHAIN_ID = 137;
 
+/**
+ * How a token's amount is computed from a yen price. Each token says so
+ * itself: pricing used to be a two-way branch on the key — JPYC at one yen,
+ * everything else at the USD/JPY rate — so a third token would have been
+ * quoted as though it were a dollar.
+ *
+ *  - `yen`: one token is one yen (JPYC, by pricing policy).
+ *  - `usd-market`: one token is one US dollar at the live USD/JPY rate plus
+ *    the buffer (USDC; docs/PAYMENTS_DESIGN.md §4).
+ *  - `fixed-yen`: a fixed number of yen per token, whatever the market says
+ *    (NETX at ¥20, decided 2026-10-21; docs/NETX_PAYMENT.md §3). The operator
+ *    can pause it; nothing re-prices it.
+ */
+export type TokenPricing =
+  | { readonly kind: 'yen' }
+  | { readonly kind: 'usd-market' }
+  | { readonly kind: 'fixed-yen'; readonly yenPerToken: number };
+
 export interface TokenSpec {
-  readonly key: 'jpyc' | 'usdc';
+  readonly key: 'jpyc' | 'usdc' | 'netx';
   readonly chainId: number;
   readonly address: string;
   readonly decimals: number;
   readonly label: string;
+  readonly pricing: TokenPricing;
+  /**
+   * Whether this is a stablecoin. Said, not inferred: the statutory page lists
+   * stablecoins and other crypto-assets under different words, and calling
+   * NETX a stablecoin there would be a false statement on a legal page.
+   */
+  readonly stablecoin: boolean;
 }
 
 export const JPYC_POLYGON: TokenSpec = {
@@ -37,6 +62,8 @@ export const JPYC_POLYGON: TokenSpec = {
   address: '0xe7c3d8c9a439fede00d2600032d5db0be71c3c29',
   decimals: 18,
   label: 'JPYC (Polygon PoS)',
+  pricing: { kind: 'yen' },
+  stablecoin: true,
 };
 
 export const USDC_POLYGON: TokenSpec = {
@@ -45,9 +72,37 @@ export const USDC_POLYGON: TokenSpec = {
   address: '0x3c499c542cef5e3811e1192ce70d8cc03d5c3359',
   decimals: 6,
   label: 'USDC (Polygon PoS, native)',
+  pricing: { kind: 'usd-market' },
+  stablecoin: true,
 };
 
-const WHITELISTED_TOKENS: readonly TokenSpec[] = [JPYC_POLYGON, USDC_POLYGON];
+/** BNB Smart Chain mainnet. */
+export const BSC_CHAIN_ID = 56;
+
+/**
+ * NETX, the NETX community's token, on BNB Smart Chain (BEP-20).
+ *
+ * The address is the one CoinRanking and CoinLore list against the
+ * community's own links, with the same contract on BscScan, DexPaprika and
+ * Bitquery (docs/NETX_PAYMENT.md §2). NOT a stablecoin: its market price
+ * moves, which is why it is priced at a fixed rate and can be paused.
+ *
+ * `decimals` is NOT yet confirmed against the contract. It is checked rather
+ * than trusted: quoting asks the chain for `decimals()` and refuses on a
+ * mismatch, and so does the scanner at start, so a wrong value here stops
+ * NETX instead of mispricing it. Confirm before enabling (§7).
+ */
+export const NETX_BSC: TokenSpec = {
+  key: 'netx',
+  chainId: BSC_CHAIN_ID,
+  address: '0x4c32964715e9a42f8d119bfa8917d57822d3adf1',
+  decimals: 18,
+  label: 'NETX (BNB Smart Chain)',
+  pricing: { kind: 'fixed-yen', yenPerToken: 20 },
+  stablecoin: false,
+};
+
+const WHITELISTED_TOKENS: readonly TokenSpec[] = [JPYC_POLYGON, USDC_POLYGON, NETX_BSC];
 
 /**
  * The whole whitelist, for callers that have to enumerate it.

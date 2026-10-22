@@ -343,6 +343,11 @@ export async function getOrder(id: string, tx?: PoolConnection): Promise<OrderRo
   return queryOne<OrderRow>(`SELECT ${ORDER_COLUMNS} FROM orders WHERE id = ?`, [id], tx);
 }
 
+/** Serialize changes that hand a payment to a wallet or replace its quote. */
+export async function lockOrder(id: string, tx: PoolConnection): Promise<void> {
+  await query(`SELECT id FROM orders WHERE id = ? FOR UPDATE`, [id], tx);
+}
+
 export async function findOrderBySession(
   sessionId: string,
   tx?: PoolConnection,
@@ -849,4 +854,22 @@ export async function disputeCountForUser(userId: string, tx?: PoolConnection): 
     tx,
   );
   return Number(row?.n ?? 0);
+}
+
+/**
+ * Fills in a receipt link the order does not have yet, and never replaces one.
+ *
+ * For orders paid while the link was read from a field the Checkout Session
+ * does not have — every card purchase until this was fixed.
+ */
+export async function setOrderReceiptIfMissing(
+  params: { orderId: string; receiptUrl: string },
+  tx?: PoolConnection,
+): Promise<void> {
+  await execute(
+    `UPDATE orders SET receipt_url = ?, updated_at = UTC_TIMESTAMP(3)
+      WHERE id = ? AND receipt_url IS NULL`,
+    [params.receiptUrl, params.orderId],
+    tx,
+  );
 }

@@ -1,11 +1,16 @@
 import { useCallback, useEffect, useState } from 'react';
+import { NavLink, useParams } from 'react-router-dom';
 import { apiFetch } from '../lib/api';
 import { useI18n } from '../lib/i18n';
 import { formatMoney, formatJst, useSession } from '../lib/session';
+import { NetxSwitch } from '../components/admin/NetxSwitch';
 import { Badge, ErrorNotice, Loading } from '../components/common';
 import { CustomerConsole } from '../components/CustomerConsole';
 import { HeldOrderConsole } from '../components/HeldOrderConsole';
 import { StablecoinConsole } from '../components/StablecoinConsole';
+import { Dashboard } from '../components/admin/Dashboard';
+import { OrdersPanel } from '../components/admin/OrdersPanel';
+import { AuditPanel } from '../components/admin/AuditPanel';
 
 interface Measured {
   value: number | null;
@@ -25,6 +30,7 @@ interface Overview {
     ledgerDiscrepancies: number;
     technicalSuccessRate: Measured;
     budgetSpentTodayMinor: number;
+    generationFailures: Array<{ code: string; state: string; count: number }>;
   };
   cost: {
     deliveredCount: number;
@@ -104,7 +110,7 @@ function Metric({ label, m, percent = true }: { label: string; m: Measured; perc
  * change feature switches. Every mutation demands a reason, which is written to
  * the audit log with the before/after state.
  */
-export default function Admin() {
+function OverviewPanel({ part }: { part: 'ops' | 'review' }) {
   const { t } = useI18n();
   const { me } = useSession();
   const [overview, setOverview] = useState<Overview | null>(null);
@@ -163,17 +169,16 @@ export default function Admin() {
 
   return (
     <div className="stack stack--loose">
-      <div className="row row--between">
-        <h1 style={{ fontSize: 28, margin: 0 }}>{t('admin.h1')}</h1>
-        <div className="row">
-          <Badge>{overview.mode}</Badge>
-          <Badge tone={isAdmin ? 'badge--accent' : ''}>{me?.role}</Badge>
-        </div>
-      </div>
-
-      <div className="alert alert--info small">{overview.disclaimer}</div>
       <ErrorNotice error={error} onRetry={() => void load()} />
 
+      {part === 'ops' && (
+      <>
+      <div className="alert alert--info small">{overview.disclaimer}</div>
+      <div className="row">
+        <Badge>{overview.mode}</Badge>
+        <Badge tone={isAdmin ? 'badge--accent' : ''}>{me?.role}</Badge>
+      </div>
+      <NetxSwitch isAdmin={isAdmin} />
       <section className="stack">
         <h2 style={{ fontSize: 18 }}>{t('admin.ops.h2')}</h2>
         <div className="grid">
@@ -222,6 +227,17 @@ export default function Admin() {
             </span>
           </div>
           <Metric label={t('admin.ops.successRate')} m={ops.technicalSuccessRate} />
+        </div>
+
+        <p className="small muted">{t('admin.ops.rateBasis')}</p>
+        <div className="card stack">
+          <h3>{t('admin.ops.failures')}</h3>
+          {ops.generationFailures?.length ? <div className="table-wrap"><table>
+            <thead><tr><th>{t('admin.ops.reason')}</th><th>{t('admin.jobs.state')}</th><th>{t('admin.jobs.count')}</th></tr></thead>
+            <tbody>{ops.generationFailures.map((f) => <tr key={`${f.state}:${f.code}`}>
+              <td className="num">{f.code}</td><td>{f.state}</td><td className="num">{f.count}</td>
+            </tr>)}</tbody>
+          </table></div> : <p className="muted small">{t('admin.ops.noFailures')}</p>}
         </div>
 
         <div className="table-wrap">
@@ -336,6 +352,11 @@ export default function Admin() {
         </p>
       </section>
 
+      </>
+      )}
+
+      {part === 'review' && (
+      <>
       <section className="stack">
         <h2 style={{ fontSize: 18 }}>{t('admin.cases.h2')}</h2>
         {cases.length === 0 ? (
@@ -404,9 +425,62 @@ export default function Admin() {
         above it — and the stablecoin channel is switched off on most
         deployments. ("Both" when there were two of them.)
       */}
-      <CustomerConsole />
       <HeldOrderConsole />
       <StablecoinConsole />
+      </>
+      )}
+    </div>
+  );
+}
+
+/**
+ * The console, in tabs. It was one long page — overview, costs, revenue,
+ * funnel, rights cases, customers, held orders, stablecoin review — so the
+ * thing an operator came for was always several screens down, and every
+ * section's data loaded on every visit. Each tab now loads only its own.
+ *
+ * The tab is in the URL (/admin/users, /admin/orders …) so a link to "the
+ * orders list" is a link, and Back works.
+ */
+const TABS = [
+  { key: 'dashboard', path: '/admin', label: 'admin.tab.dashboard' },
+  { key: 'users', path: '/admin/users', label: 'admin.tab.users' },
+  { key: 'orders', path: '/admin/orders', label: 'admin.tab.orders' },
+  { key: 'ops', path: '/admin/ops', label: 'admin.tab.ops' },
+  { key: 'review', path: '/admin/review', label: 'admin.tab.review' },
+  { key: 'audit', path: '/admin/audit', label: 'admin.tab.audit' },
+] as const;
+
+export default function Admin() {
+  const { t } = useI18n();
+  const { me } = useSession();
+  const { tab = 'dashboard' } = useParams<{ tab?: string }>();
+  const known = TABS.some((x) => x.key === tab);
+
+  return (
+    <div className="stack stack--loose admin">
+      <div className="row row--between">
+        <h1 style={{ fontSize: 28, margin: 0 }}>{t('admin.h1')}</h1>
+        <Badge tone={me?.role === 'admin' ? 'badge--accent' : ''}>{me?.role}</Badge>
+      </div>
+      <nav className="admin-tabs" aria-label={t('admin.tabs.aria')}>
+        {TABS.map((x) => (
+          <NavLink
+            key={x.key}
+            to={x.path}
+            end
+            className={({ isActive }) => `admin-tabs__tab${isActive ? ' is-active' : ''}`}
+          >
+            {t(x.label)}
+          </NavLink>
+        ))}
+      </nav>
+      {(!known || tab === 'dashboard') && <Dashboard />}
+      {tab === 'users' && <CustomerConsole />}
+      {tab === 'orders' && <OrdersPanel />}
+      {tab === 'ops' && <OverviewPanel part="ops" />}
+      {tab === 'review' && <OverviewPanel part="review" />}
+      {tab === 'audit' && <AuditPanel />}
     </div>
   );
 }

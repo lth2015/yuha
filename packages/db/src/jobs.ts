@@ -17,6 +17,8 @@ export interface JobRow {
   provider_request_key: string;
   attempt_count: number;
   version: number;
+  next_run_at: Date | null;
+  dispatch_started_at: Date | null;
   lease_owner: string | null;
   lease_expires_at: Date | null;
   cancel_requested_at: Date | null;
@@ -35,7 +37,7 @@ export interface JobRow {
 const JOB_COLUMNS = `
   id, user_id, project_id, idempotency_key, request_hash, state, input, resolved_params,
   provider_id, provider_model, provider_contract_version, provider_request_key,
-  attempt_count, version, lease_owner, lease_expires_at, cancel_requested_at,
+  attempt_count, version, next_run_at, dispatch_started_at, lease_owner, lease_expires_at, cancel_requested_at,
   track_id, error_code, error_detail, queued_at, submitted_at, delivered_at,
   finished_at, verify_started_at, created_at, updated_at
 `;
@@ -121,6 +123,7 @@ export interface TransitionPatch {
   errorCode?: string | null;
   errorDetail?: string | null;
   clearLease?: boolean;
+  nextRunInSeconds?: number;
 }
 
 /**
@@ -157,11 +160,12 @@ export async function transitionJob(
         track_id = COALESCE(?, track_id),
         error_code = ?,
         error_detail = ?,
+        next_run_at = DATE_ADD(UTC_TIMESTAMP(3), INTERVAL ? SECOND),
         lease_owner = CASE WHEN ? THEN NULL ELSE lease_owner END,
         lease_expires_at = CASE WHEN ? THEN NULL ELSE lease_expires_at END,
         queued_at    = CASE WHEN ? = 'QUEUED'    AND queued_at    IS NULL THEN UTC_TIMESTAMP(3) ELSE queued_at END,
         submitted_at = CASE WHEN ? = 'SUBMITTED' AND submitted_at IS NULL THEN UTC_TIMESTAMP(3) ELSE submitted_at END,
-        verify_started_at = CASE WHEN ? = 'UNKNOWN' AND verify_started_at IS NULL THEN UTC_TIMESTAMP(3) ELSE verify_started_at END,
+        verify_started_at = CASE ? WHEN 'QUEUED' THEN NULL WHEN 'UNKNOWN' THEN COALESCE(verify_started_at, UTC_TIMESTAMP(3)) ELSE verify_started_at END,
         delivered_at = CASE WHEN ? = 'DELIVERED' AND delivered_at IS NULL THEN UTC_TIMESTAMP(3) ELSE delivered_at END,
         finished_at  = CASE WHEN ? IN ('DELIVERED','FAILED','REJECTED','CANCELLED') AND finished_at IS NULL
                             THEN UTC_TIMESTAMP(3) ELSE finished_at END,
@@ -176,6 +180,7 @@ export async function transitionJob(
       p.trackId ?? null,
       p.errorCode ?? null,
       p.errorDetail ?? null,
+      p.nextRunInSeconds ?? null,
       p.clearLease ? 1 : 0,
       p.clearLease ? 1 : 0,
       params.to,
@@ -214,8 +219,9 @@ export async function claimJob(
   const candidate = await queryOne<{ id: string }>(
     `SELECT id FROM generation_jobs
       WHERE state IN (${placeholders})
+        AND (next_run_at IS NULL OR next_run_at <= UTC_TIMESTAMP(3) OR (state = 'QUEUED' AND cancel_requested_at IS NOT NULL))
         AND (lease_expires_at IS NULL OR lease_expires_at < UTC_TIMESTAMP(3))
-      ORDER BY created_at
+      ORDER BY created_at, id
       LIMIT 1
       FOR UPDATE SKIP LOCKED`,
     states,
@@ -226,6 +232,7 @@ export async function claimJob(
   await execute(
     `UPDATE generation_jobs
         SET lease_owner = ?,
+            dispatch_started_at = CASE WHEN state = 'QUEUED' THEN NULL ELSE dispatch_started_at END,
             lease_expires_at = DATE_ADD(UTC_TIMESTAMP(3), INTERVAL ? SECOND),
             updated_at = UTC_TIMESTAMP(3)
       WHERE id = ?`,
@@ -242,12 +249,14 @@ export async function claimJobById(
   const res = await execute(
     `UPDATE generation_jobs
         SET lease_owner = ?,
+            dispatch_started_at = CASE WHEN state = 'QUEUED' THEN NULL ELSE dispatch_started_at END,
             lease_expires_at = DATE_ADD(UTC_TIMESTAMP(3), INTERVAL ? SECOND),
             updated_at = UTC_TIMESTAMP(3)
       WHERE id = ?
         AND state NOT IN ('DELIVERED','FAILED','REJECTED','CANCELLED')
-        AND (lease_expires_at IS NULL OR lease_expires_at < UTC_TIMESTAMP(3) OR lease_owner = ?)`,
-    [params.owner, params.leaseSeconds, params.jobId, params.owner],
+        AND (next_run_at IS NULL OR next_run_at <= UTC_TIMESTAMP(3) OR (state = 'QUEUED' AND cancel_requested_at IS NOT NULL))
+        AND (lease_expires_at IS NULL OR lease_expires_at < UTC_TIMESTAMP(3))`,
+    [params.owner, params.leaseSeconds, params.jobId],
     tx,
   );
   if (res.affectedRows === 0) return undefined;
@@ -270,7 +279,8 @@ export async function extendLease(
 
 export async function releaseLease(jobId: string, owner: string, tx?: PoolConnection): Promise<void> {
   await execute(
-    `UPDATE generation_jobs SET lease_owner = NULL, lease_expires_at = NULL
+    `UPDATE generation_jobs SET lease_owner = NULL, lease_expires_at = NULL,
+      dispatch_started_at = CASE WHEN state = 'QUEUED' THEN NULL ELSE dispatch_started_at END
       WHERE id = ? AND lease_owner = ?`,
     [jobId, owner],
     tx,
@@ -491,4 +501,63 @@ export async function recordCostEvent(
     ],
     tx,
   );
+}
+
+/** Reserve provider capacity before calling either model, across all workers. */
+export async function startMusicDispatch(
+  params: { jobId: string; owner: string; providerId: string; limit: number; leaseSeconds: number; queueDeadlineSeconds: number },
+  tx: PoolConnection,
+): Promise<JobRow | undefined> {
+  await execute('INSERT INTO generation_dispatch_gates (provider_id) VALUES (?) ON DUPLICATE KEY UPDATE provider_id = provider_id', [params.providerId], tx);
+  await query('SELECT provider_id FROM generation_dispatch_gates WHERE provider_id = ? FOR UPDATE', [params.providerId], tx);
+  const job = await queryOne<JobRow>(`SELECT ${JOB_COLUMNS} FROM generation_jobs WHERE id = ? FOR UPDATE`, [params.jobId], tx);
+  if (!job || job.state !== 'QUEUED') return undefined;
+  const expired = Date.now() - job.created_at.getTime() >= params.queueDeadlineSeconds * 1000;
+  if (!expired && job.next_run_at && job.next_run_at.getTime() > Date.now() && !job.cancel_requested_at) return undefined;
+  // A duplicate invocation must neither submit nor release the first invocation's lease.
+  if (job.dispatch_started_at && job.lease_expires_at && job.lease_expires_at.getTime() > Date.now()) return undefined;
+  if (expired) return job;
+  const active = await queryOne<{ n: number }>(
+    `SELECT COUNT(*) AS n FROM generation_jobs WHERE provider_id = ?
+      AND (state IN ('SUBMITTED','UNKNOWN','PROCESSING') OR
+           (state = 'QUEUED' AND dispatch_started_at IS NOT NULL AND lease_expires_at > UTC_TIMESTAMP(3)))`,
+    [params.providerId], tx,
+  );
+  const earlier = await queryOne<{ n: number }>(
+    `SELECT COUNT(*) AS n FROM generation_jobs WHERE provider_id = ? AND state = 'QUEUED'
+      AND (created_at < ? OR (created_at = ? AND id < ?))
+      AND (dispatch_started_at IS NULL OR lease_expires_at IS NULL OR lease_expires_at <= UTC_TIMESTAMP(3))`,
+    [params.providerId, job.created_at, job.created_at, job.id], tx,
+  );
+  if (Number(active?.n ?? 0) + Number(earlier?.n ?? 0) >= params.limit) {
+    await execute(`UPDATE generation_jobs SET next_run_at = DATE_ADD(UTC_TIMESTAMP(3), INTERVAL 5 SECOND),
+      lease_owner = NULL, lease_expires_at = NULL, dispatch_started_at = NULL WHERE id = ?`, [job.id], tx);
+    return undefined;
+  }
+  await execute(`UPDATE generation_jobs SET dispatch_started_at = UTC_TIMESTAMP(3), next_run_at = NULL,
+    lease_owner = ?, lease_expires_at = DATE_ADD(UTC_TIMESTAMP(3), INTERVAL ? SECOND) WHERE id = ?`,
+    [params.owner, params.leaseSeconds, job.id], tx);
+  return getJob(job.id, tx);
+}
+
+/** Positions for a pre-authorized list; never return another user's job data. */
+export async function queuePositions(jobs: readonly JobRow[]): Promise<Map<string, number>> {
+  const queued = jobs.filter((j) => j.state === 'QUEUED' && !j.dispatch_started_at);
+  if (!queued.length) return new Map();
+  const rows = await query<{ id: string; position: number }>(
+    `SELECT q.id, COUNT(a.id) + 1 AS position
+      FROM generation_jobs q LEFT JOIN generation_jobs a
+        ON a.provider_id = q.provider_id AND a.id <> q.id
+        AND (a.state IN ('SUBMITTED','UNKNOWN','PROCESSING') OR
+          (a.state = 'QUEUED' AND (a.created_at < q.created_at OR (a.created_at = q.created_at AND a.id < q.id))))
+      WHERE q.id IN (${queued.map(() => '?').join(',')}) AND q.state = 'QUEUED' AND q.dispatch_started_at IS NULL
+      GROUP BY q.id`, queued.map((j) => j.id),
+  );
+  return new Map(rows.map((r) => [r.id, Number(r.position)]));
+}
+
+/** Schedule another status read without changing the domain state/version. */
+export async function deferJobStep(job: JobRow, seconds: number): Promise<void> {
+  await execute(`UPDATE generation_jobs SET next_run_at = DATE_ADD(UTC_TIMESTAMP(3), INTERVAL ? SECOND)
+    WHERE id = ? AND version = ? AND state = ?`, [seconds, job.id, job.version, job.state]);
 }

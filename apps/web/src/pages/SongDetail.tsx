@@ -295,6 +295,11 @@ export default function SongDetail() {
             seed={song.coverSeed}
             title={song.title}
             styles={song.styles}
+            // The reading is computed from mood and voice as well as styles;
+            // without these the song page showed 55°YU for a song the player
+            // bar, the card and Now Playing all called 87°.
+            mood={song.mood}
+            vocalMode={song.vocalMode}
             size={560}
             className="song-spread__art"
             playing={playing}

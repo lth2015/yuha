@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { OpenGenerations } from '../components/GenerationQueue';
+import { Link, useNavigate } from 'react-router-dom';
 import type { TrackView } from '@yuha/contracts';
 import { apiFetch } from '../lib/api';
 import { useI18n } from '../lib/i18n';
@@ -16,6 +17,7 @@ type Filter = 'all' | 'processing' | 'deliverable' | 'suspended';
  */
 export default function Library() {
   const { t } = useI18n();
+  const navigate = useNavigate();
   const [songs, setSongs] = useState<TrackView[] | null>(null);
   const [cursor, setCursor] = useState<string | null>(null);
   const [filter, setFilter] = useState<Filter>('all');
@@ -141,6 +143,7 @@ export default function Library() {
 
   return (
     <div className="stack">
+      <OpenGenerations onResume={(job) => navigate(`/create?job=${encodeURIComponent(job.jobId)}`)} />
       <div className="section-head">
         <h1>{t('lib.title')}</h1>
         <Link to="/create" className="btn btn--primary btn--sm">

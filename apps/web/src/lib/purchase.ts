@@ -44,7 +44,7 @@ export function unavailableReason(
 
 /** Every method open anywhere in a catalogue, for the one-line summary on the pricing page. */
 export function methodsOpenAnywhere(products: Array<Pick<ProductView, 'paymentMethods'>>): PaymentMethodKey[] {
-  const order: PaymentMethodKey[] = ['card', 'jpyc', 'usdc'];
+  const order: PaymentMethodKey[] = ['card', 'jpyc', 'usdc', 'netx'];
   const open = new Set(products.flatMap((p) => paymentMethodsOf(p).filter((m) => m.available).map((m) => m.method)));
   return order.filter((k) => open.has(k));
 }

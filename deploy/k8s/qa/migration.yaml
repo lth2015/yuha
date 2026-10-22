@@ -55,7 +55,7 @@ spec:
               exec node migration/dist/cli.js migrate
           env:
             - name: RUN_MODE
-              value: "integration"
+              value: "production"
             - name: NODE_ENV
               value: "production"
             - name: DATABASE_SECRET_FILE

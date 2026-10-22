@@ -46,7 +46,7 @@ for the web bundle is already written in `infra/terraform/compute.tf`, and
 | Setting | Value |
 | --- | --- |
 | Payload style | **Snapshot** events |
-| API version | **2025-03-31.basil** |
+| API version | **2026-08-26.dahlia** (the endpoint's payload version — see below; `STRIPE_API_VERSION` stays `2025-03-31.basil`) |
 
 Snapshot is not a preference here, it is the only format this code can read.
 `StripePaymentsAdapter.verifyWebhook` calls `webhooks.constructEvent`, which
@@ -61,7 +61,33 @@ Switching this endpoint to Thin would therefore not degrade gracefully: the
 signature would still verify, the row would still be stored, and each handler
 would read `undefined` off an object that is not there.
 
-`2025-03-31.basil` is compatible and is kept. It was pinned because an account
+### Two versions, and why they differ
+
+There are two API versions in play and they are set in different places:
+
+- **The endpoint's version** decides the shape of the snapshot in each event.
+  It is chosen in the dashboard when the destination is created. On
+  2026-10-20 the dashboard offered only `2026-08-26.dahlia` (the account's
+  version), `2026-09-30.endive` and a preview — `basil` is no longer
+  selectable for a new destination. **Pick `2026-08-26.dahlia`.** Every
+  breaking change between basil and it — the `2025-09-30.clover` and
+  `2026-03-25.dahlia` sets plus the later dahlia rows marked breaking, 66 in
+  all — was read against the fields the handlers take straight off
+  `event.data.object` (metadata, `client_reference_id`, an invoice's
+  `parent.subscription_details`, status and line period, a subscription
+  item's period, a refund's or dispute's charge, intent, amount and status).
+  None touches them; they are Connect, Treasury, Issuing, discount and
+  Stripe.js changes. `endive` starts a new release with its own breaking set
+  that nobody has read against this code yet — do not pick it until someone
+  has, and never a preview.
+- **`STRIPE_API_VERSION`** is what every API call this code makes is pinned
+  to, including the re-reads the handlers do before granting anything (the
+  Checkout Session's `payment_status` and amount, the live Subscription). It
+  is not affected by the endpoint's version and stays as below.
+  `constructEvent` does not compare the two, and nothing here reads
+  `event.api_version`.
+
+`STRIPE_API_VERSION=2025-03-31.basil` is compatible and is kept. It was pinned because an account
 with Managed Payments refuses a Checkout Session on the SDK's own
 `2025-02-24.acacia`, and it is now also required explicitly: `STRIPE_API_VERSION`
 must be set in production or the API refuses to start. The reason is that the

@@ -91,7 +91,7 @@ describe('a real node that serves latest for finalized', () => {
 describe('calldata, executed rather than asserted', () => {
   it('moves the money a quote asked for, and emits the log the scanner reads', async () => {
     const token = await deployToken(18);
-    const jpyc: TokenSpec = { key: 'jpyc', chainId: 1337, address: token, decimals: 18, label: 'mock' };
+    const jpyc: TokenSpec = { key: 'jpyc', chainId: 1337, address: token, decimals: 18, label: 'mock', pricing: { kind: 'yen' }, stablecoin: true };
     const { amountAtomic } = quoteAmountAtomic({ priceJpy: 980, token: jpyc, rate: null });
 
     // The exact bytes `prepare` hands a wallet, run by an actual EVM.
@@ -133,8 +133,8 @@ describe('eighteen decimals and six are not the same number', () => {
     const token18 = await deployToken(18);
     const token6 = await deployToken(6);
 
-    const asJpyc: TokenSpec = { key: 'jpyc', chainId: 1337, address: token18, decimals: 18, label: 'mock-18' };
-    const asUsdc: TokenSpec = { key: 'usdc', chainId: 1337, address: token6, decimals: 6, label: 'mock-6' };
+    const asJpyc: TokenSpec = { key: 'jpyc', chainId: 1337, address: token18, decimals: 18, label: 'mock-18', pricing: { kind: 'yen' }, stablecoin: true };
+    const asUsdc: TokenSpec = { key: 'usdc', chainId: 1337, address: token6, decimals: 6, label: 'mock-6', pricing: { kind: 'usd-market' }, stablecoin: true };
 
     const jpycAmount = quoteAmountAtomic({ priceJpy: 980, token: asJpyc, rate: null }).amountAtomic;
     const { parseDecimalRate } = await import('@yuha/providers');

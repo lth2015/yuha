@@ -106,14 +106,11 @@ export default function Pricing() {
     .filter((p) => PLAN_COPY[p.priceKey])
     .sort((a, b) => a.amountMinor - b.amountMinor);
   const qrWallets = runtime?.features.qrWalletsEnabled === true;
-  /*
-   * How you can pay, said once for the page — under the plans, not on each
-   * card. Derived from the same server answer the buttons use, so it cannot
-   * list a method no plan accepts.
-   */
-  const openMethods = methodsOpenAnywhere(plans);
-  const methodLabel = (m: string) =>
-    m === 'card' ? (qrWallets ? t('price.methods.cardWallets') : t('price.methods.card')) : m.toUpperCase();
+  // Each purchase kind has different rails; derive both lists from the catalogue.
+  const oneTimeMethods = methodsOpenAnywhere(plans.filter((p) => p.kind === 'one_time'));
+  const subscriptionMethods = methodsOpenAnywhere(plans.filter((p) => p.kind === 'subscription'));
+  const methodLabel = (m: string, oneTime: boolean) =>
+    m === 'card' ? (oneTime && qrWallets ? t('price.methods.cardWallets') : t('price.methods.card')) : m.toUpperCase();
 
   return (
     <div className="stack stack--loose pricing">
@@ -227,11 +224,15 @@ export default function Pricing() {
         </div>
       )}
 
-      {openMethods.length > 0 && plans.length > 0 && (
-        <p className="pricing__methods small" role="note">
-          {t('price.methods', { list: openMethods.map(methodLabel).join(' · ') })}
-          {openMethods.some((m) => m !== 'card') && ` ${t('price.methods.stablecoinNote')}`}
-        </p>
+      {(oneTimeMethods.length > 0 || subscriptionMethods.length > 0) && (
+        <div className="pricing__methods small" role="note">
+          {oneTimeMethods.length > 0 && (
+            <p>{t('price.methods.oneTime', { list: oneTimeMethods.map((m) => methodLabel(m, true)).join(' · ') })}</p>
+          )}
+          {subscriptionMethods.length > 0 && (
+            <p>{t('price.methods.subscription', { list: subscriptionMethods.map((m) => methodLabel(m, false)).join(' · ') })}</p>
+          )}
+        </div>
       )}
 
       {/* A catalogue that produced no renderable plan is stated, not drawn as

@@ -43,7 +43,7 @@ export function toProductView(row: ProductRow, available: boolean, rails?: Payme
 export async function listProducts(ctx: AppContext): Promise<ProductView[]> {
   const features = await ctx.features();
   const rows = await listActiveProducts();
-  const rails = paymentRails(ctx.config, features.cardPaymentsEnabled);
+  const rails = paymentRails(ctx.config, features);
   return rows.map((r) =>
     // Subscriptions are fully built but stay closed to the public until the
     // repeat-purchase threshold is met (§7).
@@ -356,6 +356,31 @@ export async function cancelSubscription(
     cancelAtPeriodEnd: true,
     effectiveAt: (result.effectiveAt ?? sub.current_period_end)?.toISOString() ?? null,
   };
+}
+
+/**
+ * The subscriber's way to change their card and download invoices: a link
+ * into Stripe's Customer Portal for the customer this subscription bills.
+ *
+ * Only the owner's own subscription (anything else is "not found", not
+ * "forbidden", so ids cannot be probed), and the return address is built here
+ * from PUBLIC_WEB_URL — nothing the client sends goes into a URL. Stripe
+ * refuses until the portal is configured in its dashboard; that is reported
+ * as "not available yet", not as a server error.
+ */
+export async function openBillingPortal(
+  ctx: AppContext,
+  params: { userId: string; subscriptionId: string },
+): Promise<{ url: string }> {
+  const sub = await getSubscriptionForUser(params.subscriptionId, params.userId);
+  if (!sub) throw new AppError('SUBSCRIPTION_NOT_FOUND', 'subscription not found');
+  const returnUrl = internalUrl(ctx.config.PUBLIC_WEB_URL, '/settings/billing', '/settings/billing');
+  try {
+    return await ctx.payments.createBillingPortalSession({ customerId: sub.stripe_customer_id, returnUrl });
+  } catch (err) {
+    // Stripe's own wording stays in the log, not in the response.
+    throw Object.assign(new AppError('SERVICE_DISABLED', 'card management is not available yet'), { cause: err });
+  }
 }
 
 /** Grants the free-trial batch, if the operator has enabled it (§7: at most 2). */

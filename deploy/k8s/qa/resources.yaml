@@ -110,7 +110,7 @@ spec:
               containerPort: 4000
           env:
             - name: RUN_MODE
-              value: "integration"
+              value: "production"
             - name: NODE_ENV
               value: "production"
             - name: APP_SECRET_DIR
@@ -220,7 +220,7 @@ spec:
           command: ["node", "worker/dist/index.js"]
           env:
             - name: RUN_MODE
-              value: "integration"
+              value: "production"
             - name: NODE_ENV
               value: "production"
             - name: APP_SECRET_DIR
@@ -445,8 +445,6 @@ spec:
         jmesPath:
           - path: GOOGLE_CLIENT_SECRET
             objectAlias: GOOGLE_CLIENT_SECRET
-          - path: DEV_AUTH_SECRET
-            objectAlias: DEV_AUTH_SECRET
           - path: STORAGE_SIGNING_SECRET
             objectAlias: STORAGE_SIGNING_SECRET
           - path: ALIGNMENT_API_KEY
@@ -479,8 +477,6 @@ spec:
       data:
         - objectName: GOOGLE_CLIENT_SECRET
           key: GOOGLE_CLIENT_SECRET
-        - objectName: DEV_AUTH_SECRET
-          key: DEV_AUTH_SECRET
         - objectName: STORAGE_SIGNING_SECRET
           key: STORAGE_SIGNING_SECRET
         - objectName: ALIGNMENT_API_KEY
@@ -555,8 +551,6 @@ spec:
         jmesPath:
           - path: GOOGLE_CLIENT_SECRET
             objectAlias: GOOGLE_CLIENT_SECRET
-          - path: DEV_AUTH_SECRET
-            objectAlias: DEV_AUTH_SECRET
           - path: STORAGE_SIGNING_SECRET
             objectAlias: STORAGE_SIGNING_SECRET
           - path: ALIGNMENT_API_KEY
@@ -589,8 +583,6 @@ spec:
       data:
         - objectName: GOOGLE_CLIENT_SECRET
           key: GOOGLE_CLIENT_SECRET
-        - objectName: DEV_AUTH_SECRET
-          key: DEV_AUTH_SECRET
         - objectName: STORAGE_SIGNING_SECRET
           key: STORAGE_SIGNING_SECRET
         - objectName: ALIGNMENT_API_KEY

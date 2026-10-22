@@ -83,6 +83,15 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile --prefer-offline
 
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Music service contract tests (no GPU)
+        run: |
+          python -m pip install -r deploy/dgx/music/server/requirements.txt
+          python -m unittest discover -s deploy/dgx/music/server -p 'test_*.py'
+
       # ffmpeg backs the output checks and export rendering; the audio tests
       # exercise it for real rather than mocking it out.
       - name: Install ffmpeg
@@ -146,7 +155,7 @@ jobs:
         run: pnpm check:contrast
 
       - name: Stewardship
-        # The code is Apache-2.0 and stewarded by the NEXT community; the
+        # The code is Apache-2.0 and stewarded by the NETX community; the
         # service is operated by someone else, and the 特定商取引法 block names
         # that someone. Both halves are easy to break quietly — a steward's
         # name in a statutory disclosure is a false disclosure, and an

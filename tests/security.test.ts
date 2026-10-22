@@ -735,9 +735,8 @@ describe('SEC-03 / §3.1: run-mode boundaries are enforced at start-up', () => {
       .toThrow(/demo \(fake\) music adapter/);
   });
 
-  it('production refuses the self-hosted audio escape hatch', () => {
-    // It turns off the https and private-address checks on provider audio
-    // URLs, which is a development affordance and nothing else.
+  it('production refuses an unscoped self-hosted audio escape hatch', () => {
+    // Production only permits HTTP for the single configured Spark IP.
     expect(() =>
       loadConfig({ ...base, RUN_MODE: 'production', MUSIC_ALLOW_INSECURE_SELF_HOSTED: 'true' } as never),
     ).toThrow(/MUSIC_ALLOW_INSECURE_SELF_HOSTED/);

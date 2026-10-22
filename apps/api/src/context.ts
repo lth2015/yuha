@@ -24,6 +24,7 @@ import {
   type QueueAdapter,
   type StorageAdapter,
   type TextProvider,
+  BSC_CHAIN_ID,
   ChainNode,
   DualChainReader,
   httpTransport,
@@ -34,6 +35,14 @@ import {
 import { getSetting, initDb } from '@yuha/db';
 import { baseFeatures, type AppConfig, type FeatureFlags } from './config.js';
 import { resolveFromRoot } from './paths.js';
+
+
+/**
+ * The runtime setting that holds the NETX pause, written only by
+ * `PUT /v1/admin/netx-payments` and deliberately not one of the keys the
+ * generic settings endpoint accepts.
+ */
+export const NETX_PAUSE_SETTING = 'netx_payments';
 
 export interface UsdJpySource {
   /** The rate a USDC quote is computed from. */
@@ -59,6 +68,13 @@ export interface AppContext {
    */
   chain: DualChainReader | undefined;
   /**
+   * Readers for the other chains a token lives on, by chain id — BNB Smart
+   * Chain (56) for NETX. `chain` stays the Polygon reader so nothing that only
+   * ever meant Polygon had to change; anything that acts for a TOKEN asks
+   * `readerFor(ctx, token.chainId)`, which looks in both.
+   */
+  otherChains: Map<number, DualChainReader>;
+  /**
    * Two independent USD/JPY readings, for quoting USDC. An adapter for the
    * same reason `chain` is one: the cases that matter — a feed down, a stale
    * reference, the two disagreeing — can only be arranged with fakes.
@@ -69,6 +85,27 @@ export interface AppContext {
   /** Reads the operator-editable switches on top of the static config. */
   features(): Promise<FeatureFlags>;
 }
+
+/**
+ * What a song's usage record says the buyer may and may not do — Terms §4,
+ * in the Terms' own words, because the record is shown to the customer as
+ * their licence and must not say more or less than the contract.
+ *
+ * These were `[]` for the http adapter (how the self-hosted ACE-Step model is
+ * reached). Unseen while MUSIC_COMMERCIAL_DELIVERY was off — delivery writes
+ * a "preview only" line instead — and an empty licence on every paid song the
+ * moment it was switched on. If Terms §4 changes, change this with it: a
+ * record is frozen per song at generation time.
+ */
+const TERMS_ALLOWED_USES = [
+  'Personal and creator content by the account holder',
+  'Monetised posts on the platforms the plan states',
+] as const;
+const TERMS_PROHIBITED_USES = [
+  'Reselling the audio itself as a music or stock product',
+  'Presenting it as a human performance',
+  'Using it to train competing music models',
+] as const;
 
 function buildMusic(cfg: AppConfig): MusicProvider {
   if (cfg.adapters.music === 'demo') {
@@ -120,8 +157,8 @@ function buildMusic(cfg: AppConfig): MusicProvider {
     contractVersion: cfg.MUSIC_CONTRACT_VERSION!,
     licenseVersion: cfg.MUSIC_LICENSE_VERSION!,
     territory: 'JP',
-    allowedUses: [],
-    prohibitedUses: [],
+    allowedUses: [...TERMS_ALLOWED_USES],
+    prohibitedUses: [...TERMS_PROHIBITED_USES],
     submitPath: cfg.MUSIC_SUBMIT_PATH!,
     pollPath: cfg.MUSIC_POLL_PATH!,
     ...(cfg.MUSIC_CANCEL_PATH ? { cancelPath: cfg.MUSIC_CANCEL_PATH } : {}),
@@ -279,7 +316,29 @@ function buildChainReader(cfg: AppConfig): DualChainReader | undefined {
     // The label, never the URL: an alert naming the disagreeing node must not
     // print an API key.
     new ChainNode(httpTransport({ label: 'polygon-secondary', url: cfg.POLYGON_RPC_SECONDARY_URL })),
+    cfg.STABLECOIN_RPC_MODE,
   );
+}
+
+function buildOtherChains(cfg: AppConfig): Map<number, DualChainReader> {
+  const chains = new Map<number, DualChainReader>();
+  if (cfg.BSC_RPC_PRIMARY_URL && cfg.BSC_RPC_SECONDARY_URL) {
+    chains.set(
+      BSC_CHAIN_ID,
+      new DualChainReader(
+        new ChainNode(httpTransport({ label: 'bsc-primary', url: cfg.BSC_RPC_PRIMARY_URL })),
+        new ChainNode(httpTransport({ label: 'bsc-secondary', url: cfg.BSC_RPC_SECONDARY_URL })),
+        cfg.BSC_RPC_MODE,
+      ),
+    );
+  }
+  return chains;
+}
+
+/** The reader for the chain a token lives on, or undefined when that chain is not configured. */
+export function readerFor(ctx: Pick<AppContext, 'config' | 'chain' | 'otherChains'>, chainId: number): DualChainReader | undefined {
+  if (chainId === ctx.config.STABLECOIN_CHAIN_ID) return ctx.chain;
+  return ctx.otherChains.get(chainId);
 }
 
 export function createContext(config: AppConfig): AppContext {
@@ -300,6 +359,7 @@ export function createContext(config: AppConfig): AppContext {
     queue: buildQueue(config),
     payments: buildPayments(config),
     chain: buildChainReader(config),
+    otherChains: buildOtherChains(config),
     fx: {
       primary: () => readCoinbaseUsdJpy(),
       reference: () => readFrankfurterUsdJpy(),
@@ -313,6 +373,10 @@ export function createContext(config: AppConfig): AppContext {
         'feature_overrides',
         {},
       );
+      // The NETX pause has a key of its own (NETX_PAUSE_SETTING): inside
+      // `feature_overrides` it was erased by every whole-object write of the
+      // other switches, which is how the generation runbook writes them.
+      const netx = await getSetting<{ accepting?: boolean }>(NETX_PAUSE_SETTING, {});
       return {
         subscriptionsEnabled: statics.subscriptionsEnabled && overrides.subscriptionsEnabled !== false,
         freeTrialEnabled: statics.freeTrialEnabled && overrides.freeTrialEnabled !== false,
@@ -322,6 +386,7 @@ export function createContext(config: AppConfig): AppContext {
         realPaymentsEnabled: statics.realPaymentsEnabled,
         cardPaymentsEnabled: statics.cardPaymentsEnabled,
         generationEnabled: overrides.generationEnabled !== false,
+        netxPaymentsEnabled: statics.netxPaymentsEnabled && netx.accepting !== false,
       };
     },
   };

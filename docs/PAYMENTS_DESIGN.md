@@ -25,17 +25,18 @@ change does not fit this page, change this page first, in the same commit.
 | Card (银行卡) | Stripe Checkout. Apple Pay, Google Pay, konbini, Alipay and WeChat Pay are whatever the Stripe account enables; the code never lists them |
 | JPYC | Yen stablecoin on Polygon, 1 JPYC per yen by pricing policy |
 | USDC | Dollar stablecoin on Polygon, priced as one US dollar at the live USD/JPY rate plus a buffer (§4) |
+| NETX | The NETX community's token on BNB Smart Chain — **not** a stablecoin — at a fixed 1 NETX = ¥20, pausable by an operator at runtime (docs/NETX_PAYMENT.md) |
 
 ## 2. The matrix — the whole rule
 
-| | Card | JPYC | USDC |
-| --- | --- | --- | --- |
-| Top-up pack | ✓ | ✓ | ✓ |
-| Subscription | ✓ | ✗ | ✗ |
-| Song licence | ✓ | ✓ | ✓ |
+| | Card | JPYC | USDC | NETX |
+| --- | --- | --- | --- | --- |
+| Top-up pack | ✓ | ✓ | ✓ | ✓ |
+| Subscription | ✓ | ✗ | ✗ | ✗ |
+| Song licence | ✓ | ✓ | ✓ | ✓ |
 
 The ✗ has one reason: **a subscription renews by charging the buyer every
-month, and a stablecoin cannot be charged — only sent.** A stablecoin buyer
+month, and a token cannot be charged — only sent.** A stablecoin buyer
 who wants a month's worth of songs buys top-up packs (预充值). There is no
 "stablecoin subscription", and no button may suggest one.
 
@@ -81,6 +82,9 @@ the browser), and they are why the grid disagreed with itself.
   so the price can be defended later regardless of what the configuration
   says by then. The buyer sees the rate and the buffer next to the amount.
 - JPYC consults no rate and takes no buffer.
+- NETX consults no rate and takes no buffer either: its price is fixed at
+  ¥20 per token (`ceil(priceJpy × 10^decimals / 20)`), so the market price is
+  the operator's to watch, with the pause as the control (NETX_PAYMENT.md §4).
 
 ## 5. What the screens do
 
@@ -98,6 +102,13 @@ the browser), and they are why the grid disagreed with itself.
    buyer at top-up packs.
 5. A channel being closed is stated where a channel is chosen, not as a
    banner over products.
+6. Confirmation and wallet pages refresh the runtime payment methods on
+   entry. An explicitly selected currency is never silently replaced by
+   another; previously issued quotes retain their original currency and chain.
+
+Preparing a wallet transfer and replacing an order's quote lock the same order
+row. The cross-chain prepared-intent guard therefore observes committed state,
+including when those two requests overlap.
 
 ## 6. Not decided by this page
 

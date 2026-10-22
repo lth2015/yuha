@@ -2,7 +2,7 @@
 /**
  * The steward of the code is not the operator of the service.
  *
- * YUHA's code is Apache-2.0 and stewarded upstream by the NEXT community
+ * YUHA's code is Apache-2.0 and stewarded upstream by the NETX community
  * (GOVERNANCE.md). The service at yuha.studio was not donated with it: the
  * Stripe account, the 特定商取引法 販売業者, the privacy controller, refunds
  * and support all stay with its operator, a sole proprietor. Both halves break
@@ -402,6 +402,10 @@ const EMAIL_DOMAINS = [
   'anthropic.com',
 ];
 
+// The owner explicitly approved this one mailbox for the initial admin migration.
+// Do not allow gmail.com as a domain: unrelated personal addresses remain blocked.
+const APPROVED_PERSONAL_EMAILS = new Set(['lth9739@gmail.com']);
+
 const SHAPES = [
   // A postal code: with the 〒, or bare and followed by kanji (`NNN-NNNN 東京都…`).
   [/〒\s*\d{3}-\d{4}/g, 'a Japanese postal code'],
@@ -452,7 +456,7 @@ for (const path of tracked) {
   }
   for (const m of text.matchAll(/[A-Za-z0-9._%+-]+@([A-Za-z0-9.-]+\.[A-Za-z]{2,})/g)) {
     const domain = m[1].toLowerCase().replace(/[.,;:)\]]+$/, '');
-    if (EMAIL_DOMAINS.includes(domain)) continue;
+    if (EMAIL_DOMAINS.includes(domain) || APPROVED_PERSONAL_EMAILS.has(m[0].toLowerCase())) continue;
     const key = `email:${m[0]}`;
     if (reported.has(key)) continue;
     reported.add(key);

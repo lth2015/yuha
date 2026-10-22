@@ -137,33 +137,30 @@ const MUTATIONS = [
   {
     name: 'quoting-does-not-ask-the-chain-about-decimals',
     file: `${S}/stablecoin.ts`,
-    from: '  await assertConfiguredTokensVerified(ctx, ctx.chain);',
+    from: '  await assertConfiguredTokensVerified(ctx, reader, token.chainId);',
     to: '  void assertConfiguredTokensVerified;',
     tests: ['tests/stablecoin-review-fixes.test.ts'],
   },
   {
     name: 'prepare-refuses-only-a-paid-order',
     file: `${S}/stablecoin.ts`,
-    from: `  if (['paid', 'refunded', 'partially_refunded'].includes(order.status)) {
-    throw new AppError('CONFLICT', 'this order can no longer be paid');
-  }`,
-    to: `  if (order.status === 'paid') throw new AppError('CONFLICT', 'this order has already been paid');`,
+    from: `    if (['paid', 'refunded', 'partially_refunded'].includes(order.status)) {
+      throw new AppError('CONFLICT', 'this order can no longer be paid');
+    }`,
+    to: `    if (order.status === 'paid') throw new AppError('CONFLICT', 'this order has already been paid');`,
     tests: ['tests/stablecoin-quote-intent.test.ts'],
   },
   {
     name: 'a-re-quote-leaves-the-orders-other-slot-open',
     file: `${S}/stablecoin.ts`,
-    from: `    const openForOrder = await findOpenIntentForOrder(order.id, tx);
-    if (openForOrder && openForOrder.id !== openForPayer?.id) {
-      await closeIntent({ intentId: openForOrder.id, state: 'cancelled' }, tx);
-    }`,
-    to: '    void findOpenIntentForOrder;',
+    from: "      await closeIntent({ intentId: openForOrder.id, state: 'cancelled' }, tx);",
+    to: '      void closeIntent;',
     tests: ['tests/stablecoin-quote-intent.test.ts'],
   },
   {
     name: 'the-chain-id-of-the-endpoints-is-never-checked',
     file: `${S}/stablecoin-scan.ts`,
-    from: `  for (const problem of await verifyChainIds(reader, ctx.config.STABLECOIN_CHAIN_ID)) {
+    from: `  for (const problem of await verifyChainIds(reader, chainId)) {
     problems.push({ token: 'chain', kind: 'unavailable', reason: problem });
   }`,
     to: '  void verifyChainIds;',
@@ -339,9 +336,66 @@ const MUTATIONS = [
   {
     name: 'the-browser-is-told-about-currencies-that-are-switched-off',
     file: 'apps/api/src/services/stablecoin-tokens.ts',
-    from: '  return whitelistedTokens().filter((t) => t.chainId === cfg.STABLECOIN_CHAIN_ID && on[t.key]);',
+    from: '  return whitelistedTokens().filter((t) => servedChain(cfg, t.chainId) && on[t.key]);',
     to: '  void on;\n  return [...whitelistedTokens()];',
     tests: ['tests/stablecoin-quote-intent.test.ts'],
+  },
+  {
+    // NETX is priced at a fixed ¥20; quoting it at the USD/JPY rate (the old
+    // "anything but JPYC" branch) would charge a dollar's worth per token.
+    name: 'a-fixed-price-consults-the-market',
+    file: `${S}/stablecoin.ts`,
+    from: "  const rate = token.pricing.kind === 'usd-market' ? await usdcJpyRate(ctx) : null;",
+    to: "  const rate = token.pricing.kind === 'yen' ? null : await usdcJpyRate(ctx);",
+    tests: ['tests/netx-payments.test.ts'],
+  },
+  {
+    // The operator's control when NETX's market falls below its fixed price.
+    name: 'pausing-netx-does-nothing',
+    file: 'apps/api/src/services/stablecoin-tokens.ts',
+    from: '  return { jpyc: false, usdc: false, netx: !features.netxPaymentsEnabled };',
+    to: '  void features;\n  return { jpyc: false, usdc: false, netx: false };',
+    tests: ['tests/netx-payments.test.ts'],
+  },
+  {
+    // A NETX hash reported by the customer, looked up on Polygon.
+    name: 'a-reported-hash-is-looked-up-on-the-wrong-chain',
+    file: 'apps/api/src/routes/stablecoin.ts',
+    from: '      const reader = readerFor(ctx, chainId);',
+    to: '      const reader = ctx.chain;',
+    tests: ['tests/netx-scan.test.ts'],
+  },
+  {
+    // One chain's sweep closing the other chain's quotes.
+    name: 'expiry-is-not-scoped-to-its-chain',
+    file: 'packages/db/src/stablecoin.ts',
+    from: '        AND (? IS NULL OR i.chain_id = ?)',
+    to: '        AND (? IS NULL OR ? IS NOT NULL)',
+    tests: ['tests/netx-scan.test.ts'],
+  },
+  {
+    // A cross-chain re-quote orphaning a transfer the wallet was already handed.
+    name: 'a-requote-on-the-other-chain-strands-a-sent-payment',
+    file: `${S}/stablecoin.ts`,
+    from: "      if (openForOrder.chain_id !== token.chainId && openForOrder.state !== 'quoted') {",
+    to: '      if (openForOrder.chain_id !== openForOrder.chain_id) {',
+    tests: ['tests/netx-payments.test.ts'],
+  },
+  {
+    // Signing prompts for BNB Smart Chain on a deployment that does not use it.
+    name: 'wallets-are-proved-on-a-chain-nothing-uses',
+    file: `${S}/stablecoin-tokens.ts`,
+    from: '  return chainId === cfg.STABLECOIN_CHAIN_ID || (chainId === BSC_CHAIN_ID && cfg.STABLECOIN_NETX_ENABLED);',
+    to: '  return chainId === cfg.STABLECOIN_CHAIN_ID || chainId === BSC_CHAIN_ID;',
+    tests: ['tests/stablecoin-wallet.test.ts'],
+  },
+  {
+    // A refund signed by hand in the wrong token: JPYC and NETX share 18 decimals.
+    name: 'the-queue-does-not-say-which-token',
+    file: `${S}/stablecoin-admin.ts`,
+    from: '      asset: assetAt(o.chain_id, o.token_address),',
+    to: '      asset: null,',
+    tests: ['tests/netx-scan.test.ts'],
   },
   {
     name: 'a-wallet-listing-shows-everybodys-wallets',
