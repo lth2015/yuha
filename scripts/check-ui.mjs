@@ -393,9 +393,10 @@ async function fixtures(browser, states) {
   await apage.goto(`${BASE}/`, { waitUntil: 'networkidle' });
   await apage.evaluate(async ([email, k]) => {
     const auth = { authorization: `Bearer ${localStorage.getItem('loopscene.token')}`, 'content-type': 'application/json' };
-    const found = await (await fetch(`/v1/admin/users?email=${encodeURIComponent(email)}`, { headers: auth })).json();
-    const id = found.items?.[0]?.userId;
-    if (!id) throw new Error('fixtures: the seeded creator was not found');
+    const res = await fetch(`/v1/admin/users?email=${encodeURIComponent(email)}`, { headers: auth });
+    const body = await res.text();
+    const id = res.ok ? JSON.parse(body).items?.[0]?.userId : null;
+    if (!id) throw new Error(`fixtures: the seeded creator was not found (${res.status} ${body.slice(0, 200)})`);
     await fetch(`/v1/admin/users/${id}/grant`, {
       method: 'POST',
       headers: auth,

@@ -257,6 +257,10 @@ jobs:
       STORAGE_ADAPTER: local
       QUEUE_ADAPTER: local
       PAYMENTS_ADAPTER: simulated
+      # The demo stack's admin has no MFA factor; with MFA required every
+      # admin API answers 403 and the console pages show the MFA prompt
+      # instead of the console this job exists to look at.
+      ADMIN_MFA_REQUIRED: 'false'
       UI_SHOTS: ui-shots
     steps:
       - uses: actions/checkout@v5
