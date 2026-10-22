@@ -54,6 +54,26 @@ import { mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 
 const BASE = process.env.UI_BASE ?? 'http://localhost:5173';
+
+/**
+ * In GitHub Actions each problem is also an annotation: annotations can be
+ * read from the API and the PR page, where the raw job log often cannot.
+ */
+const annotate = (title, message) => {
+  if (!process.env.GITHUB_ACTIONS) return;
+  const esc = (v) => String(v).replace(/%/g, '%25').replace(/\r/g, '%0D').replace(/\n/g, '%0A');
+  console.log(`::error title=${esc(title).replace(/[:,]/g, ' ')}::${esc(message)}`);
+};
+process.on('uncaughtException', (err) => {
+  annotate('check-ui crashed', err.stack ?? String(err));
+  console.error(err);
+  process.exit(1);
+});
+process.on('unhandledRejection', (err) => {
+  annotate('check-ui crashed', err?.stack ?? String(err));
+  console.error(err);
+  process.exit(1);
+});
 const SHOTS = process.env.UI_SHOTS ?? 'ui-shots';
 const only = (() => {
   const i = process.argv.indexOf('--only');
@@ -446,6 +466,7 @@ for (const pageDef of PAGES.filter((p) => !only || p.name.includes(only))) {
         await page.screenshot({ path: shot, fullPage: true });
         console.log(`✗ ${where}  (${shot})`);
         for (const p of problems) console.log(`    ${p.rule.padEnd(8)} ${p.what} — ${p.detail}`);
+        annotate(`UI ${where}`, problems.map((p) => `${p.rule} ${p.what} — ${p.detail}`).join('\n'));
       } else {
         console.log(`✓ ${where}`);
       }
