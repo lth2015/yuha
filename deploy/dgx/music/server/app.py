@@ -34,6 +34,7 @@ from fastapi import FastAPI, Header, HTTPException, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import FileResponse, JSONResponse
 from pydantic import BaseModel, ConfigDict, Field, field_validator
+from mastering import build_filters, validate_tone
 
 # ---------------------------------------------------------------- config
 API_KEY = os.environ.get("YUHA_API_KEY", "")
@@ -45,11 +46,17 @@ CHECKPOINT_DIR = os.environ.get("ACE_CHECKPOINT_DIR", "/root/.cache/ace-step/che
 MAX_QUEUE = int(os.environ.get("MAX_QUEUE", "8"))
 INFER_STEPS = int(os.environ.get("ACE_INFER_STEPS", "60"))
 MP3_BITRATE = os.environ.get("MP3_BITRATE", "192k")
-# Mastering, applied to the delivered mp3. Off by setting MASTER_POLISH=off, so
-# a bad sounding change can be reverted without a redeploy of this code.
+# Mastering, applied while the render is still a lossless WAV and before the
+# one-and-only MP3 encode.  Set MASTER_POLISH=off to disable the chain for
+# future deliveries without a code deploy; set MASTER_TONE=off to retain level
+# matching/fades but remove the tonal treatment.  Source WAVs are deliberately
+# ephemeral, so this is a forward-only rollout switch, not a remaster feature.
 MASTER_POLISH = os.environ.get("MASTER_POLISH", "on").lower() != "off"
+MASTER_TONE = validate_tone(os.environ.get("MASTER_TONE", "conservative"))
 MASTER_LUFS = float(os.environ.get("MASTER_LUFS", "-14"))     # streaming-era target
-MASTER_TP = float(os.environ.get("MASTER_TP", "-1.5"))        # true-peak ceiling, dBTP
+# A little extra margin protects against MP3 encoder inter-sample peaks.  This
+# is still louder than most source renders and was measured on the DGX A/B.
+MASTER_TP = float(os.environ.get("MASTER_TP", "-2.5"))        # true-peak ceiling, dBTP
 MASTER_LRA = float(os.environ.get("MASTER_LRA", "11"))        # loudness range
 FADE_IN_MS = int(os.environ.get("FADE_IN_MS", "30"))          # kills the click on the first sample
 FADE_OUT_MS = int(os.environ.get("FADE_OUT_MS", "1500"))      # an ending, instead of a cut
@@ -485,11 +492,11 @@ def _mean_volume_db(path: Path) -> Optional[float]:
 
 def _master(src: Path, dst: Path, *, want_seconds: float) -> dict:
     """
-    Encode the delivered mp3, with the polish the app's own exports already get.
+    Encode the delivered MP3 from the original WAV, with conservative polish.
 
     The export path in the main repo
     (`packages/providers/src/audio/ffmpeg.ts`) runs
-    `loudnorm=I=-14:TP=-1.5:LRA=11` and a fade before encoding, so a 30-second
+    `loudnorm` and a fade before encoding, so a 30-second
     clip someone downloads is levelled and ends cleanly. The master — the thing
     everyone actually listens to — was a bare `libmp3lame` transcode of
     whatever ACE-Step produced. Two songs in a row therefore arrive at two
@@ -509,6 +516,9 @@ def _master(src: Path, dst: Path, *, want_seconds: float) -> dict:
         empty generation to -14 LUFS, and the check that exists to catch
         exactly that (`silent_or_near_silent`, on mean volume) would then pass.
         A failed render must keep looking like one.
+      - **No blanket denoise or source separation.** Those processes can
+        damage cymbals, ambience, and consonants.  They belong to an explicitly
+        identified bad render, not every song.
       - **Single-pass `loudnorm`.** Two-pass is more accurate and doubles the
         ffmpeg work on a box that is already the bottleneck. The error is a
         fraction of a dB, well under what anyone hears across two songs.
@@ -524,12 +534,15 @@ def _master(src: Path, dst: Path, *, want_seconds: float) -> dict:
             log.warning("master: %s is near-silent (%.1f dB), leaving it unnormalised",
                         src.name, mean_db)
         else:
-            filters.append(f"loudnorm=I={MASTER_LUFS}:TP={MASTER_TP}:LRA={MASTER_LRA}")
-            if FADE_IN_MS > 0:
-                filters.append(f"afade=t=in:st=0:d={FADE_IN_MS / 1000:.3f}")
-            if FADE_OUT_MS > 0:
-                start = max(0.0, want_seconds - FADE_OUT_MS / 1000)
-                filters.append(f"afade=t=out:st={start:.3f}:d={FADE_OUT_MS / 1000:.3f}")
+            # build_filters always runs tone shaping first, then loudness and
+            # fades.  It is deliberately called before the single MP3 encode.
+            filters.extend(build_filters(
+                tone=MASTER_TONE, lufs=MASTER_LUFS, true_peak=MASTER_TP,
+                lra=MASTER_LRA, fade_in_ms=FADE_IN_MS,
+                fade_out_ms=FADE_OUT_MS, want_seconds=want_seconds,
+            ))
+            if MASTER_TONE == "conservative":
+                applied["tone"] = MASTER_TONE
             applied.update(polish=True, lufs=MASTER_LUFS, tp=MASTER_TP,
                            fade_in_ms=FADE_IN_MS, fade_out_ms=FADE_OUT_MS)
 
