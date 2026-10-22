@@ -283,14 +283,20 @@ jobs:
           path: assets/fixtures/audio
           key: audio-fixtures-${{ hashFiles('scripts/make-audio-fixtures.mjs') }}
 
-      - name: Generate demo audio fixtures
-        if: steps.fixtures.outputs.cache-hit != 'true'
+      # Not only for generating fixtures: the worker runs ffmpeg on every
+      # delivery, so without it the demo song never finishes. The first run
+      # of this job restored the fixtures from cache, skipped the install with
+      # them, and waited 60 s for a track that could not be made.
+      - name: Install ffmpeg
         run: |
           if ! command -v ffmpeg >/dev/null 2>&1; then
             sudo apt-get update
             sudo apt-get install -y --no-install-recommends ffmpeg
           fi
-          pnpm fixtures:audio
+
+      - name: Generate demo audio fixtures
+        if: steps.fixtures.outputs.cache-hit != 'true'
+        run: pnpm fixtures:audio
 
       - name: Build workspace
         run: pnpm build
@@ -327,7 +333,10 @@ jobs:
         # is not); an annotation is, through the checks API and the PR page.
         if: failure()
         run: |
-          tail -60 dev.log | sed -e 's/%/%25/g' | awk 'BEGIN{ORS="%0A"} {print}' | sed -e 's/^/::error title=demo stack log::/'
+          # Worker lines and warnings/errors only: the api's request log
+          # otherwise fills the annotation with the check's own polling.
+          grep -E '^\[worker\]|"level":(40|50)|"level":"(warn|error)"|Error' dev.log | tail -40 \
+            | sed -e 's/%/%25/g' | awk 'BEGIN{ORS="%0A"} {print}' | sed -e 's/^/::error title=demo stack log::/'
           echo
 
       - name: Screenshots of what failed, and the stack's log
