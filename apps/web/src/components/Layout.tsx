@@ -14,6 +14,7 @@ import { createInFlightGuard, PENDING_AFTER_MS } from '../lib/in-flight';
 import { NowPlaying } from './NowPlaying';
 import { PlayerBar } from './PlayerBar';
 import { PageTitleContext, pageTitleKey } from '../lib/title';
+import { resolveNowPlayingLyrics } from '../lib/now-playing-lyrics';
 
 /**
  * YUHA app shell — top navigation per the acceptance spec: 88px desktop / 72px
@@ -203,6 +204,10 @@ export function Layout({ children }: { children: ReactNode }) {
    * which the cancel flag now prevents.
    */
   const playingId = player.current?.trackId;
+  // A detail page already has the lyric payload at the moment playback starts.
+  // Keep it through the player so opening Now Playing never briefly calls a
+  // vocal track an instrumental while its detail request is in flight.
+  const currentDetail = nowPlaying?.trackId === playingId ? nowPlaying : null;
   useEffect(() => {
     if (!nowPlayingOpen || !playingId) return;
     let cancelled = false;
@@ -476,14 +481,14 @@ export function Layout({ children }: { children: ReactNode }) {
 
       {nowPlayingOpen && (
         <NowPlaying
-          title={nowPlaying?.title ?? player.current?.title ?? t('player.untitled')}
-          artist={nowPlaying?.artistName ?? player.current?.artistName ?? t('player.unknownArtist')}
-          coverSeed={nowPlaying?.coverSeed ?? player.current?.coverSeed ?? 1}
-          styles={nowPlaying?.styles ?? player.current?.styles}
-          lyrics={nowPlaying?.lyrics ?? null}
-          timings={nowPlaying?.lyricTimings ?? null}
+          title={currentDetail?.title ?? player.current?.title ?? t('player.untitled')}
+          artist={currentDetail?.artistName ?? player.current?.artistName ?? t('player.unknownArtist')}
+          coverSeed={currentDetail?.coverSeed ?? player.current?.coverSeed ?? 1}
+          styles={currentDetail?.styles ?? player.current?.styles}
+          lyrics={resolveNowPlayingLyrics(currentDetail?.lyrics, player.current?.lyrics, player.current?.vocalMode)}
+          timings={currentDetail?.lyricTimings ?? player.current?.lyricTimings ?? null}
           onDownload={
-            nowPlaying && (me?.userId === nowPlaying.artistId || nowPlaying.licensedByMe) ? download : undefined
+            currentDetail && (me?.userId === currentDetail.artistId || currentDetail.licensedByMe) ? download : undefined
           }
           downloading={downloading}
           downloadError={downloadError}

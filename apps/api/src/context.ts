@@ -3,6 +3,7 @@ import {
   AudioProcessor,
   DemoMusicProvider,
   EstimatedAlignmentProvider,
+  FallbackAlignmentProvider,
   HttpAlignmentProvider,
   HttpMusicProvider,
   createGlmMusicProvider,
@@ -151,7 +152,8 @@ function buildMusic(cfg: AppConfig): MusicProvider {
 
 function buildAlignment(cfg: AppConfig): AlignmentProvider {
   if (cfg.alignment === 'http') {
-    return new HttpAlignmentProvider({
+    const estimated = new EstimatedAlignmentProvider();
+    return new FallbackAlignmentProvider(new HttpAlignmentProvider({
       providerId: cfg.ALIGNMENT_PROVIDER_ID!,
       baseUrl: cfg.ALIGNMENT_BASE_URL!,
       apiKey: cfg.ALIGNMENT_API_KEY!,
@@ -172,7 +174,7 @@ function buildAlignment(cfg: AppConfig): AlignmentProvider {
         cfg.ALIGNMENT_AUDIO_URL_TEMPLATE
           ? cfg.ALIGNMENT_AUDIO_URL_TEMPLATE.replace('{id}', encodeURIComponent(providerRequestId))
           : null,
-    });
+    }), estimated);
   }
   return new EstimatedAlignmentProvider();
 }

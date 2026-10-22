@@ -10,6 +10,7 @@ export {
 
 export * from './alignment/types.js';
 export { EstimatedAlignmentProvider } from './alignment/estimated.js';
+export { FallbackAlignmentProvider } from './alignment/fallback.js';
 export { HttpAlignmentProvider, type HttpAlignmentConfig } from './alignment/http.js';
 
 export * from './text/types.js';

@@ -1,6 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
-import type { TrackView } from '@yuha/contracts';
+import type { LyricTimings, TrackView } from '@yuha/contracts';
 import { attachBeat as attachBeatSafe, wakeBeat } from './beat';
 import { creditHeard, hasHeardEnough, type Heard } from './listening';
 import { createResignGuard, freshPreviewUrl } from './preview-url';
@@ -27,7 +27,11 @@ export type PlayerStatus = 'idle' | 'loading' | 'playing' | 'paused' | 'error';
 export type PlayerTrack = Pick<
   TrackView,
   'trackId' | 'title' | 'artistName' | 'coverSeed' | 'styles' | 'durationSeconds' | 'vocalMode' | 'mood'
->;
+> & {
+  /** Present when playback starts from a song detail; library cards fetch it on expand. */
+  lyrics?: string | null;
+  lyricTimings?: LyricTimings | null;
+};
 
 interface PlayerState {
   /** Identifies what is loaded, so each card knows whether it is the active one. */

@@ -26,7 +26,8 @@ export function NowPlaying({
   coverSeed,
   styles,
 }: {
-  lyrics: string | null;
+  /** undefined means its detail payload is still loading; null is instrumental. */
+  lyrics: string | null | undefined;
   timings?: LyricTimings | null;
   onClose: () => void;
   onDownload?: () => void;
@@ -125,7 +126,9 @@ export function NowPlaying({
         <section className="now-playing__words">
           <h1 className="now-playing__title">{title}</h1>
           <p className="now-playing__artist">{artist}</p>
-          {lyrics ? (
+          {lyrics === undefined ? (
+            <p className="now-playing__no-lyrics">{t('common.loading')}</p>
+          ) : lyrics ? (
             <div className="now-playing__lyrics">
               <SyncedLyrics
                 lyrics={lyrics}
