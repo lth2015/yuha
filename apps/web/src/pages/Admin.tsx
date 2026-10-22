@@ -232,7 +232,7 @@ function OverviewPanel({ part }: { part: 'ops' | 'review' }) {
         <p className="small muted">{t('admin.ops.rateBasis')}</p>
         <div className="card stack">
           <h3>{t('admin.ops.failures')}</h3>
-          {ops.generationFailures?.length ? <div className="table-wrap"><table>
+          {ops.generationFailures?.length ? <div className="table-wrap table-wrap--stack"><table>
             <thead><tr><th>{t('admin.ops.reason')}</th><th>{t('admin.jobs.state')}</th><th>{t('admin.jobs.count')}</th></tr></thead>
             <tbody>{ops.generationFailures.map((f) => <tr key={`${f.state}:${f.code}`}>
               <td className="num">{f.code}</td><td>{f.state}</td><td className="num">{f.count}</td>
@@ -362,7 +362,7 @@ function OverviewPanel({ part }: { part: 'ops' | 'review' }) {
         {cases.length === 0 ? (
           <p className="muted">{t('admin.cases.none')}</p>
         ) : (
-          <div className="table-wrap">
+          <div className="table-wrap table-wrap--stack">
             <table>
               <thead>
                 <tr>

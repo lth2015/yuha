@@ -265,7 +265,7 @@ export function StablecoinConsole() {
       {!queue || queue.payments.length === 0 ? (
         <p className="muted small">{t('admin.sc.review.none')}</p>
       ) : (
-        <div className="table-wrap">
+        <div className="table-wrap table-wrap--stack">
           <table>
             <thead>
               <tr>
@@ -350,7 +350,7 @@ export function StablecoinConsole() {
       {!queue || queue.unattributed.length === 0 ? (
         <p className="muted small">{t('admin.sc.orphan.none')}</p>
       ) : (
-        <div className="table-wrap">
+        <div className="table-wrap table-wrap--stack">
           <table>
             <thead>
               <tr>
@@ -422,7 +422,7 @@ export function StablecoinConsole() {
       {!queue || queue.refundsOwed.length === 0 ? (
         <p className="muted small">{t('admin.sc.owed.none')}</p>
       ) : (
-        <div className="table-wrap">
+        <div className="table-wrap table-wrap--stack">
           <table>
             <thead>
               <tr>

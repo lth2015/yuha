@@ -231,7 +231,7 @@ export function CustomerConsole() {
       </p>
 
       <form
-        className="row"
+        className="row search-row"
         onSubmit={(e) => {
           e.preventDefault();
           void search();
@@ -247,7 +247,6 @@ export function CustomerConsole() {
           onChange={(e) => setEmail(e.target.value)}
           placeholder={t('admin.cust.search.placeholder')}
           aria-label={t('admin.cust.search.label')}
-          style={{ minWidth: 260 }}
         />
         <button type="submit" className="btn btn--ghost" disabled={busy || email.trim().length < 3}>
           {t('admin.cust.search.go')}
@@ -260,20 +259,20 @@ export function CustomerConsole() {
       {found && found.more && <p className="small muted">{t('admin.cust.search.more')}</p>}
 
       {found && found.items.length > 0 && (
-        <div className="table-wrap">
+        <div className="table-wrap table-wrap--stack">
           <table>
             <thead>
               <tr>
                 <th>{t('admin.cust.col.email')}</th>
                 <th>{t('admin.cust.col.available')}</th>
-                <th>{t('admin.cust.col.joined')}</th>
-                <th />
+                <th className="col-wide-only">{t('admin.cust.col.joined')}</th>
+                <th className="col-action" />
               </tr>
             </thead>
             <tbody>
               {found.items.map((u) => (
                 <tr key={u.userId}>
-                  <td className="small">
+                  <td className="small cell-wrap">
                     {u.email}
                     {u.status !== 'active' && (
                       <>
@@ -284,8 +283,8 @@ export function CustomerConsole() {
                     <div className="small muted">{u.displayName ?? '—'}</div>
                   </td>
                   <td className="num small">{u.available}</td>
-                  <td className="small muted">{formatJst(u.createdAt, false)}</td>
-                  <td>
+                  <td className="small muted col-wide-only">{formatJst(u.createdAt, false)}</td>
+                  <td className="col-action">
                     <button type="button" className="btn btn--ghost" onClick={() => void open(u.userId)}>
                       {t('admin.cust.open')}
                     </button>
@@ -324,7 +323,7 @@ export function CustomerConsole() {
             {detail.credits.length === 0 ? (
               <p className="muted small">{t('admin.cust.credits.none')}</p>
             ) : (
-              <div className="table-wrap">
+              <div className="table-wrap table-wrap--stack">
                 <table>
                   <thead>
                     <tr>
@@ -367,7 +366,7 @@ export function CustomerConsole() {
             {detail.orders.length === 0 ? (
               <p className="muted small">{t('admin.cust.orders.none')}</p>
             ) : (
-              <div className="table-wrap">
+              <div className="table-wrap table-wrap--stack">
                 <table>
                   <thead>
                     <tr>
@@ -400,7 +399,7 @@ export function CustomerConsole() {
               {detail.recentJobs.length === 0 ? (
                 <p className="muted small">{t('admin.cust.jobs.none')}</p>
               ) : (
-                <div className="table-wrap">
+                <div className="table-wrap table-wrap--stack">
                   <table>
                     <thead>
                       <tr>

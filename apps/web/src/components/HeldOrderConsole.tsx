@@ -99,7 +99,7 @@ export function HeldOrderConsole() {
       {!items || items.length === 0 ? (
         <p className="muted small">{t('admin.held.none')}</p>
       ) : (
-        <div className="table-wrap">
+        <div className="table-wrap table-wrap--stack">
           <table>
             <thead>
               <tr>

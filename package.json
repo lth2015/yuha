@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "license": "Apache-2.0",
-  "description": "YUHA \u2014 an AI song studio: describe a feeling, get a finished song",
+  "description": "YUHA — an AI song studio: describe a feeling, get a finished song",
   "packageManager": "pnpm@11.1.2",
   "engines": {
     "node": ">=22.13.0"
@@ -23,6 +23,7 @@
     "check:stewardship": "node scripts/check-stewardship.mjs",
     "check:limits": "node scripts/check-codepoint-limits.mjs",
     "check:type": "node scripts/check-type-scale.mjs",
+    "check:ui": "node scripts/check-ui.mjs",
     "pretest": "node scripts/check-build-fresh.mjs",
     "test": "vitest run",
     "test:watch": "vitest",
@@ -48,6 +49,7 @@
     "@yuha/worker": "workspace:*",
     "concurrently": "^9.1.0",
     "ganache": "7.9.2",
+    "playwright": "1.56.1",
     "solc": "0.8.37",
     "typescript": "^5.7.2",
     "viem": "2.57.3",

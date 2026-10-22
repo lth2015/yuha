@@ -94,7 +94,7 @@ export function AuditPanel() {
       {visible.length === 0 && !busy ? (
         <p className="muted small">{t('admin.audit.none')}</p>
       ) : (
-        <div className="table-wrap">
+        <div className="table-wrap table-wrap--stack">
           <table className="small">
             <thead>
               <tr>
