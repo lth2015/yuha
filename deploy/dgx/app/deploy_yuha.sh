@@ -12,6 +12,7 @@ cd "$(dirname "$0")"
 # their work addresses, so clearing this allowlist locks them all out. Leave it.
 DGX="${DGX:-dgx}"
 MUSIC="$(cd ../../.. && pwd)"   # repo root (this script lives in deploy/dgx/app)
+CONFIG_ENV="${YUHA_DEPLOY_ENV_FILE:-$MUSIC/.env}"
 TEAM_EMAIL="${TEAM_EMAIL:-yuha-team@netstars.co.jp}"
 TEAM_CREDITS="${TEAM_CREDITS:-50}"
 ALLOWLIST="${DEV_LOGIN_ALLOWLIST:-@netstars.co.jp}"; [[ "$ALLOWLIST" == "-" ]] && ALLOWLIST=""
@@ -31,8 +32,25 @@ echo "   $URL"
 
 echo "== 2/6 configuration (from music/.env, rewritten for the DGX)"
 TMP=$(mktemp -d); trap 'rm -rf "$TMP"' EXIT
+[[ -f "$CONFIG_ENV" ]] || {
+  echo "Missing deployment environment file: $CONFIG_ENV" >&2
+  echo "Set YUHA_DEPLOY_ENV_FILE to a local, untracked environment file." >&2
+  exit 1
+}
+# Where the music service is, FROM INSIDE THIS BOX.  Calculate it before
+# writing app.env: Docker's env_file takes literal values, not later shell
+# assignments.
+MUSIC_PORT=$(ssh "$DGX" "sed -n 's/^HOST_PORT=//p' ~/yuha-spark/.env 2>/dev/null" | head -1)
+[[ -n "$MUSIC_PORT" ]] || MUSIC_PORT=$(sed -n 's#^MUSIC_BASE_URL=.*:\([0-9][0-9]*\).*#\1#p' "$CONFIG_ENV" | tail -1)
+[[ -n "$MUSIC_PORT" ]] || MUSIC_PORT=8583
+MUSIC_URL="http://$IP:$MUSIC_PORT"
+# SEC-05: the worker refuses to pull audio from a host that is not on this
+# list, and the service hands back URLs built from its own AUDIO_BASE_URL.
+MUSIC_AUDIO_HOSTS="$IP"
+PREV_AUDIO_HOST=$(ssh "$DGX" "sed -n 's#^AUDIO_BASE_URL=##p' ~/yuha-spark/.env 2>/dev/null" | sed -E 's#^https?://##; s#[:/].*##' | head -1)
+[[ -n "$PREV_AUDIO_HOST" && "$PREV_AUDIO_HOST" != "$IP" ]] && MUSIC_AUDIO_HOSTS="$IP,$PREV_AUDIO_HOST"
 # keep secrets/settings from the Mac, drop what is machine-specific, then pin the DGX values
-grep -E '^[A-Z_][A-Z0-9_]*=' "$MUSIC/.env" \
+grep -E '^[A-Z_][A-Z0-9_]*=' "$CONFIG_ENV" \
   | grep -vE '^(GOOGLE_|VITE_|DATABASE_URL=|PORT=|HOST=|PUBLIC_WEB_URL=|PUBLIC_API_URL=|STORAGE_|DEV_AUTH_SECRET=|RUN_MODE=|AUTH_ADAPTER=|QUEUE_ADAPTER=|FEATURE_FREE_TRIAL_ENABLED=|MUSIC_BASE_URL=|MUSIC_ALLOWED_AUDIO_HOSTS=)' > "$TMP/app.env"
 # reuse the DB password and signing secrets across redeploys
 ssh "$DGX" "cat $R/.env 2>/dev/null; grep -E '^(DEV_AUTH_SECRET|STORAGE_SIGNING_SECRET)=' $R/app.env 2>/dev/null" > "$TMP/prev" || true
@@ -61,29 +79,7 @@ MUSIC_ALLOWED_AUDIO_HOSTS=$MUSIC_AUDIO_HOSTS
 ENV
 # one line per key, last value wins (docker env_file must not see duplicates)
 awk -F= '{k=$1; if(!(k in v)) ord[++n]=k; v[k]=$0} END{for(i=1;i<=n;i++) print v[ord[i]]}' "$TMP/app.env" > "$TMP/app.env.d" && mv "$TMP/app.env.d" "$TMP/app.env"
-# Where the music service is, FROM INSIDE THIS BOX.
-#
-# This was carried over from the Mac verbatim, and on the Mac it is the
-# office's public address — which is correct there and ECONNREFUSED here: a
-# container on the DGX connecting to its own site's public IP does not come
-# back in. The first generation after a deploy failed in five seconds with
-# upstream_unreachable and submitted_at NULL, and nothing in the deploy had
-# said a word. It belongs with DATABASE_URL and PUBLIC_WEB_URL — pinned to
-# this machine, not inherited from the one that ran the script.
-MUSIC_PORT=$(ssh "$DGX" "sed -n 's/^HOST_PORT=//p' ~/yuha-spark/.env 2>/dev/null" | head -1)
-[[ -n "$MUSIC_PORT" ]] || MUSIC_PORT=$(sed -n 's#^MUSIC_BASE_URL=.*:\([0-9][0-9]*\).*#\1#p' "$MUSIC/.env" | tail -1)
-[[ -n "$MUSIC_PORT" ]] || MUSIC_PORT=8583
-MUSIC_URL="http://$IP:$MUSIC_PORT"
-# SEC-05: the worker refuses to pull audio from a host that is not on this
-# list, and the service hands back URLs built from its own AUDIO_BASE_URL. If
-# that still names the public address, fixing only the line above moves the
-# failure from upstream_unreachable to audio_fetch_failed. Both addresses are
-# allowed, so whichever the service is configured with, the pull works.
-MUSIC_AUDIO_HOSTS="$IP"
-PREV_AUDIO_HOST=$(ssh "$DGX" "sed -n 's#^AUDIO_BASE_URL=##p' ~/yuha-spark/.env 2>/dev/null" | sed -E 's#^https?://##; s#[:/].*##' | head -1)
-[[ -n "$PREV_AUDIO_HOST" && "$PREV_AUDIO_HOST" != "$IP" ]] && MUSIC_AUDIO_HOSTS="$IP,$PREV_AUDIO_HOST"
-
-STRIPE_SECRET_KEY=$(sed -n 's/^STRIPE_SECRET_KEY=//p' "$MUSIC/.env" | tail -1)
+STRIPE_SECRET_KEY=$(sed -n 's/^STRIPE_SECRET_KEY=//p' "$CONFIG_ENV" | tail -1)
 cat > "$TMP/.env" <<ENV
 APP_PORT=$APP_PORT
 MYSQL_PASSWORD=$MYSQL_PASSWORD
@@ -121,7 +117,7 @@ SQL "UPDATE users SET role='admin' WHERE email='$OPERATOR_EMAIL'"
 TEAM topup || { SQL "UPDATE users SET role='user' WHERE email='$OPERATOR_EMAIL'"; exit 1; }
 SQL "UPDATE users SET role='user' WHERE email='$OPERATOR_EMAIL'"
 sleep 8; ssh "$DGX" "cd $R && docker compose logs --tail 40 stripe | grep -o 'whsec_[A-Za-z0-9]*' | tail -1" > "$TMP/whsec" || true
-WH=$(cat "$TMP/whsec"); MAC_WH=$(sed -n 's/^STRIPE_WEBHOOK_SECRET=//p' "$MUSIC/.env" | tail -1)
+WH=$(cat "$TMP/whsec"); MAC_WH=$(sed -n 's/^STRIPE_WEBHOOK_SECRET=//p' "$CONFIG_ENV" | tail -1)
 if [[ -n "$WH" && "$WH" != "$MAC_WH" ]]; then
   echo "!! Stripe forwarder secret differs from STRIPE_WEBHOOK_SECRET — updating it on the DGX"
   ssh "$DGX" "cd $R && sed -i 's/^STRIPE_WEBHOOK_SECRET=.*/STRIPE_WEBHOOK_SECRET=$WH/' app.env && docker compose up -d api"
