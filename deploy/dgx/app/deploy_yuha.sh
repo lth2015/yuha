@@ -114,7 +114,22 @@ ssh "$DGX" "for i in \$(seq 1 30); do curl -sf http://127.0.0.1:$APP_PORT/v1/aut
 SQL "UPDATE users SET role='user' WHERE email='admin@example.jp'"
 TEAM ensure
 SQL "UPDATE users SET role='admin' WHERE email='$OPERATOR_EMAIL'"
-TEAM topup || { SQL "UPDATE users SET role='user' WHERE email='$OPERATOR_EMAIL'"; exit 1; }
+if TEAM_OUTPUT=$(TEAM topup 2>&1); then
+  printf '%s\n' "$TEAM_OUTPUT"
+else
+  # The deployment has already rebuilt, migrated, and restarted the services.
+  # MFA_REQUIRED is therefore an expected account-provisioning prerequisite,
+  # not evidence that the deployment failed. Never weaken MFA merely to make
+  # this convenience top-up succeed; demote the temporary operator either way.
+  SQL "UPDATE users SET role='user' WHERE email='$OPERATOR_EMAIL'"
+  if [[ "$TEAM_OUTPUT" == *'"code":"MFA_REQUIRED"'* ]]; then
+    echo "!! shared team top-up skipped: $OPERATOR_EMAIL must enrol MFA first"
+    echo "   The application deployment completed; after MFA enrolment, re-run this script to top up $TEAM_EMAIL."
+  else
+    printf '%s\n' "$TEAM_OUTPUT" >&2
+    exit 1
+  fi
+fi
 SQL "UPDATE users SET role='user' WHERE email='$OPERATOR_EMAIL'"
 sleep 8; ssh "$DGX" "cd $R && docker compose logs --tail 40 stripe | grep -o 'whsec_[A-Za-z0-9]*' | tail -1" > "$TMP/whsec" || true
 WH=$(cat "$TMP/whsec"); MAC_WH=$(sed -n 's/^STRIPE_WEBHOOK_SECRET=//p' "$CONFIG_ENV" | tail -1)

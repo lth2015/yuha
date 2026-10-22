@@ -66,9 +66,13 @@ Other switches: `MUSIC=yes|no` forces or skips the music rebuild,
 `update.sh` delegates the app to `deploy_yuha.sh`, which tars this
 repository's tracked files, uploads, rebuilds the API image, waits for MySQL,
 **runs `pnpm db:migrate`**, seeds, builds the web assets, restarts
-api/worker/web/stripe, and tops the shared team account back up. It reads the
+api/worker/web/stripe, and attempts to top the shared team account back up. It reads the
 Mac's `.env` for the secrets it carries over, so run it from a checkout that
 has one.
+
+The account top-up obeys staff MFA. If its temporary operator has not enrolled
+MFA, deployment still completes and prints a follow-up instead of disabling or
+bypassing MFA; enrol the operator and re-run the script to add the test credits.
 
 Migrations change a schema holding everyone's songs. `0007`/`0008` add the
 account-deletion tables and `0009` rewrites `asset_versions`'s unique key to
