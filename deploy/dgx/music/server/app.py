@@ -60,7 +60,10 @@ FADE_OUT_MS = int(os.environ.get("FADE_OUT_MS", "1500"))      # an ending, inste
 MASTER_SILENCE_FLOOR_DB = float(os.environ.get("MASTER_SILENCE_FLOOR_DB", "-45"))
 MIN_DUR, MAX_DUR = 10, 240
 WHISPER_MODEL = os.environ.get("WHISPER_MODEL", "turbo")
-ALIGN_MIN_COVERAGE = float(os.environ.get("ALIGN_MIN_COVERAGE", "0.15"))
+# A timing track is worse than no timing track when it follows only a small
+# part of the vocal.  The app retains its honest estimated/unsynchronised
+# presentation when this gate refuses an alignment.
+ALIGN_MIN_COVERAGE = float(os.environ.get("ALIGN_MIN_COVERAGE", "0.85"))
 # Vocal-quality knobs, chosen from bench_vocals.py results rather than by ear.
 TAG_STYLE = os.environ.get("TAG_STYLE", "v1")            # v1 = original prompt, v2 = short tags + vocal descriptor
 VOCAL_TAKES = max(1, int(os.environ.get("VOCAL_TAKES", "1")))  # >1: render N seeds, keep the most intelligible
@@ -155,6 +158,13 @@ def recover_jobs() -> None:
 # ---------------------------------------------------------------- model
 _pipeline = None
 _model_state = {"loaded": False, "error": None, "load_seconds": None}
+# ACE-Step generation and Whisper word timing share one GPU.  FastAPI serves
+# alignment requests in a different thread from the generation worker, so the
+# worker's single-job queue alone cannot prevent two CUDA graphs from running
+# together.  On the Spark that showed up as intermittent CUBLAS internal
+# errors.  This lock deliberately covers inference, not ffmpeg/mastering, so
+# CPU post-processing and HTTP polling remain concurrent.
+_gpu_lock = threading.RLock()
 
 
 def _patch_torchaudio_save():
@@ -173,22 +183,25 @@ def _patch_torchaudio_save():
 
 def get_pipeline():
     global _pipeline
-    if _pipeline is None:
-        t0 = time.time()
-        _patch_torchaudio_save()
-        from acestep.pipeline_ace_step import ACEStepPipeline  # noqa
+    # worker() warms the pipeline before it consumes the queue, outside
+    # render().  Loading is CUDA work too, so keep it inside the shared lock.
+    with _gpu_lock:
+        if _pipeline is None:
+            t0 = time.time()
+            _patch_torchaudio_save()
+            from acestep.pipeline_ace_step import ACEStepPipeline  # noqa
 
-        _pipeline = ACEStepPipeline(
-            checkpoint_dir=CHECKPOINT_DIR,
-            dtype="bfloat16",
-            torch_compile=False,
-        )
-        # Some versions load lazily on first call; force it if available.
-        if hasattr(_pipeline, "load_checkpoint") and not getattr(_pipeline, "loaded", True):
-            _pipeline.load_checkpoint(CHECKPOINT_DIR)
-        _model_state["loaded"] = True
-        _model_state["load_seconds"] = round(time.time() - t0, 1)
-        log.info("ACE-Step pipeline ready in %.1fs", time.time() - t0)
+            _pipeline = ACEStepPipeline(
+                checkpoint_dir=CHECKPOINT_DIR,
+                dtype="bfloat16",
+                torch_compile=False,
+            )
+            # Some versions load lazily on first call; force it if available.
+            if hasattr(_pipeline, "load_checkpoint") and not getattr(_pipeline, "loaded", True):
+                _pipeline.load_checkpoint(CHECKPOINT_DIR)
+            _model_state["loaded"] = True
+            _model_state["load_seconds"] = round(time.time() - t0, 1)
+            log.info("ACE-Step pipeline ready in %.1fs", time.time() - t0)
     return _pipeline
 
 
@@ -200,28 +213,37 @@ _align_state = {"loaded": False, "error": None}
 
 def get_whisper():
     global _whisper
-    if _whisper is None:
-        import whisper  # openai-whisper; plain PyTorch, so it runs on the NGC arm64 build
-        t0 = time.time()
-        _whisper = whisper.load_model(WHISPER_MODEL, device="cuda", download_root="/root/.cache/whisper")
-        _align_state["loaded"] = True
-        log.info("whisper %s ready in %.1fs", WHISPER_MODEL, time.time() - t0)
+    # Model loading allocates and runs CUDA kernels too.  It must use the same
+    # ordering as transcription (GPU first, then Whisper) or a first alignment
+    # can still overlap an ACE-Step render before transcription reaches its
+    # critical section.
+    with _gpu_lock, _whisper_lock:
+        if _whisper is None:
+            import whisper  # openai-whisper; plain PyTorch, so it runs on the NGC arm64 build
+            t0 = time.time()
+            _whisper = whisper.load_model(WHISPER_MODEL, device="cuda", download_root="/root/.cache/whisper")
+            _align_state["loaded"] = True
+            log.info("whisper %s ready in %.1fs", WHISPER_MODEL, time.time() - t0)
     return _whisper
 
 
 def transcribe_words(path: Path, lyrics: str):
     from align import guess_language, parse_lyrics
-    model = get_whisper()
     prompt = " ".join(t for _, t in parse_lyrics(lyrics))[:200]
-    with _whisper_lock:
-        res = model.transcribe(
-            str(path),
-            language=guess_language(lyrics),
-            word_timestamps=True,
-            initial_prompt=prompt or None,
-            condition_on_previous_text=False,
-            fp16=True,
-        )
+    # Keep the lock order consistent with every GPU path: GPU first, then the
+    # model-specific lock.  That prevents an alignment request colliding with
+    # an ACE-Step render while still serialising two Whisper requests.
+    with _gpu_lock:
+        model = get_whisper()
+        with _whisper_lock:
+            res = model.transcribe(
+                str(path),
+                language=guess_language(lyrics),
+                word_timestamps=True,
+                initial_prompt=prompt or None,
+                condition_on_previous_text=False,
+                fp16=True,
+            )
     words = []
     for seg in res.get("segments", []):
         for w in seg.get("words", []) or []:
@@ -389,39 +411,46 @@ def render(req: dict, out_dir: Path, *, seed: Optional[int] = None, tag_style: O
            engine: Optional[str] = None, v15_model: Optional[str] = None) -> Path:
     """One render to a wav in out_dir. Every knob defaults to the service setting."""
     if (engine or ENGINE) == "v15":
-        return render_v15(req, out_dir, seed=seed, tag_style=tag_style or "v2", infer_steps=infer_steps, model=v15_model)
-    pipe = get_pipeline()
-    out_dir.mkdir(parents=True, exist_ok=True)
-    wav_path = out_dir / f"take-{seed if seed is not None else 'r'}.wav"
-    lg = LYRIC_GUIDANCE if lyric_guidance is None else lyric_guidance
-    kwargs = dict(
-        audio_duration=float(req["duration_seconds"]),
-        prompt=build_tags(req, tag_style),
-        lyrics=lyrics_for(req),
-        infer_step=infer_steps or INFER_STEPS,
-        guidance_scale=15.0,
-        scheduler_type="euler",
-        cfg_type="apg",
-        omega_scale=10.0,
-        manual_seeds=[seed] if seed is not None else None,
-        guidance_interval=0.5,
-        guidance_interval_decay=0.0,
-        min_guidance_scale=3.0,
-        use_erg_tag=True,
-        use_erg_lyric=True,
-        use_erg_diffusion=True,
-        oss_steps=None,
-        guidance_scale_text=0.0,
-        guidance_scale_lyric=lg,
-        save_path=str(wav_path),
-        format="wav",
-        batch_size=1,
-    )
-    # Tolerate signature drift between ACE-Step versions.
-    sig = inspect.signature(pipe.__call__)
-    if not any(p.kind == p.VAR_KEYWORD for p in sig.parameters.values()):
-        kwargs = {k: v for k, v in kwargs.items() if k in sig.parameters}
-    result = pipe(**kwargs)
+        # v15 runs in a sibling process, but it receives the same GPU.  Hold
+        # the lock until its task has completed so local Whisper cannot race it.
+        with _gpu_lock:
+            return render_v15(req, out_dir, seed=seed, tag_style=tag_style or "v2", infer_steps=infer_steps, model=v15_model)
+    # The whole ACE-Step call must be exclusive with Whisper.  Do not move the
+    # lock to run_generation: vocal-take scoring invokes Whisper between
+    # renders and needs to release the GPU in that interval.
+    with _gpu_lock:
+        pipe = get_pipeline()
+        out_dir.mkdir(parents=True, exist_ok=True)
+        wav_path = out_dir / f"take-{seed if seed is not None else 'r'}.wav"
+        lg = LYRIC_GUIDANCE if lyric_guidance is None else lyric_guidance
+        kwargs = dict(
+            audio_duration=float(req["duration_seconds"]),
+            prompt=build_tags(req, tag_style),
+            lyrics=lyrics_for(req),
+            infer_step=infer_steps or INFER_STEPS,
+            guidance_scale=15.0,
+            scheduler_type="euler",
+            cfg_type="apg",
+            omega_scale=10.0,
+            manual_seeds=[seed] if seed is not None else None,
+            guidance_interval=0.5,
+            guidance_interval_decay=0.0,
+            min_guidance_scale=3.0,
+            use_erg_tag=True,
+            use_erg_lyric=True,
+            use_erg_diffusion=True,
+            oss_steps=None,
+            guidance_scale_text=0.0,
+            guidance_scale_lyric=lg,
+            save_path=str(wav_path),
+            format="wav",
+            batch_size=1,
+        )
+        # Tolerate signature drift between ACE-Step versions.
+        sig = inspect.signature(pipe.__call__)
+        if not any(p.kind == p.VAR_KEYWORD for p in sig.parameters.values()):
+            kwargs = {k: v for k, v in kwargs.items() if k in sig.parameters}
+        result = pipe(**kwargs)
     if wav_path.exists():
         return wav_path
     if isinstance(result, (list, tuple)):
