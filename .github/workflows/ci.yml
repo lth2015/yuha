@@ -94,14 +94,14 @@ jobs:
 
       # ffmpeg backs the output checks and export rendering; the audio tests
       # exercise it for real rather than mocking it out.
+      # A static build, not apt. On 2026-10-23 `apt-get update && install
+      # ffmpeg` took 19 and 24 minutes in the two jobs of one run — the Ubuntu
+      # mirrors, not this repository — and both jobs hit their time limits
+      # before running a single test. A static binary is one download.
       - name: Install ffmpeg
-        run: |
-          if command -v ffmpeg >/dev/null 2>&1; then
-            echo "ffmpeg is already available: $(ffmpeg -version | head -1)"
-          else
-            sudo apt-get update
-            sudo apt-get install -y --no-install-recommends ffmpeg
-          fi
+        uses: FedericoCarboni/setup-ffmpeg@v3
+        with:
+          github-token: ${{ github.token }}
 
       - name: Start MySQL from docker-compose.yml
         # The test database only — `pnpm db:up` would also start the
@@ -292,11 +292,9 @@ jobs:
       # of this job restored the fixtures from cache, skipped the install with
       # them, and waited 60 s for a track that could not be made.
       - name: Install ffmpeg
-        run: |
-          if ! command -v ffmpeg >/dev/null 2>&1; then
-            sudo apt-get update
-            sudo apt-get install -y --no-install-recommends ffmpeg
-          fi
+        uses: FedericoCarboni/setup-ffmpeg@v3
+        with:
+          github-token: ${{ github.token }}
 
       - name: Generate demo audio fixtures
         if: steps.fixtures.outputs.cache-hit != 'true'
@@ -305,8 +303,19 @@ jobs:
       - name: Build workspace
         run: pnpm build
 
+      # Cached, and without `--with-deps`: that flag is apt again (the same
+      # mirrors that stalled ffmpeg), and the runner image already carries
+      # what Chromium needs because it ships Google Chrome.
+      - name: Restore cached Playwright Chromium
+        id: pw-cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ hashFiles('pnpm-lock.yaml') }}
+
       - name: Install Chromium for Playwright
-        run: pnpm exec playwright install --with-deps chromium
+        if: steps.pw-cache.outputs.cache-hit != 'true'
+        run: pnpm exec playwright install chromium
 
       - name: Migrate and seed the demo database
         run: |
