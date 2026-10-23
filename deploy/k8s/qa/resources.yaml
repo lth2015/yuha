@@ -453,6 +453,10 @@ spec:
             objectAlias: POLYGON_RPC_PRIMARY_URL
           - path: POLYGON_RPC_SECONDARY_URL
             objectAlias: POLYGON_RPC_SECONDARY_URL
+          - path: BSC_RPC_PRIMARY_URL
+            objectAlias: BSC_RPC_PRIMARY_URL
+          - path: BSC_RPC_SECONDARY_URL
+            objectAlias: BSC_RPC_SECONDARY_URL
           - path: GOOGLE_SESSION_SECRET
             objectAlias: GOOGLE_SESSION_SECRET
           - path: STRIPE_SECRET_KEY
@@ -485,6 +489,10 @@ spec:
           key: POLYGON_RPC_PRIMARY_URL
         - objectName: POLYGON_RPC_SECONDARY_URL
           key: POLYGON_RPC_SECONDARY_URL
+        - objectName: BSC_RPC_PRIMARY_URL
+          key: BSC_RPC_PRIMARY_URL
+        - objectName: BSC_RPC_SECONDARY_URL
+          key: BSC_RPC_SECONDARY_URL
         - objectName: GOOGLE_SESSION_SECRET
           key: GOOGLE_SESSION_SECRET
         - objectName: STRIPE_SECRET_KEY
@@ -559,6 +567,10 @@ spec:
             objectAlias: POLYGON_RPC_PRIMARY_URL
           - path: POLYGON_RPC_SECONDARY_URL
             objectAlias: POLYGON_RPC_SECONDARY_URL
+          - path: BSC_RPC_PRIMARY_URL
+            objectAlias: BSC_RPC_PRIMARY_URL
+          - path: BSC_RPC_SECONDARY_URL
+            objectAlias: BSC_RPC_SECONDARY_URL
           - path: GOOGLE_SESSION_SECRET
             objectAlias: GOOGLE_SESSION_SECRET
           - path: STRIPE_SECRET_KEY
@@ -591,6 +603,10 @@ spec:
           key: POLYGON_RPC_PRIMARY_URL
         - objectName: POLYGON_RPC_SECONDARY_URL
           key: POLYGON_RPC_SECONDARY_URL
+        - objectName: BSC_RPC_PRIMARY_URL
+          key: BSC_RPC_PRIMARY_URL
+        - objectName: BSC_RPC_SECONDARY_URL
+          key: BSC_RPC_SECONDARY_URL
         - objectName: GOOGLE_SESSION_SECRET
           key: GOOGLE_SESSION_SECRET
         - objectName: STRIPE_SECRET_KEY
