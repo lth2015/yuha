@@ -14,7 +14,7 @@ interface NetxStatus {
 /**
  * Pause or resume NETX (docs/NETX_PAYMENT.md §4).
  *
- * NETX is priced at a fixed ¥20 while its market moves; if the market falls
+ * NETX is priced at a fixed ¥40 while its market moves; if the market falls
  * below that, NETX bought on the market buys credits below their yen price.
  * This is the control: one action, effective on the next request, no deploy.
  * Pausing stops NETX being offered and quoted; a buyer already quoted who has

@@ -25,7 +25,7 @@ change does not fit this page, change this page first, in the same commit.
 | Card (银行卡) | Stripe Checkout. Apple Pay, Google Pay, konbini, Alipay and WeChat Pay are whatever the Stripe account enables; the code never lists them |
 | JPYC | Yen stablecoin on Polygon, 1 JPYC per yen by pricing policy |
 | USDC | Dollar stablecoin on Polygon, priced as one US dollar at the live USD/JPY rate plus a buffer (§4) |
-| NETX | The NETX community's token on BNB Smart Chain — **not** a stablecoin — at a fixed 1 NETX = ¥20, pausable by an operator at runtime (docs/NETX_PAYMENT.md) |
+| NETX | The NETX community's token on BNB Smart Chain — **not** a stablecoin — at a fixed 1 NETX = ¥40, pausable by an operator at runtime (docs/NETX_PAYMENT.md) |
 
 ## 2. The matrix — the whole rule
 
@@ -83,7 +83,7 @@ the browser), and they are why the grid disagreed with itself.
   says by then. The buyer sees the rate and the buffer next to the amount.
 - JPYC consults no rate and takes no buffer.
 - NETX consults no rate and takes no buffer either: its price is fixed at
-  ¥20 per token (`ceil(priceJpy × 10^decimals / 20)`), so the market price is
+  ¥40 per token (`ceil(priceJpy × 10^decimals / 40)`), so the market price is
   the operator's to watch, with the pause as the control (NETX_PAYMENT.md §4).
 
 ## 5. What the screens do

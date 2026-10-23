@@ -68,7 +68,7 @@ export function quoteAmountAtomic(input: QuoteInput): QuotedAmount {
     return { amountAtomic: BigInt(input.priceJpy) * unit, rounded: false };
   }
 
-  // A fixed price (NETX at ¥20) takes no rate and no buffer; anything passed is
+  // A fixed price (NETX at ¥40) takes no rate and no buffer; anything passed is
   // ignored, so a caller cannot re-price it by accident. Rounded up, so a price
   // never costs less than its yen value.
   if (pricing.kind === 'fixed-yen') {

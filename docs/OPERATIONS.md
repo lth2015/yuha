@@ -308,7 +308,7 @@ Console → 運用指標 → NETX card, with a reason; or:
 ```bash
 curl -X PUT https://$HOST/v1/admin/netx-payments \
   -H "Authorization: Bearer $ADMIN" -H 'content-type: application/json' \
-  -d '{"accepting": false, "reason": "market below ¥20, ref OPS-123"}'
+  -d '{"accepting": false, "reason": "market below ¥40, ref OPS-123"}'
 ```
 
 New NETX quotes stop at once; payments for quotes already issued are still

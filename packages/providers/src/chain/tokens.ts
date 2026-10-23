@@ -33,7 +33,7 @@ const POLYGON_CHAIN_ID = 137;
  *  - `usd-market`: one token is one US dollar at the live USD/JPY rate plus
  *    the buffer (USDC; docs/PAYMENTS_DESIGN.md §4).
  *  - `fixed-yen`: a fixed number of yen per token, whatever the market says
- *    (NETX at ¥20, decided 2026-10-21; docs/NETX_PAYMENT.md §3). The operator
+ *    (NETX at ¥40, decided 2026-10-23; docs/NETX_PAYMENT.md §3). The operator
  *    can pause it; nothing re-prices it.
  */
 export type TokenPricing =
@@ -98,7 +98,7 @@ export const NETX_BSC: TokenSpec = {
   address: '0x4c32964715e9a42f8d119bfa8917d57822d3adf1',
   decimals: 18,
   label: 'NETX (BNB Smart Chain)',
-  pricing: { kind: 'fixed-yen', yenPerToken: 20 },
+  pricing: { kind: 'fixed-yen', yenPerToken: 40 },
   stablecoin: false,
 };
 

@@ -341,7 +341,7 @@ const MUTATIONS = [
     tests: ['tests/stablecoin-quote-intent.test.ts'],
   },
   {
-    // NETX is priced at a fixed ¥20; quoting it at the USD/JPY rate (the old
+    // NETX is priced at a fixed ¥40; quoting it at the USD/JPY rate (the old
     // "anything but JPYC" branch) would charge a dollar's worth per token.
     name: 'a-fixed-price-consults-the-market',
     file: `${S}/stablecoin.ts`,

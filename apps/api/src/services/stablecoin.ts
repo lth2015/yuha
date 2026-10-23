@@ -226,7 +226,7 @@ export async function createStablecoinQuote(
    * Read here, before the transaction, so no database lock is held across
    * two network calls.
    */
-  // Only a market-priced token consults a rate. NETX's price is fixed (¥20)
+  // Only a market-priced token consults a rate. NETX's price is fixed (¥40)
   // and must not fail because a USD/JPY feed is down.
   const rate = token.pricing.kind === 'usd-market' ? await usdcJpyRate(ctx) : null;
   const bufferBps = rate ? ctx.config.STABLECOIN_USDC_BUFFER_BPS : null;

@@ -1,8 +1,7 @@
 # Paying with NETX
 
-Status: built and accepted on a local two-chain setup, 2026-10-21; not yet
-switched on in production (§7). Decisions below were made by the product
-owner on that date; the open items at the end are not decided.
+Status: accepted in production, 2026-10-23. Decisions below were made by the
+product owner; the open items at the end are not decided.
 
 ## 1. What and why
 
@@ -41,22 +40,22 @@ Unlike JPYC and USDC, NETX is **not a stablecoin**. Its market price moves,
 which is why §3 and §4 exist. Interface copy says "digital currency" /
 "暗号資産" where it used to be able to say "stablecoin".
 
-## 3. Price: fixed, 1 NETX = ¥20
+## 3. Price: fixed, 1 NETX = ¥40
 
 Decided: a fixed rate, not a market rate. A product priced ¥980 costs
-980 / 20 = 49 NETX; the atomic amount is rounded **up**, so a price never
+980 / 40 = **24.5 NETX**. The atomic amount is rounded **up** only when the
+division cannot be represented in the token's smallest unit, so a price never
 costs less than its yen value:
 
-    amountAtomic = ceil(priceJpy × 10^decimals / 20)
+    amountAtomic = ceil(priceJpy × 10^decimals / 40)
 
 Integer arithmetic only (the same rule USDC follows): no floating point
 touches an amount.
 
-On the day this was decided the market price was about $0.148, roughly
-¥22–23, so paying in NETX costs the buyer slightly more than paying in yen.
-If the market falls below ¥20 the opposite holds, and NETX bought on the
-market buys credits below their yen price. That is accepted, with the
-switch in §4 as the control.
+The rate is a YUHA pricing decision, not a claim about NETX's market price.
+If NETX trades below ¥40, tokens bought on the market can buy credits below
+their yen list price. That exposure is accepted, with the switch in §4 as the
+control.
 
 ## 4. The pause switch
 
@@ -143,7 +142,7 @@ runtime descriptor and the admin status), never as a literal in a translation.
 4. SRE provisions two BSC RPC endpoints from two providers.
 5. Configure, in both api and worker ConfigMaps: the BSC RPC pair, and
    `STABLECOIN_NETX_ENABLED=true`. Restart both.
-6. One small real payment (a DROP pack, 49 NETX), checked against BscScan
+6. One small real payment (a DROP pack, 24.5 NETX at the current ¥40 rate), checked against BscScan
    and against the order in the console, before announcing it.
 7. The 特定商取引法 page and the Terms describe the accepted payment methods;
    adding a non-stablecoin token is a change to reviewed legal text and goes
@@ -152,7 +151,7 @@ runtime descriptor and the admin status), never as a literal in a translation.
    naming it as a means of payment does not suggest the steward is a party to
    the sale (`Tokushoho.tsx` carries the `steward-disclosure-ok` waiver for it).
 8. Decide who watches the NETX market and when to pause (for example, when it
-   trades below ¥20).
+   trades below ¥40).
 
 ## 8. Not decided here
 

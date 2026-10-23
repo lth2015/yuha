@@ -1,5 +1,5 @@
 /**
- * Paying with NETX, on BNB Smart Chain, at a fixed ¥20 (docs/NETX_PAYMENT.md).
+ * Paying with NETX, on BNB Smart Chain, at a fixed ¥40 (docs/NETX_PAYMENT.md).
  *
  * The cases that decide money and trust: it is priced as fixed yen on its own
  * chain; it is a token rail like the others (top-ups and licences, never a
@@ -20,6 +20,7 @@ let support: TestUser;
 let callNo = 0;
 const freshIp = () => ({ 'x-forwarded-for': `198.51.101.${(callNo++ % 200) + 10}` });
 const wallet = privateKeyToAccount('0x59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b78690d');
+const NETX_24_5_ATOMIC = 24n * 10n ** 18n + 5n * 10n ** 17n;
 
 const NETX_ENV = {
   STABLECOIN_ENABLED: 'true',
@@ -79,7 +80,7 @@ const runtime = async () =>
     stablecoin: { tokens: Array<{ key: string; chainId: number; label: string; stablecoin: boolean; yenPerToken: number | null }> };
   };
 
-const pause = (user: TestUser, accepting: boolean, reason = 'market price under twenty yen') =>
+const pause = (user: TestUser, accepting: boolean, reason = 'market price under forty yen') =>
   h.app.inject({
     method: 'PUT',
     url: '/v1/admin/netx-payments',
@@ -90,7 +91,7 @@ const pause = (user: TestUser, accepting: boolean, reason = 'market price under 
 describe('NETX as a way to pay', () => {
   it('is offered with its own chain, next to the Polygon tokens', async () => {
     const tokens = (await runtime()).stablecoin.tokens;
-    expect(tokens.find((t) => t.key === 'netx')).toMatchObject({ chainId: 56, stablecoin: false, yenPerToken: 20 });
+    expect(tokens.find((t) => t.key === 'netx')).toMatchObject({ chainId: 56, stablecoin: false, yenPerToken: 40 });
     expect(tokens.find((t) => t.key === 'jpyc')).toMatchObject({ chainId: 137, stablecoin: true, yenPerToken: null });
   });
 
@@ -105,7 +106,7 @@ describe('NETX as a way to pay', () => {
     expect(sub!.paymentMethods.find((m) => m.method === 'netx')?.available).not.toBe(true);
   });
 
-  it('quotes ¥980 as 49 NETX on BNB Smart Chain, wanting no exchange rate', async () => {
+  it('quotes ¥980 as 24.5 NETX on BNB Smart Chain, wanting no exchange rate', async () => {
     const user = await h.createUser({ email: 'netx-buyer@example.test' });
     await linkWallet(user, 56);
     h.ctx.fx = {
@@ -122,7 +123,7 @@ describe('NETX as a way to pay', () => {
     expect(q.tokenKey).toBe('netx');
     expect(q.chainId).toBe(56);
     expect(q.tokenAddress.toLowerCase()).toBe(NETX_BSC.address);
-    expect(q.amountAtomic).toBe((49n * 10n ** BigInt(NETX_BSC.decimals)).toString());
+    expect(q.amountAtomic).toBe(NETX_24_5_ATOMIC.toString());
   });
 
   it('wants the wallet proved on BNB Smart Chain, not just on Polygon', async () => {
@@ -256,14 +257,14 @@ describe('pausing NETX', () => {
   it('is an administrator’s decision, with a reason, written to the audit log', async () => {
     expect((await pause(support, false)).statusCode).toBe(403);
     expect((await pause(admin, false, 'no')).statusCode).toBe(400);
-    expect((await pause(admin, false, 'market price under twenty yen')).statusCode).toBe(200);
-    expect((await pause(admin, true, 'market price back above twenty')).statusCode).toBe(200);
+    expect((await pause(admin, false, 'market price under forty yen')).statusCode).toBe(200);
+    expect((await pause(admin, true, 'market price back above forty')).statusCode).toBe(200);
     const rows = await query<{ action: string; actor_id: string; reason: string }>(
       `SELECT action, actor_id, reason FROM audit_logs WHERE action LIKE 'payments.netx_%' ORDER BY created_at, id`,
     );
     expect(rows.map((r) => [r.action, r.actor_id, r.reason])).toEqual([
-      ['payments.netx_paused', admin.id, 'market price under twenty yen'],
-      ['payments.netx_resumed', admin.id, 'market price back above twenty'],
+      ['payments.netx_paused', admin.id, 'market price under forty yen'],
+      ['payments.netx_resumed', admin.id, 'market price back above forty'],
     ]);
   });
 

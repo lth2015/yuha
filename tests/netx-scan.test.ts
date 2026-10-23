@@ -33,7 +33,7 @@ const silent = () => undefined;
 const RECEIVER = '0x9999999999999999999999999999999999999999';
 const wallet = privateKeyToAccount('0x59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b78690d');
 const PAYER = wallet.address.toLowerCase();
-const AMOUNT = 49n * 10n ** BigInt(NETX_BSC.decimals); // ¥980 at ¥20
+const AMOUNT = 24n * 10n ** 18n + 5n * 10n ** 17n; // ¥980 at ¥40 = 24.5 NETX
 const TX = `0x${'4e'.repeat(32)}`;
 const hex = (n: number | bigint) => `0x${BigInt(n).toString(16)}`;
 const H = (c: string) => `0x${c.repeat(64)}`;
@@ -161,7 +161,7 @@ describe('a NETX payment on BNB Smart Chain', () => {
       method: 'PUT',
       url: '/v1/admin/netx-payments',
       headers: { ...admin.authHeader, ...freshIp() },
-      payload: { accepting: false, reason: 'market price under twenty yen' } as never,
+      payload: { accepting: false, reason: 'market price under forty yen' } as never,
     });
     expect(paused.statusCode, paused.body).toBe(200);
 
@@ -233,7 +233,7 @@ describe('the operator queue', () => {
     expect(
       (await h.app.inject({
         method: 'PUT', url: '/v1/admin/netx-payments', headers: { ...admin.authHeader, ...freshIp() },
-        payload: { accepting: false, reason: 'market price under twenty yen' } as never,
+        payload: { accepting: false, reason: 'market price under forty yen' } as never,
       })).statusCode,
     ).toBe(200);
     const observation: ChainObservation = {
