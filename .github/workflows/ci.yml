@@ -94,14 +94,11 @@ jobs:
 
       # ffmpeg backs the output checks and export rendering; the audio tests
       # exercise it for real rather than mocking it out.
-      # A static build, not apt. On 2026-10-23 `apt-get update && install
-      # ffmpeg` took 19 and 24 minutes in the two jobs of one run — the Ubuntu
-      # mirrors, not this repository — and both jobs hit their time limits
-      # before running a single test. A static binary is one download.
+      # Not apt alone, and not a third-party action: scripts/ci-install-ffmpeg.sh
+      # says why (each has failed a run on its own).
       - name: Install ffmpeg
-        uses: FedericoCarboni/setup-ffmpeg@v3
-        with:
-          github-token: ${{ github.token }}
+        timeout-minutes: 8
+        run: scripts/ci-install-ffmpeg.sh
 
       - name: Start MySQL from docker-compose.yml
         # The test database only — `pnpm db:up` would also start the
@@ -292,9 +289,8 @@ jobs:
       # of this job restored the fixtures from cache, skipped the install with
       # them, and waited 60 s for a track that could not be made.
       - name: Install ffmpeg
-        uses: FedericoCarboni/setup-ffmpeg@v3
-        with:
-          github-token: ${{ github.token }}
+        timeout-minutes: 8
+        run: scripts/ci-install-ffmpeg.sh
 
       - name: Generate demo audio fixtures
         if: steps.fixtures.outputs.cache-hit != 'true'
