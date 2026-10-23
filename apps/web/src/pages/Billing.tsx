@@ -160,7 +160,7 @@ export default function Billing() {
         </div>
 
         {ent && ent.batches.length > 0 && (
-          <div className="table-wrap">
+          <div className="table-wrap table-wrap--stack">
             <table>
               <thead>
                 <tr>
@@ -299,7 +299,7 @@ export default function Billing() {
             {t('bill.noHistory')}
           </p>
         ) : (
-          <div className="table-wrap">
+          <div className="table-wrap table-wrap--stack">
             <table>
               <thead>
                 <tr>

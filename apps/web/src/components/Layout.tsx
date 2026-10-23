@@ -16,6 +16,7 @@ import { PlayerBar } from './PlayerBar';
 import { PageTitleContext, pageTitleKey } from '../lib/title';
 import { resolveNowPlayingLyrics } from '../lib/now-playing-lyrics';
 import { reportVisit } from '../lib/visits';
+import { useStackedTableLabels } from '../lib/stack-tables';
 
 /**
  * YUHA app shell — top navigation per the acceptance spec: 88px desktop / 72px
@@ -132,6 +133,7 @@ export function Layout({ children }: { children: ReactNode }) {
   const navigate = useNavigate();
   const location = useLocation();
   const player = usePlayer();
+  useStackedTableLabels();
   const credits = entitlements?.availableUnits ?? me?.creditsAvailable ?? 0;
   /*
    * Carries where the buyer was, so the post-payment screen can send them back

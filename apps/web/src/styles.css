@@ -867,6 +867,16 @@ input[type='range'] { width: 100%; accent-color: var(--ink); min-height: var(--t
 .seg__btn:hover:not(.is-active) { color: var(--ink); }
 
 .table-wrap { overflow-x: auto; border: 1px solid var(--line); border-radius: var(--r-control); }
+/* A row's action stays on screen when the rest of the row scrolls sideways:
+   on a phone the customer list put 「打开」 past the right edge, an action you
+   could only find by swiping a table. */
+.col-action { position: sticky; right: 0; background: var(--surface-solid); box-shadow: -8px 0 8px -8px rgb(32 34 31 / 18%); }
+.cell-wrap { white-space: normal; overflow-wrap: anywhere; min-width: 10ch; }
+/* A search box and its button share a row and the box gives way, rather than
+   a fixed min-width pushing the button off a 360 px screen. */
+.search-row { flex-wrap: nowrap; }
+.search-row > input { flex: 1 1 auto; min-width: 0; width: auto; }
+.search-row > .btn { flex: none; }
 table { width: 100%; border-collapse: collapse; font-size: var(--t-body); }
 th, td { text-align: left; padding: 10px 14px; border-bottom: 1px solid var(--line); white-space: nowrap; }
 th { color: var(--muted); font-weight: 500; font-size: var(--t-caption); }
@@ -2218,8 +2228,11 @@ textarea.is-full { border-color: var(--danger); }
   gap: var(--s6);
   overflow-x: auto;
   padding-bottom: var(--s3);
-  scrollbar-width: thin;
+  scrollbar-width: thin;  /* A carousel, not a table: cards snap into place, and the next one peeking
+     past the edge is the cue that there is more. */
+  scroll-snap-type: x mandatory;
 }
+.showcase__row > * { scroll-snap-align: start; }
 @media (max-width: 720px) {
   .showcase {
     margin-top: var(--s12);
@@ -2263,8 +2276,11 @@ textarea.is-full { border-color: var(--danger); }
   gap: var(--s4);
   overflow-x: auto;
   padding-bottom: var(--s2);
-  scrollbar-width: thin;
+  scrollbar-width: thin;  /* A carousel, not a table: cards snap into place, and the next one peeking
+     past the edge is the cue that there is more. */
+  scroll-snap-type: x mandatory;
 }
+.studio__recent-row > * { scroll-snap-align: start; }
 @media (max-width: 720px) {
   .studio__recent-row {
     grid-auto-columns: minmax(160px, 70%);
@@ -2499,3 +2515,63 @@ textarea.is-full { border-color: var(--danger); }
 .open-generations__row > div { min-width: 0; flex: 1; display: flex; flex-direction: column; }
 .open-generations__row strong { font-size: var(--t-body); overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 .open-generations__row > .btn { flex: none; }
+
+/* ---------------------------------------------------------------- narrow screens, last
+   Placed at the end on purpose: these override base rules defined further up
+   (the admin console's live near the bottom), and an earlier media block of
+   equal specificity silently loses to a later base rule. */
+@media (max-width: 600px) {
+  /* Six console tabs do not fit one row at phone width. Left to flex-wrap they
+     broke 5 + 1, an orphan tab on a second line that read as broken; a 3 × 2
+     grid shows every tab at once and reads as a deliberate control. */
+  .admin-tabs { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 4px; padding-bottom: var(--s2); }
+  .admin-tabs__tab {
+    text-align: center; padding: 10px 6px; margin: 0; border-bottom: none; border-radius: var(--r-control);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .admin-tabs__tab.is-active { background: var(--surface-solid); box-shadow: var(--shadow-card); }
+  /* A table column that is context, not decision, gives its width back. */
+  .col-wide-only { display: none; }
+
+  /* Data tables as cards (lib/stack-tables.ts labels the cells from <thead>). */
+  .table-wrap--stack { overflow-x: visible; border: none; border-radius: 0; }
+  .table-wrap--stack table,
+  .table-wrap--stack tbody,
+  .table-wrap--stack tr,
+  .table-wrap--stack td { display: block; width: 100%; }
+  .table-wrap--stack thead { position: absolute; width: 1px; height: 1px; clip-path: inset(50%); overflow: hidden; }
+  .table-wrap--stack tr {
+    border: 1px solid var(--line); border-radius: var(--r-control); padding: 6px 14px;
+    background: rgb(255 255 255 / 55%);
+  }
+  .table-wrap--stack tr + tr { margin-top: var(--s2); }
+  /* Block + a floated label, not flex: a cell holding text and a second line
+     (an email over a display name) would otherwise be spread apart as
+     separate flex items. Its content flows right-aligned beside the label. */
+  .table-wrap--stack td {
+    padding: 7px 0; border-bottom: 1px solid var(--line); white-space: normal; overflow-wrap: anywhere; text-align: right;
+  }
+  .table-wrap--stack td::after { content: ''; display: block; clear: both; }
+  .table-wrap--stack td:last-child { border-bottom: none; }
+  .table-wrap--stack td::before {
+    content: attr(data-label); float: left; max-width: 45%; margin-right: 12px; text-align: left;
+    color: var(--muted); font-size: var(--t-caption); font-weight: 500; line-height: 1.9;
+  }
+  .table-wrap--stack td[data-label=""]::before,
+  .table-wrap--stack td:not([data-label])::before { content: none; }
+  .table-wrap--stack .col-action { position: static; box-shadow: none; background: none; }
+  .table-wrap--stack .col-wide-only { display: block; }
+}
+@media (max-width: 380px) {
+  /* 360 px, signed out: brand + language switch + 「登录」 overflowed the
+     bar by ~10 px, and the sign-in button — the one thing a visitor needs —
+     was the part cut off. */
+  .topnav__inner { gap: 8px; padding: 0 12px; }
+  .topnav__home .brand-lockup { width: 92px !important; }
+  .lang-switch__btn { padding: 6px 7px; }
+  .topnav__account { gap: 8px; }
+  .topnav__account .btn { padding: 8px 12px; }
+  /* 「ダッシュボード」 is the longest tab label and needs ~98 px at the body
+     size; a third of a 360 px screen leaves 96. */
+  .admin-tabs__tab { font-size: var(--t-caption); }
+}

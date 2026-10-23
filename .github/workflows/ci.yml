@@ -231,6 +231,128 @@ jobs:
             console.log('demo configuration validates');
           "
 
+  ui:
+    # UI acceptance: every page at 360, 393, 768 and 1280 px, in a real
+    # browser, failing on layout that breaks (scripts/check-ui.mjs says what
+    # "breaks" means and why each rule exists).
+    #
+    # Its own job because it needs the whole demo stack running — api, worker
+    # and web — and a browser; and because 1041 green tests once sat beside an
+    # admin console that was unusable on a phone. Nothing in build-and-test
+    # ever looked at a page at phone width.
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      RUN_MODE: demo
+      PUBLIC_WEB_URL: http://localhost:5173
+      PUBLIC_API_URL: http://localhost:4000
+      DATABASE_URL: mysql://loopscene:loopscene_local_test@127.0.0.1:53307/loopscene_test
+      AUTH_ADAPTER: dev
+      DEV_AUTH_SECRET: ci-ui-acceptance-dev-auth-secret-0123456789
+      STORAGE_SIGNING_SECRET: ci-ui-acceptance-storage-secret-0123456789
+      TEXT_ADAPTER: local
+      MUSIC_ADAPTER: demo
+      DEMO_FIXTURES_DIR: ./assets/fixtures/audio
+      DEMO_LATENCY_MS: '300'
+      STORAGE_ADAPTER: local
+      QUEUE_ADAPTER: local
+      PAYMENTS_ADAPTER: simulated
+      # The demo stack's admin has no MFA factor; with MFA required every
+      # admin API answers 403 and the console pages show the MFA prompt
+      # instead of the console this job exists to look at.
+      ADMIN_MFA_REQUIRED: 'false'
+      UI_SHOTS: ui-shots
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.1.2
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.13.1
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile --prefer-offline
+
+      - name: Start MySQL from docker-compose.yml
+        run: docker compose up -d mysql-test
+
+      - name: Restore cached audio fixtures
+        id: fixtures
+        uses: actions/cache@v4
+        with:
+          path: assets/fixtures/audio
+          key: audio-fixtures-${{ hashFiles('scripts/make-audio-fixtures.mjs') }}
+
+      # Not only for generating fixtures: the worker runs ffmpeg on every
+      # delivery, so without it the demo song never finishes. The first run
+      # of this job restored the fixtures from cache, skipped the install with
+      # them, and waited 60 s for a track that could not be made.
+      - name: Install ffmpeg
+        run: |
+          if ! command -v ffmpeg >/dev/null 2>&1; then
+            sudo apt-get update
+            sudo apt-get install -y --no-install-recommends ffmpeg
+          fi
+
+      - name: Generate demo audio fixtures
+        if: steps.fixtures.outputs.cache-hit != 'true'
+        run: pnpm fixtures:audio
+
+      - name: Build workspace
+        run: pnpm build
+
+      - name: Install Chromium for Playwright
+        run: pnpm exec playwright install --with-deps chromium
+
+      - name: Migrate and seed the demo database
+        run: |
+          set -euo pipefail
+          docker compose up -d --wait mysql-test
+          pnpm db:migrate
+          pnpm seed
+
+      - name: Start the demo stack
+        run: |
+          set -euo pipefail
+          nohup pnpm dev > dev.log 2>&1 &
+          for _ in $(seq 1 90); do
+            if curl -sf http://localhost:4000/v1/runtime >/dev/null && curl -sf http://localhost:5173 >/dev/null; then
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "the demo stack did not come up in three minutes"
+          tail -100 dev.log
+          exit 1
+
+      - name: UI acceptance
+        run: pnpm check:ui
+
+      - name: The stack's log, as an annotation
+        # The raw job log is not always reachable (from an agent session it
+        # is not); an annotation is, through the checks API and the PR page.
+        if: failure()
+        run: |
+          # Worker lines and warnings/errors only: the api's request log
+          # otherwise fills the annotation with the check's own polling.
+          grep -E '^\[worker\]|"level":(40|50)|"level":"(warn|error)"|Error' dev.log | tail -40 \
+            | sed -e 's/%/%25/g' | awk 'BEGIN{ORS="%0A"} {print}' | sed -e 's/^/::error title=demo stack log::/'
+          echo
+
+      - name: Screenshots of what failed, and the stack's log
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ui-acceptance
+          path: |
+            ui-shots/
+            dev.log
+          if-no-files-found: ignore
+
   workflows:
     # Lint the workflows themselves.
     #

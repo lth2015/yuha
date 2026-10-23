@@ -257,7 +257,7 @@ export default function Export() {
         {track.exports.length > 0 && (
           <section className="panel stack">
             <h2 style={{ fontSize: 18, margin: 0 }}>{t('export.history')}</h2>
-            <div className="table-wrap">
+            <div className="table-wrap table-wrap--stack">
               <table>
                 <thead>
                   <tr>

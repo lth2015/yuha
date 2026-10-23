@@ -116,7 +116,7 @@ export function OrdersPanel() {
       {rows.length === 0 && !busy ? (
         <p className="muted small">{t('admin.orders.none')}</p>
       ) : (
-        <div className="table-wrap">
+        <div className="table-wrap table-wrap--stack">
           <table className="small">
             <thead>
               <tr>

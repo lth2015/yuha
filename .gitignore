@@ -61,3 +61,4 @@ __pycache__/
 # are a counterparty's confidential material and must never be committed.
 # See _legal-hold/MANIFEST.md.
 /_legal-hold/
+ui-shots/

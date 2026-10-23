@@ -231,6 +231,18 @@ check was about the rendering.
   for an hour ended with a stale backup stamped over the lot and the word
   "repaired" printed. It now records the mutation's own text and restores only
   when that text is still there.
+- **A layout nobody measured at 390 px is a layout nobody has seen at 390 px.**
+  1041 tests passed while the admin console on a phone wrapped its tab bar onto
+  a second row, cut the customer list's only action button off at the right
+  edge and hid a search button past the screen; signed-out visitors on a 360 px
+  phone could not see the whole 「登录」 button. Every check was about behaviour
+  and every screenshot was 1280 px wide. `document.scrollWidth` would not have
+  helped: `body` has `overflow-x: clip`, so too-wide content is silently cut,
+  not scrollable, and the page reports its width as fine. `pnpm check:ui`
+  drives every routed page at 360/393/768/1280 px in all three languages with
+  real data and fails on what a person would call broken; it runs in CI.
+  A UI change is not done until it passes — and a new route is not covered
+  until it is in that script's page list (the script fails if it is not).
 - **Prefer a scripted invariant to an eye.** The ones in this repo — brace
   balance after CSS edits, SQL placeholder counts, contrast maths, dictionary
   key parity, orphaned exports, mutation anchors — have each caught real
@@ -327,6 +339,7 @@ pnpm test            # vitest (needs MySQL: pnpm db:up)
 pnpm typecheck
 pnpm check:orphans   # exports nothing imports, baselined
 pnpm check:stewardship  # the steward/operator split, enforced
+pnpm check:ui        # every page at phone/tablet/desktop widths (needs pnpm dev + pnpm seed)
 pnpm build
 ```
 
