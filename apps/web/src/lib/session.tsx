@@ -42,27 +42,32 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const refreshMe = useCallback(async () => {
-    if (!getToken()) {
+    const token = getToken();
+    if (!token) {
       setMe(null);
       return;
     }
     try {
-      setMe(await apiFetch<MeView>('/v1/me'));
+      const fresh = await apiFetch<MeView>('/v1/me');
+      if (getToken() === token) setMe(fresh);
     } catch {
-      // An invalid token is cleared by the fetch layer; treat as signed out.
-      setMe(null);
+      // A temporary outage is not a sign-out. Rejected tokens are handled
+      // by SESSION_EXPIRED_EVENT; retain the last confirmed profile here.
     }
   }, []);
 
   const refreshEntitlements = useCallback(async () => {
-    if (!getToken()) {
+    const token = getToken();
+    if (!token) {
       setEntitlements(null);
       return;
     }
     try {
-      setEntitlements(await apiFetch<EntitlementsView>('/v1/entitlements'));
+      const fresh = await apiFetch<EntitlementsView>('/v1/entitlements');
+      if (getToken() === token) setEntitlements(fresh);
     } catch {
-      setEntitlements(null);
+      // Keep the last confirmed balance during an outage. The API remains
+      // authoritative for every purchase/reservation, and expiry clears it.
     }
   }, []);
 
@@ -96,15 +101,21 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       if (now - last < 5_000) return;
       last = now;
       void refreshRuntime().catch(() => undefined);
+      void refreshMe();
       void refreshEntitlements();
     };
+    // Reconnection is new evidence: an offline focus refresh must not swallow
+    // it just because the window regained focus less than five seconds ago.
+    const onOnline = () => { last = 0; onVisible(); };
     document.addEventListener('visibilitychange', onVisible);
     window.addEventListener('focus', onVisible);
+    window.addEventListener('online', onOnline);
     return () => {
       document.removeEventListener('visibilitychange', onVisible);
       window.removeEventListener('focus', onVisible);
+      window.removeEventListener('online', onOnline);
     };
-  }, [refreshEntitlements, refreshRuntime]);
+  }, [refreshMe, refreshEntitlements, refreshRuntime]);
 
   /*
    * The fetch layer clears a rejected token; this clears the rest of the
@@ -123,6 +134,9 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     (token: string, user: MeView) => {
       setToken(token);
       setMe(user);
+      // Cached credits/subscriptions belong to the previous session until
+      // this session's own entitlement request confirms them.
+      setEntitlements(null);
       void refreshEntitlements();
     },
     [refreshEntitlements],

@@ -18,6 +18,37 @@ async function createJob() {
 }
 
 describe('a shared GPU has a durable waiting line', () => {
+  it('handles a community arrival burst without exceeding one GPU or losing cancellation credits', async () => {
+    const music = h.ctx.music;
+    let submissions = 0;
+    h.ctx.music = {
+      capabilities: () => ({ ...music.capabilities(), maxConcurrency: 1 }),
+      submit: async () => { submissions++; return { status: 'submitted', providerRequestId: 'burst-running' }; },
+      poll: async () => ({ status: 'failed', code: 'render_failed', message: 'fixture failure' }),
+    };
+    try {
+      const visitors = await Promise.all(Array.from({ length: 12 }, () => createJob()));
+      await Promise.all(visitors.map(({ jobId }, index) => runJobStep({ ctx: h.ctx, owner: `burst-worker-${index}`, log }, jobId)));
+      expect(submissions).toBe(1);
+      const views = await Promise.all(visitors.map(async ({ user, jobId }) => {
+        const response = await h.app.inject({ method: 'GET', url: `/v1/jobs/${jobId}`, headers: user.authHeader });
+        expect(response.statusCode).toBe(200);
+        return response.json();
+      }));
+      expect(views.filter((job) => job.state === 'SUBMITTED')).toHaveLength(1);
+      expect(views.filter((job) => job.state === 'QUEUED').map((job) => job.queuePosition).sort((a, b) => a - b))
+        .toEqual([2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]);
+      await Promise.all(visitors.map(async ({ user, jobId }, index) => {
+        if (views[index].state === 'QUEUED') {
+          const cancel = await h.app.inject({ method: 'POST', url: `/v1/jobs/${jobId}/cancel`, headers: user.authHeader });
+          expect(cancel.json()).toMatchObject({ cancelled: true });
+        } else await runJobStep({ ctx: h.ctx, owner: 'burst-finish', log }, jobId);
+        const balance = await h.app.inject({ method: 'GET', url: '/v1/entitlements', headers: user.authHeader });
+        expect(balance.json()).toMatchObject({ availableUnits: 3, reservedUnits: 0 });
+      }));
+    } finally { h.ctx.music = music; }
+  });
+
   it('submits only one song across users and workers when capacity is one', async () => {
     const demo = h.ctx.music;
     let submissions = 0;
