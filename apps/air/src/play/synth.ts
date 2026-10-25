@@ -39,6 +39,13 @@ type Timbre = {
   wet: number;
   /** Evens out loudness between timbres (set by measuring renders). */
   gain: number;
+  /**
+   * Re-strike long notes like a plucked tremolo (轮指): `rate` strikes a second, only on
+   * notes at least `minMs` long (fast playing would turn to mush), each `fade` × the last.
+   */
+  tremolo?: { rate: number; minMs: number; max: number; fade: number };
+  /** Let the pad drift left and right, `rate` Hz, `depth` of the field. */
+  padSway?: { rate: number; depth: number };
 };
 
 const TIMBRES: Record<Preset['timbre'], Timbre> = {
@@ -123,6 +130,30 @@ const TIMBRES: Record<Preset['timbre'], Timbre> = {
     wet: 0.25,
     gain: 1.3, // rendered 3.2 dB quieter; not all the way back, the limiter would work too hard
   },
+  // A zheng or pipa: a bright, quick string with a faint slide, tremolo on long notes, a
+  // long room, and a drone underneath that sways like water.
+  zheng: {
+    partials: [
+      ['triangle', 1, 1, 0],
+      ['sine', 2, 0.4, 0.12],
+      ['sine', 3, 0.15, 0.08],
+      ['sine', 5, 0.05, 0.04],
+    ],
+    attack: 0.003,
+    decay: 0.5,
+    sustain: 0.08,
+    release: 0.4,
+    glide: -20,
+    cutoff: [1100, 3200],
+    send: 0.4,
+    sendOpen: 0.45,
+    pad: { wave: 'sine', level: 0.03, detune: 3 },
+    room: 3.6,
+    wet: 0.42,
+    gain: 1,
+    tremolo: { rate: 11, minMs: 450, max: 7, fade: 0.8 },
+    padSway: { rate: 0.12, depth: 0.6 },
+  },
 };
 
 const hz = (midi: number) => 440 * 2 ** ((midi - 69) / 12);
@@ -179,16 +210,29 @@ export function createSynth(ctx: BaseAudioContext, out: AudioNode = ctx.destinat
   wet.gain.value = v.wet;
   reverb.connect(wet).connect(compressor);
 
-  const route = (node: AudioNode, send: number, pan: number) => {
+  const route = (node: AudioNode, send: number, pan: number): StereoPannerNode => {
     const panner = ctx.createStereoPanner();
     panner.pan.value = Math.max(-1, Math.min(1, pan));
     node.connect(panner).connect(dry);
     const s = ctx.createGain();
     s.gain.value = send;
     panner.connect(s).connect(reverb);
+    return panner;
   };
 
   function lead(e: NoteEvent, at: number) {
+    strike(e, at);
+    const t = v.tremolo;
+    if (!t || e.duration < t.minMs) return;
+    // The tremolo is a fixed rule of the voice, so a replay plays it identically.
+    const count = Math.min(t.max, Math.floor((e.duration / 1000) * t.rate));
+    for (let k = 1; k < count; k += 1) {
+      const at2 = at + k / t.rate;
+      strike({ ...e, velocity: e.velocity * 0.55 * t.fade ** k, duration: e.duration - (k / t.rate) * 1000 }, at2);
+    }
+  }
+
+  function strike(e: NoteEvent, at: number) {
     const end = at + e.duration / 1000;
     const held = Math.max(at + v.attack + v.decay + 0.01, end);
     const filter = ctx.createBiquadFilter();
@@ -233,7 +277,17 @@ export function createSynth(ctx: BaseAudioContext, out: AudioNode = ctx.destinat
     env.gain.exponentialRampToValueAtTime(level, at + 0.9);
     env.gain.setTargetAtTime(0.0001, Math.max(at + 0.9, end - 0.2), 0.5);
     filter.connect(env);
-    route(env, 0.5 + 0.4 * e.width, e.pan);
+    const panner = route(env, 0.5 + 0.4 * e.width, e.pan);
+    const stopAt = Math.max(at + 0.9, end) + 2.5;
+    if (v.padSway) {
+      const lfo = ctx.createOscillator();
+      lfo.frequency.value = v.padSway.rate;
+      const depth = ctx.createGain();
+      depth.gain.value = v.padSway.depth;
+      lfo.connect(depth).connect(panner.pan);
+      lfo.start(at);
+      lfo.stop(stopAt);
+    }
     for (const cents of v.pad.detune ? [-v.pad.detune, v.pad.detune] : [0]) {
       const osc = ctx.createOscillator();
       osc.type = v.pad.wave;
@@ -241,7 +295,7 @@ export function createSynth(ctx: BaseAudioContext, out: AudioNode = ctx.destinat
       osc.detune.value = cents;
       osc.connect(filter);
       osc.start(at);
-      osc.stop(Math.max(at + 0.9, end) + 2.5);
+      osc.stop(stopAt);
     }
   }
 

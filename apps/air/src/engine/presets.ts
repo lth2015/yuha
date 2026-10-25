@@ -19,7 +19,7 @@ export type Preset = {
   /** Lowest and highest MIDI note the lead may play. */
   register: readonly [number, number];
   /** Which voice the synth plays it with (play/synth.ts); the engine never reads it. */
-  timbre: 'pluck' | 'qin' | 'glass' | 'mallet';
+  timbre: 'pluck' | 'qin' | 'glass' | 'mallet' | 'zheng';
 };
 
 /*
@@ -92,6 +92,25 @@ export const PRESETS: readonly Preset[] = [
     barsPerChord: 2,
     register: [55, 84],
     timbre: 'mallet',
+  },
+  {
+    // 春江: after 春江花月夜 — its stillness, not its melody (the engine chooses every note,
+    // so no fixed tune can come out of it). F gong mode at 60 bpm, the slowest of all, with
+    // chords drawn from the pentatonic like 江湖 but warmer: F, Dm, then two open ones. A
+    // zheng-like pluck that tremolos on long notes, over a drone that sways like water.
+    id: 'chunjiang',
+    bpm: 60,
+    root: 53,
+    scale: [0, 2, 4, 7, 9],
+    progression: [
+      [0, 4, 7], // F A C
+      [9, 0, 4], // D F A
+      [2, 9, 4], // G D A
+      [7, 0, 2], // C F G
+    ],
+    barsPerChord: 2,
+    register: [53, 82],
+    timbre: 'zheng',
   },
 ];
 
