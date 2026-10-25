@@ -49,6 +49,12 @@ export const LOOKAHEAD_MS = 60;
 const SMOOTH_MS = 120;
 /** Harmony voices at full spread, on top of the melody. */
 const MAX_HARMONY = 2;
+/**
+ * How far below the melody's lowest note harmony may reach, like a left hand. Without
+ * it, a melody at the bottom of the register had no chord tone beneath it, and parting
+ * two fingers there added nothing.
+ */
+export const HARMONY_FLOOR = 7;
 /** Notes per beat at rest and at full speed. */
 const DENSITY = [0.4, 4] as const;
 /** The order grid steps join as density rises: the beat, the off-beat, then the rest. */
@@ -135,11 +141,12 @@ export function createPerformer(p: Preset, seed: number): Performer {
     const count = Math.round(spread * MAX_HARMONY);
     const chord = chordAt(p, melody.t);
     const out: NoteEvent[] = [];
+    const floor = p.register[0] - HARMONY_FLOOR;
     let below = melody.pitch;
     for (let i = 1; i <= count; i += 1) {
       let pitch = below - 1;
-      while (pitch >= p.register[0] && !chord.includes((((pitch - p.root) % 12) + 12) % 12)) pitch -= 1;
-      if (pitch < p.register[0]) break;
+      while (pitch >= floor && !chord.includes((((pitch - p.root) % 12) + 12) % 12)) pitch -= 1;
+      if (pitch < floor) break;
       below = pitch;
       // Alternate sides, further apart the more open the gesture is.
       const side = i % 2 === 1 ? -1 : 1;

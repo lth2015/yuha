@@ -18,7 +18,7 @@
 import { unlockAudio } from '../audio/unlock.ts';
 import type { GestureFrame } from '../engine/frame.ts';
 import { createPerformer, LOOKAHEAD_MS, perform, type NoteEvent, type Performer } from '../engine/performer.ts';
-import { PRESETS, type Preset } from '../engine/presets.ts';
+import { PRESETS, presetFor, type Preset } from '../engine/presets.ts';
 import { createSession, MAX_MS, type Sketch } from '../engine/session.ts';
 import { decodeSketch, shareUrl } from '../engine/share.ts';
 import { createLight } from './light.ts';
@@ -61,12 +61,17 @@ let performer: Performer = createPerformer(preset, seed);
 let sketch: Sketch | null = null;
 
 function fresh() {
-  // A new seed each time: the same gesture plays a little differently.
+  // A new seed each time: the same gesture plays a little differently, and the seed
+  // also picks the preset (key, tempo, harmony and voice), so 重来 may sound new.
   seed = (Math.random() * 2 ** 32) >>> 0;
-  preset = PRESETS[0]!;
+  preset = presetFor(seed);
   session = createSession({ presetId: preset.id, seed });
   performer = createPerformer(preset, seed);
   sketch = null;
+  if (ctx) {
+    liveSynth?.release();
+    liveSynth = createSynth(ctx, ctx.destination, preset.timbre);
+  }
 }
 fresh();
 
@@ -89,7 +94,7 @@ function wake() {
   unlockAudio({ audioSession: true, silentElement: true });
   if (!ctx) {
     ctx = new AudioContext({ latencyHint: 'interactive' });
-    liveSynth = createSynth(ctx);
+    liveSynth = createSynth(ctx, ctx.destination, preset.timbre);
   }
   if (ctx.state !== 'running') void ctx.resume();
 }
@@ -169,10 +174,8 @@ let stopReplay: (() => void) | null = null;
 /** Plays a sketch back through the same engine; `after` is the mode to return to. */
 function replay(s: Sketch, playing: Mode, after: Mode) {
   if (!ctx) return;
-  const out = ctx.createGain();
-  out.connect(ctx.destination);
-  const synth = createSynth(ctx, out);
   const p = PRESETS.find((x) => x.id === s.presetId)!;
+  const synth = createSynth(ctx, ctx.destination, p.timbre);
   const start = ctx.currentTime + 0.15;
   const startedAt = performance.now() + 150;
   for (const e of perform(p, s.seed, s.frames)) {
@@ -189,9 +192,7 @@ function replay(s: Sketch, playing: Mode, after: Mode) {
   stopReplay = () => {
     clearTimeout(done);
     cancelAnimationFrame(raf);
-    // Fade rather than cut, then let go of everything still scheduled.
-    out.gain.setTargetAtTime(0, ctx!.currentTime, 0.05);
-    setTimeout(() => out.disconnect(), 400);
+    synth.release();
     light.clear();
     light.cursor(null);
     stopReplay = null;

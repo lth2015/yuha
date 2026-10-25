@@ -56,7 +56,7 @@ function gesture(seed: number, seconds: number): GestureFrame[] {
 async function render(seed: number, seconds: number, presetIndex = 0): Promise<string> {
   const rate = 44_100;
   const ctx = new OfflineAudioContext(2, Math.ceil((seconds + 3) * rate), rate);
-  const synth = createSynth(ctx);
+  const synth = createSynth(ctx, ctx.destination, PRESETS[presetIndex]!.timbre);
   const frames = gesture(seed, seconds);
   const events = perform(PRESETS[presetIndex]!, seed, frames);
   for (const e of events) synth.play(e, e.t / 1000);
@@ -99,4 +99,4 @@ async function render(seed: number, seconds: number, presetIndex = 0): Promise<s
   return btoa(bin);
 }
 
-Object.assign(window, { render });
+Object.assign(window, { render, presetIds: PRESETS.map((p) => p.id) });
