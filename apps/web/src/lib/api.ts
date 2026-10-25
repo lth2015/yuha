@@ -16,6 +16,9 @@ import type { ErrorCode } from '@yuha/contracts';
  */
 const API_BASE = import.meta.env['VITE_API_URL'] ?? '';
 const TOKEN_KEY = 'loopscene.token';
+// PR-A is an anonymous preview. Native authentication and Keychain arrive in
+// PR-B; never import a Web session or accidentally enable paid operations.
+const IOS_PREVIEW = import.meta.env['VITE_APP_PLATFORM'] === 'ios';
 
 export class ApiError extends Error {
   readonly code: ErrorCode;
@@ -41,6 +44,7 @@ export class NetworkError extends Error {
 }
 
 export function getToken(): string | null {
+  if (IOS_PREVIEW) return null;
   try {
     return localStorage.getItem(TOKEN_KEY);
   } catch {
@@ -58,6 +62,7 @@ export function getToken(): string | null {
 export const SESSION_EXPIRED_EVENT = 'yuha:session-expired';
 
 export function setToken(token: string | null): void {
+  if (IOS_PREVIEW) throw new Error('iOS preview: authentication is not enabled');
   try {
     if (token) localStorage.setItem(TOKEN_KEY, token);
     else localStorage.removeItem(TOKEN_KEY);
@@ -91,6 +96,10 @@ function retryPause(signal: AbortSignal): Promise<void> {
  * drift, and the one that drifted would be the one nobody tested.
  */
 async function request(path: string, opts: RequestOptions): Promise<{ res: Response; text: string; token: string | null }> {
+  if (IOS_PREVIEW && ((opts.method ?? 'GET') !== 'GET' ||
+    !['/v1/runtime', '/v1/explore', '/v1/legal/business-disclosure', '/v1/products'].includes(path))) {
+    throw new Error('iOS preview: this operation is not enabled');
+  }
   const headers: Record<string, string> = {};
   const token = getToken();
   if (token) headers['authorization'] = `Bearer ${token}`;

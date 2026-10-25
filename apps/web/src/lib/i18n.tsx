@@ -18,6 +18,13 @@ export const LANGS: Array<{ code: Lang; label: string }> = [
 type Dict = Record<string, string>;
 
 const zh: Dict = {
+  'ios.preview': 'iOS 开发预览 · 登录与购买尚未开放',
+  'ios.auth.title': '登录功能即将开放',
+  'ios.auth.body': '安全登录完成后，即可使用同一个 YUHA 账户。此预览不收集密码。',
+  'ios.library.title': '你的曲库保持私密',
+  'ios.library.body': '连接安全登录后，将显示你已有的作品。此预览不会读取私人曲库。',
+  'ios.unavailable.title': '此页面暂未开放',
+  'ios.unavailable.body': '此 iOS 开发预览尚未开放该功能。',
   'nav.create': '创作',
   'nav.library': '我的作品',
   'nav.signin': '登录',
@@ -989,6 +996,13 @@ const zh: Dict = {
 };
 
 const ja: Dict = {
+  'ios.preview': 'iOS 開発プレビュー · ログイン・購入は準備中',
+  'ios.auth.title': 'ログインは準備中です',
+  'ios.auth.body': '安全なログインの実装後、既存の YUHA アカウントをご利用いただけます。このプレビューではパスワードを収集しません。',
+  'ios.library.title': 'ライブラリは非公開です',
+  'ios.library.body': '安全なログインの実装後、既存の作品を表示します。このプレビューでは非公開の作品にアクセスしません。',
+  'ios.unavailable.title': 'この画面は準備中です',
+  'ios.unavailable.body': 'この機能は iOS 開発プレビューではまだ利用できません。',
   'nav.create': '創作', 'nav.library': 'マイ作品',
   'nav.signin': 'ログイン', 'nav.start': '創作をはじめる',
   'nav.credits': '残り {n} 回', 'nav.skip': '本文へスキップ',
@@ -1942,6 +1956,13 @@ const ja: Dict = {
 };
 
 const en: Dict = {
+  'ios.preview': 'iOS development preview · Sign-in and purchases are not enabled',
+  'ios.auth.title': 'Sign-in is coming',
+  'ios.auth.body': 'Secure sign-in will connect your existing YUHA account. This preview does not collect passwords.',
+  'ios.library.title': 'Your library is private',
+  'ios.library.body': 'Your existing songs will appear after secure sign-in is connected. This preview does not access private songs.',
+  'ios.unavailable.title': 'This screen is not available',
+  'ios.unavailable.body': 'This feature is not enabled in the iOS development preview.',
   'nav.create': 'Create', 'nav.library': 'My songs',
   'nav.signin': 'Sign in', 'nav.start': 'Start creating',
   'nav.credits': '{n} credits left', 'nav.skip': 'Skip to content',
