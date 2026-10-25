@@ -38,6 +38,9 @@ export type NoteEvent = {
   pan: number;
   /** 0..1, how wide and rich the sound field is; follows openness. */
   width: number;
+  /** Where the finger was (smoothed), 0..1 each: the light blooms here, live and on replay alike. */
+  x: number;
+  y: number;
 };
 
 /** How far ahead of the newest frame grid steps are decided, so audio can be scheduled exactly. */
@@ -121,6 +124,8 @@ export function createPerformer(p: Preset, seed: number): Performer {
       // The melody follows the finger across the field, more so when open.
       pan: (x - 0.5) * 2 * (0.25 + 0.5 * openness),
       width: clamp01(openness),
+      x: clamp01(x),
+      y: clamp01(y),
     };
   };
 
@@ -159,6 +164,8 @@ export function createPerformer(p: Preset, seed: number): Performer {
       accent: false,
       pan: chord.length > 1 ? ((i / (chord.length - 1)) * 2 - 1) * 0.85 * openness : 0,
       width: clamp01(openness),
+      x: clamp01(x),
+      y: clamp01(y),
     }));
   };
 

@@ -11,6 +11,21 @@
       <canvas id="light" aria-hidden="true"></canvas>
       <p id="hint">触碰，让感觉先有声音</p>
     </main>
+    <div id="ring" hidden>
+      <svg viewBox="0 0 60 60" aria-hidden="true">
+        <circle class="track" cx="30" cy="30" r="26" />
+        <circle id="ring-arc" cx="30" cy="30" r="26" />
+      </svg>
+      <button id="done" type="button">完成</button>
+    </div>
+    <section id="ended" hidden aria-live="polite">
+      <p class="length">你的 <span id="ended-length"></span></p>
+      <div class="actions">
+        <button id="replay" type="button">回放</button>
+        <button id="again" type="button" class="quiet">重来</button>
+      </div>
+    </section>
+    <p id="toast" role="status" hidden></p>
     <script type="module" src="./src/play/main.ts"></script>
   </body>
 </html>

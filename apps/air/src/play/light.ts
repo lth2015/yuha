@@ -1,19 +1,19 @@
 /**
- * The visible half of the answer: a soft bloom where the finger is for each
- * note, sized by how strongly it was played and coloured by register, and a
- * faint trace of the finger itself. Driven only by real note events and
- * frames, never by invented beats.
+ * The visible half of the answer: a soft bloom where each note was played,
+ * sized by how strongly and coloured by register, and a faint dot for the
+ * finger. Blooms are placed from the note events alone, so a replay of the
+ * same events draws the same light. Never driven by invented beats.
  */
-import type { GestureFrame } from '../engine/frame.ts';
 import type { NoteEvent } from '../engine/performer.ts';
 
 type Bloom = { x: number; y: number; born: number; life: number; size: number; hue: number; alpha: number };
+type Cursor = { x: number; y: number; active: boolean };
 
 export function createLight(canvas: HTMLCanvasElement) {
   const g = canvas.getContext('2d')!;
   const calm = matchMedia('(prefers-reduced-motion: reduce)').matches;
   const blooms: Bloom[] = [];
-  let finger: GestureFrame | null = null;
+  let finger: Cursor | null = null;
   /** Harmony arrives right after its melody note; its bloom sits beside that note, not beside the centre. */
   let melodyPan = 0;
   let scale = 1;
@@ -64,17 +64,22 @@ export function createLight(canvas: HTMLCanvasElement) {
   requestAnimationFrame(draw);
 
   return {
-    frame(f: GestureFrame) {
+    /** Where the finger is drawn now: the live finger, or the replayed one. */
+    cursor(f: Cursor | null) {
       finger = f;
+    },
+    /** Drop everything scheduled, e.g. when a replay is stopped. */
+    clear() {
+      blooms.length = 0;
     },
     /** `delayMs`: how far in the future the note sounds, so the bloom opens with it. */
     note(e: NoteEvent, delayMs: number) {
-      if (!finger) return;
       if (e.voice === 'lead') melodyPan = e.pan;
       blooms.push({
-        // Harmony opens beside the melody, on its side of the stereo field.
-        x: Math.min(1, Math.max(0, finger.x + (e.voice === 'harmony' ? (e.pan - melodyPan) * 0.12 : 0))),
-        y: finger.y,
+        // Where the note was played (carried by the event, so a replay draws the
+        // same light); harmony opens beside the melody, on its side of the field.
+        x: Math.min(1, Math.max(0, e.x + (e.voice === 'harmony' ? (e.pan - melodyPan) * 0.12 : 0))),
+        y: e.y,
         born: performance.now() + delayMs,
         life: e.voice === 'pad' ? 2400 : 900 + e.velocity * 700,
         // The light widens with the sound field.

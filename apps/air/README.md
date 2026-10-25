@@ -5,14 +5,17 @@ api / db / providers，不发任何请求，`apps/web` 不引用它，不进入 
 
 | 页面 | 内容 |
 | --- | --- |
-| `index.html` | 演奏（#28 起）：触控 → 引擎 → 声音与光 |
+| `index.html` | 演奏：触控 → 引擎 → 声音与光（#28、#29）；一次演奏最长 30 秒，回放 / 重来（#30） |
 | `probe.html` | #27 iPhone 第一声测试（静音键 Go / No-Go） |
 | `render.html` | 仅开发用：离线渲染试听录音，不进入构建 |
 
 ## 结构
 
-- `src/engine/`：纯逻辑的草图引擎，唯一的测试缝（`tests/air-engine.test.ts`）。
-  不接触 DOM、音频、时钟或 `Math.random`。
+- `src/engine/`：纯逻辑的草图引擎，唯一的测试缝（`tests/air-engine.test.ts`、
+  `tests/air-session.test.ts`）。不接触 DOM、音频、时钟或 `Math.random`。
+  `session.ts` 决定一次演奏的起止，并只把 20 Hz 降采样后的帧（按下与抬起
+  总是保留）交给引擎；草图记录的正是这些帧，所以回放的音乐事件与现场逐项
+  相同。
 - `src/play/`：触控输入、合成器、光效与演奏页面（薄适配层）。`gesture-math.ts`
   是触控到「张开程度 / 两指距离」的纯函数换算（`tests/air-gesture.test.ts`），
   演奏和离线渲染共用。

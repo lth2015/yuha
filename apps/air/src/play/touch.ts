@@ -16,10 +16,16 @@ const SMOOTH_MS = 80;
 
 type Point = { x: number; y: number };
 
+export type Touch = {
+  /** Milliseconds on the frames' clock, or null before the first touch. */
+  time(): number | null;
+  fingerDown(): boolean;
+};
+
 export function attachTouch(
   el: HTMLElement,
   handlers: { down(e: PointerEvent): void; frame(f: GestureFrame): void },
-): void {
+): Touch {
   let origin: number | null = null;
   /** Down fingers in arrival order; the first one plays. */
   const fingers = new Map<number, Point>();
@@ -91,4 +97,9 @@ export function attachTouch(
   el.addEventListener('pointercancel', up);
   // Safari's own pinch gesture would zoom the page instead of playing.
   el.addEventListener('gesturestart', (e) => e.preventDefault());
+
+  return {
+    time: () => (origin === null ? null : performance.now() - origin),
+    fingerDown: () => fingers.size > 0,
+  };
 }
