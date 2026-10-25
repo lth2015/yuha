@@ -130,23 +130,40 @@ describe('a performance', () => {
 });
 
 describe('what the engine sees, live and in a sketch', () => {
-  it('is at most 20 frames a second, except that every touch and lift is kept', () => {
+  it('keeps at most one frame per 1/20 s, plus touches', () => {
     const { outcome } = live(8, wander(8, 40_000));
     const frames = (outcome as { sketch: Sketch }).sketch.frames;
-    for (let i = 1; i < frames.length; i += 1) {
-      const edge = frames[i]!.active !== frames[i - 1]!.active;
-      if (!edge) expect(frames[i]!.t - frames[i - 1]!.t).toBeGreaterThanOrEqual(1000 / SKETCH_HZ - 1e-9);
+    // The last frame is the closing lift at 30 s, wherever the previous tick fell.
+    for (let i = 1; i < frames.length - 1; i += 1) {
+      const touch = frames[i]!.active && !frames[i - 1]!.active;
+      if (!touch) expect(frames[i]!.t - frames[i - 1]!.t).toBeGreaterThanOrEqual(1000 / SKETCH_HZ);
     }
   });
 
-  it('loses no touch: every touch in the raw input is in the sketch, at its real moment', () => {
+  it('keeps every touch at its real moment, and every lift within one tick', () => {
     const raw = wander(9, 40_000);
     const { outcome } = live(9, raw);
     const sketch = (outcome as { sketch: Sketch }).sketch;
     const start = raw.find((f) => f.active)!.t;
-    const rawTouches = raw.filter((f, i) => f.active && !raw[i - 1]?.active && f.t - start <= sketch.frames.at(-1)!.t).map((f) => f.t - start);
-    const kept = sketch.frames.filter((f, i) => f.active && !sketch.frames[i - 1]?.active).map((f) => f.t);
-    expect(kept).toEqual(rawTouches);
+    const end = sketch.frames.at(-1)!.t;
+    const kept = sketch.frames;
+    // A lift shorter than a tick, touched again inside it, is one continuous touch.
+    const lifts: number[] = [];
+    for (let i = 1; i < raw.length; i += 1) if (!raw[i]!.active && raw[i - 1]!.active) lifts.push(raw[i]!.t - start);
+    for (let i = 1; i < raw.length; i += 1) {
+      const t = Math.round(raw[i]!.t - start);
+      if (t > end || !raw[i]!.active || raw[i - 1]!.active) continue;
+      const liftedFor = t - (lifts.filter((l) => l < t).at(-1) ?? -Infinity);
+      if (liftedFor < 1000 / SKETCH_HZ) continue;
+      expect(kept.some((f, j) => f.t === t && f.active && !kept[j - 1]?.active), `touch at ${t}`).toBe(true);
+    }
+    for (const l of lifts) {
+      if (l > end - 1000 / SKETCH_HZ) continue;
+      const after = kept.find((f) => f.t >= l - 1);
+      const stillLifted = raw.find((f) => f.t - start >= l && f.t - start <= l + 1000 / SKETCH_HZ && f.active) === undefined;
+      if (stillLifted) expect(kept.some((f) => !f.active && f.t >= l - 1 && f.t <= l + 1000 / SKETCH_HZ + 17), `lift at ${l}`).toBe(true);
+      expect(after).toBeDefined();
+    }
   });
 
   it('is exactly the frames the live engine was fed', () => {

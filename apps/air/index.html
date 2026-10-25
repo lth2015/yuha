@@ -23,6 +23,15 @@
       <div class="actions">
         <button id="replay" type="button">回放</button>
         <button id="again" type="button" class="quiet">重来</button>
+        <button id="share" type="button" class="quiet">复制链接</button>
+      </div>
+      <input id="share-url" type="text" readonly hidden aria-label="分享链接" />
+    </section>
+    <section id="shared" hidden aria-live="polite">
+      <p class="length">一段空气作曲 · <span id="shared-length"></span></p>
+      <div class="actions">
+        <button id="listen" type="button">聆听</button>
+        <button id="own" type="button" class="quiet">自己来一段</button>
       </div>
     </section>
     <p id="toast" role="status" hidden></p>

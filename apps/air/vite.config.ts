@@ -17,6 +17,10 @@ export default defineConfig(({ mode }) => ({
   // Relative asset URLs: the build can be served from any path.
   base: './',
   plugins: mode === 'phone' ? [basicSsl()] : [],
+  // The address a shared link points at. A hosted artifact runs in a frame whose own
+  // address is not the one people open, so build-artifact.mjs passes the real one;
+  // empty means "this page's own address" (dev server, LAN, a normal host).
+  define: { __SHARE_BASE__: JSON.stringify(process.env['AIR_SHARE_BASE'] ?? '') },
   server: { port: 5180, strictPort: true },
   build: {
     outDir: 'dist',

@@ -85,7 +85,7 @@ body {
   cursor: pointer;
 }
 
-#ended {
+#ended, #shared {
   position: fixed;
   inset: auto 0 0;
   padding: 20px max(16px, env(safe-area-inset-right, 0px)) calc(28px + env(safe-area-inset-bottom, 0px)) max(16px, env(safe-area-inset-left, 0px));
@@ -93,9 +93,9 @@ body {
   justify-items: center;
   gap: 14px;
 }
-#ended .length { margin: 0; color: var(--yuha-muted); letter-spacing: 0.04em; }
-#ended .actions { display: flex; gap: 12px; flex-wrap: wrap; justify-content: center; }
-#ended button {
+#ended .length, #shared .length { margin: 0; color: var(--yuha-muted); letter-spacing: 0.04em; }
+#ended .actions, #shared .actions { display: flex; gap: 12px; flex-wrap: wrap; justify-content: center; }
+#ended button, #shared button {
   min-width: 112px;
   padding: 12px 20px;
   border-radius: var(--yuha-radius-control);
@@ -105,8 +105,18 @@ body {
   font: inherit;
   cursor: pointer;
 }
-#ended button.quiet { background: var(--yuha-surface); color: var(--yuha-ink); border-color: var(--yuha-control-line); }
-#ended button:disabled { opacity: 0.45; cursor: default; }
+#share-url {
+  width: min(100%, 480px);
+  font: inherit;
+  font-size: 16px; /* below 16px iOS zooms on focus */
+  padding: 10px 12px;
+  border: 1px solid var(--yuha-control-line);
+  border-radius: var(--yuha-radius-control);
+  background: var(--yuha-surface);
+  color: var(--yuha-ink);
+}
+#ended button.quiet, #shared button.quiet { background: var(--yuha-surface); color: var(--yuha-ink); border-color: var(--yuha-control-line); }
+#ended button:disabled, #shared button:disabled { opacity: 0.45; cursor: default; }
 button:focus-visible { outline: 3px solid var(--yuha-focus); outline-offset: 3px; }
 
 #toast {

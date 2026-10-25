@@ -6,15 +6,21 @@
  * also what the sketch records, so 「回放」 plays back the same events — the
  * same notes at the same moments, the same light in the same places.
  *
+ * 「复制链接」 puts the sketch in a link's #fragment (#31); opening such a link
+ * offers 「聆听」 — the same replay, so a friend hears what was played — and
+ * then 「自己来一段」. Nothing is sent anywhere: the fragment never leaves the
+ * browser.
+ *
  * Audio is unlocked and the context created synchronously inside the first
- * pointerdown (iOS allows it nowhere else), using the silent-element method
- * #27 found to work with the silent switch on.
+ * gesture (iOS allows it nowhere else), using the silent-element method #27
+ * found to work with the silent switch on.
  */
 import { unlockAudio } from '../audio/unlock.ts';
 import type { GestureFrame } from '../engine/frame.ts';
 import { createPerformer, LOOKAHEAD_MS, perform, type NoteEvent, type Performer } from '../engine/performer.ts';
 import { PRESETS, type Preset } from '../engine/presets.ts';
 import { createSession, MAX_MS, type Sketch } from '../engine/session.ts';
+import { decodeSketch, shareUrl } from '../engine/share.ts';
 import { createLight } from './light.ts';
 import { createSynth, type Synth } from './synth.ts';
 import { attachTouch } from './touch.ts';
@@ -36,12 +42,17 @@ const ended = $('#ended');
 const replayButton = $<HTMLButtonElement>('#replay');
 const againButton = $<HTMLButtonElement>('#again');
 const toast = $('#toast');
+const shareButton = $<HTMLButtonElement>('#share');
+const shareField = $<HTMLInputElement>('#share-url');
+const sharedPanel = $('#shared');
+const listenButton = $<HTMLButtonElement>('#listen');
+const ownButton = $<HTMLButtonElement>('#own');
 const light = createLight($<HTMLCanvasElement>('#light'));
 
 let ctx: AudioContext | null = null;
 let liveSynth: Synth | null = null;
 
-type Mode = 'ready' | 'playing' | 'ended' | 'replaying';
+type Mode = 'ready' | 'playing' | 'ended' | 'replaying' | 'shared' | 'shared-replaying';
 let mode: Mode = 'ready';
 let preset: Preset = PRESETS[0]!;
 let seed = 0;
@@ -63,9 +74,24 @@ function setMode(next: Mode) {
   mode = next;
   ring.hidden = next !== 'playing';
   ended.hidden = next !== 'ended' && next !== 'replaying';
+  sharedPanel.hidden = next !== 'shared' && next !== 'shared-replaying';
   replayButton.textContent = next === 'replaying' ? '停止' : '回放';
-  againButton.disabled = next === 'replaying';
-  stage.setAttribute('aria-hidden', String(next === 'ended' || next === 'replaying'));
+  againButton.disabled = shareButton.disabled = next === 'replaying';
+  listenButton.textContent = next === 'shared-replaying' ? '停止' : '聆听';
+  ownButton.disabled = next === 'shared-replaying';
+  hint.hidden = next !== 'ready';
+  if (next !== 'ended') shareField.hidden = true;
+  stage.setAttribute('aria-hidden', String(next !== 'ready' && next !== 'playing'));
+}
+
+/** Audio may only start inside a gesture; every button that plays calls this first. */
+function wake() {
+  unlockAudio({ audioSession: true, silentElement: true });
+  if (!ctx) {
+    ctx = new AudioContext({ latencyHint: 'interactive' });
+    liveSynth = createSynth(ctx);
+  }
+  if (ctx.state !== 'running') void ctx.resume();
 }
 
 let toastTimer: ReturnType<typeof setTimeout> | undefined;
@@ -92,10 +118,7 @@ function offer(raw: GestureFrame) {
   if (mode !== 'ready' && mode !== 'playing') return;
   const out = session.push(raw);
   if (out.frame) playLive(performer.push(out.frame), out.frame);
-  if (out.status === 'playing' && mode === 'ready') {
-    setMode('playing');
-    hint.hidden = true;
-  }
+  if (out.status === 'playing' && mode === 'ready') setMode('playing');
   if (out.status === 'ended') finishWith(out.sketch);
 }
 
@@ -108,12 +131,7 @@ function finishWith(s: Sketch) {
 
 const touch = attachTouch(stage, {
   down() {
-    unlockAudio({ audioSession: true, silentElement: true });
-    if (!ctx) {
-      ctx = new AudioContext({ latencyHint: 'interactive' });
-      liveSynth = createSynth(ctx);
-    }
-    if (ctx.state !== 'running') void ctx.resume();
+    wake();
   },
   frame(f) {
     if (mode === 'ready' || mode === 'playing') light.cursor(f);
@@ -141,23 +159,16 @@ doneButton.addEventListener('click', () => {
     say('再多玩一会儿，再听回放');
     fresh();
     setMode('ready');
-    hint.hidden = false;
   }
 });
 
-/* ---------- replay ---------- */
+/* ---------- replay: your own sketch, or a friend's ---------- */
 
 let stopReplay: (() => void) | null = null;
 
-replayButton.addEventListener('click', () => {
-  if (stopReplay) {
-    stopReplay();
-    return;
-  }
-  if (!ctx || !sketch) return;
-  // A click is a gesture: wake audio in case the page was in the background.
-  if (ctx.state !== 'running') void ctx.resume();
-  const s = sketch;
+/** Plays a sketch back through the same engine; `after` is the mode to return to. */
+function replay(s: Sketch, playing: Mode, after: Mode) {
+  if (!ctx) return;
   const out = ctx.createGain();
   out.connect(ctx.destination);
   const synth = createSynth(ctx, out);
@@ -168,14 +179,13 @@ replayButton.addEventListener('click', () => {
     synth.play(e, start + e.t / 1000);
     light.note(e, 150 + e.t);
   }
-  const last = s.frames.at(-1)!.t;
   let raf = 0;
   const follow = () => {
     raf = requestAnimationFrame(follow);
     light.cursor(frameAt(s.frames, performance.now() - startedAt));
   };
   follow();
-  const done = setTimeout(() => stopReplay?.(), 150 + last + TAIL_MS);
+  const done = setTimeout(() => stopReplay?.(), 150 + s.frames.at(-1)!.t + TAIL_MS);
   stopReplay = () => {
     clearTimeout(done);
     cancelAnimationFrame(raf);
@@ -185,16 +195,58 @@ replayButton.addEventListener('click', () => {
     light.clear();
     light.cursor(null);
     stopReplay = null;
-    setMode('ended');
+    setMode(after);
   };
-  setMode('replaying');
+  setMode(playing);
+}
+
+replayButton.addEventListener('click', () => {
+  if (stopReplay) return stopReplay();
+  if (!sketch) return;
+  wake();
+  replay(sketch, 'replaying', 'ended');
 });
 
 againButton.addEventListener('click', () => {
   stopReplay?.();
   fresh();
   setMode('ready');
-  hint.hidden = false;
+});
+
+/* ---------- sharing ---------- */
+
+shareButton.addEventListener('click', () => {
+  if (!sketch) return;
+  const url = shareUrl(__SHARE_BASE__ || location.href, sketch);
+  // Must be called inside the click; refused in some frames, so fall back to a field to copy from.
+  navigator.clipboard.writeText(url).then(
+    () => say('链接已复制，发给朋友吧'),
+    () => {
+      shareField.value = url;
+      shareField.hidden = false;
+      shareField.focus();
+      shareField.select();
+      say('长按上面的链接，全选后复制');
+    },
+  );
+});
+
+let received: Sketch | null = null;
+
+listenButton.addEventListener('click', () => {
+  if (stopReplay) return stopReplay();
+  if (!received) return;
+  wake();
+  replay(received, 'shared-replaying', 'shared');
+});
+
+ownButton.addEventListener('click', () => {
+  stopReplay?.();
+  received = null;
+  // Drop the friend's sketch from the address, so a reload starts fresh.
+  history.replaceState(null, '', location.pathname + location.search);
+  fresh();
+  setMode('ready');
 });
 
 /** The finger as it was `t` ms into the sketch, interpolated between kept frames. */
@@ -208,4 +260,12 @@ function frameAt(frames: GestureFrame[], t: number) {
   return { x: a.x + (b.x - a.x) * k, y: a.y + (b.y - a.y) * k, active: true };
 }
 
-setMode('ready');
+/* Opened from a shared link? A short fragment is someone else's anchor, not a broken sketch. */
+received = decodeSketch(location.hash);
+if (received) {
+  $('#shared-length').textContent = `${Math.round(received.frames.at(-1)!.t / 1000)} 秒`;
+  setMode('shared');
+} else {
+  setMode('ready');
+  if (location.hash.length > 12) say('这个链接打不开了，来演奏你自己的吧');
+}

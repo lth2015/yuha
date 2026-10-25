@@ -19,6 +19,10 @@ const root = import.meta.dirname;
 const outDir = mkdtempSync(join(tmpdir(), 'yuha-air-'));
 try {
   process.env['AIR_PAGE'] = page;
+  // Where a shared link should point (the artifact's own link); see vite.config.ts.
+  if (page === 'index' && !process.env['AIR_SHARE_BASE']) {
+    console.warn('build-artifact: AIR_SHARE_BASE is not set; shared links will point at the frame, not the artifact');
+  }
   await build({ root, configFile: join(root, 'vite.config.ts'), logLevel: 'warn', build: { outDir, emptyOutDir: true, sourcemap: false } });
   const html = readFileSync(join(outDir, `${page}.html`), 'utf8');
   const assets = readdirSync(join(outDir, 'assets'));
