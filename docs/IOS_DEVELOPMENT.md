@@ -66,7 +66,7 @@ concurrent operator testing/distribution. Do not mistake a development API for
 a data-isolated backend without verifying its database and adapters.
 
 Native builds disable Vite `.env` loading, remove Google Fonts links, do not
-publish source maps, and use system fonts. Only public Vite build values belong
+publish source maps, and bundle pinned Noto Sans SC/JP variable fonts for offline CJK rendering. Full OFL notices are copied into `dist-ios/licenses` and the native app. Only public Vite build values belong
 in any frontend environment. Do not place production keys, administrator tokens,
 Apple private keys, Stripe secrets or operator identity in a build file.
 
@@ -81,6 +81,9 @@ The Web fetch implementation and payment pages continue to operate normally.
 
 - ATS explicitly denies arbitrary loads. Development requires trusted HTTPS;
   there is no exception for a local HTTP API.
+- Native type tokens use the WebKit system body size and relative units.
+  Locally bundled CJK fonts and form-control inheritance avoid network/system
+  fallback dependence; full OFL notices accompany the bundle.
 - Safe-area insets cover top/side/bottom chrome; tabs and language controls have
   44px targets. Content can scroll above the Home Indicator; navigation focuses
   the main landmark. Dark/reduced-transparency styles are native-only.

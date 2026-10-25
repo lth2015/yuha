@@ -44,12 +44,40 @@ remaining 0 code/document issues. Native interaction evidence is still partial.
 
 ## Unverified and handoff
 
-The computer-use tool timed out opening the Simulator window, including a
-bounded retry by its full application path. No native screenshot, tab tapping,
-keyboard, dark-mode, large-text or VoiceOver result is claimed. Browser preview
-and a running native process do not substitute for those tests. Reproduce the
-unsigned build, open Simulator locally and check Home → Library → Login before
-considering the visual part of PR-A acceptance closed.
+The original Simulator window launch issue was bypassed using Capacitor's
+supported `cap run ios --target <device-id> --no-sync` after building assets.
+Actual native inspection found two defects invisible in browser preview:
+CJK text (including default-font buttons) rendered as missing glyphs on the
+installed iOS 26.3.1 runtime, and dark-mode logo inversion made the wordmark
+dark while turning the orange petal blue. Both were reproduced before repair.
+
+The native entry now imports pinned, locally bundled Noto Sans SC/JP variable
+fonts, including full OFL notices in the copied app resources, and native form
+controls inherit the same family. The same simulator now renders Chinese
+headings, body, labels, placeholders and mood buttons. No online font request
+is required; Web output contains no added WOFF2 assets. Native web resources
+are approximately 11 MiB including both font families; the Web output remains
+approximately 2.9 MiB. System-font-only substitution did not resolve the
+observed failure and was not retained. The precise underlying runtime/font
+service fault is not claimed as established.
+
+Dark mode keeps the logo's `currentColor` wordmark and original orange petal,
+reduces the bright glass overlay, and uses readable placeholders and semantic
+text colors. Native typography now uses WebKit's system body text size with
+relative type tokens; header wrapping and scaled bottom clearance accommodate
+larger text. A larger preferred system text size was exercised on the iPhone
+17 Pro; this does not certify every accessibility size or every page.
+
+A separate fresh iPhone 16e simulator instance was installed and launched with
+Japanese app-language arguments. Its Japanese headings, body, placeholders,
+mood labels and bottom navigation rendered correctly in light mode. Both
+simulators used iOS 26.3.1; these are not two real devices or two OS versions.
+
+Some later coordinate/keyboard actions failed in the computer-use tool even
+though AX menu actions and native screenshots remained available. Keyboard,
+VoiceOver, all accessibility sizes and complete native route interaction remain
+pending where not explicitly exercised. No browser image is represented as a
+native screenshot.
 
 Real-device tests, Apple/Google OAuth, Keychain, private-library synchronization,
 AASA/Universal Links, AVAudioSession/lock-screen/Bluetooth/interruption handling,

@@ -3,6 +3,8 @@
 // enter the app. Vite's normal Web .env files are disabled for native builds.
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
+import { copyFileSync, mkdirSync } from 'node:fs';
+import { join } from 'node:path';
 const root = fileURLToPath(new URL('../', import.meta.url));
 const [command, ...args] = process.argv.slice(2);
 try {
@@ -35,6 +37,12 @@ try {
     if (command !== 'open') {
       run(['typecheck']);
       run(['exec', 'vite', 'build', '--mode', 'ios']);
+      const licenses = join(root, 'apps/web/dist-ios/licenses');
+      mkdirSync(licenses, { recursive: true });
+      for (const family of ['noto-sans-sc', 'noto-sans-jp']) {
+        copyFileSync(join(root, 'apps/web/node_modules/@fontsource-variable', family, 'LICENSE'),
+          join(licenses, `${family}-OFL.txt`));
+      }
       if (command === 'sync') run(['exec', 'cap', 'sync', 'ios']);
     } else run(['exec', 'cap', 'open', 'ios']);
   }

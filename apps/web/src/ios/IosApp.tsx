@@ -8,6 +8,8 @@ import { SessionProvider } from '../lib/session';
 import Home from '../pages/Home';
 import { Company, LegalIndex, Privacy, Terms } from '../pages/Legal';
 import { Tokushoho } from '../pages/Tokushoho';
+import '@fontsource-variable/noto-sans-sc';
+import '@fontsource-variable/noto-sans-jp';
 import './ios.css';
 
 function PreviewStatus({ kind }: { kind: 'auth' | 'library' | 'unavailable' }) {
