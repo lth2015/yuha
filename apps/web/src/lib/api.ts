@@ -73,6 +73,15 @@ export interface RequestOptions {
   signal?: AbortSignal;
 }
 
+function retryPause(signal: AbortSignal): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const abort = () => { clearTimeout(timer); reject(new DOMException('request aborted', 'AbortError')); };
+    const timer = setTimeout(() => { signal.removeEventListener('abort', abort); resolve(); }, 500);
+    if (signal.aborted) abort();
+    else signal.addEventListener('abort', abort, { once: true });
+  });
+}
+
 /**
  * The request itself, and what a failure means — shared by the JSON and the
  * text callers.
@@ -81,26 +90,45 @@ export interface RequestOptions {
  * authorization header and the 401 handling is a second place for them to
  * drift, and the one that drifted would be the one nobody tested.
  */
-async function request(path: string, opts: RequestOptions): Promise<{ res: Response; text: string }> {
+async function request(path: string, opts: RequestOptions): Promise<{ res: Response; text: string; token: string | null }> {
   const headers: Record<string, string> = {};
   const token = getToken();
   if (token) headers['authorization'] = `Bearer ${token}`;
   if (opts.body !== undefined) headers['content-type'] = 'application/json';
   if (opts.idempotencyKey) headers['idempotency-key'] = opts.idempotencyKey;
 
-  let res: Response;
+  if (opts.signal?.aborted) throw new DOMException('request aborted', 'AbortError');
+  const controller = new AbortController();
+  const onAbort = () => controller.abort();
+  opts.signal?.addEventListener('abort', onAbort, { once: true });
+  // Reads should recover promptly; mutations can include a text-model call.
+  const timeout = setTimeout(onAbort, (opts.method ?? 'GET') === 'GET' ? 15_000 : 60_000);
   try {
-    res = await fetch(`${API_BASE}${path}`, {
-      method: opts.method ?? 'GET',
-      headers,
-      body: opts.body === undefined ? undefined : JSON.stringify(opts.body),
-      ...(opts.signal ? { signal: opts.signal } : {}),
-    });
+    const readOnly = (opts.method ?? 'GET') === 'GET';
+    for (let attempt = 0; ; attempt++) {
+      try {
+        const res = await fetch(`${API_BASE}${path}`, {
+          method: opts.method ?? 'GET',
+          headers,
+          body: opts.body === undefined ? undefined : JSON.stringify(opts.body),
+          signal: controller.signal,
+        });
+        const text = res.status === 204 ? '' : await res.text();
+        if (!readOnly || attempt > 0 || ![502, 503, 504].includes(res.status)) return { res, text, token };
+      } catch (err) {
+        if (!readOnly || attempt > 0 || controller.signal.aborted) throw err;
+      }
+      // Read recovery stays inside the original deadline. Never replay writes:
+      // a lost response does not mean a generation/payment was not accepted.
+      await retryPause(controller.signal);
+    }
   } catch (err) {
-    if ((err as Error).name === 'AbortError') throw err;
+    if (opts.signal?.aborted) throw new DOMException('request aborted', 'AbortError');
     throw new NetworkError(err);
+  } finally {
+    clearTimeout(timeout);
+    opts.signal?.removeEventListener('abort', onAbort);
   }
-  return { res, text: res.status === 204 ? '' : await res.text() };
 }
 
 /**
@@ -111,30 +139,28 @@ async function request(path: string, opts: RequestOptions): Promise<{ res: Respo
  * HTML error page named `.csv` or quietly produce nothing.
  */
 export async function apiFetchText(path: string): Promise<string> {
-  const { res, text } = await request(path, {});
-  if (!res.ok) throw errorFrom(res, text);
+  const { res, text, token } = await request(path, {});
+  if (!res.ok) throw errorFrom(res, text, token);
   return text;
 }
 
 export async function apiFetch<T>(path: string, opts: RequestOptions = {}): Promise<T> {
-  const { res, text } = await request(path, opts);
+  const { res, text, token } = await request(path, opts);
 
   if (res.status === 204) return undefined as T;
+  if (!res.ok) throw errorFrom(res, text, token);
 
-  let json: unknown = null;
   try {
-    json = text ? JSON.parse(text) : null;
+    return JSON.parse(text) as T;
   } catch {
-    json = null;
+    // A proxy can answer an API path with the SPA shell and HTTP 200.
+    // Never turn that into successful null data and a later render crash.
+    throw new ApiError('INTERNAL_ERROR', 'invalid JSON response', 502);
   }
-
-  if (!res.ok) throw errorFrom(res, text);
-
-  return json as T;
 }
 
 /** The error a failed response becomes, including what a 401 does to the session. */
-function errorFrom(res: Response, text: string): ApiError {
+function errorFrom(res: Response, text: string, requestToken: string | null): ApiError {
   let json: unknown = null;
   try {
     json = text ? JSON.parse(text) : null;
@@ -154,7 +180,7 @@ function errorFrom(res: Response, text: string): ApiError {
    */
   // A suspension is the same for the session: the token is no use any more,
   // and the sign-in page is where the reason can be shown.
-  if (res.status === 401 || code === 'ACCOUNT_SUSPENDED') {
+  if ((res.status === 401 || code === 'ACCOUNT_SUSPENDED') && requestToken && getToken() === requestToken) {
     setToken(null);
     try {
       window.dispatchEvent(new Event(SESSION_EXPIRED_EVENT));
