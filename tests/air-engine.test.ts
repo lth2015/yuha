@@ -168,3 +168,71 @@ describe('quiet edges', () => {
     expect(perform(preset, 11, frames)).toEqual(perform(preset, 11, frames));
   });
 });
+
+describe('opening up and spreading out (#29)', () => {
+  const harmony = (events: NoteEvent[]) => events.filter((e) => e.voice === 'harmony');
+  /** How many voices start together on each lead note, on average. */
+  const layers = (events: NoteEvent[]) => {
+    const at = new Map<number, number>();
+    for (const e of events) if (e.voice !== 'pad') at.set(e.t, (at.get(e.t) ?? 0) + 1);
+    return mean([...at.values()]);
+  };
+
+  it('adds no harmony while only one finger is down', () => {
+    for (const seed of SEEDS.slice(0, 10)) expect(harmony(perform(preset, seed, wander(seed)))).toEqual([]);
+  });
+
+  it('adds harmony made only of chord tones, inside the register, under the melody', () => {
+    for (const seed of SEEDS) {
+      const frames = wander(seed).map((f, i) => ({ ...f, spread: Math.abs(Math.sin(i / 90)) }));
+      const events = perform(preset, seed, frames);
+      expect(harmony(events).length).toBeGreaterThan(0);
+      for (const e of harmony(events)) {
+        expect(pcsOf(chordAt(preset, e.t)).has(pc(e.pitch)), `seed ${seed} t ${e.t}`).toBe(true);
+        expect(e.pitch).toBeGreaterThanOrEqual(preset.register[0]);
+        const melody = lead(events).find((l) => l.t === e.t)!;
+        expect(e.pitch).toBeLessThan(melody.pitch);
+      }
+    }
+  });
+
+  it('grows from one voice to three as the fingers spread', () => {
+    for (const seed of SEEDS.slice(0, 10)) {
+      const [one, two, three] = [0, 0.5, 1].map((spread) => layers(perform(preset, seed, hold({ speed: 0.6, y: 0.8, spread }))));
+      expect(one).toBe(1);
+      expect(two).toBeGreaterThan(one!);
+      expect(three).toBeGreaterThan(two!);
+      expect(three).toBeLessThanOrEqual(3);
+    }
+  });
+
+  it('widens the sound field as the gesture opens', () => {
+    for (const seed of SEEDS.slice(0, 10)) {
+      const closed = perform(preset, seed, hold({ speed: 0.5, openness: 0.1 }));
+      const open = perform(preset, seed, hold({ speed: 0.5, openness: 0.9 }));
+      // Per voice: an average over all of them would let one voice carry the rest.
+      for (const voice of ['lead', 'pad'] as const) {
+        const w = (events: NoteEvent[]) => mean(events.filter((e) => e.voice === voice).map((e) => e.width));
+        expect(w(open), voice).toBeGreaterThan(w(closed));
+      }
+    }
+  });
+
+  it('places harmony further apart in the stereo field when the gesture is open', () => {
+    const spreadOf = (openness: number) =>
+      mean(harmony(perform(preset, 2, hold({ speed: 0.6, y: 0.8, spread: 1, openness }))).map((e) => Math.abs(e.pan)));
+    expect(spreadOf(0.9)).toBeGreaterThan(spreadOf(0.1));
+  });
+
+  it('keeps every pan inside the stereo field', () => {
+    for (const seed of SEEDS.slice(0, 10)) {
+      const frames = wander(seed).map((f, i) => ({ ...f, openness: (i % 300) / 300, spread: (i % 500) / 500 }));
+      for (const e of perform(preset, seed, frames)) {
+        expect(Math.abs(e.pan)).toBeLessThanOrEqual(1);
+        expect(e.width).toBeGreaterThanOrEqual(0);
+        expect(e.width).toBeLessThanOrEqual(1);
+      }
+    }
+  });
+});
+

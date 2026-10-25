@@ -10,6 +10,9 @@
  * - Notes on a beat, and the note answering a touch, are chord tones; the
  *   rest come from the pentatonic scale.
  * - Height picks the register and the brightness.
+ * - Openness widens the field: more reverb, a richer tone, voices further
+ *   apart. Spread (two fingers) adds harmony under the melody, from one
+ *   voice to three, made only of chord tones.
  * - The first frame of a touch sounds at once, off the grid: a person must
  *   hear that they made the sound, and waiting for the next sixteenth would
  *   blur that.
@@ -26,17 +29,23 @@ export type NoteEvent = {
   velocity: number;
   /** Milliseconds. */
   duration: number;
-  voice: 'lead' | 'pad';
+  voice: 'lead' | 'harmony' | 'pad';
   /** 0..1, how open the tone is; follows height. */
   brightness: number;
-  /** A beat or the touch itself: always a chord tone. */
+  /** A beat, the touch itself, or harmony: always a chord tone. */
   accent: boolean;
+  /** -1 (left) .. 1 (right). */
+  pan: number;
+  /** 0..1, how wide and rich the sound field is; follows openness. */
+  width: number;
 };
 
 /** How far ahead of the newest frame grid steps are decided, so audio can be scheduled exactly. */
 export const LOOKAHEAD_MS = 60;
-/** Smoothing time constant for height and speed. */
+/** Smoothing time constant for height, speed, position, openness and spread. */
 const SMOOTH_MS = 120;
+/** Harmony voices at full spread, on top of the melody. */
+const MAX_HARMONY = 2;
 /** Notes per beat at rest and at full speed. */
 const DENSITY = [0.4, 4] as const;
 /** The order grid steps join as density rises: the beat, the off-beat, then the rest. */
@@ -86,6 +95,10 @@ export function createPerformer(p: Preset, seed: number): Performer {
   let last: GestureFrame | null = null;
   let y = 0;
   let speed = 0;
+  let x = 0.5;
+  let openness = 0;
+  /** null while one finger is down. */
+  let spread: number | null = null;
   /** Index of the next grid step not yet decided. */
   let nextStep = 0;
   let padUntil = -Infinity;
@@ -105,7 +118,29 @@ export function createPerformer(p: Preset, seed: number): Performer {
       voice: 'lead',
       brightness: clamp01(0.15 + 0.85 * y),
       accent,
+      // The melody follows the finger across the field, more so when open.
+      pan: (x - 0.5) * 2 * (0.25 + 0.5 * openness),
+      width: clamp01(openness),
     };
+  };
+
+  /** Chord tones stacked under the melody: none with one finger, up to two at full spread. */
+  const harmony = (melody: NoteEvent): NoteEvent[] => {
+    if (spread === null) return [];
+    const count = Math.round(spread * MAX_HARMONY);
+    const chord = chordAt(p, melody.t);
+    const out: NoteEvent[] = [];
+    let below = melody.pitch;
+    for (let i = 1; i <= count; i += 1) {
+      let pitch = below - 1;
+      while (pitch >= p.register[0] && !chord.includes((((pitch - p.root) % 12) + 12) % 12)) pitch -= 1;
+      if (pitch < p.register[0]) break;
+      below = pitch;
+      // Alternate sides, further apart the more open the gesture is.
+      const side = i % 2 === 1 ? -1 : 1;
+      out.push({ ...melody, pitch, voice: 'harmony', accent: true, velocity: melody.velocity * 0.6, pan: Math.max(-1, Math.min(1, melody.pan + side * (0.2 + 0.6 * openness))) });
+    }
+    return out;
   };
 
   /** The chord under the melody, once per chord while a finger is down. */
@@ -122,6 +157,8 @@ export function createPerformer(p: Preset, seed: number): Performer {
       voice: 'pad' as const,
       brightness: clamp01(0.1 + 0.5 * y),
       accent: false,
+      pan: chord.length > 1 ? ((i / (chord.length - 1)) * 2 - 1) * 0.85 * openness : 0,
+      width: clamp01(openness),
     }));
   };
 
@@ -131,12 +168,18 @@ export function createPerformer(p: Preset, seed: number): Performer {
       if (!last) {
         y = frame.y;
         speed = frame.speed;
+        x = frame.x;
+        openness = frame.openness;
         nextStep = Math.ceil(frame.t / step);
       } else {
         const k = 1 - Math.exp(-Math.max(0, frame.t - last.t) / SMOOTH_MS);
         y += (frame.y - y) * k;
         speed += (frame.speed - speed) * k;
+        x += (frame.x - x) * k;
+        openness += (frame.openness - openness) * k;
       }
+      // A second finger arriving starts from where it is, not from zero.
+      spread = frame.spread === null ? null : spread === null ? frame.spread : spread + (frame.spread - spread) * (1 - Math.exp(-Math.max(0, frame.t - (last?.t ?? frame.t)) / SMOOTH_MS));
       const wasActive = last?.active ?? false;
       last = frame;
       if (!frame.active) {
@@ -145,7 +188,8 @@ export function createPerformer(p: Preset, seed: number): Performer {
         return events;
       }
       if (!wasActive) {
-        events.push(...pad(frame.t), lead(frame.t, true, random()));
+        const touch = lead(frame.t, true, random());
+        events.push(...pad(frame.t), touch, ...harmony(touch));
         // The touch itself counts for the step it lands on.
         nextStep = Math.max(nextStep, Math.floor(frame.t / step) + 1);
       }
@@ -160,7 +204,10 @@ export function createPerformer(p: Preset, seed: number): Performer {
         const jitter = random();
         const share = density - rank;
         events.push(...pad(t));
-        if (roll < share) events.push(lead(t, rank === 0, jitter));
+        if (roll < share) {
+          const note = lead(t, rank === 0, jitter);
+          events.push(note, ...harmony(note));
+        }
       }
       return events;
     },

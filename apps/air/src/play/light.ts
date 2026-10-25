@@ -14,6 +14,8 @@ export function createLight(canvas: HTMLCanvasElement) {
   const calm = matchMedia('(prefers-reduced-motion: reduce)').matches;
   const blooms: Bloom[] = [];
   let finger: GestureFrame | null = null;
+  /** Harmony arrives right after its melody note; its bloom sits beside that note, not beside the centre. */
+  let melodyPan = 0;
   let scale = 1;
 
   const resize = () => {
@@ -68,12 +70,15 @@ export function createLight(canvas: HTMLCanvasElement) {
     /** `delayMs`: how far in the future the note sounds, so the bloom opens with it. */
     note(e: NoteEvent, delayMs: number) {
       if (!finger) return;
+      if (e.voice === 'lead') melodyPan = e.pan;
       blooms.push({
-        x: finger.x,
+        // Harmony opens beside the melody, on its side of the stereo field.
+        x: Math.min(1, Math.max(0, finger.x + (e.voice === 'harmony' ? (e.pan - melodyPan) * 0.12 : 0))),
         y: finger.y,
         born: performance.now() + delayMs,
         life: e.voice === 'pad' ? 2400 : 900 + e.velocity * 700,
-        size: e.voice === 'pad' ? 0.9 : 0.08 + e.velocity * 0.14,
+        // The light widens with the sound field.
+        size: (e.voice === 'pad' ? 0.9 : 0.08 + e.velocity * 0.14) * (1 + e.width * 0.8),
         hue: hueFor(e.pitch),
         alpha: e.voice === 'pad' ? 0.06 : 0.55,
       });

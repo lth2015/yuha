@@ -21,9 +21,10 @@ try {
   for (const seed of seeds) {
     const b64 = await page.evaluate(([s]) => window.render(s, 30), [seed]);
     const peak = await page.evaluate(() => window.lastPeak);
+    const stats = await page.evaluate(() => window.lastStats);
     const file = join(outDir, `air-seed-${seed}.wav`);
     writeFileSync(file, Buffer.from(b64, 'base64'));
-    console.log(`${file}  peak ${peak.toFixed(3)}${peak >= 1 ? '  CLIPPED' : ''}`);
+    console.log(`${file}  peak ${peak.toFixed(3)}${peak >= 1 ? '  CLIPPED' : ''}  ${JSON.stringify(stats)}`);
   }
 } finally {
   await browser.close();

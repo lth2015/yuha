@@ -13,7 +13,9 @@ api / db / providers，不发任何请求，`apps/web` 不引用它，不进入 
 
 - `src/engine/`：纯逻辑的草图引擎，唯一的测试缝（`tests/air-engine.test.ts`）。
   不接触 DOM、音频、时钟或 `Math.random`。
-- `src/play/`：触控输入、合成器、光效与演奏页面（薄适配层）。
+- `src/play/`：触控输入、合成器、光效与演奏页面（薄适配层）。`gesture-math.ts`
+  是触控到「张开程度 / 两指距离」的纯函数换算（`tests/air-gesture.test.ts`），
+  演奏和离线渲染共用。
 - `src/audio/unlock.ts`：iPhone 静音键下让 Web Audio 发声（#27 验证：静音
   `<audio>` 循环有效）。
 - `src/probe/`：#27 测试页。
