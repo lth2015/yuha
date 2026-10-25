@@ -124,7 +124,7 @@ client and the API remains responsible for authorization and cost controls.
 | Deep links | Associated Domains entitlement prepared for `yuha.studio`; provisional bundle ID | No AASA deployed or Apple Team ID inferred. Verify domain ownership, Team ID + bundle ID, AASA/proxy route and limited song/auth routing before enabling release links. Native callbacks not implemented in PR-A. |
 | ATS / permissions | HTTPS only; no arbitrary-load exceptions; no microphone/photos/contacts permissions or background modes | Do not weaken ATS for a development IP. Use a trusted HTTPS development origin; add permissions only with a tested feature |
 | Accessibility / system appearance | Separate safe-area chrome, 44px tabs/language buttons, focus on navigation, dark/reduced-transparency styles | Simulator appearance/layout checks plus later real-device VoiceOver, Dynamic Type, keyboard and interruptions; CSS scaling is not full Dynamic Type certification |
-| External fonts / data | Web loads Google Fonts | Native HTML removes external font links; uses system fallbacks. Audit all native SDK/privacy manifests before release |
+| External fonts / data | Web loads Google Fonts | Native HTML removes external font links; Noto Sans SC/JP variable fonts are bundled locally with OFL notices. Audit all native SDK/privacy manifests before release |
 
 ## Historical documents versus present evidence
 
