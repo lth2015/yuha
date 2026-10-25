@@ -7,7 +7,7 @@ import { SessionProvider, useSession } from '../apps/web/src/lib/session.js';
 import { getToken, setToken } from '../apps/web/src/lib/api.js';
 
 const user: MeView = {
-  userId: '00000000-0000-4000-8000-000000000001', email: 'session@example.test', displayName: 'Tester',
+  userId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa1', email: 'session@example.test', displayName: 'Tester',
   avatarUrl: null, role: 'user', ageConfirmed: true, marketingOptIn: false, creditsAvailable: 9,
   createdAt: '2026-10-25T00:00:00Z',
 };
@@ -105,7 +105,7 @@ it('still signs out when the current session is rejected', async () => {
 });
 
 it('never carries the previous account balance into a different account during an outage', async () => {
-  const otherUser = { ...user, userId: '00000000-0000-4000-8000-000000000002', creditsAvailable: 0 };
+  const otherUser = { ...user, userId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa2', creditsAvailable: 0 };
   setToken('old-session');
   vi.stubGlobal('fetch', async (path: string, init: RequestInit) =>
     (init.headers as Record<string, string>).authorization === 'Bearer new-session'
