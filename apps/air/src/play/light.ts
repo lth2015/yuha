@@ -1,0 +1,93 @@
+/**
+ * The visible half of the answer: a soft bloom where each note was played,
+ * sized by how strongly and coloured by register, and a faint dot for the
+ * finger. Blooms are placed from the note events alone, so a replay of the
+ * same events draws the same light. Never driven by invented beats.
+ */
+import type { NoteEvent } from '../engine/performer.ts';
+
+type Bloom = { x: number; y: number; born: number; life: number; size: number; hue: number; alpha: number };
+type Cursor = { x: number; y: number; active: boolean };
+
+export function createLight(canvas: HTMLCanvasElement) {
+  const g = canvas.getContext('2d')!;
+  const calm = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const blooms: Bloom[] = [];
+  let finger: Cursor | null = null;
+  /** Harmony arrives right after its melody note; its bloom sits beside that note, not beside the centre. */
+  let melodyPan = 0;
+  let scale = 1;
+
+  const resize = () => {
+    scale = Math.min(2, devicePixelRatio || 1);
+    canvas.width = canvas.clientWidth * scale;
+    canvas.height = canvas.clientHeight * scale;
+  };
+  resize();
+  addEventListener('resize', resize);
+
+  // Low notes warm (petal orange), high notes cool (violet).
+  const hueFor = (pitch: number) => 18 - Math.min(1, Math.max(0, (pitch - 55) / 29)) * 75;
+
+  function draw(now: number) {
+    g.clearRect(0, 0, canvas.width, canvas.height);
+    const short = Math.min(canvas.width, canvas.height);
+    for (let i = blooms.length - 1; i >= 0; i -= 1) {
+      const b = blooms[i]!;
+      const age = (now - b.born) / b.life;
+      if (age >= 1) {
+        blooms.splice(i, 1);
+        continue;
+      }
+      if (age < 0) continue;
+      const r = short * b.size * (calm ? 0.6 : 0.25 + 0.75 * Math.sqrt(age));
+      const x = b.x * canvas.width;
+      const y = (1 - b.y) * canvas.height;
+      const fill = g.createRadialGradient(x, y, 0, x, y, r);
+      fill.addColorStop(0, `hsla(${b.hue}, 85%, 62%, ${b.alpha * (1 - age)})`);
+      fill.addColorStop(1, `hsla(${b.hue}, 85%, 62%, 0)`);
+      g.fillStyle = fill;
+      g.beginPath();
+      g.arc(x, y, r, 0, Math.PI * 2);
+      g.fill();
+    }
+    if (finger?.active) {
+      const x = finger.x * canvas.width;
+      const y = (1 - finger.y) * canvas.height;
+      g.fillStyle = 'rgba(32, 34, 31, 0.18)';
+      g.beginPath();
+      g.arc(x, y, 6 * scale, 0, Math.PI * 2);
+      g.fill();
+    }
+    requestAnimationFrame(draw);
+  }
+  requestAnimationFrame(draw);
+
+  return {
+    /** Where the finger is drawn now: the live finger, or the replayed one. */
+    cursor(f: Cursor | null) {
+      finger = f;
+    },
+    /** Drop everything scheduled, e.g. when a replay is stopped. */
+    clear() {
+      blooms.length = 0;
+    },
+    /** `delayMs`: how far in the future the note sounds, so the bloom opens with it. */
+    note(e: NoteEvent, delayMs: number) {
+      if (e.voice === 'lead') melodyPan = e.pan;
+      blooms.push({
+        // Where the note was played (carried by the event, so a replay draws the
+        // same light); harmony opens beside the melody, on its side of the field.
+        x: Math.min(1, Math.max(0, e.x + (e.voice === 'harmony' ? (e.pan - melodyPan) * 0.12 : 0))),
+        y: e.y,
+        born: performance.now() + delayMs,
+        life: e.voice === 'pad' ? 2400 : 900 + e.velocity * 700,
+        // The light widens with the sound field.
+        size: (e.voice === 'pad' ? 0.9 : 0.08 + e.velocity * 0.14) * (1 + e.width * 0.8),
+        hue: hueFor(e.pitch),
+        alpha: e.voice === 'pad' ? 0.06 : 0.55,
+      });
+      if (blooms.length > 160) blooms.splice(0, blooms.length - 160);
+    },
+  };
+}

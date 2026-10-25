@@ -1,0 +1,122 @@
+/* YUHA design tokens (yuha/YUHA_Design_v1/design_tokens.json), only the ones this page uses. */
+/* A single light look on purpose: the background is set explicitly, so a dark host cannot show through. */
+:root {
+  color-scheme: light;
+  --yuha-bg: #f6f5f0;
+  --yuha-surface: #ffffff;
+  --yuha-surface-soft: #eceee7;
+  --yuha-ink: #20221f;
+  --yuha-muted: #61665d;
+  --yuha-line: #d8dad3;
+  --yuha-control-line: #7b8177;
+  --yuha-petal: #f46b45;
+  --yuha-petal-soft: #ffe4d8;
+  --yuha-focus: #5748b9;
+  --yuha-success: #28704b;
+  --yuha-warning: #855619;
+  --yuha-danger: #b33131;
+  --yuha-font: -apple-system, BlinkMacSystemFont, "Segoe UI", "Hiragino Kaku Gothic ProN", "Yu Gothic", "PingFang SC",
+    "Microsoft YaHei", "Noto Sans CJK SC", sans-serif;
+  --yuha-radius-control: 14px;
+  --yuha-radius-card: 24px;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: var(--yuha-bg);
+  color: var(--yuha-ink);
+  font: 16px/1.5 var(--yuha-font);
+  -webkit-text-size-adjust: 100%;
+}
+
+main {
+  max-width: 720px;
+  margin: 0 auto;
+  padding: max(16px, env(safe-area-inset-top)) max(16px, env(safe-area-inset-right)) 48px max(16px, env(safe-area-inset-left));
+}
+
+h1 { font-size: 1.5rem; margin: 8px 0 4px; }
+h2 { font-size: 1.05rem; margin: 24px 0 8px; }
+.lede, .env, .fine, small { color: var(--yuha-muted); }
+.env { font-size: 0.85rem; overflow-wrap: anywhere; }
+.fine { font-size: 0.8rem; margin-top: 24px; }
+.steps { padding-left: 1.25rem; }
+
+.methods { display: flex; flex-wrap: wrap; gap: 8px; }
+.methods button { padding: 8px 12px; font-size: 0.9rem; }
+.notice { padding: 10px 14px; border-radius: var(--yuha-radius-control); border: 2px solid var(--yuha-warning); background: var(--yuha-surface); }
+
+.fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; margin: 16px 0; }
+.field { display: grid; gap: 4px; font-size: 0.9rem; }
+.field input, .field select {
+  font: inherit;
+  font-size: 16px; /* below 16px iOS zooms the page on focus */
+  padding: 10px 12px;
+  border: 1px solid var(--yuha-control-line);
+  border-radius: var(--yuha-radius-control);
+  background: var(--yuha-surface);
+  color: var(--yuha-ink);
+  min-width: 0;
+}
+small { font-size: 0.75rem; }
+
+.pad {
+  display: grid;
+  place-items: center;
+  height: 44vh;
+  min-height: 220px;
+  border-radius: var(--yuha-radius-card);
+  background: var(--yuha-surface);
+  border: 1px solid var(--yuha-line);
+  font-size: 1.25rem;
+  color: var(--yuha-muted);
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+  -webkit-tap-highlight-color: transparent;
+  cursor: pointer;
+}
+.pad:focus-visible { outline: 3px solid var(--yuha-focus); outline-offset: 3px; }
+.pad.ring { animation: ring 900ms ease-out; }
+@keyframes ring {
+  from { box-shadow: 0 0 0 0 var(--yuha-petal-soft); background: var(--yuha-petal-soft); }
+  to { box-shadow: 0 0 0 28px transparent; background: var(--yuha-surface); }
+}
+@media (prefers-reduced-motion: reduce) { .pad.ring { animation: none; background: var(--yuha-petal-soft); } }
+
+.readout { font-size: 0.9rem; overflow-wrap: anywhere; }
+
+.record { padding: 16px; border-radius: var(--yuha-radius-card); background: var(--yuha-surface-soft); }
+.record h2 { margin-top: 0; }
+.heard, .actions { display: flex; flex-wrap: wrap; gap: 8px; }
+button {
+  font: inherit;
+  padding: 10px 16px;
+  border-radius: var(--yuha-radius-control);
+  border: 1px solid var(--yuha-ink);
+  background: var(--yuha-ink);
+  color: var(--yuha-surface);
+  cursor: pointer;
+}
+button:focus-visible { outline: 3px solid var(--yuha-focus); outline-offset: 2px; }
+button.quiet { background: transparent; color: var(--yuha-ink); border-color: var(--yuha-control-line); }
+
+.verdict { padding: 12px 16px; border-radius: var(--yuha-radius-control); border: 2px solid var(--yuha-line); background: var(--yuha-surface); }
+.verdict.go { border-color: var(--yuha-success); }
+.verdict.no-go, .verdict.control-not-muted { border-color: var(--yuha-danger); }
+.verdict.incomplete { border-color: var(--yuha-warning); }
+.verdict p { margin: 4px 0 0; }
+
+.evidence {
+  margin: 0 0 12px;
+  padding: 12px;
+  border-radius: var(--yuha-radius-control);
+  background: var(--yuha-surface);
+  border: 1px solid var(--yuha-line);
+  font-size: 0.72rem;
+  overflow-x: auto;
+  white-space: pre;
+}
