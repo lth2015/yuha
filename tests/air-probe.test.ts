@@ -13,6 +13,7 @@
  */
 import { describe, expect, it } from 'vitest';
 import {
+  chooseMethod,
   decodeTrials,
   encodeTrials,
   evidenceRow,
@@ -44,6 +45,7 @@ const trial = (over: Partial<Trial>): Trial => ({
   route: 'speaker',
   method: 'none',
   secureContext: true,
+  embedded: false,
   audioSessionAvailable: true,
   latencyMs: 40,
   outputLatencyMs: null,
@@ -75,6 +77,22 @@ describe('readUserAgent', () => {
     });
     expect(readUserAgent({ userAgent: UA.macSafari, maxTouchPoints: 0 }).browser).toBe('Safari');
     expect(readUserAgent({ userAgent: UA.linuxChrome })).toEqual({ platform: 'Linux', uaOsVersion: null, browser: 'Chrome' });
+  });
+});
+
+describe('chooseMethod', () => {
+  it('takes a bare #token first, because inside an artifact frame that is all a link can carry', () => {
+    expect(chooseMethod({ hash: '#silent-element', search: '?method=both', stored: 'audio-session' })).toBe('silent-element');
+  });
+
+  it('falls back to ?method= for the dev server, then to what this browser last chose', () => {
+    expect(chooseMethod({ hash: '', search: '?method=both', stored: 'audio-session' })).toBe('both');
+    expect(chooseMethod({ hash: '', search: '', stored: 'audio-session' })).toBe('audio-session');
+  });
+
+  it('starts with the control when nothing names a known method', () => {
+    expect(chooseMethod({ hash: '#nonsense', search: '?method=x', stored: 'bogus' })).toBe('none');
+    expect(chooseMethod({ hash: '', search: '', stored: null })).toBe('none');
   });
 });
 

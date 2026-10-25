@@ -1,15 +1,18 @@
 /**
  * #27 · iPhone first-sound probe.
  *
- * One method per page load (`?method=`), because an audio session that one
- * method changed may not change back. Trials ride in the URL fragment across
- * those reloads; nothing is stored and nothing is sent anywhere.
+ * One method per page load, because an audio session that one method changed
+ * may not change back. The method comes from a bare `#token` (all a hosted
+ * artifact frame passes through), `?method=` on the dev server, or what this
+ * browser chose before reloading. Trials are kept in this browser's own
+ * storage when it allows that, and in memory when it does not; nothing is
+ * sent anywhere.
  *
- * Everything a tester typed is rendered with textContent: a trial list can
- * arrive in a link someone else made.
+ * Everything shown is set with textContent, never parsed as HTML.
  */
 import { audioSessionAvailable, resumeAgain, strike, unlockProblems } from './probe/audio.ts';
 import {
+  chooseMethod,
   decodeTrials,
   encodeTrials,
   EVIDENCE_HEADER,
@@ -40,10 +43,36 @@ const VERDICT_TEXT: Record<ReturnType<typeof verdict>['status'], string> = {
   'control-not-muted': '无效：对照在静音键开启时仍有声音，说明这台设备上没有复现问题。请确认静音键确实开启，再重测。',
 };
 
-const params = new URLSearchParams(location.search);
-const method: Method = (METHODS as readonly string[]).includes(params.get('method') ?? '') ? (params.get('method') as Method) : 'none';
-let trials: Trial[] = decodeTrials(location.hash);
+/* Storage can be refused (private window, a sandboxed frame): every access is guarded. */
+const TRIALS_KEY = 'yuha-air-probe-trials';
+const METHOD_KEY = 'yuha-air-probe-method';
+function load(key: string): string | null {
+  try {
+    return localStorage.getItem(key);
+  } catch {
+    return null;
+  }
+}
+function save(key: string, value: string | null): boolean {
+  try {
+    if (value === null) localStorage.removeItem(key);
+    else localStorage.setItem(key, value);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+const method: Method = chooseMethod({ hash: location.hash, search: location.search, stored: load(METHOD_KEY) });
+let trials: Trial[] = decodeTrials(load(TRIALS_KEY) ?? '');
 const env = readUserAgent(navigator);
+const embedded = (() => {
+  try {
+    return window.top !== window;
+  } catch {
+    return true; // a cross-origin parent refuses the comparison
+  }
+})();
 const last = trials.at(-1);
 
 // Props are assigned as DOM properties (textContent, never innerHTML).
@@ -66,22 +95,49 @@ function input(label: string, initial: string, hint?: string) {
   return { field: el('label', { className: 'field' }, ...children), get: () => i.value.trim() };
 }
 
-const linkFor = (m: Method) => `?method=${m}${trials.length ? `#${encodeTrials(trials)}` : ''}`;
 
 /* ---------- environment ---------- */
 
 const envLine = el(
   'p',
   { className: 'env' },
-  `${env.platform} · ${env.browser} · UA 报告系统 ${env.uaOsVersion ?? '—'} · HTTPS ${isSecureContext ? '是' : '否（结果无效）'} · audioSession API ${audioSessionAvailable() ? '有' : '无'}`,
+  `${env.platform} · ${env.browser} · UA 报告系统 ${env.uaOsVersion ?? '—'} · HTTPS ${isSecureContext ? '是' : '否（结果无效）'} · 嵌入框架 ${embedded ? '是' : '否'} · audioSession API ${audioSessionAvailable() ? '有' : '无'}`,
 );
 
 /* ---------- methods ---------- */
 
+const reloadNotice = el('p', { className: 'notice', hidden: true, textContent: '页面没能自动重新加载。请关闭页面，再重新打开链接；记录不会丢失。' });
+
+let warnedUnsaved = false;
+
+/** A fresh page load per method, so one method's audio session cannot leak into the next trial. */
+function switchTo(m: Method) {
+  save(METHOD_KEY, m);
+  // Storage refused: warn once, so the tester can copy the evidence first; a second tap switches anyway.
+  if (!save(TRIALS_KEY, encodeTrials(trials)) && trials.length && !warnedUnsaved) {
+    warnedUnsaved = true;
+    reloadNotice.textContent = '这个浏览器不允许本页保存记录。请先点「复制证据」，再点一次方案按钮切换；否则记录会丢失。';
+    reloadNotice.hidden = false;
+    return;
+  }
+  history.replaceState(null, '', `${location.pathname}${location.search.replace(/[?&]method=[^&]*/, '')}#${m}`);
+  location.reload();
+  // Still here a moment later: the frame refused the reload.
+  setTimeout(() => (reloadNotice.hidden = false), 1500);
+}
+
 const methodNav = el('nav', { className: 'methods' });
 function renderMethods() {
   methodNav.replaceChildren(
-    ...METHODS.map((m) => el('a', { href: linkFor(m), textContent: METHOD_LABEL[m], className: m === method ? 'on' : '' })),
+    ...METHODS.map((m) =>
+      el('button', {
+        type: 'button',
+        textContent: METHOD_LABEL[m],
+        className: m === method ? 'on' : 'quiet',
+        ariaPressed: String(m === method),
+        onclick: () => m !== method && switchTo(m),
+      }),
+    ),
   );
 }
 
@@ -152,6 +208,7 @@ for (const [value, text] of [['yes', '听到了'], ['no', '没听到'], ['odd', 
             route: route.get(),
             method,
             secureContext: isSecureContext,
+            embedded,
             audioSessionAvailable: audioSessionAvailable(),
             latencyMs: pending?.latencyMs ?? null,
             outputLatencyMs: pending?.outputLatencyMs ?? null,
@@ -159,7 +216,7 @@ for (const [value, text] of [['yes', '听到了'], ['no', '没听到'], ['odd', 
             note: [note.get(), pending ? `context ${pending.state}` : '', ...notes()].filter(Boolean).join('; '),
           },
         ];
-        history.replaceState(null, '', `${location.search}#${encodeTrials(trials)}`);
+        save(TRIALS_KEY, encodeTrials(trials));
         record.hidden = true;
         pending = null;
         tapNotes = [];
@@ -190,13 +247,24 @@ copy.addEventListener('click', () => {
     },
   );
 });
+// Two taps rather than confirm(): a hosted frame never shows browser dialogs.
 const clear = el('button', { type: 'button', textContent: '清空记录', className: 'quiet' });
+let armed: ReturnType<typeof setTimeout> | null = null;
 clear.addEventListener('click', () => {
-  if (!confirm('清空所有记录？')) return;
+  if (!armed) {
+    clear.textContent = '再点一次，确认清空';
+    armed = setTimeout(() => {
+      armed = null;
+      clear.textContent = '清空记录';
+    }, 4000);
+    return;
+  }
+  clearTimeout(armed);
+  armed = null;
+  clear.textContent = '清空记录';
   trials = [];
-  history.replaceState(null, '', location.search);
+  save(TRIALS_KEY, null);
   renderResults();
-  renderMethods();
 });
 
 function renderResults() {
@@ -221,10 +289,11 @@ document.querySelector('#app')!.replaceChildren(
     el('li', { textContent: '先选「对照」，静音键开启，触碰一次。正常情况下应当听不到。' }),
     el('li', { textContent: '静音键保持开启，依次切换 A、B、A + B，每个方案触碰一次并记录。' }),
     el('li', { textContent: '静音键关闭，每个方案再测一次。然后换浏览器、iPad、桌面。' }),
-    el('li', { textContent: '结果可疑时，关闭标签页、用复制的链接重新打开再测：切换方案只会重新加载页面。' }),
+    el('li', { textContent: '切换方案会重新加载页面，记录保留在这台手机上。结果可疑时，关闭页面再重新打开链接重测。' }),
   ),
   el('h2', { textContent: `当前方案：${METHOD_LABEL[method]}` }),
   methodNav,
+  reloadNotice,
   el('div', { className: 'fields' }, device.field, os.field, sw.field, route.field, note.field),
   pad,
   readout,

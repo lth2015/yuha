@@ -28,12 +28,30 @@ export type Trial = {
   route: Route;
   method: Method;
   secureContext: boolean;
+  /** Running inside another page's frame (e.g. a hosted artifact), which may change how audio is routed. */
+  embedded: boolean;
   audioSessionAvailable: boolean;
   latencyMs: number | null;
   outputLatencyMs: number | null;
   heard: Heard;
   note: string;
 };
+
+const isMethod = (v: string | null | undefined): v is Method => !!v && (METHODS as readonly string[]).includes(v);
+
+/**
+ * Which method this page load tests. A bare `#token` comes first: inside a
+ * hosted artifact frame a plain anchor is the only part of a link that
+ * reaches the page. `?method=` serves the dev server; the stored value is
+ * what this browser chose before reloading.
+ */
+export function chooseMethod(input: { hash: string; search: string; stored: string | null }): Method {
+  const fromHash = input.hash.replace(/^#/, '');
+  if (isMethod(fromHash)) return fromHash;
+  const fromSearch = new URLSearchParams(input.search).get('method');
+  if (isMethod(fromSearch)) return fromSearch;
+  return isMethod(input.stored) ? input.stored : 'none';
+}
 
 export function readUserAgent(nav: { userAgent: string; maxTouchPoints?: number }): {
   platform: string;
@@ -101,6 +119,7 @@ const COLUMNS: readonly [string, (t: Trial) => string][] = [
   ['route', (t) => t.route],
   ['method', (t) => t.method],
   ['HTTPS', (t) => (t.secureContext ? 'yes' : 'NO')],
+  ['framed', (t) => (t.embedded ? 'yes' : 'no')],
   ['audioSession API', (t) => (t.audioSessionAvailable ? 'yes' : 'no')],
   ['code-path ms', (t) => (t.latencyMs === null ? '?' : String(t.latencyMs))],
   ['reported output ms', (t) => (t.outputLatencyMs === null ? '?' : String(t.outputLatencyMs))],
@@ -116,7 +135,7 @@ export function evidenceRow(t: Trial): string {
   return `| ${COLUMNS.map(([, get]) => cell(get(t))).join(' | ')} |`;
 }
 
-/** Trials ride in the URL fragment across the reload between methods: no storage, no server. */
+/** Serialised form of the trial list: what the page keeps across the reload between methods. */
 const MAX_FRAGMENT = 64_000;
 
 export function encodeTrials(trials: Trial[]): string {
@@ -139,6 +158,7 @@ function isTrial(v: unknown): v is Trial {
     oneOf(t.method, METHODS) &&
     oneOf(t.heard, ['yes', 'no', 'odd'] as const) &&
     typeof t.secureContext === 'boolean' &&
+    typeof t.embedded === 'boolean' &&
     typeof t.audioSessionAvailable === 'boolean' &&
     numOrNull(t.latencyMs) &&
     numOrNull(t.outputLatencyMs)

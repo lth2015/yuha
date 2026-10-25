@@ -1,5 +1,7 @@
 /* YUHA design tokens (yuha/YUHA_Design_v1/design_tokens.json), only the ones this page uses. */
+/* A single light look on purpose: the background is set explicitly, so a dark host cannot show through. */
 :root {
+  color-scheme: light;
   --yuha-bg: #f6f5f0;
   --yuha-surface: #ffffff;
   --yuha-surface-soft: #eceee7;
@@ -43,15 +45,8 @@ h2 { font-size: 1.05rem; margin: 24px 0 8px; }
 .steps { padding-left: 1.25rem; }
 
 .methods { display: flex; flex-wrap: wrap; gap: 8px; }
-.methods a {
-  padding: 8px 12px;
-  border: 1px solid var(--yuha-control-line);
-  border-radius: var(--yuha-radius-control);
-  color: var(--yuha-ink);
-  text-decoration: none;
-  font-size: 0.9rem;
-}
-.methods a.on { background: var(--yuha-ink); color: var(--yuha-surface); border-color: var(--yuha-ink); }
+.methods button { padding: 8px 12px; font-size: 0.9rem; }
+.notice { padding: 10px 14px; border-radius: var(--yuha-radius-control); border: 2px solid var(--yuha-warning); background: var(--yuha-surface); }
 
 .fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; margin: 16px 0; }
 .field { display: grid; gap: 4px; font-size: 0.9rem; }
@@ -106,6 +101,7 @@ button {
   color: var(--yuha-surface);
   cursor: pointer;
 }
+button:focus-visible { outline: 3px solid var(--yuha-focus); outline-offset: 2px; }
 button.quiet { background: transparent; color: var(--yuha-ink); border-color: var(--yuha-control-line); }
 
 .verdict { padding: 12px 16px; border-radius: var(--yuha-radius-control); border: 2px solid var(--yuha-line); background: var(--yuha-surface); }
