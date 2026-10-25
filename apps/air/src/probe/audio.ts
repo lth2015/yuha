@@ -1,17 +1,8 @@
 /**
  * The side-effecting half of the probe: unlock audio inside the gesture, then
- * play a short chime through Web Audio.
- *
- * Both candidate fixes are UNVERIFIED on a real iPhone — finding out is the
- * point of #27:
- *
- * - `audio-session`: set `navigator.audioSession.type = 'playback'`, which
- *   asks WebKit to treat the page's audio as media rather than as a ringer
- *   sound. Exposed by recent Safari; whether it is available on a given
- *   version, or only in a secure context, is what the trial rows record.
- * - `silent-element`: start a looping, silent <audio> element in the same
- *   gesture. A playing media element is believed to move the page's audio
- *   session to the media channel, taking Web Audio with it.
+ * play a short chime through Web Audio. The unlock itself, and what #27 found
+ * about each method, lives in ../audio/unlock.ts, which the instrument uses
+ * too.
  *
  * Everything that must happen in the gesture happens synchronously in
  * `strike`: iOS only lets a user gesture create or resume an AudioContext and
@@ -19,67 +10,10 @@
  */
 import type { Method } from './probe.ts';
 
-type AudioSessionNavigator = Navigator & { audioSession?: { type: string } };
-
-export const audioSessionAvailable = (): boolean =>
-  typeof navigator !== 'undefined' && typeof (navigator as AudioSessionNavigator).audioSession === 'object';
+import { unlockAudio } from '../audio/unlock.ts';
+export { audioSessionAvailable, unlockProblems } from '../audio/unlock.ts';
 
 let ctx: AudioContext | null = null;
-let silent: HTMLAudioElement | null = null;
-let unlocked = false;
-
-/** Half a second of 8-bit mono silence as a WAV, built here so no asset is fetched. */
-function silentWavUrl(): string {
-  const rate = 8000;
-  const samples = rate / 2;
-  const buf = new ArrayBuffer(44 + samples);
-  const v = new DataView(buf);
-  const ascii = (at: number, s: string) => [...s].forEach((c, i) => v.setUint8(at + i, c.charCodeAt(0)));
-  ascii(0, 'RIFF');
-  v.setUint32(4, 36 + samples, true);
-  ascii(8, 'WAVE');
-  ascii(12, 'fmt ');
-  v.setUint32(16, 16, true);
-  v.setUint16(20, 1, true); // PCM
-  v.setUint16(22, 1, true); // mono
-  v.setUint32(24, rate, true);
-  v.setUint32(28, rate, true); // byte rate
-  v.setUint16(32, 1, true); // block align
-  v.setUint16(34, 8, true); // bits per sample
-  ascii(36, 'data');
-  v.setUint32(40, samples, true);
-  for (let i = 0; i < samples; i += 1) v.setUint8(44 + i, 128); // 8-bit silence is the midpoint
-  return URL.createObjectURL(new Blob([buf], { type: 'audio/wav' }));
-}
-
-/**
- * What the browser refused while unlocking. Unlocking happens once per page
- * load, so these hold for every trial on this load, not just the first.
- */
-export const unlockProblems: string[] = [];
-
-function unlock(method: Method) {
-  if (unlocked) return;
-  unlocked = true;
-  if (method === 'audio-session' || method === 'both') {
-    const nav = navigator as AudioSessionNavigator;
-    if (nav.audioSession) {
-      try {
-        nav.audioSession.type = 'playback';
-      } catch (e) {
-        unlockProblems.push(`audioSession: ${(e as Error).message}`);
-      }
-    } else {
-      unlockProblems.push('audioSession: not exposed');
-    }
-  }
-  if (method === 'silent-element' || method === 'both') {
-    silent = new Audio(silentWavUrl());
-    silent.loop = true;
-    silent.setAttribute('playsinline', '');
-    silent.play().catch((e: Error) => unlockProblems.push(`silent element: ${e.name}`));
-  }
-}
 
 /** C major pentatonic across two octaves: any note sounds right against any other. */
 const PENTATONIC = [523.25, 587.33, 659.25, 783.99, 880, 1046.5, 1174.66, 1318.51, 1567.98, 1760];
@@ -135,7 +69,7 @@ export function resumeAgain(): boolean {
 
 /** Call from the pointerdown handler itself, never after an await. */
 export function strike(method: Method, x: number): Strike {
-  unlock(method);
+  unlockAudio({ audioSession: method === 'audio-session' || method === 'both', silentElement: method === 'silent-element' || method === 'both' });
   const contextStateAtGesture = ctx ? ctx.state : 'new';
   ctx ??= new AudioContext({ latencyHint: 'interactive' });
   const context = ctx;

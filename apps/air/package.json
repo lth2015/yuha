@@ -9,7 +9,8 @@
     "dev": "vite",
     "phone": "vite --host --mode phone",
     "preview": "vite preview",
-    "artifact": "vite build && node build-artifact.mjs"
+    "artifact:probe": "node build-artifact.mjs probe",
+    "artifact:play": "node build-artifact.mjs index"
   },
   "devDependencies": {
     "@vitejs/plugin-basic-ssl": "2.1.4",

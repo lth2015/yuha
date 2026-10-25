@@ -11,10 +11,18 @@ import basicSsl from '@vitejs/plugin-basic-ssl';
  * false "this fix does not work". The probe prints `isSecureContext` on every
  * row so such a run cannot pass for a real one.
  */
+const page = process.env['AIR_PAGE'];
+
 export default defineConfig(({ mode }) => ({
   // Relative asset URLs: the build can be served from any path.
   base: './',
   plugins: mode === 'phone' ? [basicSsl()] : [],
   server: { port: 5180, strictPort: true },
-  build: { outDir: 'dist', sourcemap: true },
+  build: {
+    outDir: 'dist',
+    sourcemap: true,
+    // index.html is the instrument; probe.html is the #27 first-sound probe.
+    // AIR_PAGE builds one page alone (build-artifact.mjs), so nothing is split into a shared chunk.
+    rollupOptions: { input: page ? { [page]: `${page}.html` } : { index: 'index.html', probe: 'probe.html' } },
+  },
 }));
