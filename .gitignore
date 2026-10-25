@@ -62,3 +62,8 @@ __pycache__/
 # See _legal-hold/MANIFEST.md.
 /_legal-hold/
 ui-shots/
+
+# Native web bundle and local Xcode signing/build state
+apps/web/dist-ios/
+apps/web/ios/App/App.xcodeproj/project.xcworkspace/xcuserdata/
+apps/web/ios/App/App.xcodeproj/xcuserdata/

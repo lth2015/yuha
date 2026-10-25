@@ -376,3 +376,29 @@ jobs:
       - uses: docker://rhysd/actionlint:1.7.7
         with:
           args: -color
+
+  ios-build:
+    runs-on: macos-15
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_26.2.app/Contents/Developer
+    steps:
+      - uses: actions/checkout@v5
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.1.2
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @yuha/contracts build
+      - name: Build and sync the anonymous iOS preview
+        run: pnpm ios:sync --environment production
+      - name: Compile iPhone app without signing or App Store credentials
+        run: >-
+          xcodebuild -project apps/web/ios/App/App.xcodeproj -scheme App
+          -configuration Debug -destination 'generic/platform=iOS Simulator'
+          -derivedDataPath build/ios CODE_SIGNING_ALLOWED=NO build

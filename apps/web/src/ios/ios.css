@@ -1,0 +1,26 @@
+/* Native-only chrome. The Web theme and layout are untouched. */
+html[data-platform='ios'] { color-scheme: light dark; -webkit-text-size-adjust: 100%; }
+.ios-app { min-height: 100dvh; padding: env(safe-area-inset-top, 0px) env(safe-area-inset-right, 0px) 0 env(safe-area-inset-left, 0px); }
+.ios-header { display: flex; justify-content: space-between; align-items: center; gap: var(--s3); padding: var(--s4) var(--s6); }
+.ios-preview-note { padding: 0 var(--s6); color: var(--muted); font-size: var(--t-body); }
+.ios-main { max-width: 960px; margin: auto; padding: var(--s4) var(--s6) calc(110px + env(safe-area-inset-bottom, 0px)); outline: none; }
+.ios-main .home { padding-top: var(--s4); }
+.ios-status { padding: var(--s6); border-radius: var(--r-card); }
+.ios-status p { margin: var(--s4) 0 var(--s6); }
+.ios-footer { margin-top: var(--s8); }
+.ios-tabs { position: fixed; z-index: 100; display: flex; gap: var(--s1); left: max(var(--s4), env(safe-area-inset-left, 0px)); right: max(var(--s4), env(safe-area-inset-right, 0px)); bottom: calc(var(--s3) + env(safe-area-inset-bottom, 0px)); padding: var(--s2); border: 1px solid var(--glass-edge); border-radius: var(--r-sheet); background: var(--glass-strong); backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-sat)); -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-sat)); box-shadow: 0 8px 30px rgba(32, 34, 31, 0.12); }
+.ios-tabs a { flex: 1; min-height: 44px; display: flex; justify-content: center; align-items: center; text-align: center; padding: var(--s2); border-radius: var(--r-control); color: var(--ink); }
+.ios-tabs a[aria-current='page'] { background: var(--surface-soft); font-weight: 700; }
+.ios-header button { min-width: 44px; min-height: 44px; }
+@media (prefers-color-scheme: dark) {
+  html[data-platform='ios'] {
+    --bg: #171916; --bg-deep: #10120f; --surface-solid: #242722; --surface-soft: #30362e;
+    --glass-sunken: rgba(36, 39, 34, 0.96); --glass: rgba(36, 39, 34, 0.96); --glass-strong: rgba(36, 39, 34, 0.98);
+    --glass-edge: rgba(255, 255, 255, 0.2); --ink: #f6f5f0; --muted: #c2c8bd; --faint: #c2c8bd;
+    --line: rgba(255, 255, 255, 0.2); --line-strong: rgba(255, 255, 255, 0.3); --control-line: rgba(255, 255, 255, 0.5);
+    --link: #ffad8f; --focus: #b5abff; --petal-soft: #523125;
+  }
+  .ios-header .brand-lockup { filter: invert(1); }
+  .ios-app .btn--primary { color: #20221f; }
+}
+@media (prefers-reduced-transparency: reduce) { .ios-tabs { background: var(--surface-solid); backdrop-filter: none; -webkit-backdrop-filter: none; } }
