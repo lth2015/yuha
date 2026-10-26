@@ -52,5 +52,5 @@ node apps/air/scripts/render-air.mjs <输出目录> [seed...]   # 在 apps/air �
 所有文案在 `src/play/i18n.ts`（中 / 日 / 英），按浏览器语言自动选择，未匹配时用
 英文；`tests/air-i18n.test.ts` 保证三种语言键完全对齐，页面和脚本里不再有写死的
 句子。演奏区可用键盘操作：聚焦后按住空格或回车即「按下」，方向键移动。读屏会读出
-演奏区的说明。日文与英文的产品名（エア作曲 / Air composition）是暂定译名。
+演奏区的说明。日文与英文的产品名为エア作曲 / Air composition（2026-10-26 产品负责人确认）。
 
