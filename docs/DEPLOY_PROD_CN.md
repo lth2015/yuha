@@ -17,7 +17,7 @@
 | yuha.studio 由 AWS EKS 集群 `qa-web3-netx-tokyo-eks` 的 **`qa-music`** 命名空间提供服务。名字叫 QA，实际就是正式服务 | `deploy/k8s/qa/resources.yaml` 的 Ingress `host: "yuha.studio"`；`deploy/PRODUCTION_CUTOVER.md` 第一行 |
 | 它以 **`RUN_MODE=production`** 运行，Stripe 为 live | 同文件 API / worker 容器的 `env`；切换提交 `bfe1785`（2026-10-20） |
 | **每次合并到 master 都会自动上线**：CI → Artifact Build → Deploy QA，中间没有人工审批这一步 | `.github/workflows/{ci,artifact-build,deploy}.yml`（`workflow_run`，`branches: [master]`） |
-| Web 前端只构建 `apps/web`；`apps/air`（空气作曲）不在部署产物里 | `artifact-build.yml` 的构建步骤 |
+| Web 前端构建 `apps/web`，空气作曲（`apps/air`）构建进同一份产物的 `air/`，上线在 `yuha.studio/air` | `artifact-build.yml` 的构建步骤；`apps/air/build-web.mjs` |
 | 部署用的是自建 runner `qa-music-gha-runner`，manifest 由 `kubectl apply`，**不是** Helm | `deploy.yml` |
 
 **这份清单描述的是另一件事**：把服务迁到一个**独立的生产 AWS 账号**，用

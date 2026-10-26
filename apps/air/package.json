@@ -11,7 +11,8 @@
     "preview": "vite preview",
     "artifact:probe": "node build-artifact.mjs probe",
     "artifact:play": "node build-artifact.mjs index",
-    "check:ui": "node scripts/check-ui.mjs"
+    "check:ui": "node scripts/check-ui.mjs",
+    "build:web": "node build-web.mjs"
   },
   "devDependencies": {
     "@vitejs/plugin-basic-ssl": "2.1.4",

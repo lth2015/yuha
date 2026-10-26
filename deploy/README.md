@@ -14,7 +14,7 @@ qa-music-github-actions-deploy-role
     ├── push immutable images → ECR: music/api, music/worker
     ├── Helm release → existing EKS: qa-web3-netx-tokyo-eks
     │                    namespace: qa-music
-    └── build web → S3: qa-music-web → CloudFront invalidation
+    └── build web (+ apps/air → dist/air) → S3: qa-music-web → CloudFront invalidation
 ```
 
 Runtime secrets use the existing EKS add-ons:
