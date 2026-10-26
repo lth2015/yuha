@@ -11,6 +11,10 @@
  * then 「自己来一段」. Nothing is sent anywhere: the fragment never leaves the
  * browser.
  *
+ * 「让它成为一首歌」 shows the parameter card (#32): the sketch said back as the
+ * mood, tempo and energy a song request would use, and a link to YUHA. It
+ * sends nothing; generation itself is phase 3.
+ *
  * Audio is unlocked and the context created synchronously inside the first
  * gesture (iOS allows it nowhere else), using the silent-element method #27
  * found to work with the silent switch on.
@@ -20,6 +24,7 @@ import type { GestureFrame } from '../engine/frame.ts';
 import { createPerformer, LOOKAHEAD_MS, perform, type NoteEvent, type Performer } from '../engine/performer.ts';
 import { PRESETS, presetFor, type Preset } from '../engine/presets.ts';
 import { createSession, MAX_MS, type Sketch } from '../engine/session.ts';
+import { describeSketch } from '../engine/describe.ts';
 import { decodeSketch, shareUrl } from '../engine/share.ts';
 import { createLight } from './light.ts';
 import { createSynth, type Synth } from './synth.ts';
@@ -47,12 +52,14 @@ const shareField = $<HTMLInputElement>('#share-url');
 const sharedPanel = $('#shared');
 const listenButton = $<HTMLButtonElement>('#listen');
 const ownButton = $<HTMLButtonElement>('#own');
+const toSongButton = $<HTMLButtonElement>('#to-song');
+const card = $('#card');
 const light = createLight($<HTMLCanvasElement>('#light'));
 
 let ctx: AudioContext | null = null;
 let liveSynth: Synth | null = null;
 
-type Mode = 'ready' | 'playing' | 'ended' | 'replaying' | 'shared' | 'shared-replaying';
+type Mode = 'ready' | 'playing' | 'ended' | 'replaying' | 'shared' | 'shared-replaying' | 'card';
 let mode: Mode = 'ready';
 let preset: Preset = PRESETS[0]!;
 let seed = 0;
@@ -80,6 +87,8 @@ function setMode(next: Mode) {
   ring.hidden = next !== 'playing';
   ended.hidden = next !== 'ended' && next !== 'replaying';
   sharedPanel.hidden = next !== 'shared' && next !== 'shared-replaying';
+  card.hidden = next !== 'card';
+  toSongButton.disabled = next === 'replaying';
   replayButton.textContent = next === 'replaying' ? '停止' : '回放';
   againButton.disabled = shareButton.disabled = next === 'replaying';
   listenButton.textContent = next === 'shared-replaying' ? '停止' : '聆听';
@@ -212,6 +221,28 @@ againButton.addEventListener('click', () => {
   stopReplay?.();
   fresh();
   setMode('ready');
+});
+
+/* ---------- the parameter card ---------- */
+
+const TEMPO_NAME = { slow: '慢', medium: '中速', fast: '快' } as const;
+const ENERGY_NAME = { mellow: '舒缓', medium: '适中', strong: '强烈' } as const;
+
+toSongButton.addEventListener('click', () => {
+  if (!sketch) return;
+  const c = describeSketch(sketch);
+  $('#card-mood').textContent = c.moodName.zh;
+  $('#card-words').textContent = c.words.zh;
+  $('#card-fact-mood').textContent = c.moodName.zh;
+  $('#card-tempo').textContent = TEMPO_NAME[c.tempo];
+  $('#card-energy').textContent = ENERGY_NAME[c.energy.id];
+  setMode('card');
+  $<HTMLAnchorElement>('#card-go').focus();
+});
+
+$('#card-back').addEventListener('click', () => {
+  setMode('ended');
+  toSongButton.focus();
 });
 
 /* ---------- sharing ---------- */

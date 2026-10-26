@@ -14,6 +14,7 @@
   },
   "devDependencies": {
     "@vitejs/plugin-basic-ssl": "2.1.4",
+    "@yuha/contracts": "workspace:*",
     "typescript": "^5.7.2",
     "vite": "^6.0.3"
   }

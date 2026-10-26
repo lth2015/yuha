@@ -25,6 +25,7 @@
         <button id="again" type="button" class="quiet">重来</button>
         <button id="share" type="button" class="quiet">复制链接</button>
       </div>
+      <button id="to-song" type="button" class="link">让它成为一首歌</button>
       <input id="share-url" type="text" readonly hidden aria-label="分享链接" />
     </section>
     <section id="shared" hidden aria-live="polite">
@@ -33,6 +34,20 @@
         <button id="listen" type="button">聆听</button>
         <button id="own" type="button" class="quiet">自己来一段</button>
       </div>
+    </section>
+    <section id="card" hidden aria-labelledby="card-mood">
+      <p class="eyebrow">你的草图</p>
+      <h2 id="card-mood"></h2>
+      <p id="card-words" class="words"></p>
+      <dl class="facts">
+        <div><dt>情绪</dt><dd id="card-fact-mood"></dd></div>
+        <div><dt>速度</dt><dd id="card-tempo"></dd></div>
+        <div><dt>能量</dt><dd id="card-energy"></dd></div>
+        <div><dt>人声</dt><dd>纯音乐</dd></div>
+      </dl>
+      <a id="card-go" href="https://yuha.studio/" target="_blank" rel="noopener">去 YUHA 把它写成一首歌</a>
+      <p class="fine">这个页面不收费，也不消耗 Credit。</p>
+      <button id="card-back" type="button" class="quiet">返回</button>
     </section>
     <p id="toast" role="status" hidden></p>
     <script type="module" src="./src/play/main.ts"></script>
