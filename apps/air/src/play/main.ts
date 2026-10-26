@@ -28,6 +28,7 @@ import { describeSketch } from '../engine/describe.ts';
 import { decodeSketch, shareUrl } from '../engine/share.ts';
 import { format, pickLang, STRINGS, type Key } from './i18n.ts';
 import { createLight } from './light.ts';
+import { createObservation } from './observe.ts';
 import { createSynth, type Synth } from './synth.ts';
 import { attachTouch } from './touch.ts';
 import './play.css';
@@ -49,6 +50,24 @@ document.title = t('title');
 for (const el of document.querySelectorAll<HTMLElement>('[data-i18n]')) el.textContent = t(el.dataset.i18n as Key);
 for (const el of document.querySelectorAll<HTMLElement>('[data-i18n-aria]')) el.setAttribute('aria-label', t(el.dataset.i18nAria as Key));
 const seconds = (ms: number) => Math.round(ms / 1000);
+
+/*
+ * The moderator's numbers for the usability test (#35), only with #observe in the
+ * address: a faint dot in the corner opens them. Moderator-facing, so in English
+ * and outside the string table. Nothing is stored or sent.
+ */
+const observing = location.hash === '#observe';
+const observation = createObservation(performance.now());
+if (observing) {
+  const panel = Object.assign(document.createElement('pre'), { id: 'observe', hidden: true });
+  const dot = Object.assign(document.createElement('button'), { id: 'observe-dot', type: 'button', textContent: '·' });
+  dot.setAttribute('aria-label', 'Observer numbers');
+  dot.addEventListener('click', () => {
+    panel.textContent = observation.line();
+    panel.hidden = !panel.hidden;
+  });
+  document.body.append(dot, panel);
+}
 const stage = $('#stage');
 const hint = $('#hint');
 const ring = $('#ring');
@@ -148,6 +167,7 @@ function offer(raw: GestureFrame) {
 }
 
 function finishWith(s: Sketch) {
+  observation.performanceEnded(s.frames.at(-1)!.t);
   sketch = s;
   light.cursor(null);
   $('#ended-length').textContent = t('ended.length', { n: seconds(s.frames.at(-1)!.t) });
@@ -156,6 +176,7 @@ function finishWith(s: Sketch) {
 
 const touch = attachTouch(stage, {
   down() {
+    observation.touch(performance.now());
     wake();
   },
   frame(f) {
@@ -181,6 +202,7 @@ doneButton.addEventListener('click', () => {
   const out = session.finish();
   if (out.status === 'ended') finishWith(out.sketch);
   else if (out.status === 'too-short') {
+    observation.tooShort(session.elapsed());
     say(t('toast.tooShort'));
     fresh();
     setMode('ready');
@@ -225,6 +247,7 @@ replayButton.addEventListener('click', () => {
   if (stopReplay) return stopReplay();
   if (!sketch) return;
   wake();
+  observation.replay();
   replay(sketch, 'replaying', 'ended');
 });
 
@@ -239,6 +262,7 @@ againButton.addEventListener('click', () => {
 
 toSongButton.addEventListener('click', () => {
   if (!sketch) return;
+  observation.toSong(performance.now());
   const c = describeSketch(sketch);
   $('#card-mood').textContent = c.moodName[lang];
   $('#card-words').textContent = c.words[lang];
@@ -258,6 +282,7 @@ $('#card-back').addEventListener('click', () => {
 
 shareButton.addEventListener('click', () => {
   if (!sketch) return;
+  observation.share();
   const url = shareUrl(__SHARE_BASE__ || location.href, sketch);
   // Must be called inside the click; refused in some frames, so fall back to a field to copy from.
   navigator.clipboard.writeText(url).then(
