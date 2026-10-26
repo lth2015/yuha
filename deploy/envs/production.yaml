@@ -1,10 +1,17 @@
-# Helm values for production. Non-secret configuration only.
+# Helm values for a dedicated production account. Non-secret configuration only.
 #
-# **Production cannot be deployed from this file today, on purpose.** No music
-# provider agreement is signed, so `music.adapter` is `demo`, and the API
-# refuses to start in production mode with a fake music adapter. Selling
-# synthetic audio is the outcome that refusal prevents. Nothing here works
-# around it; see docs/OPEN_ITEMS.md §1.
+# **This file is not what serves yuha.studio.** Since 2026-10-20 (bfe1785)
+# yuha.studio has run with RUN_MODE=production from the `qa-music` namespace,
+# deployed by `kubectl apply` of deploy/k8s/qa/*.yaml on every merge to master
+# (.github/workflows/deploy.yml). This header used to say production could not
+# be deployed at all, and that sentence was read as a fact about yuha.studio.
+#
+# What this file describes — Terraform plus this Helm chart in a separate
+# account — has never been applied, nothing in .github/workflows deploys it any
+# more, and no such environment is planned (product owner, 2026-10-26): "QA"
+# and "production" name the same one, yuha.studio. It still cannot be deployed as written: `music.adapter` is `demo`,
+# and the API refuses to start in production mode with a fake music adapter.
+# See docs/DEPLOY_PROD_CN.md.
 #
 # Every empty string below is an output of `terraform apply` in
 # infra/terraform/, which has never been run against a real account.
