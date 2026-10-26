@@ -5,38 +5,48 @@
 
 ---
 
-## ⛔ 先读这一段：**今天不能部署生产，而且这是设计如此**
+## ⛔ 先读这一段：**yuha.studio 已经是生产服务，它不是按这份清单部署的**
 
-这不是脚本没写好，也不是哪一步漏了。是三件事同时成立：
+这一段在 2026-10-26 改写。原来写的是「今天不能部署生产」，但 2026-10-20 起
+这句话就和事实不符了，有人照它回答「最新版本上线了吗」并且答错了。
 
-1. **`deploy/envs/production.yaml` 的第一段注释就写着**：本文件今天无法部署。
-   因为没有签署音乐服务商协议，`music.adapter` 仍然是 `demo`，而生产模式
-   **拒绝用假音乐适配器启动**。卖合成音频正是这个拒绝要防止的事。
+**正在给用户提供服务的是什么**（以下都能在本仓库里查到）：
 
-2. **[LAUNCH_READINESS.md](LAUNCH_READINESS.md) 的结论是「尚未具备收费条件，而且
-   差得远」**，其中五节标着 BLOCKED：音乐版权、经营主体与法务、支付、基础设施
-   账号、成本模型。
-
-3. **这些阻塞项没有一项是 SRE 能解决的。** 它们是商务合同和法律审查。
-
-> 所以这份清单的用途是：**当上述阻塞解除后**，技术侧按什么顺序执行；以及
-> **现在就能做的**——在 QA 上把生产形态彩排一遍，把属于 SRE 的那部分风险提前
-> 消化掉。请不要把它读成"照着做就能上线"。
-
-### 不是 SRE 的阻塞项（给运营方和业务方）
-
-| 阻塞 | 现状 |
+| 事实 | 出处 |
 | --- | --- |
-| 音乐服务商企业/OEM 协议 | ✗ 未签署 —— 一切商业化的前提 |
-| 面向消费者的条款、隐私政策的日本律师审查 | ✗ 仅草稿，UI 上已标注为草稿 |
-| 经营主体确认 | ✗ 未确认 |
-| 预付额度是否属于 **前払式支払手段** | ✗ 未裁定 —— **结论可能改变产品形态** |
-| 退款政策与 資金決済法 / 特商法 / 消费者法的对齐 | ✗ 仅草稿 |
-| 真实成本数据（目前是保守假设值） | ✗ 仅假设 |
+| yuha.studio 由 AWS EKS 集群 `qa-web3-netx-tokyo-eks` 的 **`qa-music`** 命名空间提供服务。名字叫 QA，实际就是正式服务 | `deploy/k8s/qa/resources.yaml` 的 Ingress `host: "yuha.studio"`；`deploy/PRODUCTION_CUTOVER.md` 第一行 |
+| 它以 **`RUN_MODE=production`** 运行，Stripe 为 live | 同文件 API / worker 容器的 `env`；切换提交 `bfe1785`（2026-10-20） |
+| **每次合并到 master 都会自动上线**：CI → Artifact Build → Deploy QA，中间没有人工审批这一步 | `.github/workflows/{ci,artifact-build,deploy}.yml`（`workflow_run`，`branches: [master]`） |
+| Web 前端只构建 `apps/web`；`apps/air`（空气作曲）不在部署产物里 | `artifact-build.yml` 的构建步骤 |
+| 部署用的是自建 runner `qa-music-gha-runner`，manifest 由 `kubectl apply`，**不是** Helm | `deploy.yml` |
 
-详见 LAUNCH_READINESS.md 第 8 节「工作顺序」：**1 音乐协议 → 2 法务审查 →
-3 真实成本 → 4 账号 → 5 工程缺口 → 6 产品验证**。在 1–3 完成之前，这个项目
-不得被对外报告为"可以收费"。
+**这份清单描述的是另一件事**：把服务迁到一个**独立的生产 AWS 账号**，用
+Terraform + Helm + `deploy/envs/production.yaml` 搭建。这条路从未执行过：
+`production.yaml` 里的值仍是空串，`music.adapter` 仍是 `demo`，Terraform 也从未
+对真实账号 `apply` 过。下面第 1 节起的内容都是这条路的计划，不是 yuha.studio
+的现状。
+
+**本仓库查不到的事**（不要据此下结论）：线上 ConfigMap 和 secret 的实际值、
+yuha.studio 当前真正运行的提交、`qa` 这个 GitHub Environment 有没有配置审批人。
+前两项看集群（`kubectl -n qa-music get deploy yuha-api -o yaml`），第三项看仓库的
+Settings → Environments。
+
+### 原来列在这里的业务阻塞项
+
+下表是 2026-10 上旬写的，**大部分已经被后来的事改变，或者无法从本仓库核实**。
+保留它是为了记录，不是现状：
+
+| 阻塞（原文） | 现在能从仓库里确认的 |
+| --- | --- |
+| 音乐服务商企业/OEM 协议 | 未核实。yuha.studio 用的是自建的 ACE-Step 音乐服务（`deploy/PRODUCTION_CUTOVER.md` 中的 `ace-step-spark`），不是第三方服务商 |
+| 面向消费者的条款、隐私政策的日本律师审查 | 运营方 2026-10-19 确认律师已审阅（`PRODUCTION_CUTOVER.md`「法务」一节，lth2015/yuha#5） |
+| 经营主体确认 | 未核实 |
+| 预付额度是否属于 **前払式支払手段** | 未核实 |
+| 退款政策与 資金決済法 / 特商法 / 消费者法的对齐 | 特商法页的「返品・キャンセル」在 #5 中补齐；其余未核实 |
+| 真实成本数据 | 未核实 |
+
+[LAUNCH_READINESS.md](LAUNCH_READINESS.md) 的结论写于 2026-10-20 之前，同样没有
+反映切换之后的状态。
 
 ---
 
@@ -47,20 +57,21 @@
 | 项目 | QA / staging | 生产 |
 | --- | --- | --- |
 | EKS API 端点 | 公开 | **私有** |
-| 部署 runner | GitHub 托管 `ubuntu-latest` | **必须自建 runner**（见 2.1） |
+| 部署 runner | 自建 `qa-music-gha-runner`（`deploy.yml`） | **必须自建 runner**（见 1.1） |
 | RDS | 单 AZ，备份 3 天 | **Multi-AZ**，备份 14 天 |
 | NAT 网关 | 单个（省钱） | **每 AZ 一个** |
 | Secrets Manager 恢复窗口 | 0 天（立即删除） | **30 天** |
 | EKS 节点组 | min/desired = 1 | min/desired = 2 |
 | 删除保护 | 关 | **开** —— `terraform destroy` 会被拒绝 |
-| 触发方式 | 手动 `workflow_dispatch` | **推送 `v*` 标签**，或手动选 production |
-| Stripe 密钥 | `sk_test_…` | **必须 `sk_live_…`**（见下） |
+| 触发方式 | 合并到 master 自动部署，或手动 `workflow_dispatch` | 计划为推送 `v*` 标签。**现有工作流里没有这条触发**，要上这条路得先写 |
+| Stripe 密钥 | 原计划 `sk_test_…`；`qa-music` 自 2026-10-20 起已是 live | **必须 `sk_live_…`**（见下） |
 
 ### 1.1 自建 runner 是硬性前提
 
 生产的 EKS 端点是私有的（`compute.tf:17`），**GitHub 托管的 runner 连不上**。
-`deploy.yml` 已经为此做了防护：如果仓库变量 `DEPLOY_RUNNER_PRODUCTION` 为空，
-它会**立刻报错并说明原因**，而不是在几分钟后超时失败、看起来像一次故障。
+原先的 `deploy.yml` 会在仓库变量 `DEPLOY_RUNNER_PRODUCTION` 为空时立刻报错；
+现在的 `deploy.yml` 只部署 `qa-music`，**这项防护和生产部署的 job 都已不存在**，
+走这条路时要重新写。
 
 - [ ] 在 VPC 内部署一台自托管 runner（EC2 或 EKS 上的 ARC）
 - [ ] 它需要能访问私有 EKS 端点
@@ -74,7 +85,7 @@
 在部署前当 checklist 用，不必等 Pod 崩了再看日志：
 
 - [ ] 认证适配器**不是** `dev`
-- [ ] 音乐适配器**不是** `demo` ← **当前被这条挡住**
+- [ ] 音乐适配器**不是** `demo` ← `production.yaml` 仍被这条挡住；按 `PRODUCTION_CUTOVER.md`，yuha.studio 配的是 `http`（自建 ACE-Step），不受此条影响
 - [ ] 支付适配器**是** `stripe`（不能是模拟）
 - [ ] 存储**是** `s3`
 - [ ] 文本适配器**是** TokenStars（AI-01）
@@ -160,7 +171,7 @@
 
 - [ ] 7.1 确认目标 commit 的 CI 为绿
 - [ ] 7.2 打标签 `git tag v1.0.0 && git push origin v1.0.0`
-      —— 推 `v*` 标签会触发生产部署
+      —— 计划中由 `v*` 标签触发生产部署；**现有工作流没有这条触发**（见第 1 节）
 - [ ] 7.3 流水线会先跑完整 CI，再构建推镜像、按 digest 固定、`helm upgrade`
 - [ ] 7.4 **数据库迁移由 Helm hook 执行**。生产首次迁移前请先确认 RDS 已有快照
 
