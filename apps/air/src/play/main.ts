@@ -28,6 +28,7 @@ import { describeSketch } from '../engine/describe.ts';
 import { decodeSketch, shareUrl } from '../engine/share.ts';
 import { format, pickLang, STRINGS, type Key } from './i18n.ts';
 import { createLight } from './light.ts';
+import { sceneFor } from './scenes.ts';
 import { createObservation } from './observe.ts';
 import { createSynth, type Synth } from './synth.ts';
 import { attachTouch } from './touch.ts';
@@ -105,6 +106,8 @@ function fresh() {
   session = createSession({ presetId: preset.id, seed });
   performer = createPerformer(preset, seed);
   sketch = null;
+  light.scene(sceneFor(preset.id));
+  light.progress(0);
   if (ctx) {
     liveSynth?.release();
     liveSynth = createSynth(ctx, ctx.destination, preset.timbre);
@@ -194,7 +197,10 @@ function tick() {
     offer({ t, active: false, x: 0.5, y: 0.5, speed: 0, openness: 0, spread: null, confidence: 1, source: 'touch' });
   }
   // offer() may just have ended the performance.
-  if (mode === 'playing') ringArc.style.strokeDashoffset = String(RING_LENGTH * (1 - session.elapsed() / MAX_MS));
+  if (mode === 'playing') {
+    ringArc.style.strokeDashoffset = String(RING_LENGTH * (1 - session.elapsed() / MAX_MS));
+    light.progress(session.elapsed() / MAX_MS);
+  }
 }
 requestAnimationFrame(tick);
 
@@ -220,6 +226,8 @@ function replay(s: Sketch, playing: Mode, after: Mode) {
   const synth = createSynth(ctx, ctx.destination, p.timbre);
   const start = ctx.currentTime + 0.15;
   const startedAt = performance.now() + 150;
+  light.scene(sceneFor(p.id));
+  light.progress(0);
   for (const e of perform(p, s.seed, s.frames)) {
     synth.play(e, start + e.t / 1000);
     light.note(e, 150 + e.t);
@@ -228,6 +236,7 @@ function replay(s: Sketch, playing: Mode, after: Mode) {
   const follow = () => {
     raf = requestAnimationFrame(follow);
     light.cursor(frameAt(s.frames, performance.now() - startedAt));
+    light.progress(Math.max(0, performance.now() - startedAt) / MAX_MS);
   };
   follow();
   const done = setTimeout(() => stopReplay?.(), 150 + s.frames.at(-1)!.t + TAIL_MS);
@@ -329,6 +338,7 @@ function frameAt(frames: GestureFrame[], t: number) {
 /* Opened from a shared link? A short fragment is someone else's anchor, not a broken sketch. */
 received = decodeSketch(location.hash);
 if (received) {
+  light.scene(sceneFor(received.presetId));
   $('#shared-length').textContent = t('shared.length', { n: seconds(received.frames.at(-1)!.t) });
   setMode('shared');
 } else {

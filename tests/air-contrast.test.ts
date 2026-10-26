@@ -41,3 +41,9 @@ describe('contrast', () => {
     });
   }
 });
+
+/* 春江 paints a pale lake under the hint (light.ts); its darkest point there is
+   the water just below the far shore. */
+it('the hint is readable on the 春江 lake where it sits', () => {
+  expect(contrast(token('muted'), '#eceee7')).toBeGreaterThanOrEqual(4.5);
+});
