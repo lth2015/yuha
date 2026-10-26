@@ -343,6 +343,11 @@ jobs:
       - name: Air composition UI and privacy
         run: pnpm --filter @yuha/air check:ui
 
+      # The build Artifact Build publishes at yuha.studio/air. It runs only after
+      # merge, so a broken one would otherwise first fail on master.
+      - name: Air composition production build
+        run: pnpm --filter @yuha/air build:web "$RUNNER_TEMP/air"
+
       - name: The stack's log, as an annotation
         # The raw job log is not always reachable (from an agent session it
         # is not); an annotation is, through the checks API and the PR page.

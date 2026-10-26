@@ -144,6 +144,10 @@ jobs:
           pnpm install --frozen-lockfile --prefer-offline
           pnpm --filter @yuha/contracts build
           pnpm --dir apps/web build
+          # Air composition, served at yuha.studio/air beside the web app. After the
+          # web build, which empties dist/. Shared links go straight to the file, not
+          # through /air, so opening one never loads the web app first.
+          AIR_SHARE_BASE=https://yuha.studio/air/index.html pnpm --filter @yuha/air build:web
 
       - uses: actions/upload-artifact@v4
         with:

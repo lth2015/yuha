@@ -3,6 +3,12 @@
 第一阶段规格：`docs/AIR_COMPOSITION_SPEC.md`（#26）。独立静态应用：不依赖
 api / db / providers，不发任何请求，`apps/web` 不引用它，不进入 iOS 包。
 
+**上线位置：`yuha.studio/air`。** Artifact Build 在构建 `apps/web` 之后运行
+`build:web`，把演奏页放进同一份产物的 `air/`，随每次合并到 master 一起发布。
+网站前面没有目录首页，所以 `/air` 和 `/air/` 会落到主站的 `index.html`，由
+`apps/web/src/lib/air-redirect.ts` 在 React 启动前转到 `/air/index.html`，并保留
+`#` 后面的草图。分享链接直接指向 `/air/index.html`，不经过主站。
+
 | 页面 | 内容 |
 | --- | --- |
 | `index.html` | 演奏：触控 → 引擎 → 声音与光（#28、#29）；一次演奏最长 30 秒，回放 / 重来（#30） |
@@ -29,6 +35,7 @@ api / db / providers，不发任何请求，`apps/web` 不引用它，不进入 
 pnpm --filter @yuha/air dev            # 本机开发，端口 5180
 pnpm --filter @yuha/air phone          # 局域网 HTTPS（自签名证书），供真机访问
 pnpm --filter @yuha/air check:ui       # 三种语言 × 五种宽度逐屏实测，键盘演奏，零请求零存储（CI 的 ui 任务也会跑）
+AIR_SHARE_BASE=https://yuha.studio/air/index.html pnpm --filter @yuha/air build:web  # 上线用构建 → apps/web/dist/air
 AIR_SHARE_BASE=<托管页链接> pnpm --filter @yuha/air artifact:play  # 演奏页单文件 → dist/play.html
 pnpm --filter @yuha/air artifact:probe # 测试页打包为单文件 → dist/artifact.html
 node apps/air/scripts/render-air.mjs <输出目录> [seed...]   # 在 apps/air 目录下运行：30 秒试听 WAV
