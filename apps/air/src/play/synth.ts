@@ -11,6 +11,7 @@
  */
 import type { NoteEvent } from '../engine/performer.ts';
 import type { Preset } from '../engine/presets.ts';
+import { releaseFor, tremoloStrikes, type TremoloRule } from './voice-rules.ts';
 
 /**
  * A preset's voice. `pluck` is exactly the sound approved in #28/#29; the others were
@@ -39,11 +40,12 @@ type Timbre = {
   wet: number;
   /** Evens out loudness between timbres (set by measuring renders). */
   gain: number;
-  /**
-   * Re-strike long notes like a plucked tremolo (轮指): `rate` strikes a second, only on
-   * notes at least `minMs` long (fast playing would turn to mush), each `fade` × the last.
-   */
-  tremolo?: { rate: number; minMs: number; max: number; fade: number };
+  /** Re-strike long notes like a plucked tremolo (轮指); see voice-rules.ts. */
+  tremolo?: TremoloRule;
+  /** Low notes ring longer: the release grows by this fraction at brightness 0 (0: off). */
+  lowTail?: number;
+  /** Time constant of the pad's fade after its chord ends. */
+  padRelease?: number;
   /** Let the pad drift left and right, `rate` Hz, `depth` of the field. */
   padSway?: { rate: number; depth: number };
 };
@@ -151,7 +153,11 @@ const TIMBRES: Record<Preset['timbre'], Timbre> = {
     room: 3.6,
     wet: 0.42,
     gain: 1,
-    tremolo: { rate: 11, minMs: 450, max: 7, fade: 0.8 },
+    // After the 春江花月夜 brief: the tremolo quickens and reaches shorter notes as the
+    // hand rises (月照花林); low notes ring on (月升); the drone fades slowly (落月).
+    tremolo: { rate: [8, 14], minMs: [700, 350], max: 7, fade: 0.8 },
+    lowTail: 1.5,
+    padRelease: 1.2,
     padSway: { rate: 0.12, depth: 0.6 },
   },
 };
@@ -222,14 +228,9 @@ export function createSynth(ctx: BaseAudioContext, out: AudioNode = ctx.destinat
 
   function lead(e: NoteEvent, at: number) {
     strike(e, at);
-    const t = v.tremolo;
-    if (!t || e.duration < t.minMs) return;
-    // The tremolo is a fixed rule of the voice, so a replay plays it identically.
-    const count = Math.min(t.max, Math.floor((e.duration / 1000) * t.rate));
-    for (let k = 1; k < count; k += 1) {
-      const at2 = at + k / t.rate;
-      strike({ ...e, velocity: e.velocity * 0.55 * t.fade ** k, duration: e.duration - (k / t.rate) * 1000 }, at2);
-    }
+    if (!v.tremolo) return;
+    // A fixed rule of the voice, so a replay plays it identically.
+    for (const s of tremoloStrikes(v.tremolo, e)) strike({ ...e, velocity: s.velocity, duration: s.durationMs }, at + s.atMs / 1000);
   }
 
   function strike(e: NoteEvent, at: number) {
@@ -244,7 +245,8 @@ export function createSynth(ctx: BaseAudioContext, out: AudioNode = ctx.destinat
     env.gain.setValueAtTime(0.0001, at);
     env.gain.exponentialRampToValueAtTime(peak, at + v.attack);
     env.gain.exponentialRampToValueAtTime(Math.max(0.0001, peak * v.sustain), at + v.attack + v.decay);
-    env.gain.setTargetAtTime(0.0001, held, v.release);
+    const release = releaseFor(v.release, v.lowTail ?? 0, e.brightness);
+    env.gain.setTargetAtTime(0.0001, held, release);
     filter.connect(env);
     route(env, v.send + v.sendOpen * e.width, e.pan);
     // Openness brings out the overtones: a richer tone, not a louder one.
@@ -262,7 +264,7 @@ export function createSynth(ctx: BaseAudioContext, out: AudioNode = ctx.destinat
       g.gain.value = gain;
       osc.connect(g).connect(filter);
       osc.start(at);
-      osc.stop(held + v.release * 6);
+      osc.stop(held + release * 6);
     }
   }
 
@@ -275,10 +277,11 @@ export function createSynth(ctx: BaseAudioContext, out: AudioNode = ctx.destinat
     const level = v.pad.level * e.velocity;
     env.gain.setValueAtTime(0.0001, at);
     env.gain.exponentialRampToValueAtTime(level, at + 0.9);
-    env.gain.setTargetAtTime(0.0001, Math.max(at + 0.9, end - 0.2), 0.5);
+    const padRelease = v.padRelease ?? 0.5;
+    env.gain.setTargetAtTime(0.0001, Math.max(at + 0.9, end - 0.2), padRelease);
     filter.connect(env);
     const panner = route(env, 0.5 + 0.4 * e.width, e.pan);
-    const stopAt = Math.max(at + 0.9, end) + 2.5;
+    const stopAt = Math.max(at + 0.9, end) + Math.max(2.5, padRelease * 5);
     if (v.padSway) {
       const lfo = ctx.createOscillator();
       lfo.frequency.value = v.padSway.rate;
