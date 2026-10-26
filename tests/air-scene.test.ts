@@ -1,11 +1,10 @@
 /**
- * Each preset can have its own scene, starting with 春江: a pale landscape in
- * YUHA's own palette. Faint distant mountains, a still lake, a sun that rises
- * with the performance, a few drifting petals. These pin the parts of the
- * picture that carry meaning, so a later change cannot quietly break them:
- * which preset gets which scene, the sun rising and staying in the sky, notes
- * landing on the water as ripples and in the sky as light, and everything
- * held pale.
+ * The air page's background, behind every preset: a pale landscape in
+ * YUHA's own palette. Faint distant hills, a still lake, a still sun far off
+ * in the east, a few drifting petals. These pin the parts of the picture that
+ * carry meaning, so a later change cannot quietly break them: every preset
+ * gets the lake, the sun stands in the east clear of the hills, notes land on
+ * the water as ripples and in the sky as light, and everything is held pale.
  *
  * No database: pure functions.
  */
