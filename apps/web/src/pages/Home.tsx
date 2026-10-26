@@ -28,6 +28,9 @@ const SIMPLE_DURATION_SECONDS = 120;
  * Visitors can write first and sign in at submit; the draft survives the
  * round trip.
  */
+/** The iOS shell has no /air page (it ships apps/web only). */
+const IOS_BUILD = import.meta.env['VITE_APP_PLATFORM'] === 'ios';
+
 export default function Home() {
   const { t } = useI18n();
   const { me, entitlements, refreshEntitlements } = useSession();
@@ -420,6 +423,26 @@ export default function Home() {
         </div>
 
       </section>
+
+      {/* Air composition: a static page beside this app (apps/air), so a plain
+          link, not a router one. Not in the iOS build, which does not carry it. */}
+      {!IOS_BUILD && (
+        <section className="air-entry" aria-labelledby="air-entry-heading">
+          <svg className="air-entry__hills" viewBox="0 0 400 80" preserveAspectRatio="none" aria-hidden="true">
+            <path d="M0 52 C60 30 110 38 160 46 S260 22 320 36 S380 44 400 40 V80 H0Z" />
+            <path d="M0 62 C70 48 130 56 190 58 S300 44 360 52 S390 56 400 54 V80 H0Z" />
+          </svg>
+          <span className="air-entry__sun" aria-hidden="true" />
+          <div className="air-entry__text">
+            <span className="air-entry__kicker">{t('home.air.kicker')}</span>
+            <h2 id="air-entry-heading">{t('home.air.title')}</h2>
+            <p>{t('home.air.body')}</p>
+          </div>
+          <a className="btn btn--primary air-entry__go" href="/air/index.html">
+            {t('home.air.cta')}
+          </a>
+        </section>
+      )}
 
       {showcase && showcase.length > 0 && (
         <section className="showcase" aria-labelledby="showcase-heading">

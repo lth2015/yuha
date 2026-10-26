@@ -25,6 +25,7 @@ import { createPerformer, LOOKAHEAD_MS, perform, type NoteEvent, type Performer 
 import { PRESETS, presetFor, type Preset } from '../engine/presets.ts';
 import { createSession, MAX_MS, type Sketch } from '../engine/session.ts';
 import { describeSketch } from '../engine/describe.ts';
+import { songUrl } from '../engine/prefill.ts';
 import { decodeSketch, shareUrl } from '../engine/share.ts';
 import { format, pickLang, STRINGS, type Key } from './i18n.ts';
 import { createLight } from './light.ts';
@@ -278,6 +279,8 @@ toSongButton.addEventListener('click', () => {
   $('#card-fact-mood').textContent = c.moodName[lang];
   $('#card-tempo').textContent = t(`tempo.${c.tempo}`);
   $('#card-energy').textContent = t(`energy.${c.energy.id}`);
+  // Phase 3: /create on yuha.studio, already filled in from this sketch.
+  $<HTMLAnchorElement>('#card-go').href = songUrl(c);
   setMode('card');
   $<HTMLAnchorElement>('#card-go').focus();
 });

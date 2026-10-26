@@ -4,15 +4,19 @@
  * up (as in a GestureFrame), so light.ts does all the drawing and these stay
  * testable (tests/air-scene.test.ts).
  *
- * 春江 is the first: a pale landscape in YUHA's own palette, light and quiet.
+ * The lake: a pale landscape in YUHA's own palette, light and quiet, behind
+ * every preset (first drawn for 春江, then made the page's own background).
  * Distant hills in faint ink, a still lake, a sun that rises with the
  * performance, a few drifting petals (the YUHA mark). The player's notes are
  * ripples on the water and soft light in the sky.
  */
+import { PRESETS } from '../engine/presets.ts';
+
 export type SceneId = 'paper' | 'lake';
 
+/** Every preset plays on the lake; plain paper is only the fallback for an id this page does not know. */
 export function sceneFor(presetId: string): SceneId {
-  return presetId === 'chunjiang' ? 'lake' : 'paper';
+  return PRESETS.some((p) => p.id === presetId) ? 'lake' : 'paper';
 }
 
 /** Where the lake meets the far shore, from the bottom of the stage. */

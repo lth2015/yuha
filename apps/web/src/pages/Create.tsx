@@ -16,6 +16,7 @@ import { ApiError, apiFetch, newIdempotencyKey } from '../lib/api';
 import { clampToCodePoints, codePointLength } from '../lib/codepoints';
 import { FIELDS_IN_MORE_PANEL, focusFieldFor } from '../lib/messages';
 import { useI18n } from '../lib/i18n';
+import { airPrefillPlan } from '../lib/air-prefill';
 import { JOB_PHASES as PHASE_STEPS, fractionOfPhase } from '../lib/phases';
 import { Score } from '../components/Score';
 import { useSession } from '../lib/session';
@@ -236,10 +237,17 @@ function advancedTouched(d: Draft): number {
 export default function Create() {
   const navigate = useNavigate();
   const { t } = useI18n();
-  const [params] = useSearchParams();
+  const [params, setParams] = useSearchParams();
   const editTrackId = params.get('edit');
   const resumeJobId = params.get('job');
   const { me, entitlements, refreshEntitlements, runtime } = useSession();
+  /**
+   * A sketch from Air composition (`?air=`, lib/air-prefill.ts), decided once
+   * at mount, before the draft, so the draft's own lazy initializer can take
+   * it: no effect races the save below. `edit` and `job` win over it.
+   */
+  const [air] = useState(() => (editTrackId || resumeJobId ? ({ kind: 'none' } as const) : airPrefillPlan(params.get('air'), readStoredDraft(), t)));
+  const [airNotice, setAirNotice] = useState(() => (air.kind === 'fill' ? 'filled' : air.kind === 'none' ? null : air.kind));
   /**
    * Hydrated lazily — see the note on the home composer. Loading in one effect
    * while saving in another keyed on the value means the save runs on mount
@@ -247,7 +255,9 @@ export default function Create() {
    * worse than losing the draft: the overwrite is valid JSON, so the next
    * mount restores it and the creator's work silently becomes the defaults.
    */
-  const [draft, setDraft] = useState<Draft>(() => (editTrackId ? DEFAULT_DRAFT : readStoredDraft()));
+  const [draft, setDraft] = useState<Draft>(() =>
+    editTrackId ? DEFAULT_DRAFT : air.kind === 'fill' ? { ...DEFAULT_DRAFT, ...air.fields } : readStoredDraft(),
+  );
   const writesOwnLyrics = draft.lyricsBy === 'me' && !draft.instrumental;
   const [more, setMore] = useState(() => advancedTouched(readStoredDraft()) > 0);
   const [job, setJob] = useState<JobView | null>(null);
@@ -326,6 +336,20 @@ export default function Create() {
   }, [draft, editTrackId, editSource]);
 
   const patch = useCallback((p: Partial<Draft>) => setDraft((d) => ({ ...d, ...p })), []);
+
+  // The sketch is in the draft (or declined) now: drop it from the address, so a
+  // reload cannot fill the form over the creator's edits.
+  useEffect(() => {
+    if (!params.has('air')) return;
+    setParams(
+      (prev) => {
+        const next = new URLSearchParams(prev);
+        next.delete('air');
+        return next;
+      },
+      { replace: true },
+    );
+  }, [params, setParams]);
 
   /*
    * Anything still generating is in this list too: `/v1/tracks` orders by
@@ -854,6 +878,34 @@ export default function Create() {
     <div className="studio">
       {me && <OpenGenerations onResume={setJob} />}
       {head}
+
+      {airNotice && (
+        <div className="studio__edit studio__air" role="status">
+          <div className="studio__edit-icon" aria-hidden="true">
+            <span className="icon icon--edit" />
+          </div>
+          <div>
+            <strong>{t(airNotice === 'conflict' ? 'create.air.conflict' : airNotice === 'invalid' ? 'create.air.invalid' : 'create.air.banner')}</strong>
+            {airNotice === 'conflict' && air.kind === 'conflict' && (
+              <div className="studio__air-choice">
+                <button
+                  type="button"
+                  className="btn btn--primary btn--sm"
+                  onClick={() => {
+                    setDraft({ ...DEFAULT_DRAFT, ...air.fields });
+                    setAirNotice('filled');
+                  }}
+                >
+                  {t('create.air.useSketch')}
+                </button>
+                <button type="button" className="btn btn--sm" onClick={() => setAirNotice(null)}>
+                  {t('create.air.keepMine')}
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Their own words, read as music, before anything else on the page. */}
       <Score

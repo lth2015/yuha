@@ -12,7 +12,7 @@
  * openness or a second finger → how wide. A minor preset (夜) turns the quiet
  * moods sad rather than calm.
  */
-import type { EnergyLevelId, Mood, TempoHint } from '@yuha/contracts';
+import type { AirSpace, AirTone, EnergyLevelId, Mood, TempoHint } from '@yuha/contracts';
 import { PRESETS } from './presets.ts';
 import type { Sketch } from './session.ts';
 
@@ -36,6 +36,9 @@ export type Card = {
   tempo: TempoHint;
   energy: (typeof AIR_ENERGY_LEVELS)[number];
   instrumental: true;
+  /** How bright and how wide, as values: phase 3 sends these, not the words. */
+  tone: AirTone;
+  space: AirSpace;
   /** One line: how bright, how wide, how it moves. */
   words: Words;
 };
@@ -51,12 +54,12 @@ const MOOD_NAMES: Record<Mood, Words> = {
   uplifting: { zh: '昂扬', ja: '高揚', en: 'uplifting' },
 };
 
-const BRIGHT: Record<'bright' | 'soft' | 'deep', Words> = {
+const BRIGHT: Record<AirTone, Words> = {
   bright: { zh: '明亮', ja: '明るく', en: 'bright' },
   soft: { zh: '柔和', ja: 'やわらかく', en: 'soft' },
   deep: { zh: '深沉', ja: '深く', en: 'deep' },
 };
-const SPACE: Record<'wide' | 'close', Words> = {
+const SPACE: Record<AirSpace, Words> = {
   wide: { zh: '开阔', ja: '広がり', en: 'wide' },
   close: { zh: '亲密', ja: '寄り添い', en: 'close' },
 };
@@ -94,8 +97,10 @@ export function describeSketch(sketch: Sketch): Card {
   else if (minor) mood = height < 0.5 ? 'melancholic' : 'dreamy';
   else mood = height >= 0.6 ? 'confident' : 'warm';
 
-  const b = BRIGHT[height >= 0.6 ? 'bright' : height < 0.4 ? 'deep' : 'soft'];
-  const s = SPACE[wide ? 'wide' : 'close'];
+  const tone: AirTone = height >= 0.6 ? 'bright' : height < 0.4 ? 'deep' : 'soft';
+  const space: AirSpace = wide ? 'wide' : 'close';
+  const b = BRIGHT[tone];
+  const s = SPACE[space];
   const m = MOTION[tempo];
   return {
     mood,
@@ -103,6 +108,8 @@ export function describeSketch(sketch: Sketch): Card {
     tempo,
     energy,
     instrumental: true,
+    tone,
+    space,
     words: { zh: `${b.zh}、${s.zh}、${m.zh}`, ja: `${b.ja}、${s.ja}、${m.ja}`, en: `${b.en}, ${s.en}, ${m.en}` },
   };
 }
