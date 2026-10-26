@@ -59,8 +59,9 @@ helm upgrade --install yuha infra/helm/loopscene \
 The shared ECR repositories are intentionally named `music/api` and
 `music/worker`; QA and production are distinguished by the immutable image
 tag/digest and deployment environment, not by separate repository names. The
-QA namespace is `qa-music`; production will use its own namespace and values
-file when that environment is introduced.
+namespace is `qa-music`, and despite the name it **is** production: it serves
+yuha.studio, and no separate environment is planned (see CLAUDE.md,
+"One environment").
 
 The chart **refuses to render** without a digest. A mutable tag would make
 "roll back to the previous release" ambiguous, which is unacceptable on a path

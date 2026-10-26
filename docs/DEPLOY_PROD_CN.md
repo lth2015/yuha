@@ -23,8 +23,12 @@
 **这份清单描述的是另一件事**：把服务迁到一个**独立的生产 AWS 账号**，用
 Terraform + Helm + `deploy/envs/production.yaml` 搭建。这条路从未执行过：
 `production.yaml` 里的值仍是空串，`music.adapter` 仍是 `demo`，Terraform 也从未
-对真实账号 `apply` 过。下面第 1 节起的内容都是这条路的计划，不是 yuha.studio
-的现状。
+对真实账号 `apply` 过。下面第 1 节起的内容是当初为这条路写的，不是 yuha.studio
+的现状。**目前也没有搭这套独立环境的计划**（产品负责人，2026-10-26）。
+
+**用词约定**：「QA」和「生产」指的是同一个环境，也就是 yuha.studio。
+`qa-music`、「Deploy QA」里的 QA 只是 SRE 起名时留下的标签。改这些名字会导致
+资源重建，所以保持不动；写文档、说话时，统一叫它「生产」。
 
 **本仓库查不到的事**（不要据此下结论）：线上 ConfigMap 和 secret 的实际值、
 yuha.studio 当前真正运行的提交、`qa` 这个 GitHub Environment 有没有配置审批人。

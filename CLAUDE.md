@@ -16,6 +16,15 @@ Terraform resources, the dev database in `docker-compose.yml`) still read
 `loopscene`; renaming those forces resource recreation, so it is a separate,
 deliberate decision. Do not "tidy" either group.
 
+**One environment: "QA" is production.** yuha.studio is served from the
+`qa-music` namespace, deployed by the workflow named "Deploy QA" on every merge
+to master, with `RUN_MODE=production` and live Stripe since 2026-10-20. "QA" in
+those names is the SRE team's label; there is no other QA or production
+environment and none is planned. Say "production" for it. Merging to master
+**is** releasing to users. `deploy/envs/production.yaml` and the Terraform/Helm
+path describe a separate account that was never built; they are not what is
+live. The names stay, like `loopscene`, because renaming recreates resources.
+
 **Apache-2.0, stewarded by NETX, operated by someone else.** The code is
 donated to the NETX technical community (<https://www.netx.world/>), which is
 the upstream steward: `LICENSE`, `NOTICE`, `GOVERNANCE.md`, `CONTRIBUTING.md`.

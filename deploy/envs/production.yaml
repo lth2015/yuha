@@ -7,8 +7,9 @@
 # be deployed at all, and that sentence was read as a fact about yuha.studio.
 #
 # What this file describes — Terraform plus this Helm chart in a separate
-# account — has never been applied, and nothing in .github/workflows deploys it
-# any more. It still cannot be deployed as written: `music.adapter` is `demo`,
+# account — has never been applied, nothing in .github/workflows deploys it any
+# more, and no such environment is planned (product owner, 2026-10-26): "QA"
+# and "production" name the same one, yuha.studio. It still cannot be deployed as written: `music.adapter` is `demo`,
 # and the API refuses to start in production mode with a fake music adapter.
 # See docs/DEPLOY_PROD_CN.md.
 #
