@@ -132,3 +132,34 @@ describe('the sentence', () => {
     }
   });
 });
+
+/** Ten seconds of a hand whose height follows `y(fraction of the take)`, closed with a lift. */
+function sketchAlong(y: (u: number) => number): Sketch {
+  const frames: GestureFrame[] = [];
+  for (let t = 0; t <= 10_000; t += 50) frames.push({ t, active: true, x: 0.5, y: y(t / 10_000), speed: 0.3, openness: 0, spread: null, confidence: 1, source: 'touch' });
+  frames.push({ ...frames.at(-1)!, t: 10_050, active: false, speed: 0 });
+  return { version: 1, presetId: 'morning', seed: 1, frames };
+}
+
+describe('the shape of what was played (phase 3: the material the lyrics are written from)', () => {
+  it('hears a hand that climbs as rising, and one that sinks as falling', () => {
+    expect(describeSketch(sketchAlong((u) => 0.15 + 0.7 * u)).arc).toBe('rise');
+    expect(describeSketch(sketchAlong((u) => 0.85 - 0.7 * u)).arc).toBe('fall');
+  });
+
+  it('hears a hand that goes up and comes back as a wave', () => {
+    expect(describeSketch(sketchAlong((u) => 0.3 + 0.5 * Math.sin(Math.PI * u))).arc).toBe('wave');
+    expect(describeSketch(sketchAlong((u) => 0.75 - 0.5 * Math.sin(Math.PI * u))).arc).toBe('wave');
+  });
+
+  it('hears a hand that stays at one height as steady', () => {
+    expect(describeSketch(sketchAlong(() => 0.5)).arc).toBe('steady');
+    expect(describeSketch(sketchAlong((u) => 0.5 + 0.03 * Math.sin(20 * u))).arc).toBe('steady');
+  });
+
+  it('only counts what was played: a lifted finger does not bend the arc', () => {
+    const s = sketchAlong(() => 0.5);
+    s.frames.splice(100, 0, { ...s.frames[100]!, active: false, y: 0.95 });
+    expect(describeSketch(s).arc).toBe('steady');
+  });
+});

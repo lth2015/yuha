@@ -10,16 +10,24 @@
  * - apps/web turns a valid link into a draft, in the reader's own language,
  *   and never over a draft the creator already wrote.
  *
+ * Version 2 closes the loop from playing to a sung song: the card lets the
+ * player choose a voice (sung: the AI writes the lyrics, as /create already
+ * does for any sung request) and the link carries the sketch's shape (arc),
+ * which becomes a line of the description the lyrics and music are written
+ * from. Version 1 links, already shared, still open.
+ *
  * The link carries enum values only, never text, so a tampered link can at
  * worst pick another valid sketch. No database: pure functions.
  */
 import { describe, expect, it } from 'vitest';
-import { AIR_SPACES, AIR_TONES, ENERGY_LEVELS, Mood, PROMPT_MAX_CODEPOINTS, TempoHint, parseAirPrefill } from '@yuha/contracts';
+import { AIR_ARCS, AIR_SPACES, AIR_TONES, AIR_VOICES, ENERGY_LEVELS, Mood, PROMPT_MAX_CODEPOINTS, TempoHint, parseAirPrefill } from '@yuha/contracts';
 import { songUrl } from '../apps/air/src/engine/prefill.js';
 import type { Card } from '../apps/air/src/engine/describe.js';
 import { AIR_ENERGY_LEVELS } from '../apps/air/src/engine/describe.js';
 import { airPrefillPlan } from '../apps/web/src/lib/air-prefill.js';
 import { textIn } from '../apps/web/src/lib/i18n.js';
+
+const blank = { zh: '', ja: '', en: '' };
 
 /** Every card the air page can show, as far as the link is concerned. */
 function* everyCard(): Generator<Card> {
@@ -27,53 +35,68 @@ function* everyCard(): Generator<Card> {
     for (const tempo of TempoHint.options)
       for (const energy of AIR_ENERGY_LEVELS)
         for (const tone of AIR_TONES)
-          for (const space of AIR_SPACES) yield { mood, tempo, energy, tone, space, instrumental: true, moodName: { zh: '', ja: '', en: '' }, words: { zh: '', ja: '', en: '' } };
+          for (const space of AIR_SPACES)
+            for (const arc of AIR_ARCS) yield { mood, tempo, energy, tone, space, arc, instrumental: true, moodName: blank, words: blank };
 }
 
 /** `t()` as /create has it, in one language; a missing key comes back as the key itself. */
 const say = (lang: 'zh' | 'ja' | 'en') => (key: string, vars: Record<string, string> = {}) =>
   textIn(lang, key).replace(/\{(\w+)\}/g, (_, k: string) => vars[k] ?? `<<${k}>>`);
 
+const param = (card: Card, voice: (typeof AIR_VOICES)[number]) => new URL(songUrl(card, voice)).searchParams.get('air');
+
 describe('the link the air page builds', () => {
   it('goes to /create on yuha.studio and carries only the air parameter', () => {
-    const url = new URL(songUrl(everyCard().next().value!));
+    const url = new URL(songUrl(everyCard().next().value!, 'sung'));
     expect(url.origin).toBe('https://yuha.studio');
     expect(url.pathname).toBe('/create');
     expect([...url.searchParams.keys()]).toEqual(['air']);
     expect(url.hash).toBe('');
   });
 
-  it('is accepted by the contract for every card the page can show, and says the same thing back', () => {
+  it('is accepted by the contract for every card and voice, and says the same thing back', () => {
     let n = 0;
     for (const card of everyCard()) {
-      const parsed = parseAirPrefill(new URL(songUrl(card)).searchParams.get('air'));
-      expect(parsed).toEqual({ mood: card.mood, tempo: card.tempo, energy: card.energy.id, tone: card.tone, space: card.space });
-      n += 1;
+      for (const voice of AIR_VOICES) {
+        expect(parseAirPrefill(param(card, voice))).toEqual({
+          mood: card.mood, tempo: card.tempo, energy: card.energy.id, tone: card.tone, space: card.space, arc: card.arc, voice,
+        });
+        n += 1;
+      }
     }
-    expect(n).toBe(8 * 3 * 3 * 3 * 2);
+    expect(n).toBe(8 * 3 * 3 * 3 * 2 * 4 * 2);
   });
 });
 
 describe('what the contract accepts', () => {
-  const good = '1-calm-slow-mellow-soft-wide';
+  it('accepts a version 2 link', () => {
+    expect(parseAirPrefill('2-calm-slow-mellow-soft-wide-rise-sung')).toEqual({
+      mood: 'calm', tempo: 'slow', energy: 'mellow', tone: 'soft', space: 'wide', arc: 'rise', voice: 'sung',
+    });
+  });
 
-  it('accepts a well-formed link', () => {
-    expect(parseAirPrefill(good)).toEqual({ mood: 'calm', tempo: 'slow', energy: 'mellow', tone: 'soft', space: 'wide' });
+  it('still opens a version 1 link, as the instrumental without an arc it always meant', () => {
+    expect(parseAirPrefill('1-calm-slow-mellow-soft-wide')).toEqual({
+      mood: 'calm', tempo: 'slow', energy: 'mellow', tone: 'soft', space: 'wide', arc: null, voice: 'inst',
+    });
   });
 
   it('rejects anything else whole, without throwing', () => {
     for (const bad of [
       null,
       '',
-      '2-calm-slow-mellow-soft-wide', // unknown version
-      '1-angry-slow-mellow-soft-wide', // unknown mood
-      '1-calm-slow-0.7-soft-wide', // energy between the levels
-      '1-calm-slow-mellow-soft', // missing a part
-      '1-calm-slow-mellow-soft-wide-extra', // one too many
-      `1-calm-slow-mellow-soft-wide${'x'.repeat(200)}`,
-      '1-CALM-slow-mellow-soft-wide',
-      '1-calm-slow-mellow-soft-wide\n',
-      '1-<script>-slow-mellow-soft-wide',
+      '3-calm-slow-mellow-soft-wide-rise-sung', // unknown version
+      '1-calm-slow-mellow-soft-wide-rise-sung', // version 1 has six parts
+      '2-calm-slow-mellow-soft-wide', // version 2 has eight
+      '2-angry-slow-mellow-soft-wide-rise-sung', // unknown mood
+      '2-calm-slow-0.7-soft-wide-rise-sung', // energy between the levels
+      '2-calm-slow-mellow-soft-wide-spiral-sung', // unknown arc
+      '2-calm-slow-mellow-soft-wide-rise-rap', // unknown voice
+      '2-calm-slow-mellow-soft-wide-rise-sung-extra',
+      `2-calm-slow-mellow-soft-wide-rise-sung${'x'.repeat(200)}`,
+      '2-CALM-slow-mellow-soft-wide-rise-sung',
+      '2-calm-slow-mellow-soft-wide-rise-sung\n',
+      '2-<script>-slow-mellow-soft-wide-rise-sung',
     ]) {
       expect(parseAirPrefill(bad)).toBeNull();
     }
@@ -91,30 +114,45 @@ describe('the draft /create makes of it', () => {
     expect(airPrefillPlan(null, empty, say('zh'))).toEqual({ kind: 'none' });
   });
 
-  it('fills an instrumental at the sketch’s energy, described in words, with AI lyrics', () => {
-    const plan = airPrefillPlan('1-calm-slow-mellow-soft-wide', empty, say('zh'));
-    expect(plan).toEqual({
+  it('sung: a song with AI lyrics, described with the shape of what was played', () => {
+    expect(airPrefillPlan('2-calm-slow-mellow-soft-wide-rise-sung', empty, say('zh'))).toEqual({
+      kind: 'fill',
+      fields: { prompt: '一首柔和、开阔、舒缓的歌，旋律从低处慢慢扬起，情绪平静。', instrumental: false, energy: 0.2, lyricsBy: 'ai', lyrics: '' },
+    });
+  });
+
+  it('instrumental: no vocals, the same shape', () => {
+    expect(airPrefillPlan('2-calm-slow-mellow-soft-wide-fall-inst', empty, say('zh'))).toEqual({
+      kind: 'fill',
+      fields: { prompt: '一段柔和、开阔、舒缓的纯音乐，旋律从高处缓缓落下，情绪平静。', instrumental: true, energy: 0.2, lyricsBy: 'ai', lyrics: '' },
+    });
+  });
+
+  it('a version 1 link still fills the instrumental it always did', () => {
+    expect(airPrefillPlan('1-calm-slow-mellow-soft-wide', empty, say('zh'))).toEqual({
       kind: 'fill',
       fields: { prompt: '一段柔和、开阔、舒缓的纯音乐，情绪平静。', instrumental: true, energy: 0.2, lyricsBy: 'ai', lyrics: '' },
     });
   });
 
-  it('describes every sketch in all three languages, within the prompt limit, with no missing words', () => {
+  it('describes every sketch and voice in all three languages, within the prompt limit, with no missing words', () => {
     for (const lang of ['zh', 'ja', 'en'] as const) {
       for (const card of everyCard()) {
-        const param = new URL(songUrl(card)).searchParams.get('air');
-        const plan = airPrefillPlan(param, empty, say(lang));
-        if (plan.kind !== 'fill') throw new Error(`${lang} ${param}: ${plan.kind}`);
-        expect(plan.fields.prompt).not.toMatch(/<<|\{|undefined|create\.air/);
-        expect([...plan.fields.prompt].length).toBeLessThanOrEqual(PROMPT_MAX_CODEPOINTS);
-        expect(plan.fields.energy).toBe(card.energy.value);
+        for (const voice of AIR_VOICES) {
+          const plan = airPrefillPlan(param(card, voice), empty, say(lang));
+          if (plan.kind !== 'fill') throw new Error(`${lang} ${param(card, voice)}: ${plan.kind}`);
+          expect(plan.fields.prompt).not.toMatch(/<<|\{|undefined|create\.air/);
+          expect([...plan.fields.prompt].length).toBeLessThanOrEqual(PROMPT_MAX_CODEPOINTS);
+          expect(plan.fields.energy).toBe(card.energy.value);
+          expect(plan.fields.instrumental).toBe(voice === 'inst');
+        }
       }
     }
   });
 
   it('says it in the reader’s language, not one language for all', () => {
     const prompts = (['zh', 'ja', 'en'] as const).map((lang) => {
-      const plan = airPrefillPlan('1-warm-medium-medium-bright-close', empty, say(lang));
+      const plan = airPrefillPlan('2-warm-medium-medium-bright-close-wave-sung', empty, say(lang));
       return plan.kind === 'fill' ? plan.fields.prompt : plan.kind;
     });
     expect(new Set(prompts).size).toBe(3);
@@ -122,16 +160,15 @@ describe('the draft /create makes of it', () => {
 
   it('never overwrites a draft the creator wrote: it asks', () => {
     for (const stored of [{ prompt: '我自己的描述', lyrics: '' }, { prompt: '', lyrics: '[Verse]\n我写的词' }]) {
-      const plan = airPrefillPlan('1-calm-slow-mellow-soft-wide', stored, say('zh'));
-      expect(plan.kind).toBe('conflict');
+      expect(airPrefillPlan('2-calm-slow-mellow-soft-wide-rise-sung', stored, say('zh')).kind).toBe('conflict');
     }
   });
 
   it('treats a draft of only spaces as empty', () => {
-    expect(airPrefillPlan('1-calm-slow-mellow-soft-wide', { prompt: '  \n', lyrics: ' ' }, say('zh')).kind).toBe('fill');
+    expect(airPrefillPlan('2-calm-slow-mellow-soft-wide-rise-sung', { prompt: '  \n', lyrics: ' ' }, say('zh')).kind).toBe('fill');
   });
 
   it('ignores a tampered link whole and says so', () => {
-    expect(airPrefillPlan('1-calm-slow-mellow-soft-wide-<b>', empty, say('zh'))).toEqual({ kind: 'invalid' });
+    expect(airPrefillPlan('2-calm-slow-mellow-soft-wide-rise-sung-<b>', empty, say('zh'))).toEqual({ kind: 'invalid' });
   });
 });

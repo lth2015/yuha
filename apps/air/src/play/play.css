@@ -9,6 +9,7 @@
   --yuha-line: #d8dad3;
   --yuha-control-line: #7b8177;
   --yuha-petal: #f46b45;
+  --yuha-petal-soft: #ffe4d8;
   --yuha-focus: #5748b9;
   --yuha-radius-control: 14px;
   --yuha-radius-card: 24px;
@@ -162,6 +163,24 @@ button:focus-visible { outline: 3px solid var(--yuha-focus); outline-offset: 3px
 #card .facts div { display: grid; gap: 2px; }
 #card dt { color: var(--yuha-muted); font-size: 0.75rem; }
 #card dd { margin: 0; font-size: 0.95rem; overflow-wrap: anywhere; }
+/* Sung or instrumental: the one choice the card asks for, two equal buttons. */
+#card .voice { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 8px; width: 100%; }
+#card .voice span { color: var(--yuha-muted); font-size: 0.75rem; flex-basis: 100%; }
+#card .voice button {
+  flex: 1 1 0;
+  min-width: 96px;
+  min-height: 44px;
+  padding: 8px 14px;
+  border-radius: var(--yuha-radius-control);
+  border: 1px solid var(--yuha-control-line);
+  background: var(--yuha-surface);
+  color: var(--yuha-ink);
+  font: inherit;
+  cursor: pointer;
+}
+/* Chosen: petal-soft, so it reads as selected without competing with 「去 YUHA」 below. */
+#card .voice button[aria-pressed="true"] { border: 2px solid var(--yuha-petal); background: var(--yuha-petal-soft); color: var(--yuha-ink); font-weight: 600; }
+#card .voice button:focus-visible { outline: 3px solid var(--yuha-focus); outline-offset: 3px; }
 #card-go {
   display: block;
   width: 100%;

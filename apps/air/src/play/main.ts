@@ -26,6 +26,7 @@ import { PRESETS, presetFor, type Preset } from '../engine/presets.ts';
 import { createSession, MAX_MS, type Sketch } from '../engine/session.ts';
 import { describeSketch } from '../engine/describe.ts';
 import { songUrl } from '../engine/prefill.ts';
+import type { AirVoice } from '@yuha/contracts';
 import { decodeSketch, shareUrl } from '../engine/share.ts';
 import { format, pickLang, STRINGS, type Key } from './i18n.ts';
 import { createLight } from './light.ts';
@@ -108,7 +109,6 @@ function fresh() {
   performer = createPerformer(preset, seed);
   sketch = null;
   light.scene(sceneFor(preset.id));
-  light.progress(0);
   if (ctx) {
     liveSynth?.release();
     liveSynth = createSynth(ctx, ctx.destination, preset.timbre);
@@ -198,10 +198,7 @@ function tick() {
     offer({ t, active: false, x: 0.5, y: 0.5, speed: 0, openness: 0, spread: null, confidence: 1, source: 'touch' });
   }
   // offer() may just have ended the performance.
-  if (mode === 'playing') {
-    ringArc.style.strokeDashoffset = String(RING_LENGTH * (1 - session.elapsed() / MAX_MS));
-    light.progress(session.elapsed() / MAX_MS);
-  }
+  if (mode === 'playing') ringArc.style.strokeDashoffset = String(RING_LENGTH * (1 - session.elapsed() / MAX_MS));
 }
 requestAnimationFrame(tick);
 
@@ -228,7 +225,6 @@ function replay(s: Sketch, playing: Mode, after: Mode) {
   const start = ctx.currentTime + 0.15;
   const startedAt = performance.now() + 150;
   light.scene(sceneFor(p.id));
-  light.progress(0);
   for (const e of perform(p, s.seed, s.frames)) {
     synth.play(e, start + e.t / 1000);
     light.note(e, 150 + e.t);
@@ -237,7 +233,6 @@ function replay(s: Sketch, playing: Mode, after: Mode) {
   const follow = () => {
     raf = requestAnimationFrame(follow);
     light.cursor(frameAt(s.frames, performance.now() - startedAt));
-    light.progress(Math.max(0, performance.now() - startedAt) / MAX_MS);
   };
   follow();
   const done = setTimeout(() => stopReplay?.(), 150 + s.frames.at(-1)!.t + TAIL_MS);
@@ -279,10 +274,32 @@ toSongButton.addEventListener('click', () => {
   $('#card-fact-mood').textContent = c.moodName[lang];
   $('#card-tempo').textContent = t(`tempo.${c.tempo}`);
   $('#card-energy').textContent = t(`energy.${c.energy.id}`);
-  // Phase 3: /create on yuha.studio, already filled in from this sketch.
-  $<HTMLAnchorElement>('#card-go').href = songUrl(c);
+  shownCard = c;
+  showVoice();
   setMode('card');
   $<HTMLAnchorElement>('#card-go').focus();
+});
+
+/*
+ * Phase 3: 「去 YUHA」 opens /create on yuha.studio, already filled in from this
+ * sketch, sung (the AI writes lyrics from it) or instrumental as chosen here.
+ * Sung by default: the product is full songs with vocals.
+ */
+let shownCard: ReturnType<typeof describeSketch> | null = null;
+let voice: AirVoice = 'sung';
+function showVoice() {
+  $('#card-sung').setAttribute('aria-pressed', String(voice === 'sung'));
+  $('#card-inst').setAttribute('aria-pressed', String(voice === 'inst'));
+  $('#card-voice-note').textContent = t(voice === 'sung' ? 'card.sungNote' : 'card.instNote');
+  if (shownCard) $<HTMLAnchorElement>('#card-go').href = songUrl(shownCard, voice);
+}
+$('#card-sung').addEventListener('click', () => {
+  voice = 'sung';
+  showVoice();
+});
+$('#card-inst').addEventListener('click', () => {
+  voice = 'inst';
+  showVoice();
 });
 
 $('#card-back').addEventListener('click', () => {
