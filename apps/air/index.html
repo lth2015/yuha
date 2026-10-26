@@ -7,47 +7,48 @@
     <title>YUHA 空气作曲</title>
   </head>
   <body>
-    <main id="stage" aria-label="空气作曲：触碰屏幕并移动手指，声音会随之变化">
+    <!-- Every word comes from src/play/i18n.ts: data-i18n fills the text, data-i18n-aria the label. -->
+    <main id="stage" role="application" tabindex="0" data-i18n-aria="stage.aria">
       <canvas id="light" aria-hidden="true"></canvas>
-      <p id="hint">触碰，让感觉先有声音</p>
+      <p id="hint" data-i18n="hint"></p>
     </main>
     <div id="ring" hidden>
       <svg viewBox="0 0 60 60" aria-hidden="true">
         <circle class="track" cx="30" cy="30" r="26" />
         <circle id="ring-arc" cx="30" cy="30" r="26" />
       </svg>
-      <button id="done" type="button">完成</button>
+      <button id="done" type="button" data-i18n="done"></button>
     </div>
     <section id="ended" hidden aria-live="polite">
-      <p class="length">你的 <span id="ended-length"></span></p>
+      <p class="length" id="ended-length"></p>
       <div class="actions">
-        <button id="replay" type="button">回放</button>
-        <button id="again" type="button" class="quiet">重来</button>
-        <button id="share" type="button" class="quiet">复制链接</button>
+        <button id="replay" type="button"></button>
+        <button id="again" type="button" class="quiet" data-i18n="again"></button>
+        <button id="share" type="button" class="quiet" data-i18n="share"></button>
       </div>
-      <button id="to-song" type="button" class="link">让它成为一首歌</button>
-      <input id="share-url" type="text" readonly hidden aria-label="分享链接" />
+      <button id="to-song" type="button" class="link" data-i18n="toSong"></button>
+      <input id="share-url" type="text" readonly hidden data-i18n-aria="shareUrl.aria" />
     </section>
     <section id="shared" hidden aria-live="polite">
-      <p class="length">一段空气作曲 · <span id="shared-length"></span></p>
+      <p class="length" id="shared-length"></p>
       <div class="actions">
-        <button id="listen" type="button">聆听</button>
-        <button id="own" type="button" class="quiet">自己来一段</button>
+        <button id="listen" type="button"></button>
+        <button id="own" type="button" class="quiet" data-i18n="own"></button>
       </div>
     </section>
     <section id="card" hidden aria-labelledby="card-mood">
-      <p class="eyebrow">你的草图</p>
+      <p class="eyebrow" data-i18n="card.eyebrow"></p>
       <h2 id="card-mood"></h2>
       <p id="card-words" class="words"></p>
       <dl class="facts">
-        <div><dt>情绪</dt><dd id="card-fact-mood"></dd></div>
-        <div><dt>速度</dt><dd id="card-tempo"></dd></div>
-        <div><dt>能量</dt><dd id="card-energy"></dd></div>
-        <div><dt>人声</dt><dd>纯音乐</dd></div>
+        <div><dt data-i18n="card.mood"></dt><dd id="card-fact-mood"></dd></div>
+        <div><dt data-i18n="card.tempo"></dt><dd id="card-tempo"></dd></div>
+        <div><dt data-i18n="card.energy"></dt><dd id="card-energy"></dd></div>
+        <div><dt data-i18n="card.vocals"></dt><dd data-i18n="card.instrumental"></dd></div>
       </dl>
-      <a id="card-go" href="https://yuha.studio/" target="_blank" rel="noopener">去 YUHA 把它写成一首歌</a>
-      <p class="fine">这个页面不收费，也不消耗 Credit。</p>
-      <button id="card-back" type="button" class="quiet">返回</button>
+      <a id="card-go" href="https://yuha.studio/" target="_blank" rel="noopener" data-i18n="card.go"></a>
+      <p class="fine" data-i18n="card.free"></p>
+      <button id="card-back" type="button" class="quiet" data-i18n="card.back"></button>
     </section>
     <p id="toast" role="status" hidden></p>
     <script type="module" src="./src/play/main.ts"></script>

@@ -10,7 +10,8 @@
     "phone": "vite --host --mode phone",
     "preview": "vite preview",
     "artifact:probe": "node build-artifact.mjs probe",
-    "artifact:play": "node build-artifact.mjs index"
+    "artifact:play": "node build-artifact.mjs index",
+    "check:ui": "node scripts/check-ui.mjs"
   },
   "devDependencies": {
     "@vitejs/plugin-basic-ssl": "2.1.4",
