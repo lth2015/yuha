@@ -11,7 +11,7 @@
  * in the sky. Everything is drawn faint: it is a ground for the sound, not a show.
  */
 import type { NoteEvent } from '../engine/performer.ts';
-import { HORIZON, lakeTone, ridge, splashFor, sunAt, type SceneId } from './scenes.ts';
+import { HORIZON, lakeTone, ridge, splashFor, SUN, type SceneId } from './scenes.ts';
 
 type Kind = 'bloom' | 'ripple' | 'glow' | 'mist';
 type Bloom = { kind: Kind; x: number; y: number; born: number; life: number; size: number; hue: number; sat: number; light: number; alpha: number; seed: number };
@@ -32,10 +32,6 @@ export function createLight(canvas: HTMLCanvasElement) {
   let melodyPan = 0;
   let scale = 1;
   let scene: SceneId = 'paper';
-  /** How far through the longest performance we are, 0…1: the sun's height. */
-  let progress = 0;
-  /** Eased towards `progress`, so the sun glides when a new performance resets it. */
-  let shown = 0;
 
   const resize = () => {
     scale = Math.min(2, devicePixelRatio || 1);
@@ -56,8 +52,17 @@ export function createLight(canvas: HTMLCanvasElement) {
   /** The YUHA mark: a drifting petal (apps/web/public/brand/yuha-mark-orange.svg), 96 units wide. */
   const PETAL = [new Path2D('M81 12C83 41 62 71 27 85C31 70 43 55 54 47C66 37 75 24 81 12Z'), new Path2D('M14 24C37 23 53 34 54 49C40 47 22 38 14 24Z')];
   /** A few petals and two far birds: decoration, drifting so slowly it reads as stillness. */
-  const PETALS = Array.from({ length: 5 }, (_, i) => ({ x: hash(i + 11), y: 0.5 + hash(i + 21) * 0.45, speed: 0.5 + hash(i + 31), size: 0.6 + hash(i + 41) * 0.6, spin: hash(i + 51) * 6.28 }));
-  const BIRDS = [{ x: 0.22, y: 0.78, s: 1 }, { x: 0.27, y: 0.8, s: 0.75 }];
+  /**
+   * Three petals, each on one long, slow fall from the upper right down to the
+   * water, fading in at the start and out as it settles, so none pops into or
+   * out of view. Staggered so there is rarely more than one or two in the sky.
+   */
+  const PETALS = [
+    { x0: 0.82, period: 46_000, phase: 0.0, size: 1, spin: 0.6 },
+    { x0: 0.6, period: 58_000, phase: 0.38, size: 0.8, spin: 2.2 },
+    { x0: 0.95, period: 52_000, phase: 0.71, size: 0.9, spin: 4.1 },
+  ];
+  const BIRDS = [{ x: 0.6, y: 0.8, s: 1 }, { x: 0.65, y: 0.82, s: 0.75 }];
 
   /** Hills from scenes.ts as a filled shape down to the shore, misting out at the foot. */
   function hills(layer: number, ink: string, alpha: number) {
@@ -91,8 +96,7 @@ export function createLight(canvas: HTMLCanvasElement) {
     g.fillRect(0, 0, w, horizon);
 
     // The sun, rising behind the hills; pale petal, never a glare.
-    shown += (progress - shown) * (calm ? 1 : 0.04);
-    const sun = sunAt(shown);
+    const sun = SUN;
     const sx = px(sun.x);
     const sy = py(sun.y);
     const sr = short * sun.r;
@@ -179,17 +183,19 @@ export function createLight(canvas: HTMLCanvasElement) {
       g.stroke();
     }
     for (const p of PETALS) {
-      const t = calm ? 0 : now / 1000;
-      const x = (p.x + t * 0.004 * p.speed) % 1.15 - 0.05;
-      const y = p.y - ((t * 0.0025 * p.speed) % 0.6) + Math.sin(t * 0.4 + p.spin) * 0.01;
-      if (y < HORIZON + 0.02) continue;
-      const size = short * 0.00022 * p.size;
+      // u: how far along its fall, 0 at the top of the sky, 1 resting on the water.
+      const u = calm ? 0.35 + p.phase * 0.4 : (now / p.period + p.phase) % 1;
+      const x = p.x0 - 0.45 * u + 0.03 * Math.sin(u * Math.PI * 3 + p.spin);
+      const y = 0.95 - (0.95 - (HORIZON + 0.01)) * u;
+      const fade = Math.min(1, u / 0.12) * Math.min(1, (1 - u) / 0.18);
+      const size = short * 0.0003 * p.size;
       g.save();
+      g.globalAlpha = fade;
       g.translate(px(x), py(y));
-      g.rotate(p.spin + (calm ? 0 : Math.sin(t * 0.3 + p.spin) * 0.5));
+      g.rotate(p.spin + 0.7 * Math.sin(u * Math.PI * 2.4 + p.spin));
       g.scale(size, size);
       g.translate(-48, -48);
-      g.fillStyle = 'rgba(244, 107, 69, 0.28)';
+      g.fillStyle = 'rgba(244, 107, 69, 0.26)';
       for (const path of PETAL) g.fill(path);
       g.restore();
     }
@@ -288,10 +294,6 @@ export function createLight(canvas: HTMLCanvasElement) {
     scene(id: SceneId) {
       scene = id;
       document.body.dataset['scene'] = id;
-    },
-    /** Share of the longest performance played so far, 0…1. */
-    progress(p: number) {
-      progress = p;
     },
     /** Where the finger is drawn now: the live finger, or the replayed one. */
     cursor(f: Cursor | null) {

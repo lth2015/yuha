@@ -108,7 +108,6 @@ function fresh() {
   performer = createPerformer(preset, seed);
   sketch = null;
   light.scene(sceneFor(preset.id));
-  light.progress(0);
   if (ctx) {
     liveSynth?.release();
     liveSynth = createSynth(ctx, ctx.destination, preset.timbre);
@@ -198,10 +197,7 @@ function tick() {
     offer({ t, active: false, x: 0.5, y: 0.5, speed: 0, openness: 0, spread: null, confidence: 1, source: 'touch' });
   }
   // offer() may just have ended the performance.
-  if (mode === 'playing') {
-    ringArc.style.strokeDashoffset = String(RING_LENGTH * (1 - session.elapsed() / MAX_MS));
-    light.progress(session.elapsed() / MAX_MS);
-  }
+  if (mode === 'playing') ringArc.style.strokeDashoffset = String(RING_LENGTH * (1 - session.elapsed() / MAX_MS));
 }
 requestAnimationFrame(tick);
 
@@ -228,7 +224,6 @@ function replay(s: Sketch, playing: Mode, after: Mode) {
   const start = ctx.currentTime + 0.15;
   const startedAt = performance.now() + 150;
   light.scene(sceneFor(p.id));
-  light.progress(0);
   for (const e of perform(p, s.seed, s.frames)) {
     synth.play(e, start + e.t / 1000);
     light.note(e, 150 + e.t);
@@ -237,7 +232,6 @@ function replay(s: Sketch, playing: Mode, after: Mode) {
   const follow = () => {
     raf = requestAnimationFrame(follow);
     light.cursor(frameAt(s.frames, performance.now() - startedAt));
-    light.progress(Math.max(0, performance.now() - startedAt) / MAX_MS);
   };
   follow();
   const done = setTimeout(() => stopReplay?.(), 150 + s.frames.at(-1)!.t + TAIL_MS);

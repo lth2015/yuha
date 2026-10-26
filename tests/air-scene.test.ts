@@ -11,7 +11,7 @@
  */
 import { describe, expect, it } from 'vitest';
 import { PRESETS } from '../apps/air/src/engine/presets.js';
-import { HORIZON, ridge, splashFor, sceneFor, sunAt, lakeTone } from '../apps/air/src/play/scenes.js';
+import { HORIZON, ridge, splashFor, sceneFor, SUN, lakeTone } from '../apps/air/src/play/scenes.js';
 
 describe('which scene a preset is drawn in', () => {
   it('draws every preset on the lake landscape: it is the page’s background, not one preset’s', () => {
@@ -24,20 +24,15 @@ describe('which scene a preset is drawn in', () => {
 });
 
 describe('the sun over the lake', () => {
-  it('rises as the performance goes on', () => {
-    const ys = [0, 0.25, 0.5, 0.75, 1].map((p) => sunAt(p).y);
-    for (let i = 1; i < ys.length; i += 1) expect(ys[i]).toBeGreaterThan(ys[i - 1]!);
+  it('stands in the east, on the left, as a map reads', () => {
+    expect(SUN.x).toBeLessThan(0.4);
   });
 
-  it('starts low behind the hills and never leaves the sky', () => {
-    expect(sunAt(0).y).toBeGreaterThan(HORIZON);
-    expect(sunAt(0).y).toBeLessThan(HORIZON + 0.15);
-    expect(sunAt(1).y).toBeLessThan(0.9);
-  });
-
-  it('holds still outside 0…1 rather than leaving the frame', () => {
-    expect(sunAt(-1)).toEqual(sunAt(0));
-    expect(sunAt(5)).toEqual(sunAt(1));
+  it('is far off: low over the hills, small, and clear of them', () => {
+    const hillTop = Math.max(...[0, 1, 2].map((l) => ridge(l, SUN.x)));
+    expect(SUN.y).toBeGreaterThan(hillTop);
+    expect(SUN.y).toBeLessThan(HORIZON + 0.25);
+    expect(SUN.r).toBeLessThan(0.06);
   });
 });
 

@@ -6,8 +6,8 @@
  *
  * The lake: a pale landscape in YUHA's own palette, light and quiet, behind
  * every preset (first drawn for 春江, then made the page's own background).
- * Distant hills in faint ink, a still lake, a sun that rises with the
- * performance, a few drifting petals (the YUHA mark). The player's notes are
+ * Distant hills in faint ink, a still lake, a distant sun in the east, a
+ * few drifting petals (the YUHA mark). The player's notes are
  * ripples on the water and soft light in the sky.
  */
 import { PRESETS } from '../engine/presets.ts';
@@ -22,13 +22,12 @@ export function sceneFor(presetId: string): SceneId {
 /** Where the lake meets the far shore, from the bottom of the stage. */
 export const HORIZON = 0.4;
 
-/** The sun comes up from behind the hills as the performance goes on. `progress`: 0…1. */
-export function sunAt(progress: number): { x: number; y: number; r: number } {
-  const p = Math.min(1, Math.max(0, progress));
-  // Eased so it clears the hills quickly and settles slowly, the way it looks.
-  const lift = 1 - (1 - p) ** 2;
-  return { x: 0.66 - 0.05 * lift, y: HORIZON + 0.07 + 0.36 * lift, r: 0.06 };
-}
+/**
+ * The sun: far away in the east (on the left, as a map reads), low over the
+ * hills, and still. It used to rise with the performance; the product owner
+ * preferred it simply there, distant.
+ */
+export const SUN = { x: 0.22, y: HORIZON + 0.17, r: 0.045 } as const;
 
 /**
  * Height of the hills at `x` for a layer: 0 is the farthest and tallest,
