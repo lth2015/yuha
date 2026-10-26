@@ -28,6 +28,7 @@ api / db / providers，不发任何请求，`apps/web` 不引用它，不进入 
 ```bash
 pnpm --filter @yuha/air dev            # 本机开发，端口 5180
 pnpm --filter @yuha/air phone          # 局域网 HTTPS（自签名证书），供真机访问
+pnpm --filter @yuha/air check:ui       # 三种语言 × 五种宽度逐屏实测，键盘演奏，零请求零存储（CI 的 ui 任务也会跑）
 AIR_SHARE_BASE=<托管页链接> pnpm --filter @yuha/air artifact:play  # 演奏页单文件 → dist/play.html
 pnpm --filter @yuha/air artifact:probe # 测试页打包为单文件 → dist/artifact.html
 node apps/air/scripts/render-air.mjs <输出目录> [seed...]   # 在 apps/air 目录下运行：30 秒试听 WAV
@@ -45,3 +46,11 @@ node apps/air/scripts/render-air.mjs <输出目录> [seed...]   # 在 apps/air �
 现场听到的相同。
 
 试听录音用与演奏完全相同的引擎和合成器离线渲染，所以听到的就是手指会弹出的。
+
+## 语言与无障碍（#34）
+
+所有文案在 `src/play/i18n.ts`（中 / 日 / 英），按浏览器语言自动选择，未匹配时用
+英文；`tests/air-i18n.test.ts` 保证三种语言键完全对齐，页面和脚本里不再有写死的
+句子。演奏区可用键盘操作：聚焦后按住空格或回车即「按下」，方向键移动。读屏会读出
+演奏区的说明。日文与英文的产品名（エア作曲 / Air composition）是暂定译名。
+

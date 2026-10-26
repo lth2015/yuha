@@ -337,6 +337,12 @@ jobs:
       - name: UI acceptance
         run: pnpm check:ui
 
+      # apps/air is not a route of apps/web, so the step above never sees it. This
+      # starts its own dev server: every screen in zh/ja/en at five widths, keyboard
+      # play, and nothing sent or stored.
+      - name: Air composition UI and privacy
+        run: pnpm --filter @yuha/air check:ui
+
       - name: The stack's log, as an annotation
         # The raw job log is not always reachable (from an agent session it
         # is not); an annotation is, through the checks API and the PR page.

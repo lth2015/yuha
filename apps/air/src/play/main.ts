@@ -11,6 +11,10 @@
  * then 「自己来一段」. Nothing is sent anywhere: the fragment never leaves the
  * browser.
  *
+ * 「让它成为一首歌」 shows the parameter card (#32): the sketch said back as the
+ * mood, tempo and energy a song request would use, and a link to YUHA. It
+ * sends nothing; generation itself is phase 3.
+ *
  * Audio is unlocked and the context created synchronously inside the first
  * gesture (iOS allows it nowhere else), using the silent-element method #27
  * found to work with the silent switch on.
@@ -20,7 +24,9 @@ import type { GestureFrame } from '../engine/frame.ts';
 import { createPerformer, LOOKAHEAD_MS, perform, type NoteEvent, type Performer } from '../engine/performer.ts';
 import { PRESETS, presetFor, type Preset } from '../engine/presets.ts';
 import { createSession, MAX_MS, type Sketch } from '../engine/session.ts';
+import { describeSketch } from '../engine/describe.ts';
 import { decodeSketch, shareUrl } from '../engine/share.ts';
+import { format, pickLang, STRINGS, type Key } from './i18n.ts';
 import { createLight } from './light.ts';
 import { createSynth, type Synth } from './synth.ts';
 import { attachTouch } from './touch.ts';
@@ -33,6 +39,16 @@ const TAIL_MS = 2500;
 const RING_LENGTH = 2 * Math.PI * 26;
 
 const $ = <T extends HTMLElement>(sel: string) => document.querySelector<T>(sel)!;
+
+/* ---------- words ---------- */
+
+const lang = pickLang(navigator.languages?.length ? navigator.languages : [navigator.language]);
+const t = (key: Key, vars: Record<string, string | number> = {}) => format(STRINGS[lang][key], vars);
+document.documentElement.lang = { zh: 'zh-Hans', ja: 'ja', en: 'en' }[lang];
+document.title = t('title');
+for (const el of document.querySelectorAll<HTMLElement>('[data-i18n]')) el.textContent = t(el.dataset.i18n as Key);
+for (const el of document.querySelectorAll<HTMLElement>('[data-i18n-aria]')) el.setAttribute('aria-label', t(el.dataset.i18nAria as Key));
+const seconds = (ms: number) => Math.round(ms / 1000);
 const stage = $('#stage');
 const hint = $('#hint');
 const ring = $('#ring');
@@ -47,12 +63,14 @@ const shareField = $<HTMLInputElement>('#share-url');
 const sharedPanel = $('#shared');
 const listenButton = $<HTMLButtonElement>('#listen');
 const ownButton = $<HTMLButtonElement>('#own');
+const toSongButton = $<HTMLButtonElement>('#to-song');
+const card = $('#card');
 const light = createLight($<HTMLCanvasElement>('#light'));
 
 let ctx: AudioContext | null = null;
 let liveSynth: Synth | null = null;
 
-type Mode = 'ready' | 'playing' | 'ended' | 'replaying' | 'shared' | 'shared-replaying';
+type Mode = 'ready' | 'playing' | 'ended' | 'replaying' | 'shared' | 'shared-replaying' | 'card';
 let mode: Mode = 'ready';
 let preset: Preset = PRESETS[0]!;
 let seed = 0;
@@ -80,9 +98,11 @@ function setMode(next: Mode) {
   ring.hidden = next !== 'playing';
   ended.hidden = next !== 'ended' && next !== 'replaying';
   sharedPanel.hidden = next !== 'shared' && next !== 'shared-replaying';
-  replayButton.textContent = next === 'replaying' ? '停止' : '回放';
+  card.hidden = next !== 'card';
+  toSongButton.disabled = next === 'replaying';
+  replayButton.textContent = t(next === 'replaying' ? 'stop' : 'replay');
   againButton.disabled = shareButton.disabled = next === 'replaying';
-  listenButton.textContent = next === 'shared-replaying' ? '停止' : '聆听';
+  listenButton.textContent = t(next === 'shared-replaying' ? 'stop' : 'listen');
   ownButton.disabled = next === 'shared-replaying';
   hint.hidden = next !== 'ready';
   if (next !== 'ended') shareField.hidden = true;
@@ -130,7 +150,7 @@ function offer(raw: GestureFrame) {
 function finishWith(s: Sketch) {
   sketch = s;
   light.cursor(null);
-  $('#ended-length').textContent = `${Math.round(s.frames.at(-1)!.t / 1000)} 秒`;
+  $('#ended-length').textContent = t('ended.length', { n: seconds(s.frames.at(-1)!.t) });
   setMode('ended');
 }
 
@@ -161,7 +181,7 @@ doneButton.addEventListener('click', () => {
   const out = session.finish();
   if (out.status === 'ended') finishWith(out.sketch);
   else if (out.status === 'too-short') {
-    say('再多玩一会儿，再听回放');
+    say(t('toast.tooShort'));
     fresh();
     setMode('ready');
   }
@@ -214,6 +234,26 @@ againButton.addEventListener('click', () => {
   setMode('ready');
 });
 
+/* ---------- the parameter card ---------- */
+
+
+toSongButton.addEventListener('click', () => {
+  if (!sketch) return;
+  const c = describeSketch(sketch);
+  $('#card-mood').textContent = c.moodName[lang];
+  $('#card-words').textContent = c.words[lang];
+  $('#card-fact-mood').textContent = c.moodName[lang];
+  $('#card-tempo').textContent = t(`tempo.${c.tempo}`);
+  $('#card-energy').textContent = t(`energy.${c.energy.id}`);
+  setMode('card');
+  $<HTMLAnchorElement>('#card-go').focus();
+});
+
+$('#card-back').addEventListener('click', () => {
+  setMode('ended');
+  toSongButton.focus();
+});
+
 /* ---------- sharing ---------- */
 
 shareButton.addEventListener('click', () => {
@@ -221,13 +261,13 @@ shareButton.addEventListener('click', () => {
   const url = shareUrl(__SHARE_BASE__ || location.href, sketch);
   // Must be called inside the click; refused in some frames, so fall back to a field to copy from.
   navigator.clipboard.writeText(url).then(
-    () => say('链接已复制，发给朋友吧'),
+    () => say(t('toast.copied')),
     () => {
       shareField.value = url;
       shareField.hidden = false;
       shareField.focus();
       shareField.select();
-      say('长按上面的链接，全选后复制');
+      say(t('toast.copyByHand'));
     },
   );
 });
@@ -264,9 +304,9 @@ function frameAt(frames: GestureFrame[], t: number) {
 /* Opened from a shared link? A short fragment is someone else's anchor, not a broken sketch. */
 received = decodeSketch(location.hash);
 if (received) {
-  $('#shared-length').textContent = `${Math.round(received.frames.at(-1)!.t / 1000)} 秒`;
+  $('#shared-length').textContent = t('shared.length', { n: seconds(received.frames.at(-1)!.t) });
   setMode('shared');
 } else {
   setMode('ready');
-  if (location.hash.length > 12) say('这个链接打不开了，来演奏你自己的吧');
+  if (location.hash.length > 12) say(t('toast.broken'));
 }

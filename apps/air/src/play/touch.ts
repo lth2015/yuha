@@ -6,6 +6,10 @@
  *
  * The first finger plays; a second finger only sets `spread`. If the first
  * lifts while the second stays, the second carries on playing.
+ *
+ * The keyboard plays too, for anyone who cannot touch the screen (#34): with
+ * the stage focused, holding Space or Enter is a finger down, and the arrow
+ * keys move it, so key repeat reads as movement and plays like a finger.
  */
 import type { GestureFrame } from '../engine/frame.ts';
 import { nextOpenness, spreadFrom } from './gesture-math.ts';
@@ -24,7 +28,7 @@ export type Touch = {
 
 export function attachTouch(
   el: HTMLElement,
-  handlers: { down(e: PointerEvent): void; frame(f: GestureFrame): void },
+  handlers: { down(e: Event): void; frame(f: GestureFrame): void },
 ): Touch {
   let origin: number | null = null;
   /** Down fingers in arrival order; the first one plays. */
@@ -64,11 +68,9 @@ export function attachTouch(
     raf = requestAnimationFrame(loop);
   };
 
-  el.addEventListener('pointerdown', (e) => {
-    e.preventDefault();
-    el.setPointerCapture?.(e.pointerId);
+  const press = (id: number, at: Point, e: Event) => {
     const starting = fingers.size === 0;
-    fingers.set(e.pointerId, read(e));
+    fingers.set(id, at);
     if (!starting) return;
     prev = null;
     speed = 0;
@@ -77,11 +79,17 @@ export function attachTouch(
     handlers.down(e);
     emit(true);
     raf = requestAnimationFrame(loop);
+  };
+
+  el.addEventListener('pointerdown', (e) => {
+    e.preventDefault();
+    el.setPointerCapture?.(e.pointerId);
+    press(e.pointerId, read(e), e);
   });
   el.addEventListener('pointermove', (e) => {
     if (fingers.has(e.pointerId)) fingers.set(e.pointerId, read(e));
   });
-  const up = (e: PointerEvent) => {
+  const up = (e: { pointerId: number }) => {
     const wasPlaying = fingers.keys().next().value === e.pointerId;
     if (!fingers.delete(e.pointerId)) return;
     if (fingers.size > 0) {
@@ -97,6 +105,29 @@ export function attachTouch(
   el.addEventListener('pointercancel', up);
   // Safari's own pinch gesture would zoom the page instead of playing.
   el.addEventListener('gesturestart', (e) => e.preventDefault());
+
+  /* ---------- keyboard ---------- */
+
+  const KEY = -1;
+  const STEP = 0.04;
+  const keyAt: Point = { x: 0.5, y: 0.5 };
+  const MOVES: Record<string, [number, number]> = { ArrowUp: [0, STEP], ArrowDown: [0, -STEP], ArrowLeft: [-STEP, 0], ArrowRight: [STEP, 0] };
+  el.addEventListener('keydown', (e) => {
+    if (e.key === ' ' || e.key === 'Enter') {
+      e.preventDefault();
+      if (!e.repeat && !fingers.has(KEY)) press(KEY, { ...keyAt }, e);
+    } else if (e.key in MOVES) {
+      e.preventDefault();
+      const [dx, dy] = MOVES[e.key]!;
+      keyAt.x = Math.min(1, Math.max(0, keyAt.x + dx));
+      keyAt.y = Math.min(1, Math.max(0, keyAt.y + dy));
+      if (fingers.has(KEY)) fingers.set(KEY, { ...keyAt });
+    }
+  });
+  el.addEventListener('keyup', (e) => {
+    if (e.key === ' ' || e.key === 'Enter') up({ pointerId: KEY });
+  });
+  el.addEventListener('blur', () => up({ pointerId: KEY }));
 
   return {
     time: () => (origin === null ? null : performance.now() - origin),

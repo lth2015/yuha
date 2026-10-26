@@ -38,6 +38,7 @@ body {
   -webkit-tap-highlight-color: transparent;
   cursor: crosshair;
 }
+#stage:focus-visible { outline: 3px solid var(--yuha-focus); outline-offset: -3px; }
 #light { position: absolute; inset: 0; width: 100%; height: 100%; }
 
 #hint {
@@ -119,6 +120,70 @@ body {
 #ended button:disabled, #shared button:disabled { opacity: 0.45; cursor: default; }
 button:focus-visible { outline: 3px solid var(--yuha-focus); outline-offset: 3px; }
 
+/* Two ids, so it outranks `#ended button` (id + element) and stays a quiet link. */
+#ended #to-song {
+  min-width: 0;
+  border: 0;
+  background: transparent;
+  color: var(--yuha-ink);
+  font: inherit;
+  text-decoration: underline;
+  text-underline-offset: 4px;
+  padding: 6px 10px;
+  cursor: pointer;
+}
+
+/* The card: what the sketch felt like, said in the words a song request uses. */
+#card {
+  position: fixed;
+  left: 50%;
+  bottom: calc(16px + env(safe-area-inset-bottom, 0px));
+  transform: translateX(-50%);
+  width: min(420px, calc(100% - 32px));
+  box-sizing: border-box;
+  padding: 24px;
+  border-radius: var(--yuha-radius-card);
+  background: var(--yuha-surface);
+  border: 1px solid var(--yuha-line);
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 12px;
+  justify-items: center;
+  text-align: center;
+  /* A short phone in landscape: scroll inside the card rather than lose its button. */
+  max-height: calc(100% - 32px - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px));
+  overflow-y: auto;
+}
+#card .eyebrow { margin: 0; color: var(--yuha-muted); font-size: 0.8rem; letter-spacing: 0.12em; }
+#card h2 { margin: 0; font-size: 1.6rem; font-weight: 600; letter-spacing: 0.06em; }
+#card .words { margin: 0; color: var(--yuha-ink); }
+/* Four across when the words fit, two by two when they do not ("Instrumental" is long). */
+#card .facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(76px, 1fr)); gap: 8px; width: 100%; margin: 4px 0; }
+#card .facts div { display: grid; gap: 2px; }
+#card dt { color: var(--yuha-muted); font-size: 0.75rem; }
+#card dd { margin: 0; font-size: 0.95rem; overflow-wrap: anywhere; }
+#card-go {
+  display: block;
+  width: 100%;
+  box-sizing: border-box;
+  padding: 12px 16px;
+  border-radius: var(--yuha-radius-control);
+  background: var(--yuha-ink);
+  color: var(--yuha-surface);
+  text-decoration: none;
+}
+#card .fine { margin: 0; color: var(--yuha-muted); font-size: 0.8rem; }
+#card-back {
+  padding: 10px 20px;
+  border-radius: var(--yuha-radius-control);
+  border: 1px solid var(--yuha-control-line);
+  background: var(--yuha-surface);
+  color: var(--yuha-ink);
+  font: inherit;
+  cursor: pointer;
+}
+#card-go:focus-visible, #to-song:focus-visible { outline: 3px solid var(--yuha-focus); outline-offset: 3px; }
+
 #toast {
   position: fixed;
   left: 50%;
@@ -130,5 +195,9 @@ button:focus-visible { outline: 3px solid var(--yuha-focus); outline-offset: 3px
   background: var(--yuha-surface);
   border: 1px solid var(--yuha-line);
   color: var(--yuha-ink);
-  white-space: nowrap;
+  /* Wraps on a narrow phone: Japanese and English messages are longer than Chinese. */
+  width: max-content;
+  max-width: calc(100% - 32px);
+  box-sizing: border-box;
+  text-align: center;
 }
