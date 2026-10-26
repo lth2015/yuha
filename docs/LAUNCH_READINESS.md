@@ -25,12 +25,24 @@ checkable from this repository:
   training data and output-rights claim are still **unread**
   (`docs/OPEN_ITEMS.md` §1).
 
-What this repository **cannot** tell you, so nothing here claims it: whose
-Stripe account is live and whether its digital-content review passed; the
-operating-entity, 前払式支払手段 and refund-law determinations; real costs;
-and anything about product validation. Rows below that say ✗ for those were
-true on 2026-10-09 and have not been re-checked. They were not re-checked
-because they are decided outside the code, not because they are resolved.
+**Confirmed by the product owner on 2026-10-26** (relayed in conversation;
+no written opinion is held in this repository):
+
+- **Output rights:** the operator's lawyer advised that ownership of a
+  generated song, as a digital product, can be assigned to its creator. This
+  is what 「你生成的歌曲归你」 rests on. The advice as relayed concerns
+  assigning ownership. It does not say whether ACE-Step's training data
+  exposes an output to a third party's claim, which `docs/OPEN_ITEMS.md` §1
+  lists separately.
+- **Operating entity:** an individual, the operator. Their particulars stay
+  out of every file (CLAUDE.md); they come from the deployment's secret store.
+- **Costs:** borne by the operator personally. The figures in §5 are still
+  the modelled estimates, not the operator's actual costs.
+
+Still **not** checkable here and not confirmed: whose Stripe account is live
+and whether its digital-content review passed; the 前払式支払手段 and
+refund-law determinations; and anything about product validation. Rows below
+that say ✗ for those were true on 2026-10-09 and have not been re-checked.
 
 ---
 

@@ -58,7 +58,7 @@ licence, which is a different thing and currently has none.
 
 | Item | State | Owner | Unblocks |
 | --- | --- | --- | --- |
-| **ACE-Step's training data and output-rights claim** | **Unread.** Apache 2.0 is the weights' licence and answers neither | Legal | UI-09, the licence record, 「你生成的歌曲归你」 |
+| **ACE-Step's training data and output-rights claim** | **Output ownership: cleared.** The operator's lawyer advised that ownership can be assigned to the creator (relayed by the product owner, 2026-10-26; no written opinion in this repository). **Training-data exposure: still unread.** Apache 2.0 is the weights' licence and answers neither | Legal | UI-09, the licence record, 「你生成的歌曲归你」 |
 | Delivering MP3/WAV to end users; storing and re-downloading | Ours to decide now that we host it; still unwritten | Legal | UI-06, UI-07, SEC-09 |
 | Downstream user rights: personal SNS video, monetisation, global visibility | Ours to decide; follows the row above | Legal | UI-09, the licence record contents |
 | Whether rights **survive** cancellation | Ours to decide | Legal | PAY-10, our terms §7 |
