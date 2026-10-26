@@ -14,12 +14,8 @@ import { PRESETS } from '../apps/air/src/engine/presets.js';
 import { HORIZON, ridge, splashFor, sceneFor, sunAt, lakeTone } from '../apps/air/src/play/scenes.js';
 
 describe('which scene a preset is drawn in', () => {
-  it('draws 春江 as the lake landscape', () => {
-    expect(sceneFor('chunjiang')).toBe('lake');
-  });
-
-  it('leaves every other preset on plain paper, as before', () => {
-    for (const p of PRESETS.filter((x) => x.id !== 'chunjiang')) expect(sceneFor(p.id)).toBe('paper');
+  it('draws every preset on the lake landscape: it is the page’s background, not one preset’s', () => {
+    for (const p of PRESETS) expect(sceneFor(p.id)).toBe('lake');
   });
 
   it('falls back to paper for a preset it does not know', () => {
