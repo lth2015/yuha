@@ -101,6 +101,8 @@ const PAGES = [
   { name: 'pricing', path: '/pricing', as: null },
   { name: 'auth', path: '/auth', as: null },
   { name: 'create', path: '/create', as: 'creator' },
+  // Opened from Air composition's parameter card: the form filled from a sketch (lib/air-prefill.ts).
+  { name: 'create-air', path: '/create?air=1-calm-slow-mellow-soft-wide', as: 'creator' },
   { name: 'library', path: '/library', as: 'creator' },
   { name: 'checkout-confirm', path: '/checkout/confirm?price=drop_5', as: 'creator' },
   { name: 'settings-billing', path: '/settings/billing', as: 'creator' },
