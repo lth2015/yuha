@@ -1,9 +1,9 @@
 /**
  * Koi in the air page's lake: a few fish idling in the water, drawn in code.
- * The behaviour follows Wonderful World's 送鱼 agreements (shared as principles,
+ * The behaviour follows Wonderful World's product design (shared as principles,
  * not code, docs/AIR_WONDERFUL_WORLD_SYNC.md): a fixed number, never swapped
- * while you play, never summoned; a finger held on the water draws them slowly
- * near; otherwise they wander, unhurried.
+ * while you play; a finger held on the water calls them slowly near; otherwise
+ * they wander, unhurried.
  *
  * What is pinned here is what makes them read as calm and stay in the picture:
  * they never leave the lake, never hurry, never turn sharply, and gathering

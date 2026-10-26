@@ -32,6 +32,7 @@ const PAIRS: [string, string, string][] = [
   ['surface', 'ink', 'primary buttons: 回放, 聆听, 去 YUHA'],
   ['ink', 'surface', 'secondary buttons, the card, the toast'],
   ['muted', 'surface', 'the card’s labels and fine print'],
+  ['ink', 'petal-soft', 'the chosen voice on the card: 有人声 / 纯音乐'],
 ];
 
 describe('contrast', () => {

@@ -1,13 +1,16 @@
 /**
  * A few koi idling in the lake (scenes.ts), as pure state the canvas draws.
  *
- * Behaviour follows Wonderful World's 送鱼 agreements, shared as principles
- * rather than code (docs/AIR_WONDERFUL_WORLD_SYNC.md): a fixed number, never
- * swapped while you play and never summoned; a finger held on the water draws
- * them slowly near, each circling at its own distance so they never pile up;
- * otherwise they wander from one quiet spot to another, gliding between strokes.
- * The motion numbers are ours; tests/air-koi.test.ts pins what makes them read
- * as calm: they stay in the lake, never hurry, never turn sharply.
+ * Behaviour follows Wonderful World's product design (their 02 §4–§5), shared
+ * as principles rather than code (docs/AIR_WONDERFUL_WORLD_SYNC.md, appendix):
+ * a fixed number, never swapped while you play; a finger held on the water
+ * calls them slowly near, each circling at its own distance so they never pile
+ * up (their lesson: fish chasing one shared circle bunch to one side); otherwise
+ * they wander from one quiet spot to another, gliding between strokes.
+ * Our fish swim slower than theirs (about 0.15–0.3 body lengths a second
+ * against their 0.3–1.05): this lake is a backdrop to the music, not the game.
+ * tests/air-koi.test.ts pins what makes them read as calm: they stay in the
+ * lake, never hurry, never turn sharply.
  *
  * Coordinates are fractions of the stage, y going up, like a GestureFrame.
  */
@@ -18,6 +21,8 @@ export const KOI_COUNT = 3;
 export const KOI_MAX_SPEED = 0.03;
 /** Radians per second: a wide, slow turn. */
 export const KOI_MAX_TURN = 0.9;
+/** A body length, in fractions of the stage, for the tail-beat rate. */
+export const KOI_BODY = 0.06;
 /** The water they keep to: clear of the far shore and of the screen's edges. */
 export const LAKE = { left: 0.05, right: 0.95, bottom: 0.05, top: HORIZON - 0.06 } as const;
 
@@ -98,6 +103,7 @@ export function stepKoi(school: Koi[], dtMs: number, lure: { x: number; y: numbe
     const speed = clamp(f.speed + (target - f.speed) * Math.min(1, dt * 1.2), 0, KOI_MAX_SPEED);
     const x = clamp(f.x + Math.cos(heading) * speed * dt, LAKE.left, LAKE.right);
     const y = clamp(f.y + Math.sin(heading) * speed * dt, LAKE.bottom, LAKE.top);
-    return { ...f, x, y, heading, speed, goal, rand, phase: f.phase + dt * (1.2 + speed * 120) };
+    // Body wave: 3 rad/s plus 5 per body length a second of speed (Wonderful World's rate).
+    return { ...f, x, y, heading, speed, goal, rand, phase: f.phase + dt * (3 + (5 * speed) / KOI_BODY) };
   });
 }

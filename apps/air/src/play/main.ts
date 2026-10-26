@@ -26,6 +26,7 @@ import { PRESETS, presetFor, type Preset } from '../engine/presets.ts';
 import { createSession, MAX_MS, type Sketch } from '../engine/session.ts';
 import { describeSketch } from '../engine/describe.ts';
 import { songUrl } from '../engine/prefill.ts';
+import type { AirVoice } from '@yuha/contracts';
 import { decodeSketch, shareUrl } from '../engine/share.ts';
 import { format, pickLang, STRINGS, type Key } from './i18n.ts';
 import { createLight } from './light.ts';
@@ -273,10 +274,32 @@ toSongButton.addEventListener('click', () => {
   $('#card-fact-mood').textContent = c.moodName[lang];
   $('#card-tempo').textContent = t(`tempo.${c.tempo}`);
   $('#card-energy').textContent = t(`energy.${c.energy.id}`);
-  // Phase 3: /create on yuha.studio, already filled in from this sketch.
-  $<HTMLAnchorElement>('#card-go').href = songUrl(c);
+  shownCard = c;
+  showVoice();
   setMode('card');
   $<HTMLAnchorElement>('#card-go').focus();
+});
+
+/*
+ * Phase 3: 「去 YUHA」 opens /create on yuha.studio, already filled in from this
+ * sketch, sung (the AI writes lyrics from it) or instrumental as chosen here.
+ * Sung by default: the product is full songs with vocals.
+ */
+let shownCard: ReturnType<typeof describeSketch> | null = null;
+let voice: AirVoice = 'sung';
+function showVoice() {
+  $('#card-sung').setAttribute('aria-pressed', String(voice === 'sung'));
+  $('#card-inst').setAttribute('aria-pressed', String(voice === 'inst'));
+  $('#card-voice-note').textContent = t(voice === 'sung' ? 'card.sungNote' : 'card.instNote');
+  if (shownCard) $<HTMLAnchorElement>('#card-go').href = songUrl(shownCard, voice);
+}
+$('#card-sung').addEventListener('click', () => {
+  voice = 'sung';
+  showVoice();
+});
+$('#card-inst').addEventListener('click', () => {
+  voice = 'inst';
+  showVoice();
 });
 
 $('#card-back').addEventListener('click', () => {

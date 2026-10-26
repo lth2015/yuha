@@ -44,8 +44,13 @@
         <div><dt data-i18n="card.mood"></dt><dd id="card-fact-mood"></dd></div>
         <div><dt data-i18n="card.tempo"></dt><dd id="card-tempo"></dd></div>
         <div><dt data-i18n="card.energy"></dt><dd id="card-energy"></dd></div>
-        <div><dt data-i18n="card.vocals"></dt><dd data-i18n="card.instrumental"></dd></div>
       </dl>
+      <div class="voice" role="group" aria-labelledby="card-voice-label">
+        <span id="card-voice-label" data-i18n="card.vocals"></span>
+        <button id="card-sung" type="button" aria-pressed="true" data-i18n="card.sung"></button>
+        <button id="card-inst" type="button" aria-pressed="false" data-i18n="card.instrumental"></button>
+      </div>
+      <p id="card-voice-note" class="fine" data-i18n="card.sungNote"></p>
       <a id="card-go" href="https://yuha.studio/" target="_blank" rel="noopener" data-i18n="card.go"></a>
       <p class="fine" data-i18n="card.free"></p>
       <button id="card-back" type="button" class="quiet" data-i18n="card.back"></button>

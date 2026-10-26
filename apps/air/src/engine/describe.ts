@@ -12,7 +12,7 @@
  * openness or a second finger → how wide. A minor preset (夜) turns the quiet
  * moods sad rather than calm.
  */
-import type { AirSpace, AirTone, EnergyLevelId, Mood, TempoHint } from '@yuha/contracts';
+import type { AirArc, AirSpace, AirTone, EnergyLevelId, Mood, TempoHint } from '@yuha/contracts';
 import { PRESETS } from './presets.ts';
 import type { Sketch } from './session.ts';
 
@@ -39,6 +39,12 @@ export type Card = {
   /** How bright and how wide, as values: phase 3 sends these, not the words. */
   tone: AirTone;
   space: AirSpace;
+  /**
+   * The shape of the take: how the hand's height moved from start to end.
+   * Phase 3 sends it as material, a line of the description the lyrics and
+   * the music are written from.
+   */
+  arc: AirArc;
   /** One line: how bright, how wide, how it moves. */
   words: Words;
 };
@@ -70,6 +76,23 @@ const MOTION: Record<TempoHint, Words> = {
 };
 
 const clamp01 = (v: number) => Math.min(1, Math.max(0, v));
+
+/**
+ * Rise, fall, a wave out and back, or steady: compare the mean height of the
+ * first, middle and last thirds of what was played. 0.15 of the stage is a
+ * movement a person meant, not a wobble.
+ */
+function arcOf(heights: number[]): AirArc {
+  if (heights.length < 3) return 'steady';
+  const third = Math.floor(heights.length / 3);
+  const a = mean(heights.slice(0, third));
+  const m = mean(heights.slice(third, heights.length - third));
+  const b = mean(heights.slice(heights.length - third));
+  if (b - a >= 0.15) return 'rise';
+  if (a - b >= 0.15) return 'fall';
+  if (Math.abs(m - (a + b) / 2) >= 0.15) return 'wave';
+  return 'steady';
+}
 const mean = (xs: number[]) => (xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : 0);
 
 export function describeSketch(sketch: Sketch): Card {
@@ -110,6 +133,7 @@ export function describeSketch(sketch: Sketch): Card {
     instrumental: true,
     tone,
     space,
+    arc: arcOf(down.map((f) => f.y)),
     words: { zh: `${b.zh}、${s.zh}、${m.zh}`, ja: `${b.ja}、${s.ja}、${m.ja}`, en: `${b.en}, ${s.en}, ${m.en}` },
   };
 }

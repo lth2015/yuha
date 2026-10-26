@@ -108,11 +108,13 @@ export function createLight(canvas: HTMLCanvasElement) {
     // Screen y points down, the model's up: flip the heading.
     const dir = { x: Math.cos(f.heading), y: -Math.sin(f.heading) };
     const perp = { x: -dir.y, y: dir.x };
-    const sway = calm ? 0 : 0.08 + f.speed * 3;
+    // Wonderful World's travelling wave: the head barely moves, the tail most.
+    // Amplitude about 0.06 of the body, a little more when swimming faster.
+    const sway = calm ? 0 : 0.06 * (1 + Math.min(0.4, f.speed * 15));
     const N = 20;
     const spine = Array.from({ length: N + 1 }, (_, k) => {
       const s = k / N;
-      const bend = Math.sin(f.phase * 3.2 - s * 3.4) * sway * len * s * s;
+      const bend = Math.sin(f.phase - 5.5 * s) * sway * len * (0.12 + s ** 1.3);
       return { x: hx - dir.x * len * s + perp.x * bend, y: hy - dir.y * len * s + perp.y * bend, s };
     });
     // Seen from above: a blunt, rounded head, widest a quarter of the way back,
@@ -152,7 +154,7 @@ export function createLight(canvas: HTMLCanvasElement) {
 
     // Pectoral fins: translucent, just behind the head, rowing slowly.
     const fin = spine[4]!;
-    const beat = calm ? 0.4 : 0.4 + 0.3 * Math.sin(f.phase * 2.1);
+    const beat = calm ? 0.4 : 0.4 + 0.25 * Math.sin(f.phase * 0.5); // fins at half the body's beat
     g.fillStyle = `rgba(${look.body}, 0.45)`;
     for (const side of [-1, 1]) {
       const ox = fin.x + perp.x * side * width(0.2) * 0.9;
