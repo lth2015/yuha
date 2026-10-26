@@ -43,7 +43,11 @@ operate a paid consumer service on somebody's API. It does not remove the
 rights questions; it moves them onto us, and adds one that is now the single
 largest unknown:
 
-**Nobody has read ACE-Step's model card.** Apache 2.0 covers the weights. What
+**Reviewed by the operator's lawyer, 2026-10-26** (relayed by the product
+owner; no written opinion in this repository): both output ownership and
+ACE-Step's training data. The paragraph below is what was open until then.
+
+~~Nobody has read ACE-Step's model card.~~ Apache 2.0 covers the weights. What
 the model was trained on, and what claim anyone can make over its output, is a
 separate question that the licence does not answer — and the answer decides
 whether YUHA can keep telling users 「你生成的歌曲归你」. Suno and Udio settled
@@ -58,7 +62,7 @@ licence, which is a different thing and currently has none.
 
 | Item | State | Owner | Unblocks |
 | --- | --- | --- | --- |
-| **ACE-Step's training data and output-rights claim** | **Output ownership: cleared.** The operator's lawyer advised that ownership can be assigned to the creator (relayed by the product owner, 2026-10-26; no written opinion in this repository). **Training-data exposure: still unread.** Apache 2.0 is the weights' licence and answers neither | Legal | UI-09, the licence record, 「你生成的歌曲归你」 |
+| **ACE-Step's training data and output-rights claim** | **Output ownership: cleared.** The operator's lawyer advised that ownership can be assigned to the creator (relayed by the product owner, 2026-10-26; no written opinion in this repository). **Training data: reviewed** by the same lawyer (relayed, 2026-10-26) | Legal | UI-09, the licence record, 「你生成的歌曲归你」 |
 | Delivering MP3/WAV to end users; storing and re-downloading | Ours to decide now that we host it; still unwritten | Legal | UI-06, UI-07, SEC-09 |
 | Downstream user rights: personal SNS video, monetisation, global visibility | Ours to decide; follows the row above | Legal | UI-09, the licence record contents |
 | Whether rights **survive** cancellation | Ours to decide | Legal | PAY-10, our terms §7 |
