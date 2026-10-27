@@ -282,6 +282,8 @@ const BUSINESS_TABLES = [
   // Before users: it has a foreign key to them, both as the subject and as the
   // operator who verified it.
   'account_deletions',
+  // Counts only (no text), with a foreign key to users.
+  'lyric_drafts',
   'users',
 ];
 

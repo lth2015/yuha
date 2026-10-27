@@ -1,5 +1,5 @@
 import type { Mood, Scene, TempoHint } from '@yuha/contracts';
-import type { IntentRequest, IntentResult, ReviseRequest, ReviseResult, TextProvider } from './types.js';
+import type { IntentRequest, IntentResult, LyricsRequest, LyricsResult, ReviseRequest, ReviseResult, TextProvider } from './types.js';
 
 /**
  * Deterministic local intent extractor for demo mode and tests.
@@ -137,6 +137,23 @@ export class LocalTextProvider implements TextProvider {
    * rewrite needs the model — with the local provider this exists so the edit
    * flow, credits and pipeline are exercisable without credentials.
    */
+  /**
+   * Placeholder lyrics for demo mode: sectioned like real ones, built from the
+   * description's own words, and stable for the same request. A keyword
+   * mapper cannot write a song; this only lets the flow run without a model.
+   */
+  async writeLyrics(req: LyricsRequest): Promise<LyricsResult> {
+    const phrases = req.prompt
+      .split(/[，。、,.!?！？；;\n]+/)
+      .map((p) => p.trim())
+      .filter(Boolean);
+    const line = (i: number) => phrases[(LocalTextProvider.hashInt(req.prompt) + i) % Math.max(1, phrases.length)] ?? req.prompt;
+    const verse = [line(0), line(1), line(2), line(3)];
+    const chorus = [line(1), line(1), line(4), line(0)];
+    const lyrics = ['[verse]', ...verse, '', '[chorus]', ...chorus].join('\n');
+    return { status: 'ok', lyrics, requestId: null, usage: { costMinor: 0, costIsEstimate: true } };
+  }
+
   async reviseSong(req: ReviseRequest): Promise<ReviseResult> {
     return {
       status: 'ok',

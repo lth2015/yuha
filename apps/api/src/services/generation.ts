@@ -355,7 +355,7 @@ async function assertConcurrencyLimit(ctx: AppContext, userId: string): Promise<
  * order lookup, the library and existing downloads keep working. Checked
  * before any reservation, so hitting the cap costs the user nothing.
  */
-async function assertWithinDailyBudget(ctx: AppContext): Promise<void> {
+export async function assertWithinDailyBudget(ctx: AppContext): Promise<void> {
   const cap = ctx.config.DAILY_BUDGET_MINOR;
   if (cap <= 0) return;
 

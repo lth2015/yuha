@@ -86,3 +86,15 @@ export function airPrefillPlan(param: string | null, stored: { prompt: string; l
   const written = stored.prompt.trim() !== '' || stored.lyrics.trim() !== '';
   return { kind: 'fill', fields, setAside: written };
 }
+
+/**
+ * Lyrics written ahead (POST /v1/lyrics/draft) arrive a few seconds after the
+ * page. By then the creator may have switched to instrumental, started typing
+ * lyrics, or restored an earlier draft: any of those wins, and the arrival is
+ * dropped rather than written over their choice. Otherwise the lyrics go into
+ * the box as the creator's own, to edit, so generation sings them as written.
+ */
+export function withDraftedLyrics<D extends { instrumental: boolean; lyrics: string; lyricsBy: 'ai' | 'me' }>(draft: D, lyrics: string): D {
+  if (draft.instrumental || draft.lyrics.trim() !== '') return draft;
+  return { ...draft, lyrics, lyricsBy: 'me' };
+}

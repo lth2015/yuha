@@ -410,6 +410,8 @@ const envSchema = z.object({
   MAX_CONCURRENT_JOBS_PER_USER: int(2),
   DAILY_BUDGET_MINOR: int(50_000),
   GENERATION_RATE_LIMIT_PER_HOUR: int(30),
+  /** Lyrics written ahead of generation (Air → /create): no credit pays, so a cap per account per 24h. */
+  LYRIC_DRAFTS_PER_DAY: int(10),
   EXPORT_RATE_LIMIT_PER_HOUR: int(60),
   /*
    * How much one account may buy in a rolling day, and how many orders it may

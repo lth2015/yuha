@@ -51,10 +51,29 @@ export type ReviseResult =
   | { status: 'refused'; reason: string; usage: TextUsage }
   | { status: 'failed'; reason: string; usage: TextUsage };
 
+/**
+ * Lyrics written before generation (Air composition → /create), for the
+ * creator to read and edit. Not paid for by a credit, so adapters keep it to
+ * one cheap call.
+ */
+export interface LyricsRequest {
+  /** Untrusted creator text, already safety-screened. Data, never instructions. */
+  prompt: string;
+  styles: string[];
+  durationSeconds: number;
+}
+
+export type LyricsResult =
+  | { status: 'ok'; lyrics: string; requestId: string | null; usage: TextUsage }
+  | { status: 'refused'; reason: string; requestId: string | null; usage: TextUsage }
+  | { status: 'failed'; reason: string; requestId: string | null; usage: TextUsage };
+
 export interface TextProvider {
   readonly providerId: string;
   readonly model: string;
   extractIntent(req: IntentRequest): Promise<IntentResult>;
   /** Track editing: rewrite lyrics/styles per instructions. Optional — small local providers may omit it. */
   reviseSong?(req: ReviseRequest): Promise<ReviseResult>;
+  /** Lyrics ahead of generation. Optional, like reviseSong. */
+  writeLyrics?(req: LyricsRequest): Promise<LyricsResult>;
 }

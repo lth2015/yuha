@@ -13,6 +13,7 @@ import exploreRoutes from './routes/explore.js';
 import marketRoutes from './routes/market.js';
 import fileRoutes from './routes/files.js';
 import generationRoutes from './routes/generations.js';
+import lyricsRoutes from './routes/lyrics.js';
 import projectRoutes from './routes/projects.js';
 import publicRoutes from './routes/public.js';
 import rightsRoutes from './routes/rights.js';
@@ -137,6 +138,7 @@ export async function buildServer(ctx: AppContext): Promise<FastifyInstance> {
   await app.register(authRoutes, { ctx, adapter });
   await app.register(projectRoutes);
   await app.register(generationRoutes, { ctx });
+  await app.register(lyricsRoutes, { ctx });
   await app.register(exploreRoutes, { ctx });
   await app.register(marketRoutes, { ctx });
   await app.register(trackRoutes, { ctx });
