@@ -235,6 +235,8 @@ export default function Create() {
    */
   const [air] = useState(() => (editTrackId || resumeJobId ? ({ kind: 'none' } as const) : airPrefillPlan(params.get('air'), readStoredDraft(), t)));
   const [airNotice, setAirNotice] = useState(() => (air.kind === 'fill' ? 'filled' : air.kind === 'none' ? null : air.kind));
+  /** The draft the sketch replaced, held so the banner can give it back. Read before the save below overwrites it. */
+  const [setAside, setSetAside] = useState<Draft | null>(() => (air.kind === 'fill' && air.setAside ? readStoredDraft() : null));
   /**
    * Hydrated lazily — see the note on the home composer. Loading in one effect
    * while saving in another keyed on the value means the save runs on mount
@@ -872,21 +874,23 @@ export default function Create() {
             <span className="icon icon--edit" />
           </div>
           <div>
-            <strong>{t(airNotice === 'conflict' ? 'create.air.conflict' : airNotice === 'invalid' ? 'create.air.invalid' : 'create.air.banner')}</strong>
-            {airNotice === 'conflict' && air.kind === 'conflict' && (
+            <strong>{t(airNotice === 'invalid' ? 'create.air.invalid' : 'create.air.banner')}</strong>
+            {airNotice === 'filled' && air.kind === 'fill' && (
+              <p className="studio__air-note">{t(air.fields.instrumental ? 'create.air.instNote' : 'create.air.sungNote')}</p>
+            )}
+            {airNotice === 'filled' && setAside && (
               <div className="studio__air-choice">
+                <span>{t('create.air.setAside')}</span>
                 <button
                   type="button"
-                  className="btn btn--primary btn--sm"
+                  className="btn btn--sm"
                   onClick={() => {
-                    setDraft({ ...DEFAULT_DRAFT, ...air.fields });
-                    setAirNotice('filled');
+                    setDraft(setAside);
+                    setSetAside(null);
+                    setAirNotice(null);
                   }}
                 >
-                  {t('create.air.useSketch')}
-                </button>
-                <button type="button" className="btn btn--sm" onClick={() => setAirNotice(null)}>
-                  {t('create.air.keepMine')}
+                  {t('create.air.restore')}
                 </button>
               </div>
             )}

@@ -787,6 +787,20 @@ input:not([type]), input[type='text'], input[type='email'], input[type='search']
   background: var(--surface); color: var(--ink); font: inherit;
 }
 textarea { resize: vertical; line-height: 1.7; }
+/* One drawn chevron for every <select>, inset like the text on the left. The
+   browser's own arrow sat wherever each engine put it — in Safari jammed
+   against the rounded right edge — and in each its own colour. */
+select {
+  appearance: none; -webkit-appearance: none;
+  padding-right: 44px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 8'%3E%3Cpath d='M1 1.5l5 5 5-5' fill='none' stroke='%235b6057' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 18px center;
+  background-size: 12px 8px;
+  cursor: pointer;
+}
+select:disabled { cursor: default; color: var(--muted); }
+select::-ms-expand { display: none; }
 input:focus-visible, textarea:focus-visible, select:focus-visible, .btn:focus-visible, .btn-icon:focus-visible, .chip:focus-visible, .seg__btn:focus-visible, .song-card__play:focus-visible, .account__btn:focus-visible, .topnav__link:focus-visible {
   outline: 2px solid var(--focus); outline-offset: 3px;
 }
@@ -1773,8 +1787,9 @@ textarea.is-full { border-color: var(--danger); }
 .studio__edit { display: flex; gap: 14px; align-items: flex-start; margin-bottom: var(--s4); padding: var(--s4) var(--s4); border-radius: var(--r-control); border: 1px solid color-mix(in srgb, var(--petal) 30%, transparent); background: var(--petal-soft); }
 .studio__edit strong { display: block; margin-bottom: 2px; }
 .studio__edit-icon { width: 34px; height: 34px; flex: none; display: grid; place-items: center; border-radius: 10px; background: var(--petal-soft); color: var(--link); font-size: var(--t-lead); }
-/* Air composition's sketch on /create: the same note, with a choice when a draft already exists. */
-.studio__air-choice { display: flex; flex-wrap: wrap; gap: var(--s2); margin-top: var(--s3); }
+/* Air composition's sketch on /create: the same note, saying what the voice choice means, and offering back a draft it set aside. */
+.studio__air-choice { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s2); margin-top: var(--s3); color: var(--muted); font-size: var(--t-caption); }
+.studio__air-note { margin: var(--s1) 0 0; color: var(--muted); font-size: var(--t-caption); }
 
 /* ---------------------------------------------------------------- pricing */
 .pricing__head { text-align: center; max-width: 640px; margin: 0 auto var(--s8); }
