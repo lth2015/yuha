@@ -142,6 +142,10 @@ export const EntitlementSource = z.enum([
   // so "how much have we given away" is a query and not a guess — see
   // migration 0018, whose CHECK carries the same six values.
   'operator_gift',
+  // An operator's credit reset (docs/CREDIT_RESET.md): the top-up to the floor
+  // and the paid-account bonus. Spent first, expired at the next reset.
+  // Migration 0023 rewrote the CHECK with this seventh value.
+  'credit_reset',
 ]);
 export type EntitlementSource = z.infer<typeof EntitlementSource>;
 

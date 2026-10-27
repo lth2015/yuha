@@ -36,6 +36,7 @@ import { NETX_PAUSE_SETTING, type AppContext } from '../context.js';
 import { executeAccountDeletion } from '../services/deletion.js';
 import { decideHeldOrder, heldOrderQueue } from '../services/order-review.js';
 import { findCustomers, getCustomer, giftCredits } from '../services/operator-grant.js';
+import { creditResetOverview, getCreditResetView, startCreditReset } from '../services/credit-reset.js';
 import { changeRole, reactivateAccount, suspendAccount } from '../services/account-admin.js';
 
 /**
@@ -323,6 +324,35 @@ export default async function adminRoutes(app: FastifyInstance, opts: { ctx: App
       actorId: req.user!.id,
       actorRole: req.user!.role,
     });
+  });
+
+  // -------------------------------------------------------- credit resets
+
+  /**
+   * Credit resets (docs/CREDIT_RESET.md). Admin only, like gifts: a reset
+   * hands out credits to every account at once, and every credit is provider
+   * cost. GET shows what a reset started now would give and the recent ones;
+   * POST starts one (or continues the one its key started) and returns at
+   * once, 202, while it runs in the background.
+   */
+  app.get('/v1/admin/credit-resets', { preHandler: adminOnly }, async () => creditResetOverview(ctx));
+
+  app.get('/v1/admin/credit-resets/:id', { preHandler: adminOnly }, async (req) => {
+    const { id } = z.object({ id: z.string().uuid() }).parse(req.params);
+    return getCreditResetView(id);
+  });
+
+  app.post('/v1/admin/credit-resets', { preHandler: adminOnly }, async (req, reply) => {
+    const body = z
+      .object({ reason: z.string().trim().min(3).max(500), idempotencyKey: idempotencyKeySchema })
+      .parse(req.body);
+    const view = await startCreditReset(ctx, {
+      idempotencyKey: body.idempotencyKey,
+      reason: body.reason,
+      actorId: req.user!.id,
+      actorRole: req.user!.role,
+    });
+    return reply.status(202).send(view);
   });
 
   // -------------------------------------------------------- compensation

@@ -103,7 +103,7 @@ export async function listBatches(
   return query<EntitlementBatchRow>(
     `SELECT ${BATCH_COLUMNS} FROM entitlement_batches
       WHERE user_id = ? AND status <> 'revoked'
-      ORDER BY expires_at IS NULL, expires_at, created_at
+      ORDER BY source = 'credit_reset' DESC, expires_at IS NULL, expires_at, created_at
       LIMIT ?`,
     [userId, Math.min(Math.max(limit ?? 500, 1), 1000)],
     tx,
@@ -227,7 +227,10 @@ export type ReserveOutcome =
 /**
  * Reserves exactly one unit for a job.
  *
- * Ordering: the batch expiring soonest is used first, and a batch that is not
+ * Ordering: reset credits first (docs/CREDIT_RESET.md) — they carry no date
+ * but end at the next reset, whenever an operator runs it, so holding them
+ * back behind paid credits would let a reset wipe free credits the customer
+ * could have spent instead of their own. Then the batch expiring soonest, and a batch that is not
  * yet effective is never borrowed from — §6.2 forbids drawing on a future
  * billing period. Idempotent per job via the generated-column unique key on
  * ledger_entries.
@@ -253,7 +256,7 @@ export async function reserveUnit(
         AND effective_from <= UTC_TIMESTAMP(3)
         AND (expires_at IS NULL OR expires_at > UTC_TIMESTAMP(3))
         AND granted_units - reserved_units - consumed_units >= ?
-      ORDER BY expires_at IS NULL, expires_at, created_at
+      ORDER BY source = 'credit_reset' DESC, expires_at IS NULL, expires_at, created_at
       LIMIT 1
       FOR UPDATE`,
     [params.userId, units],

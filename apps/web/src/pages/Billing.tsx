@@ -182,12 +182,18 @@ export default function Billing() {
                             ? t('bill.src.compensation')
                             : b.source === 'promo_trial'
                               ? t('bill.src.trial')
-                              : t('bill.src.adjust')}
+                              : b.source === 'credit_reset'
+                                ? t('bill.src.reset')
+                                : t('bill.src.adjust')}
                     </td>
                     <td className="num">{b.grantedUnits}</td>
                     <td className="num">{b.availableUnits}</td>
                     <td className="small muted">
-                      {b.expiresAt ? formatJst(b.expiresAt, false) : t('bill.noExpiry')}
+                      {b.expiresAt
+                        ? formatJst(b.expiresAt, false)
+                        : b.source === 'credit_reset'
+                          ? t('bill.resetExpiry')
+                          : t('bill.noExpiry')}
                     </td>
                   </tr>
                 ))}
