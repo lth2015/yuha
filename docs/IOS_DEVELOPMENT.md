@@ -1,5 +1,11 @@
 # iOS PR-A build and handoff
 
+> **Status at the 2026-10-27 release freeze:** the iOS app is the PR-A
+> anonymous preview and stays so in this release. Sign-in and library (PR-B),
+> the native player (PR-C), StoreKit (PR-D) and App Store submission (PR-E)
+> are not started. The freeze pass is recorded in
+> [IOS_VALIDATION.md](IOS_VALIDATION.md#2026-10-27-release-freeze-pass-封版).
+
 See [architecture/route audit](IOS_ARCHITECTURE_AUDIT.md) and
 [planning PR #23](https://github.com/lth2015/yuha/pull/23). This is an anonymous
 engineering preview, not an App Store release. Login and private-library tabs
