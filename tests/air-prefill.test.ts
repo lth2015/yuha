@@ -24,7 +24,7 @@ import { AIR_ARCS, AIR_SPACES, AIR_TONES, AIR_VOICES, ENERGY_LEVELS, Mood, PROMP
 import { songUrl } from '../apps/air/src/engine/prefill.js';
 import type { Card } from '../apps/air/src/engine/describe.js';
 import { AIR_ENERGY_LEVELS } from '../apps/air/src/engine/describe.js';
-import { airPrefillPlan } from '../apps/web/src/lib/air-prefill.js';
+import { airPrefillPlan, withDraftedLyrics } from '../apps/web/src/lib/air-prefill.js';
 import { textIn } from '../apps/web/src/lib/i18n.js';
 
 const blank = { zh: '', ja: '', en: '' };
@@ -184,5 +184,21 @@ describe('the draft /create makes of it', () => {
 
   it('ignores a tampered link whole and says so', () => {
     expect(airPrefillPlan('2-calm-slow-mellow-soft-wide-rise-sung-<b>', empty, say('zh'))).toEqual({ kind: 'invalid' });
+  });
+});
+
+describe('lyrics written ahead, arriving after the page', () => {
+  const sung = { instrumental: false, lyrics: '', lyricsBy: 'ai' as const, prompt: 'x' };
+  const LYRICS = '[verse]\n晚风吹过湖面';
+
+  it('go into the lyrics box as the creator’s own, so generation sings them as written', () => {
+    expect(withDraftedLyrics(sung, LYRICS)).toEqual({ ...sung, lyrics: LYRICS, lyricsBy: 'me' });
+  });
+
+  it('never land on an instrumental, or over lyrics the creator started meanwhile', () => {
+    const inst = { ...sung, instrumental: true };
+    expect(withDraftedLyrics(inst, LYRICS)).toBe(inst);
+    const typing = { ...sung, lyrics: '我自己写的第一句', lyricsBy: 'me' as const };
+    expect(withDraftedLyrics(typing, LYRICS)).toBe(typing);
   });
 });

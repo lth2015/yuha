@@ -192,6 +192,22 @@ that did not happen (GEN-12). Cancelling before submission releases the credit.
 `availableUnits`, `reservedUnits`, `costOfNextGeneration` — what UI-03 shows
 before submission.
 
+### `POST /v1/lyrics/draft` → `200`
+Lyrics written before generation, for the creator to read and edit: /create
+calls it when a sung sketch arrives from Air composition. Body: `prompt`
+(required), `styles`, `durationSeconds` (as in `POST /v1/generations`).
+Returns `{ lyrics, remaining }`.
+
+No credit pays for it, so each account gets `LYRIC_DRAFTS_PER_DAY` (default 10)
+in any 24 hours; the next is `429 RATE_LIMITED`. The count is race-safe and is
+all that is stored (`lyric_drafts` has no text column). The prompt is screened
+like a generation prompt (`422 PROMPT_BLOCKED`, not counted); the daily upstream
+budget applies (`429 BUDGET_EXCEEDED`). Once the model is called the draft
+counts whatever comes back, because it was paid for: a model failure is
+`503 UPSTREAM_UNAVAILABLE`, and a refusal, or lyrics the lyrics screen blocks,
+is `422 UPSTREAM_REJECTED`. Every call is a `provider_cost_events` row with no
+job and `usage_data.purpose = "lyric_draft"`.
+
 ---
 
 ## Tracks

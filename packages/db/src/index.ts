@@ -15,3 +15,4 @@ export * from './stablecoin.js';
 export * from './deletions.js';
 export * from './admin-stats.js';
 export * from './admin-lists.js';
+export * from './lyric-drafts.js';

@@ -87,3 +87,31 @@ payment setting, real transaction, server ledger or database schema was changed.
 
 Rollback is a revert of the implementation PR; existing backend and Web payment
 configuration require no migration or operational rollback.
+
+## 2026-10-27 release freeze pass (封版)
+
+The product owner froze the project for release on 2026-10-27. The iOS app
+stays at PR-A, the anonymous preview above; this pass checks that the day's
+Web changes reached it correctly and break none of its boundaries. It was run
+in Chromium against `dist-ios` from `pnpm ios:build --environment production`,
+with the app's `https://yuha.studio` requests answered by a local demo API.
+It is browser evidence, not a native screenshot or device test.
+
+- 360, 390 and 430 px with touch, in zh, ja and en: no element wider than the
+  screen outside a horizontal scroller, no page errors.
+- What changed on the Web that day, as the preview shows it: style tags in the
+  reader's language (鼓打贝斯 / ドラムンベース / drum & bass); the showcase's
+  arrows hidden on a touch screen (`hover: none`, computed `display: none`),
+  the fade and the swipe remaining; the Air composition entry absent, as the
+  preview ships no `/air`.
+- Tap targets: the header logo and the footer's legal link were 32 and 22 px
+  tall, under the 44 pt the rest of the preview keeps. Fixed in `ios.css`;
+  every link and button on Home now measures at least 44 px.
+- Signed out, pressing generate goes to the sign-in placeholder; the library,
+  sign-in and legal routes render. Requests made across all of that: GET
+  `/v1/runtime`, `/v1/explore`, `/v1/products`, `/v1/legal/business-disclosure`
+  only, and no write.
+- The macOS CI job (unsigned simulator build) passed on every PR merged that
+  day (#50–#53).
+
+Still pending, unchanged: everything listed under "Unverified and handoff".

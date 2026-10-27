@@ -13,11 +13,12 @@ import {
   type VoiceChoice,
 } from '@yuha/contracts';
 import { ApiError, apiFetch, newIdempotencyKey } from '../lib/api';
+import type { LyricDraftResponse } from '@yuha/contracts';
 import { clampToCodePoints, codePointLength } from '../lib/codepoints';
 import { FIELDS_IN_MORE_PANEL, focusFieldFor } from '../lib/messages';
 import { useI18n } from '../lib/i18n';
 import { STYLE_PRESETS, styleLabel } from '../lib/style-label';
-import { airPrefillPlan } from '../lib/air-prefill';
+import { airPrefillPlan, withDraftedLyrics } from '../lib/air-prefill';
 import { JOB_PHASES as PHASE_STEPS, fractionOfPhase } from '../lib/phases';
 import { Score } from '../components/Score';
 import { useSession } from '../lib/session';
@@ -238,6 +239,15 @@ export default function Create() {
   /** The draft the sketch replaced, held so the banner can give it back. Read before the save below overwrites it. */
   const [setAside, setSetAside] = useState<Draft | null>(() => (air.kind === 'fill' && air.setAside ? readStoredDraft() : null));
   /**
+   * A sung sketch asks for its lyrics to be written now (POST /v1/lyrics/draft),
+   * so they are in the box to read and edit before anything is generated. When
+   * that cannot happen (the day's drafts are used, or the model fails), the
+   * lyrics are still written from the description at generation, as before.
+   */
+  const [airLyrics, setAirLyrics] = useState<'writing' | 'done' | 'limit' | 'failed' | null>(() =>
+    air.kind === 'fill' && !air.fields.instrumental ? 'writing' : null,
+  );
+  /**
    * Hydrated lazily — see the note on the home composer. Loading in one effect
    * while saving in another keyed on the value means the save runs on mount
    * holding DEFAULT_DRAFT and writes it over the stored draft. Here it was
@@ -325,6 +335,31 @@ export default function Create() {
   }, [draft, editTrackId, editSource]);
 
   const patch = useCallback((p: Partial<Draft>) => setDraft((d) => ({ ...d, ...p })), []);
+
+  // Once per arrival: a ref, because development mode runs effects twice.
+  const lyricsAsked = useRef(false);
+  /** Set when the creator restores the draft the sketch replaced: lyrics arriving after that are not theirs. */
+  const lyricsDropped = useRef(false);
+  useEffect(() => {
+    if (air.kind !== 'fill' || air.fields.instrumental || lyricsAsked.current) return;
+    lyricsAsked.current = true;
+    apiFetch<LyricDraftResponse>('/v1/lyrics/draft', {
+      method: 'POST',
+      body: {
+        prompt: air.fields.prompt,
+        styles: draft.styles,
+        durationSeconds: draft.durationSeconds,
+      },
+    })
+      .then((res) => {
+        if (lyricsDropped.current) return;
+        setDraft((d) => withDraftedLyrics(d, res.lyrics));
+        setAirLyrics('done');
+      })
+      .catch((err) => setAirLyrics(err instanceof ApiError && err.code === 'RATE_LIMITED' ? 'limit' : 'failed'));
+    // Mount only: `air` and the draft's first values are what this arrival asked for.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // The sketch is in the draft (or declined) now: drop it from the address, so a
   // reload cannot fill the form over the creator's edits.
@@ -876,7 +911,19 @@ export default function Create() {
           <div>
             <strong>{t(airNotice === 'invalid' ? 'create.air.invalid' : 'create.air.banner')}</strong>
             {airNotice === 'filled' && air.kind === 'fill' && (
-              <p className="studio__air-note">{t(air.fields.instrumental ? 'create.air.instNote' : 'create.air.sungNote')}</p>
+              <p className="studio__air-note" aria-live="polite">
+                {t(
+                  air.fields.instrumental
+                    ? 'create.air.instNote'
+                    : airLyrics === 'done'
+                      ? 'create.air.lyricsDone'
+                      : airLyrics === 'limit'
+                        ? 'create.air.lyricsLimit'
+                        : airLyrics === 'failed'
+                          ? 'create.air.lyricsFailed'
+                          : 'create.air.lyricsWriting',
+                )}
+              </p>
             )}
             {airNotice === 'filled' && setAside && (
               <div className="studio__air-choice">
@@ -885,6 +932,7 @@ export default function Create() {
                   type="button"
                   className="btn btn--sm"
                   onClick={() => {
+                    lyricsDropped.current = true;
                     setDraft(setAside);
                     setSetAside(null);
                     setAirNotice(null);

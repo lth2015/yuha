@@ -54,6 +54,11 @@ cp .env.example .env   # 然后按需填写下表中的值
 
 启用：`TEXT_ADAPTER=tokenstars`。GPT 负责「AI 再创作」改写与歌词；不填则用本地规则（demo 可用）。
 
+**提前写词**（空气作曲选了有人声、跳到创作页时，`POST /v1/lyrics/draft`）用同一个 `TOKENSTARS_MODEL_ID`，
+为省钱做成：纯文本输出（不走 JSON、没有修复重试）、只调一次、`max_tokens` 按歌曲时长算（最多 1600）。
+这一步不扣用户额度，所以每个账号 24 小时内最多 `LYRIC_DRAFTS_PER_DAY` 次（默认 `10`），
+每次都记进 `provider_cost_events`（`usage_data.purpose = "lyric_draft"`），也受 `DAILY_BUDGET_MINOR` 限制。
+
 ### B4. 歌词词级对齐（可选）
 
 `ALIGNMENT_ADAPTER=estimated`（默认，界面如实标注「估算同步」）。接入真实对齐模型时切 `http` 并填 `ALIGNMENT_*` 字段映射（`LINES_FIELD / LINE_TEXT_FIELD / LINE_START_FIELD / LINE_END_FIELD` 为必填）。

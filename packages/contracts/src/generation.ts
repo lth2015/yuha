@@ -146,6 +146,25 @@ export const styleTagSchema = z
   .min(1)
   .max(STYLE_TAG_MAX_LENGTH, `each style tag is at most ${STYLE_TAG_MAX_LENGTH} characters`);
 
+/**
+ * POST /v1/lyrics/draft — lyrics written before generation, for the creator to
+ * read and edit (Air composition → /create). No credit; a cap per account per
+ * 24 hours instead (LYRIC_DRAFTS_PER_DAY).
+ */
+export const lyricDraftRequest = z.object({
+  prompt: promptSchema.refine((v) => v.length > 0, { message: 'prompt is required' }),
+  styles: z.array(styleTagSchema).max(MAX_STYLE_TAGS).default([]),
+  /** `auto` writes for the default length; the song is then fitted to the lyrics. */
+  durationSeconds: z.union([songDurationSchema, z.literal('auto')]).default(120),
+});
+export type LyricDraftRequest = z.infer<typeof lyricDraftRequest>;
+
+export interface LyricDraftResponse {
+  lyrics: string;
+  /** Drafts this account may still ask for in the current 24 hours. */
+  remaining: number;
+}
+
 export const createGenerationRequest = z
   .object({
     projectId: z.string().uuid().optional(),
