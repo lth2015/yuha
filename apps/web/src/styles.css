@@ -2198,44 +2198,39 @@ textarea.is-full { border-color: var(--danger); }
  * up with the button it belongs to rather than with the page heading.
  */
 /*
- * Air composition's door on the home page: a pale landscape card, the same
- * hills, sun and paper as the 春江 scene it opens onto, kept faint so it sits
- * under the composer rather than competing with it.
+ * Air composition's door on the home page: the words and the button on one
+ * side, a small framed picture of the page it opens onto on the other (on a
+ * phone, the picture above). The picture keeps its own aspect and is never
+ * laid under the text: a stretched hill band behind a paragraph read as
+ * overlapping text.
  */
 .air-entry {
-  position: relative;
-  overflow: hidden;
-  display: flex;
-  flex-wrap: wrap;
-  align-items: flex-end;
-  justify-content: space-between;
-  gap: var(--s4) var(--s6);
+  display: grid;
+  /* The picture stays a vignette: it never grows past 400px, however wide the card. */
+  grid-template-columns: minmax(0, 1fr) minmax(220px, min(36%, 400px));
+  align-items: center;
+  gap: var(--s6) var(--s8);
   margin: var(--s12) 0 0;
-  padding: var(--s8) var(--s6) var(--s6);
+  padding: var(--s6);
   border: 1px solid var(--line);
   border-radius: var(--r-card);
-  background: linear-gradient(180deg, var(--surface) 0%, #f7f1ea 100%);
+  background: var(--surface);
 }
-.air-entry__hills { position: absolute; inset: auto 0 0 0; width: 100%; height: 45%; pointer-events: none; }
-.air-entry__hills path:first-child { fill: rgb(123 129 119 / 10%); }
-.air-entry__hills path:last-child { fill: rgb(97 102 93 / 12%); }
-.air-entry__sun {
-  position: absolute;
-  /* Low on the right, rising out of the hills, where the button row leaves room. */
-  bottom: 12%;
-  right: 10%;
-  width: 46px;
-  height: 46px;
-  border-radius: 50%;
-  background: radial-gradient(circle, rgb(255 210 190 / 90%) 0 60%, rgb(255 210 190 / 0%) 72%);
-  box-shadow: 0 0 60px 30px rgb(244 107 69 / 8%);
-  pointer-events: none;
-}
-.air-entry__text { position: relative; flex: 1 1 280px; max-width: 34rem; }
+.air-entry__text { min-width: 0; max-width: 34rem; }
 .air-entry__kicker { display: block; margin-bottom: var(--s1); font-size: var(--t-caption); color: var(--link); letter-spacing: 0.04em; }
 .air-entry h2 { margin: 0 0 var(--s2); font-size: var(--t-heading); font-weight: 600; }
-.air-entry p { margin: 0; color: var(--muted); }
-.air-entry__go { position: relative; flex: none; }
+.air-entry p { margin: 0 0 var(--s4); color: var(--muted); }
+.air-entry__scene {
+  display: block;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  border-radius: calc(var(--r-card) - 8px);
+  border: 1px solid var(--line);
+}
+@media (max-width: 640px) {
+  .air-entry { grid-template-columns: 1fr; }
+  .air-entry__scene { order: -1; aspect-ratio: 2 / 1; }
+}
 
 /*
  * The showcase under the hero.

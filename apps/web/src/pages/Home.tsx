@@ -28,6 +28,79 @@ const SIMPLE_DURATION_SECONDS = 120;
  * Visitors can write first and sign in at submit; the draft survives the
  * round trip.
  */
+/**
+ * A small framed picture of the page the card opens onto: the same pale hills,
+ * still lake, distant sun in the east, koi and drifting petal (apps/air). Drawn
+ * at a fixed aspect and cropped, never stretched, and kept beside the words
+ * rather than under them, so nothing ever reads as overlapping text.
+ */
+function AirVignette() {
+  return (
+    <svg className="air-entry__scene" viewBox="0 0 320 180" preserveAspectRatio="xMidYMid slice" aria-hidden="true" focusable="false">
+      <defs>
+        <linearGradient id="air-sky" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stopColor="#fbf8f3" />
+          <stop offset="1" stopColor="#f6eee4" />
+        </linearGradient>
+        <linearGradient id="air-water" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stopColor="#eef0e9" />
+          <stop offset="1" stopColor="#f6f6f1" />
+        </linearGradient>
+        <radialGradient id="air-sun-halo">
+          <stop offset="0" stopColor="#f46b45" stopOpacity="0.16" />
+          <stop offset="1" stopColor="#f46b45" stopOpacity="0" />
+        </radialGradient>
+        <linearGradient id="air-haze" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stopColor="#f6f5f0" stopOpacity="0" />
+          <stop offset="0.65" stopColor="#f4f3ee" stopOpacity="0.9" />
+          <stop offset="1" stopColor="#eef0e9" stopOpacity="0" />
+        </linearGradient>
+      </defs>
+      <rect width="320" height="112" fill="url(#air-sky)" />
+      <circle cx="78" cy="74" r="40" fill="url(#air-sun-halo)" />
+      <circle cx="78" cy="74" r="12" fill="#ffd3bf" />
+      <path d="M0 86 C40 70 70 74 104 80 S170 62 214 72 S280 82 320 74 V112 H0Z" fill="#7b8177" opacity="0.12" />
+      <path d="M0 96 C46 86 92 92 136 94 S220 82 262 90 S304 96 320 92 V112 H0Z" fill="#6e7870" opacity="0.15" />
+      <path d="M0 104 C60 98 120 103 176 102 S270 97 320 101 V112 H0Z" fill="#61665d" opacity="0.12" />
+      <rect y="112" width="320" height="68" fill="url(#air-water)" />
+      {/* The shore dissolves into haze on both sides of the waterline. */}
+      <rect y="94" width="320" height="26" fill="url(#air-haze)" />
+      <g fill="#f46b45">
+        <rect x="71" y="116" width="13" height="1" rx="0.5" opacity="0.16" />
+        <rect x="66" y="121.5" width="21" height="1" rx="0.5" opacity="0.12" />
+        <rect x="74" y="127" width="9" height="1" rx="0.5" opacity="0.09" />
+        <rect x="68" y="133" width="15" height="1" rx="0.5" opacity="0.06" />
+      </g>
+      <g fill="#7b8177" opacity="0.14">
+        <rect x="150" y="124" width="70" height="0.8" rx="0.4" />
+        <rect x="24" y="146" width="90" height="0.8" rx="0.4" />
+        <rect x="190" y="166" width="100" height="0.8" rx="0.4" />
+      </g>
+      {/* Two koi, seen from above: white with petal markings, and warm gold. */}
+      <g transform="translate(196 141) rotate(-16)">
+        <path d="M0 0 C-4 -1.5 -8 -5.5 -11 -5 C-9 -2 -9 2 -11 5 C-8 5.5 -4 1.5 0 0 Z" fill="#fbf7f2" opacity="0.85" />
+        <path d="M0 0 C1 -4.5 9 -6 17 -5 C23 -4.2 27 -2 27.6 0 C27 2 23 4.2 17 5 C9 6 1 4.5 0 0 Z" fill="#fdfaf6" stroke="#6e766e" strokeOpacity="0.22" strokeWidth="0.45" />
+        <ellipse cx="18.5" cy="-1" rx="4.6" ry="2.4" fill="#f06842" opacity="0.78" />
+        <ellipse cx="9.5" cy="1" rx="3.6" ry="1.9" fill="#f06842" opacity="0.62" />
+        <circle cx="25" cy="-1.7" r="0.45" fill="#2c302b" opacity="0.6" />
+        <circle cx="25" cy="1.7" r="0.45" fill="#2c302b" opacity="0.6" />
+      </g>
+      <g transform="translate(248 161) rotate(166) scale(0.85)">
+        <path d="M0 0 C-4 -1.5 -8 -5.5 -11 -5 C-9 -2 -9 2 -11 5 C-8 5.5 -4 1.5 0 0 Z" fill="#f7c493" opacity="0.8" />
+        <path d="M0 0 C1 -4.5 9 -6 17 -5 C23 -4.2 27 -2 27.6 0 C27 2 23 4.2 17 5 C9 6 1 4.5 0 0 Z" fill="#f4ab72" />
+        <circle cx="25" cy="-1.7" r="0.5" fill="#2c302b" opacity="0.55" />
+        <circle cx="25" cy="1.7" r="0.5" fill="#2c302b" opacity="0.55" />
+      </g>
+      {/* A petal, the YUHA mark, and two far birds. */}
+      <g transform="translate(232 34) rotate(24) scale(0.12)" fill="#f46b45" opacity="0.3">
+        <path d="M81 12C83 41 62 71 27 85C31 70 43 55 54 47C66 37 75 24 81 12Z" />
+        <path d="M14 24C37 23 53 34 54 49C40 47 22 38 14 24Z" />
+      </g>
+      <path d="M176 44 q3 -2 5 0 q2 -2 5 0 M190 38 q2 -1.5 4 0 q1.5 -1.5 4 0" fill="none" stroke="#61665d" strokeOpacity="0.35" strokeWidth="0.7" strokeLinecap="round" />
+    </svg>
+  );
+}
+
 /** The iOS shell has no /air page (it ships apps/web only). */
 const IOS_BUILD = import.meta.env['VITE_APP_PLATFORM'] === 'ios';
 
@@ -428,19 +501,15 @@ export default function Home() {
           link, not a router one. Not in the iOS build, which does not carry it. */}
       {!IOS_BUILD && (
         <section className="air-entry" aria-labelledby="air-entry-heading">
-          <svg className="air-entry__hills" viewBox="0 0 400 80" preserveAspectRatio="none" aria-hidden="true">
-            <path d="M0 52 C60 30 110 38 160 46 S260 22 320 36 S380 44 400 40 V80 H0Z" />
-            <path d="M0 62 C70 48 130 56 190 58 S300 44 360 52 S390 56 400 54 V80 H0Z" />
-          </svg>
-          <span className="air-entry__sun" aria-hidden="true" />
           <div className="air-entry__text">
             <span className="air-entry__kicker">{t('home.air.kicker')}</span>
             <h2 id="air-entry-heading">{t('home.air.title')}</h2>
             <p>{t('home.air.body')}</p>
+            <a className="btn btn--primary air-entry__go" href="/air/index.html">
+              {t('home.air.cta')}
+            </a>
           </div>
-          <a className="btn btn--primary air-entry__go" href="/air/index.html">
-            {t('home.air.cta')}
-          </a>
+          <AirVignette />
         </section>
       )}
 
