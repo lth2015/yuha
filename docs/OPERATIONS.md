@@ -269,6 +269,15 @@ operator, the reason and the expiry for each one.
 
 ---
 
+## 6b. Credit reset
+
+An admin tops every active account up to 5 and gives accounts that paid since
+the previous reset 5 more, from the console's 运营 tab, whenever they decide.
+The previous reset's credits expire at that moment; reset credits are spent
+first. The card shows exactly what a reset will give before the button, and
+offers 继续 if a pod roll interrupted one. Rules and implementation:
+[CREDIT_RESET.md](CREDIT_RESET.md).
+
 ## 7. Rights complaints
 
 1. A complaint arrives at `POST /v1/rights-cases` — no account, no payment.

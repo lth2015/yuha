@@ -4,6 +4,7 @@ import { apiFetch } from '../lib/api';
 import { useI18n } from '../lib/i18n';
 import { formatMoney, formatJst, useSession } from '../lib/session';
 import { NetxSwitch } from '../components/admin/NetxSwitch';
+import { CreditReset } from '../components/admin/CreditReset';
 import { Badge, ErrorNotice, Loading } from '../components/common';
 import { CustomerConsole } from '../components/CustomerConsole';
 import { HeldOrderConsole } from '../components/HeldOrderConsole';
@@ -179,6 +180,7 @@ function OverviewPanel({ part }: { part: 'ops' | 'review' }) {
         <Badge tone={isAdmin ? 'badge--accent' : ''}>{me?.role}</Badge>
       </div>
       <NetxSwitch isAdmin={isAdmin} />
+      {isAdmin && <CreditReset />}
       <section className="stack">
         <h2 style={{ fontSize: 18 }}>{t('admin.ops.h2')}</h2>
         <div className="grid">

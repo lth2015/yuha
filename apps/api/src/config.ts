@@ -537,6 +537,10 @@ const envSchema = z.object({
    * must be between 1 and 0 days".
    */
   ADMIN_GRANT_VALIDITY_DAYS: int(90),
+  /** Credit reset (docs/CREDIT_RESET.md): every active account is topped up to this, counting all it holds. */
+  CREDIT_RESET_FLOOR: int(5),
+  /** Credit reset: given on top to accounts that paid since the previous reset. */
+  CREDIT_RESET_PAID_BONUS: int(5),
   /**
    * Most units one operator may compensate in a rolling day. 0 means no daily
    * limit, as above.

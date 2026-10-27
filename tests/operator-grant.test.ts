@@ -14,7 +14,7 @@
  * feature: a credit is a generation and a generation is provider cost, so this
  * screen spends money.
  */
-import { readFileSync } from 'node:fs';
+import { readFileSync, readdirSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { EntitlementSource } from '@yuha/contracts';
@@ -528,7 +528,18 @@ describe('the gift source is one list, in three places', () => {
      * while the third does not — and an `operator_gift` the CHECK rejects
      * fails at the INSERT, in production, on the one action that spends money.
      */
-    const migration = read('packages/db/src/migrations/0018_an_operator_can_give_credits_away.sql');
+    /*
+     * The LATEST migration that rewrites the CHECK, not 0018 by name: 0023
+     * added credit_reset, and a test pinned to 0018 would have compared the
+     * enum with a list the database no longer has.
+     */
+    const dir = 'packages/db/src/migrations';
+    const latest = readdirSync(resolve(root, dir))
+      .filter((f) => f.endsWith('.sql'))
+      .sort()
+      .filter((f) => /ADD CONSTRAINT entitlement_batches_source_chk/.test(read(`${dir}/${f}`)))
+      .pop()!;
+    const migration = read(`${dir}/${latest}`);
     /*
      * Only the CHECK's own list, not every quoted string in the file. Taken
      * over the whole text this would also pick up anything quoted in the
@@ -539,7 +550,7 @@ describe('the gift source is one list, in three places', () => {
     // file: the comment block above it is prose that could easily contain the
     // phrase, and then a seventh value added to the comment alone would pass.
     const list = /ADD CONSTRAINT[\s\S]*?source IN\s*\(([^)]*)\)/.exec(migration)?.[1];
-    expect(list, 'migration 0018 has no `source IN (...)` list').toBeTruthy();
+    expect(list, `migration ${latest} has no source IN (...) list`).toBeTruthy();
     const inMigration = [...list!.matchAll(/'([a-z_]+)'/g)].map((m) => m[1]!);
     expect([...new Set(inMigration)].sort()).toEqual([...EntitlementSource.options].sort());
 
