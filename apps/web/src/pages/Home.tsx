@@ -29,74 +29,42 @@ const SIMPLE_DURATION_SECONDS = 120;
  * round trip.
  */
 /**
- * A small framed picture of the page the card opens onto: the same pale hills,
- * still lake, distant sun in the east, koi and drifting petal (apps/air). Drawn
- * at a fixed aspect and cropped, never stretched, and kept beside the words
- * rather than under them, so nothing ever reads as overlapping text.
+ * The card's background: distant hills under a warm sun, the air page's own
+ * landscape reduced to its two essentials and fading in from the left, so
+ * the card reads as one piece of paper with the scene breathing through it
+ * rather than a picture placed on it. Drawn at a fixed aspect and cropped
+ * from the bottom right, never stretched.
  */
 function AirVignette() {
   return (
-    <svg className="air-entry__scene" viewBox="0 0 320 180" preserveAspectRatio="xMidYMid slice" aria-hidden="true" focusable="false">
+    <svg className="air-entry__scene" viewBox="0 0 400 200" preserveAspectRatio="xMaxYMax slice" aria-hidden="true" focusable="false">
       <defs>
-        <linearGradient id="air-sky" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0" stopColor="#fbf8f3" />
-          <stop offset="1" stopColor="#f6eee4" />
-        </linearGradient>
-        <linearGradient id="air-water" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0" stopColor="#eef0e9" />
-          <stop offset="1" stopColor="#f6f6f1" />
-        </linearGradient>
-        <radialGradient id="air-sun-halo">
-          <stop offset="0" stopColor="#f46b45" stopOpacity="0.16" />
-          <stop offset="1" stopColor="#f46b45" stopOpacity="0" />
+        {/* The sun's warmth washes the whole sky, not just its disc. */}
+        <radialGradient id="air-warmth" cx="300" cy="132" r="230" gradientUnits="userSpaceOnUse">
+          <stop offset="0" stopColor="#f46b45" stopOpacity="0.2" />
+          <stop offset="0.35" stopColor="#f6a07a" stopOpacity="0.1" />
+          <stop offset="1" stopColor="#f6f5f0" stopOpacity="0" />
         </radialGradient>
-        <linearGradient id="air-haze" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0" stopColor="#f6f5f0" stopOpacity="0" />
-          <stop offset="0.65" stopColor="#f4f3ee" stopOpacity="0.9" />
-          <stop offset="1" stopColor="#eef0e9" stopOpacity="0" />
+        <radialGradient id="air-sun" cx="300" cy="132" r="15" gradientUnits="userSpaceOnUse">
+          <stop offset="0" stopColor="#ffdcca" />
+          <stop offset="0.8" stopColor="#ffc9b0" />
+          <stop offset="1" stopColor="#ffc9b0" stopOpacity="0" />
+        </radialGradient>
+        <linearGradient id="air-mist" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stopColor="#fdfbf8" stopOpacity="0" />
+          <stop offset="0.7" stopColor="#fdfbf8" stopOpacity="0.85" />
+          <stop offset="1" stopColor="#fdfbf8" stopOpacity="1" />
         </linearGradient>
       </defs>
-      <rect width="320" height="112" fill="url(#air-sky)" />
-      <circle cx="78" cy="74" r="40" fill="url(#air-sun-halo)" />
-      <circle cx="78" cy="74" r="12" fill="#ffd3bf" />
-      <path d="M0 86 C40 70 70 74 104 80 S170 62 214 72 S280 82 320 74 V112 H0Z" fill="#7b8177" opacity="0.12" />
-      <path d="M0 96 C46 86 92 92 136 94 S220 82 262 90 S304 96 320 92 V112 H0Z" fill="#6e7870" opacity="0.15" />
-      <path d="M0 104 C60 98 120 103 176 102 S270 97 320 101 V112 H0Z" fill="#61665d" opacity="0.12" />
-      <rect y="112" width="320" height="68" fill="url(#air-water)" />
-      {/* The shore dissolves into haze on both sides of the waterline. */}
-      <rect y="94" width="320" height="26" fill="url(#air-haze)" />
-      <g fill="#f46b45">
-        <rect x="71" y="116" width="13" height="1" rx="0.5" opacity="0.16" />
-        <rect x="66" y="121.5" width="21" height="1" rx="0.5" opacity="0.12" />
-        <rect x="74" y="127" width="9" height="1" rx="0.5" opacity="0.09" />
-        <rect x="68" y="133" width="15" height="1" rx="0.5" opacity="0.06" />
-      </g>
-      <g fill="#7b8177" opacity="0.14">
-        <rect x="150" y="124" width="70" height="0.8" rx="0.4" />
-        <rect x="24" y="146" width="90" height="0.8" rx="0.4" />
-        <rect x="190" y="166" width="100" height="0.8" rx="0.4" />
-      </g>
-      {/* Two koi, seen from above: white with petal markings, and warm gold. */}
-      <g transform="translate(196 141) rotate(-16)">
-        <path d="M0 0 C-4 -1.5 -8 -5.5 -11 -5 C-9 -2 -9 2 -11 5 C-8 5.5 -4 1.5 0 0 Z" fill="#fbf7f2" opacity="0.85" />
-        <path d="M0 0 C1 -4.5 9 -6 17 -5 C23 -4.2 27 -2 27.6 0 C27 2 23 4.2 17 5 C9 6 1 4.5 0 0 Z" fill="#fdfaf6" stroke="#6e766e" strokeOpacity="0.22" strokeWidth="0.45" />
-        <ellipse cx="18.5" cy="-1" rx="4.6" ry="2.4" fill="#f06842" opacity="0.78" />
-        <ellipse cx="9.5" cy="1" rx="3.6" ry="1.9" fill="#f06842" opacity="0.62" />
-        <circle cx="25" cy="-1.7" r="0.45" fill="#2c302b" opacity="0.6" />
-        <circle cx="25" cy="1.7" r="0.45" fill="#2c302b" opacity="0.6" />
-      </g>
-      <g transform="translate(248 161) rotate(166) scale(0.85)">
-        <path d="M0 0 C-4 -1.5 -8 -5.5 -11 -5 C-9 -2 -9 2 -11 5 C-8 5.5 -4 1.5 0 0 Z" fill="#f7c493" opacity="0.8" />
-        <path d="M0 0 C1 -4.5 9 -6 17 -5 C23 -4.2 27 -2 27.6 0 C27 2 23 4.2 17 5 C9 6 1 4.5 0 0 Z" fill="#f4ab72" />
-        <circle cx="25" cy="-1.7" r="0.5" fill="#2c302b" opacity="0.55" />
-        <circle cx="25" cy="1.7" r="0.5" fill="#2c302b" opacity="0.55" />
-      </g>
-      {/* A petal, the YUHA mark, and two far birds. */}
-      <g transform="translate(232 34) rotate(24) scale(0.12)" fill="#f46b45" opacity="0.3">
-        <path d="M81 12C83 41 62 71 27 85C31 70 43 55 54 47C66 37 75 24 81 12Z" />
-        <path d="M14 24C37 23 53 34 54 49C40 47 22 38 14 24Z" />
-      </g>
-      <path d="M176 44 q3 -2 5 0 q2 -2 5 0 M190 38 q2 -1.5 4 0 q1.5 -1.5 4 0" fill="none" stroke="#61665d" strokeOpacity="0.35" strokeWidth="0.7" strokeLinecap="round" />
+      <rect width="400" height="200" fill="url(#air-warmth)" />
+      <circle cx="300" cy="132" r="15" fill="url(#air-sun)" />
+      {/* Three ranges, farthest palest, the nearest settling into mist. */}
+      {/* Warm ink, not grey: the hills take a little of the sun's colour. */}
+      <path d="M0 150 C50 134 92 138 140 144 S220 124 280 136 S360 148 400 138 V200 H0Z" fill="#8c8478" opacity="0.1" />
+      <path d="M0 164 C60 152 110 158 170 160 S270 146 330 156 S380 164 400 158 V200 H0Z" fill="#7f7a70" opacity="0.11" />
+      <path d="M0 178 C70 172 140 177 210 175 S320 168 400 174 V200 H0Z" fill="#76726a" opacity="0.1" />
+      <rect y="150" width="400" height="50" fill="url(#air-mist)" />
+      <path d="M246 124 q3 -2 5 0 q2 -2 5 0 M258 119 q2 -1.5 4 0 q1.5 -1.5 4 0" fill="none" stroke="#61665d" strokeOpacity="0.32" strokeWidth="0.7" strokeLinecap="round" />
     </svg>
   );
 }

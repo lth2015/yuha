@@ -2198,38 +2198,47 @@ textarea.is-full { border-color: var(--danger); }
  * up with the button it belongs to rather than with the page heading.
  */
 /*
- * Air composition's door on the home page: the words and the button on one
- * side, a small framed picture of the page it opens onto on the other (on a
- * phone, the picture above). The picture keeps its own aspect and is never
- * laid under the text: a stretched hill band behind a paragraph read as
- * overlapping text.
+ * Air composition's door on the home page. Distant hills under a warm sun are
+ * the card's own background, emerging from left to right: the words sit on
+ * clean paper on the left and the landscape grows clearer towards the right,
+ * one piece rather than a picture in a box. On a phone it fades from the top
+ * down instead, into the words below it.
+ *
+ * Never laid at full strength under text: a stretched hill band behind a
+ * paragraph read as overlapping text, and a framed picture read as a box.
  */
 .air-entry {
-  display: grid;
-  /* The picture stays a vignette: it never grows past 400px, however wide the card. */
-  grid-template-columns: minmax(0, 1fr) minmax(220px, min(36%, 400px));
-  align-items: center;
-  gap: var(--s6) var(--s8);
+  position: relative;
+  overflow: hidden;
   margin: var(--s12) 0 0;
-  padding: var(--s6);
+  padding: var(--s8) var(--s6);
   border: 1px solid var(--line);
   border-radius: var(--r-card);
   background: var(--surface);
 }
-.air-entry__text { min-width: 0; max-width: 34rem; }
+.air-entry__scene {
+  position: absolute;
+  inset: 0 0 0 auto;
+  width: 72%;
+  height: 100%;
+  pointer-events: none;
+  -webkit-mask-image: linear-gradient(to right, transparent 0%, rgb(0 0 0 / 45%) 30%, #000 65%);
+  mask-image: linear-gradient(to right, transparent 0%, rgb(0 0 0 / 45%) 30%, #000 65%);
+}
+.air-entry__text { position: relative; max-width: min(34rem, 52%); }
 .air-entry__kicker { display: block; margin-bottom: var(--s1); font-size: var(--t-caption); color: var(--link); letter-spacing: 0.04em; }
 .air-entry h2 { margin: 0 0 var(--s2); font-size: var(--t-heading); font-weight: 600; }
 .air-entry p { margin: 0 0 var(--s4); color: var(--muted); }
-.air-entry__scene {
-  display: block;
-  width: 100%;
-  aspect-ratio: 16 / 9;
-  border-radius: calc(var(--r-card) - 8px);
-  border: 1px solid var(--line);
-}
 @media (max-width: 640px) {
-  .air-entry { grid-template-columns: 1fr; }
-  .air-entry__scene { order: -1; aspect-ratio: 2 / 1; }
+  .air-entry { padding-top: calc(var(--s6) + 36vw); }
+  .air-entry__scene {
+    inset: 0 0 auto 0;
+    width: 100%;
+    height: calc(var(--s6) + 48vw);
+    -webkit-mask-image: linear-gradient(to bottom, #000 0%, #000 55%, transparent 100%);
+    mask-image: linear-gradient(to bottom, #000 0%, #000 55%, transparent 100%);
+  }
+  .air-entry__text { max-width: none; }
 }
 
 /*
