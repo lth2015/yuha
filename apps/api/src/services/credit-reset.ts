@@ -132,21 +132,28 @@ async function runCreditReset(id: string, actorRole: string): Promise<void> {
       await withTxRetry((tx) => resetAccount(reset, userId, tx));
     }
   }
-  await finishCreditReset(id);
-  const done = (await getCreditReset(id))!;
-  await writeAuditLog({
-    actorId: done.actor_id,
-    actorRole,
-    action: 'credit_reset.finished',
-    subjectType: 'credit_reset',
-    subjectId: id,
-    reason: done.reason,
-    after: {
-      usersSeen: done.users_seen,
-      usersTopped: done.users_topped,
-      unitsTopped: done.units_topped,
-      usersBonus: done.users_bonus,
-      unitsBonus: done.units_bonus,
-    },
+  // Done and its audit row in one transaction: a reset is never shown as done
+  // while its finishing record is still missing (CI caught that window).
+  await withTxRetry(async (tx) => {
+    if (!(await finishCreditReset(id, tx))) return;
+    const done = (await getCreditReset(id))!;
+    await writeAuditLog(
+      {
+        actorId: done.actor_id,
+        actorRole,
+        action: 'credit_reset.finished',
+        subjectType: 'credit_reset',
+        subjectId: id,
+        reason: done.reason,
+        after: {
+          usersSeen: done.users_seen,
+          usersTopped: done.users_topped,
+          unitsTopped: done.units_topped,
+          usersBonus: done.users_bonus,
+          unitsBonus: done.units_bonus,
+        },
+      },
+      tx,
+    );
   });
 }

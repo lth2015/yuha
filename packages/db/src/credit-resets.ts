@@ -168,8 +168,12 @@ export async function resetAccount(reset: CreditResetRow, userId: string, tx: Po
   return { topped, bonus };
 }
 
-export async function finishCreditReset(id: string): Promise<void> {
-  await execute(`UPDATE credit_resets SET status = 'done', finished_at = UTC_TIMESTAMP(3) WHERE id = ? AND status = 'running'`, [id]);
+/** Marks a reset done; returns false when it already was (a second runner finished it). */
+export async function finishCreditReset(id: string, tx: PoolConnection): Promise<boolean> {
+  const row = await queryOne<{ status: string }>(`SELECT status FROM credit_resets WHERE id = ? FOR UPDATE`, [id], tx);
+  if (row?.status !== 'running') return false;
+  await execute(`UPDATE credit_resets SET status = 'done', finished_at = UTC_TIMESTAMP(3) WHERE id = ?`, [id], tx);
+  return true;
 }
 
 /**
