@@ -28,6 +28,47 @@ const SIMPLE_DURATION_SECONDS = 120;
  * Visitors can write first and sign in at submit; the draft survives the
  * round trip.
  */
+/**
+ * The card's background: distant hills under a warm sun, the air page's own
+ * landscape reduced to its two essentials and fading in from the left, so
+ * the card reads as one piece of paper with the scene breathing through it
+ * rather than a picture placed on it. Drawn at a fixed aspect and cropped
+ * from the bottom right, never stretched.
+ */
+function AirVignette() {
+  return (
+    <svg className="air-entry__scene" viewBox="0 0 400 200" preserveAspectRatio="xMaxYMax slice" aria-hidden="true" focusable="false">
+      <defs>
+        {/* The sun's warmth washes the whole sky, not just its disc. */}
+        <radialGradient id="air-warmth" cx="300" cy="132" r="230" gradientUnits="userSpaceOnUse">
+          <stop offset="0" stopColor="#f46b45" stopOpacity="0.2" />
+          <stop offset="0.35" stopColor="#f6a07a" stopOpacity="0.1" />
+          <stop offset="1" stopColor="#f6f5f0" stopOpacity="0" />
+        </radialGradient>
+        <radialGradient id="air-sun" cx="300" cy="132" r="15" gradientUnits="userSpaceOnUse">
+          <stop offset="0" stopColor="#ffdcca" />
+          <stop offset="0.8" stopColor="#ffc9b0" />
+          <stop offset="1" stopColor="#ffc9b0" stopOpacity="0" />
+        </radialGradient>
+        <linearGradient id="air-mist" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stopColor="#fdfbf8" stopOpacity="0" />
+          <stop offset="0.7" stopColor="#fdfbf8" stopOpacity="0.85" />
+          <stop offset="1" stopColor="#fdfbf8" stopOpacity="1" />
+        </linearGradient>
+      </defs>
+      <rect width="400" height="200" fill="url(#air-warmth)" />
+      <circle cx="300" cy="132" r="15" fill="url(#air-sun)" />
+      {/* Three ranges, farthest palest, the nearest settling into mist. */}
+      {/* Warm ink, not grey: the hills take a little of the sun's colour. */}
+      <path d="M0 150 C50 134 92 138 140 144 S220 124 280 136 S360 148 400 138 V200 H0Z" fill="#8c8478" opacity="0.1" />
+      <path d="M0 164 C60 152 110 158 170 160 S270 146 330 156 S380 164 400 158 V200 H0Z" fill="#7f7a70" opacity="0.11" />
+      <path d="M0 178 C70 172 140 177 210 175 S320 168 400 174 V200 H0Z" fill="#76726a" opacity="0.1" />
+      <rect y="150" width="400" height="50" fill="url(#air-mist)" />
+      <path d="M246 124 q3 -2 5 0 q2 -2 5 0 M258 119 q2 -1.5 4 0 q1.5 -1.5 4 0" fill="none" stroke="#61665d" strokeOpacity="0.32" strokeWidth="0.7" strokeLinecap="round" />
+    </svg>
+  );
+}
+
 /** The iOS shell has no /air page (it ships apps/web only). */
 const IOS_BUILD = import.meta.env['VITE_APP_PLATFORM'] === 'ios';
 
@@ -428,19 +469,15 @@ export default function Home() {
           link, not a router one. Not in the iOS build, which does not carry it. */}
       {!IOS_BUILD && (
         <section className="air-entry" aria-labelledby="air-entry-heading">
-          <svg className="air-entry__hills" viewBox="0 0 400 80" preserveAspectRatio="none" aria-hidden="true">
-            <path d="M0 52 C60 30 110 38 160 46 S260 22 320 36 S380 44 400 40 V80 H0Z" />
-            <path d="M0 62 C70 48 130 56 190 58 S300 44 360 52 S390 56 400 54 V80 H0Z" />
-          </svg>
-          <span className="air-entry__sun" aria-hidden="true" />
           <div className="air-entry__text">
             <span className="air-entry__kicker">{t('home.air.kicker')}</span>
             <h2 id="air-entry-heading">{t('home.air.title')}</h2>
             <p>{t('home.air.body')}</p>
+            <a className="btn btn--primary air-entry__go" href="/air/index.html">
+              {t('home.air.cta')}
+            </a>
           </div>
-          <a className="btn btn--primary air-entry__go" href="/air/index.html">
-            {t('home.air.cta')}
-          </a>
+          <AirVignette />
         </section>
       )}
 
