@@ -274,7 +274,7 @@ export function createLight(canvas: HTMLCanvasElement) {
     g.fillStyle = sky;
     g.fillRect(0, 0, w, horizon);
 
-    // The sun, rising behind the hills; pale petal, never a glare.
+    // The sun, high in the upper right; pale petal, never a glare.
     const sun = SUN;
     const sx = px(sun.x);
     const sy = py(sun.y);
@@ -297,7 +297,7 @@ export function createLight(canvas: HTMLCanvasElement) {
     g.arc(sx, sy, sr * 1.06, 0, Math.PI * 2);
     g.fill();
 
-    // Distant hills in faint ink, farthest palest; they stand in front of the low sun.
+    // Distant hills in faint ink, farthest palest.
     hills(0, '123, 129, 119', 0.13);
     hills(1, '110, 120, 112', 0.17);
     hills(2, '97, 102, 93', 0.22);
