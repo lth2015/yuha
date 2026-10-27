@@ -2293,10 +2293,10 @@ textarea.is-full { border-color: var(--danger); }
   display: inline-flex; align-items: center; justify-content: center;
   border: 1px solid var(--line); background: rgb(255 255 255 / 80%); color: var(--ink);
   box-shadow: var(--shadow-card); cursor: pointer;
-  transition: background var(--t-ui) var(--ease-ui), opacity var(--t-ui) var(--ease-ui);
+  transition: background var(--t-ui) var(--ease-ui), color var(--t-ui) var(--ease-ui);
 }
 .shelf__arrow:hover:not(:disabled) { background: white; }
-.shelf__arrow:disabled { opacity: 0.35; cursor: default; box-shadow: none; }
+.shelf__arrow:disabled { color: var(--muted); background: transparent; cursor: default; box-shadow: none; }
 .shelf__arrow svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
 .shelf__row[data-after] { mask-image: linear-gradient(to right, #000 calc(100% - 72px), transparent); }
 .shelf__row[data-before] { mask-image: linear-gradient(to right, transparent, #000 72px); }
