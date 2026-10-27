@@ -442,7 +442,8 @@ html:has(.player-bar) { scroll-padding-bottom: 100px; }
   position: sticky;
   top: 12px;
   z-index: 40;
-  width: min(1200px, calc(100% - 40px));
+  /* The content column's width (1248px less 24px gutters), so the edges line up. */
+  width: min(1200px, calc(100% - 48px));
   margin: 16px auto 0;
   border-radius: 999px;
 }
@@ -884,7 +885,9 @@ tr:last-child td { border-bottom: none; }
 
 /* ---------------------------------------------------------------- hero / composer */
 .hero { display: block; padding: clamp(24px, min(7vw, 6vh), 88px) 0 64px; }
-.hero__copy { max-width: 880px; margin: 0 auto; }
+/* Full width of the content column, so the composer and score line up with
+   the nav above and the cards below instead of standing inset between them. */
+.hero__copy { margin: 0 auto; }
 .eyebrow { font-size: var(--t-caption); letter-spacing: 0.14em; font-weight: 600; color: var(--muted); margin: 0 0 20px; }
 .hero__title {
   /* Height-aware as well as width-aware: on a laptop screen the 104px title
@@ -2251,10 +2254,10 @@ textarea.is-full { border-color: var(--danger); }
 .showcase {
   margin: var(--s16) 0 var(--s12);
 }
-.showcase__head {
+.showcase .shelf__head {
   margin-bottom: var(--s6);
 }
-.showcase__head h2 {
+.showcase .shelf__title h2 {
   margin: 0 0 var(--s1);
   font-size: var(--t-heading);
   font-weight: 600;
@@ -2279,6 +2282,27 @@ textarea.is-full { border-color: var(--danger); }
   scroll-snap-type: x mandatory;
 }
 .showcase__row > * { scroll-snap-align: start; }
+
+/* A shelf (components/Shelf.tsx) that runs past the edge says so: the side
+   with more fades out, and arrows beside the heading move a page at a time. */
+.shelf__head { display: flex; align-items: flex-end; justify-content: space-between; gap: var(--s4); }
+.shelf__title { min-width: 0; }
+.shelf__nav { display: flex; gap: 8px; flex: none; }
+.shelf__arrow {
+  width: 44px; height: 44px; padding: 0; border-radius: 999px;
+  display: inline-flex; align-items: center; justify-content: center;
+  border: 1px solid var(--line); background: rgb(255 255 255 / 80%); color: var(--ink);
+  box-shadow: var(--shadow-card); cursor: pointer;
+  transition: background var(--t-ui) var(--ease-ui), opacity var(--t-ui) var(--ease-ui);
+}
+.shelf__arrow:hover:not(:disabled) { background: white; }
+.shelf__arrow:disabled { opacity: 0.35; cursor: default; box-shadow: none; }
+.shelf__arrow svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.shelf__row[data-after] { mask-image: linear-gradient(to right, #000 calc(100% - 72px), transparent); }
+.shelf__row[data-before] { mask-image: linear-gradient(to right, transparent, #000 72px); }
+.shelf__row[data-before][data-after] { mask-image: linear-gradient(to right, transparent, #000 72px, #000 calc(100% - 72px), transparent); }
+/* Touch screens swipe the row itself; the fade and the peeking card are the cue. */
+@media (hover: none) { .shelf__nav { display: none; } }
 @media (max-width: 720px) {
   .showcase {
     margin-top: var(--s12);

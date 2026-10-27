@@ -7,6 +7,7 @@ import { messageFor } from '../lib/messages';
 import { useI18n } from '../lib/i18n';
 import { useSession } from '../lib/session';
 import { Score } from '../components/Score';
+import { Shelf } from '../components/Shelf';
 import { SongCard } from '../components/SongCard';
 import { JOB_PHASES, fractionOfPhase, phaseKey } from '../lib/phases';
 
@@ -483,15 +484,21 @@ export default function Home() {
 
       {showcase && showcase.length > 0 && (
         <section className="showcase" aria-labelledby="showcase-heading">
-          <div className="showcase__head">
-            <h2 id="showcase-heading">{t('home.showcase.title')}</h2>
-            <p className="showcase__sub">{t('home.showcase.sub')}</p>
-          </div>
-          <div className="showcase__row">
+          <Shelf
+            head={(
+              <>
+                <h2 id="showcase-heading">{t('home.showcase.title')}</h2>
+                <p className="showcase__sub">{t('home.showcase.sub')}</p>
+              </>
+            )}
+            rowClass="showcase__row"
+            prevLabel={t('home.showcase.prev')}
+            nextLabel={t('home.showcase.next')}
+          >
             {showcase.map((song, i) => (
               <SongCard key={song.trackId} song={song} queue={showcase} index={i} />
             ))}
-          </div>
+          </Shelf>
         </section>
       )}
     </div>
