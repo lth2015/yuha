@@ -16,6 +16,7 @@ import { ApiError, apiFetch, newIdempotencyKey } from '../lib/api';
 import { clampToCodePoints, codePointLength } from '../lib/codepoints';
 import { FIELDS_IN_MORE_PANEL, focusFieldFor } from '../lib/messages';
 import { useI18n } from '../lib/i18n';
+import { STYLE_PRESETS, styleLabel } from '../lib/style-label';
 import { airPrefillPlan } from '../lib/air-prefill';
 import { JOB_PHASES as PHASE_STEPS, fractionOfPhase } from '../lib/phases';
 import { Score } from '../components/Score';
@@ -102,20 +103,6 @@ const DEFAULT_DRAFT: Draft = {
  */
 const SECTION_PRESETS = ['intro', 'verse', 'chorus', 'bridge', 'rap', 'interlude'] as const;
 
-const STYLE_PRESETS = [
-  'lofi',
-  'synthwave',
-  'trap',
-  'pop',
-  'acoustic',
-  'ambient',
-  'dnb',
-  'rock',
-  'jazz',
-  'cinematic',
-  'hyperpop',
-  'house',
-];
 
 /**
  * Four ways in, for the creator who opened this page with nothing in mind.
@@ -974,8 +961,9 @@ export default function Create() {
                 aria-pressed={draft.styles.includes(s)}
                 disabled={stylesFull && !draft.styles.includes(s)}
                 onClick={() => toggleStyle(s)}
+                title={s}
               >
-                {s}
+                {styleLabel(s, t)}
               </button>
             ))}
             {customStyles.map((s) => (
@@ -984,10 +972,10 @@ export default function Create() {
                 type="button"
                 className="chip chip--btn is-on"
                 aria-pressed={true}
-                aria-label={t('create.styles.remove', { s })}
+                aria-label={t('create.styles.remove', { s: styleLabel(s, t) })}
                 onClick={() => toggleStyle(s)}
               >
-                {s} <span aria-hidden="true">×</span>
+                {styleLabel(s, t)} <span aria-hidden="true">×</span>
               </button>
             ))}
           </div>

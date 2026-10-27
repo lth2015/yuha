@@ -6,6 +6,7 @@ import { clampToCodePoints } from '../lib/codepoints';
 import { createInFlightGuard, PENDING_AFTER_MS } from '../lib/in-flight';
 import { formatTime, usePlayer } from '../lib/player';
 import { fetchProducts, findLicenceProduct } from '../lib/catalog';
+import { styleLabel } from '../lib/style-label';
 import { useI18n } from '../lib/i18n';
 import { LOCALES, formatMoney } from '../lib/money';
 import { useSession } from '../lib/session';
@@ -391,7 +392,7 @@ export default function SongDetail() {
                 showing the number turns a private song into a performance, and
                 a song with two plays into a failure. */}
             {song.artistName ?? t(isOwner ? 'song.you' : 'song.creator')}
-            {song.styles.length > 0 && <> · {song.styles.join(' / ')}</>}
+            {song.styles.length > 0 && <> · {song.styles.map((s) => styleLabel(s, t)).join(' / ')}</>}
           </p>
 
           {/*

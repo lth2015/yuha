@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import type { TrackView } from '@yuha/contracts';
 import { apiFetch } from '../lib/api';
 import { TRACK_STATE_KEY } from '../lib/messages';
+import { styleLabel } from '../lib/style-label';
 import { useI18n } from '../lib/i18n';
 import { formatTime, usePlayer } from '../lib/player';
 import { useSession } from '../lib/session';
@@ -273,8 +274,8 @@ export function SongCard({
         {song.styles.length > 0 && (
           <div className="song-card__styles">
             {song.styles.slice(0, 3).map((s) => (
-              <span key={s} className="chip">
-                {s}
+              <span key={s} className="chip" title={s}>
+                {styleLabel(s, t)}
               </span>
             ))}
           </div>
