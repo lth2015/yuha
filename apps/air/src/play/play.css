@@ -40,6 +40,41 @@ body {
   cursor: crosshair;
 }
 #stage:focus-visible { outline: 3px solid var(--yuha-focus); outline-offset: -3px; }
+
+/* The way out: the YUHA mark (home) on the left, × on the right. Quiet glass
+   pills, so they read as a frame around the picture rather than part of it. */
+#topbar {
+  position: fixed;
+  top: calc(12px + env(safe-area-inset-top, 0px));
+  left: max(12px, env(safe-area-inset-left, 0px));
+  right: max(12px, env(safe-area-inset-right, 0px));
+  display: flex;
+  justify-content: space-between;
+  pointer-events: none;
+}
+#topbar a {
+  pointer-events: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 0 16px 0 12px;
+  box-sizing: border-box;
+  border-radius: 999px;
+  border: 1px solid var(--yuha-line);
+  background: rgb(255 255 255 / 78%);
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
+  color: var(--yuha-ink);
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-decoration: none;
+}
+#topbar a:hover { background: var(--yuha-surface); }
+#topbar a:focus-visible { outline: 3px solid var(--yuha-focus); outline-offset: 3px; }
+#home svg { width: 20px; height: 20px; fill: var(--yuha-petal); }
+#close { width: 44px; padding: 0; justify-content: center; }
+#close svg { width: 18px; height: 18px; fill: none; stroke: var(--yuha-ink); stroke-width: 1.8; stroke-linecap: round; }
 #light { position: absolute; inset: 0; width: 100%; height: 100%; }
 
 #hint {

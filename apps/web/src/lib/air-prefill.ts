@@ -10,7 +10,12 @@ import { ENERGY_LEVELS, parseAirPrefill, type AirPrefill } from '@yuha/contracts
  * and the AI's lyrics are written from), sung or instrumental as the player
  * chose on the card, the energy level, and AI lyrics. Length, styles and
  * visibility stay at their defaults, for the creator to choose.
- * A draft the creator already wrote is never replaced without asking.
+ *
+ * Pressing 「去 YUHA」 is the creator asking for this sketch, so the sketch
+ * always fills the form. It used to ask first when a draft existed; the form
+ * then stayed on the old draft behind a banner (人声 after choosing 纯音乐),
+ * and every earlier visit from Air leaves such a draft. A draft the creator
+ * wrote is set aside (`setAside`) for the page to offer back, never lost.
  *
  * Pure, so the whole decision is testable (tests/air-prefill.test.ts); the
  * page only applies it.
@@ -20,8 +25,7 @@ export type AirFields = { prompt: string; instrumental: boolean; energy: number;
 export type AirPlan =
   | { kind: 'none' }
   | { kind: 'invalid' }
-  | { kind: 'fill'; fields: AirFields }
-  | { kind: 'conflict'; fields: AirFields };
+  | { kind: 'fill'; fields: AirFields; setAside: boolean };
 
 type Say = (key: string, vars?: Record<string, string>) => string;
 
@@ -80,5 +84,5 @@ export function airPrefillPlan(param: string | null, stored: { prompt: string; l
     lyrics: '',
   };
   const written = stored.prompt.trim() !== '' || stored.lyrics.trim() !== '';
-  return { kind: written ? 'conflict' : 'fill', fields };
+  return { kind: 'fill', fields, setAside: written };
 }

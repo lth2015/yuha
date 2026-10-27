@@ -86,6 +86,7 @@ const sharedPanel = $('#shared');
 const listenButton = $<HTMLButtonElement>('#listen');
 const ownButton = $<HTMLButtonElement>('#own');
 const toSongButton = $<HTMLButtonElement>('#to-song');
+const topbar = $<HTMLElement>('#topbar');
 const card = $('#card');
 const light = createLight($<HTMLCanvasElement>('#light'));
 
@@ -128,6 +129,8 @@ function setMode(next: Mode) {
   listenButton.textContent = t(next === 'shared-replaying' ? 'stop' : 'listen');
   ownButton.disabled = next === 'shared-replaying';
   hint.hidden = next !== 'ready';
+  // Hidden while playing, so a stray touch in a corner cannot end the performance.
+  topbar.hidden = next === 'playing';
   if (next !== 'ended') shareField.hidden = true;
   stage.setAttribute('aria-hidden', String(next !== 'ready' && next !== 'playing'));
 }

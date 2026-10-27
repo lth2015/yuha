@@ -7,8 +7,8 @@
  * - apps/air builds the link (it may only import contracts' types, so it
  *   cannot use the schema);
  * - @yuha/contracts says what a valid link is;
- * - apps/web turns a valid link into a draft, in the reader's own language,
- *   and never over a draft the creator already wrote.
+ * - apps/web turns a valid link into a draft, in the reader's own language;
+ *   a draft the creator already wrote is set aside to restore, never lost.
  *
  * Version 2 closes the loop from playing to a sung song: the card lets the
  * player choose a voice (sung: the AI writes the lyrics, as /create already
@@ -118,6 +118,7 @@ describe('the draft /create makes of it', () => {
     expect(airPrefillPlan('2-calm-slow-mellow-soft-wide-rise-sung', empty, say('zh'))).toEqual({
       kind: 'fill',
       fields: { prompt: '一首柔和、开阔、舒缓的歌，旋律从低处慢慢扬起，情绪平静。', instrumental: false, energy: 0.2, lyricsBy: 'ai', lyrics: '' },
+      setAside: false,
     });
   });
 
@@ -125,6 +126,7 @@ describe('the draft /create makes of it', () => {
     expect(airPrefillPlan('2-calm-slow-mellow-soft-wide-fall-inst', empty, say('zh'))).toEqual({
       kind: 'fill',
       fields: { prompt: '一段柔和、开阔、舒缓的纯音乐，旋律从高处缓缓落下，情绪平静。', instrumental: true, energy: 0.2, lyricsBy: 'ai', lyrics: '' },
+      setAside: false,
     });
   });
 
@@ -132,6 +134,7 @@ describe('the draft /create makes of it', () => {
     expect(airPrefillPlan('1-calm-slow-mellow-soft-wide', empty, say('zh'))).toEqual({
       kind: 'fill',
       fields: { prompt: '一段柔和、开阔、舒缓的纯音乐，情绪平静。', instrumental: true, energy: 0.2, lyricsBy: 'ai', lyrics: '' },
+      setAside: false,
     });
   });
 
@@ -158,14 +161,25 @@ describe('the draft /create makes of it', () => {
     expect(new Set(prompts).size).toBe(3);
   });
 
-  it('never overwrites a draft the creator wrote: it asks', () => {
+  // Pressing 「去 YUHA」 is the creator asking for this sketch. Asking again on
+  // arrival left the form on the old draft (人声 after choosing 纯音乐) behind a
+  // banner, and every earlier visit from Air leaves such a draft. So the sketch
+  // always fills the form, and a written draft is kept to restore, not asked about.
+  it('fills from the sketch even over a draft the creator wrote, and says one was set aside', () => {
     for (const stored of [{ prompt: '我自己的描述', lyrics: '' }, { prompt: '', lyrics: '[Verse]\n我写的词' }]) {
-      expect(airPrefillPlan('2-calm-slow-mellow-soft-wide-rise-sung', stored, say('zh')).kind).toBe('conflict');
+      const plan = airPrefillPlan('2-calm-slow-mellow-soft-wide-fall-inst', stored, say('zh'));
+      expect(plan.kind).toBe('fill');
+      if (plan.kind !== 'fill') return;
+      expect(plan.fields.instrumental).toBe(true);
+      expect(plan.setAside).toBe(true);
     }
   });
 
-  it('treats a draft of only spaces as empty', () => {
-    expect(airPrefillPlan('2-calm-slow-mellow-soft-wide-rise-sung', { prompt: '  \n', lyrics: ' ' }, say('zh')).kind).toBe('fill');
+  it('sets nothing aside when the draft was empty or only spaces', () => {
+    for (const stored of [empty, { prompt: '  \n', lyrics: ' ' }]) {
+      const plan = airPrefillPlan('2-calm-slow-mellow-soft-wide-rise-sung', stored, say('zh'));
+      expect(plan.kind === 'fill' && plan.setAside).toBe(false);
+    }
   });
 
   it('ignores a tampered link whole and says so', () => {
