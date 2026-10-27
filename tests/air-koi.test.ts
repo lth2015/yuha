@@ -80,6 +80,21 @@ describe('the koi', () => {
       for (let j = i + 1; j < school.length; j += 1) expect(dist(school[i]!, school[j]!)).toBeGreaterThan(0.025);
   });
 
+  it('keep room of their own while wandering: rarely one on top of another', () => {
+    let close = 0;
+    let pairs = 0;
+    for (let seed = 1; seed <= 8; seed += 1) {
+      run(createKoi(seed), 60_000, null, (_, next) => {
+        for (let i = 0; i < next.length; i += 1)
+          for (let j = i + 1; j < next.length; j += 1) {
+            pairs += 1;
+            if (dist(next[i]!, next[j]!) < 0.03) close += 1;
+          }
+      });
+    }
+    expect(close / pairs).toBeLessThan(0.02);
+  });
+
   it('drift off again once the finger lifts', () => {
     const lure = { x: 0.5, y: 0.15 };
     const gathered = run(createKoi(13), 25_000, lure);
