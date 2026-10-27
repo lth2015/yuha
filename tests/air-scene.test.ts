@@ -1,9 +1,9 @@
 /**
  * The air page's background, behind every preset: a pale landscape in
- * YUHA's own palette. Faint distant hills, a still lake, a still sun far off
- * in the east, a few drifting petals. These pin the parts of the picture that
+ * YUHA's own palette. Faint distant hills, a still lake, a still sun high in
+ * the upper right, a few drifting petals. These pin the parts of the picture that
  * carry meaning, so a later change cannot quietly break them: every preset
- * gets the lake, the sun stands in the east clear of the hills, notes land on
+ * gets the lake, the sun stands high in the upper right clear of the hills, notes land on
  * the water as ripples and in the sky as light, and everything is held pale.
  *
  * No database: pure functions.
@@ -23,15 +23,17 @@ describe('which scene a preset is drawn in', () => {
 });
 
 describe('the sun over the lake', () => {
-  it('stands in the east, on the left, as a map reads', () => {
-    expect(SUN.x).toBeLessThan(0.4);
+  it('stands high in the upper right of the sky, where the product owner placed it', () => {
+    expect(SUN.x).toBeGreaterThan(0.75);
+    expect(SUN.y).toBeGreaterThan(HORIZON + 0.3);
   });
 
-  it('is far off: low over the hills, small, and clear of them', () => {
+  it('is small, and its glow stays on the screen and clear of the hills', () => {
     const hillTop = Math.max(...[0, 1, 2].map((l) => ridge(l, SUN.x)));
-    expect(SUN.y).toBeGreaterThan(hillTop);
-    expect(SUN.y).toBeLessThan(HORIZON + 0.25);
     expect(SUN.r).toBeLessThan(0.06);
+    expect(SUN.y - SUN.r).toBeGreaterThan(hillTop);
+    expect(SUN.x + SUN.r).toBeLessThan(1);
+    expect(SUN.y + SUN.r).toBeLessThan(1);
   });
 });
 

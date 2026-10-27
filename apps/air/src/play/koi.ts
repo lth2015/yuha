@@ -16,13 +16,15 @@
  */
 import { HORIZON } from './scenes.ts';
 
-export const KOI_COUNT = 3;
+export const KOI_COUNT = 5;
 /** Fractions of the stage per second. Cruising is about half of this. */
 export const KOI_MAX_SPEED = 0.03;
 /** Radians per second: a wide, slow turn. */
 export const KOI_MAX_TURN = 0.9;
 /** A body length, in fractions of the stage, for the tail-beat rate. */
 export const KOI_BODY = 0.06;
+/** Closer than this to another fish, it turns away. */
+export const KOI_ROOM = 0.06;
 /** The water they keep to: clear of the far shore and of the screen's edges. */
 export const LAKE = { left: 0.05, right: 0.95, bottom: 0.05, top: HORIZON - 0.06 } as const;
 
@@ -62,7 +64,7 @@ export function createKoi(seed: number): Koi[] {
     const [goal, r2] = pointIn(r1);
     const [h, r3] = next(r2);
     rand = r3;
-    return { ...at, heading: h * Math.PI * 2, speed: 0.01, goal, rand, phase: h * 6, ring: 0.045 + i * 0.035 };
+    return { ...at, heading: h * Math.PI * 2, speed: 0.01, goal, rand, phase: h * 6, ring: 0.04 + i * 0.02 };
   });
 }
 
@@ -88,6 +90,25 @@ export function stepKoi(school: Koi[], dtMs: number, lure: { x: number; y: numbe
       desired = Math.atan2(goal.y - f.y, goal.x - f.x);
       // A stroke, then a glide: cruising speed swells and eases on a slow beat.
       target = 0.008 + 0.009 * (1 + Math.sin(f.phase * 0.18));
+    }
+
+    // Room of its own: another fish closer than this turns it gently away, so
+    // circling at neighbouring distances never brings two onto one spot.
+    let ax = 0;
+    let ay = 0;
+    for (const o of school) {
+      if (o === f) continue;
+      const d = Math.hypot(f.x - o.x, f.y - o.y);
+      if (d > 0 && d < KOI_ROOM) {
+        const push = (KOI_ROOM - d) / KOI_ROOM;
+        ax += ((f.x - o.x) / d) * push;
+        ay += ((f.y - o.y) / d) * push;
+      }
+    }
+    const crowd = Math.min(1, Math.hypot(ax, ay));
+    if (crowd > 0) {
+      const away = Math.atan2(ay, ax);
+      desired = Math.atan2(Math.sin(desired) * (1 - crowd) + Math.sin(away) * crowd, Math.cos(desired) * (1 - crowd) + Math.cos(away) * crowd);
     }
 
     // Near the bank, turn back towards open water whatever else it wanted.

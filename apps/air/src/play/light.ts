@@ -89,13 +89,22 @@ export function createLight(canvas: HTMLCanvasElement) {
 
   /**
    * Koi palettes, YUHA's own: a white fish with petal markings (kohaku), a
-   * warm gold one, and a pale silver one with soft ink markings. A marking is
-   * [where along the spine, which side, how large], blurred into the body.
+   * warm gold one, a pale silver one with soft ink markings, a yellow one, and
+   * a white one patched red and yellow in turn. A marking is [where along the
+   * spine, which side, how large, and its own colour if not the fish's], blurred
+   * into the body.
    */
-  const KOI_LOOK: Array<{ body: string; belly: string; mark: string; markAlpha: number; marks: Array<[number, number, number]> }> = [
+  type Mark = [number, number, number, string?];
+  const KOI_LOOK: Array<{ body: string; belly: string; mark: string; markAlpha: number; marks: Mark[] }> = [
     { body: '253, 250, 245', belly: '240, 234, 226', mark: '240, 104, 66', markAlpha: 0.8, marks: [[0.16, 0.2, 1], [0.42, -0.3, 1.2], [0.62, 0.25, 0.8]] },
     { body: '250, 196, 146', belly: '238, 160, 104', mark: '236, 120, 66', markAlpha: 0.55, marks: [[0.3, 0, 1.6], [0.55, 0.1, 1.2]] },
     { body: '238, 240, 237', belly: '214, 220, 216', mark: '112, 120, 114', markAlpha: 0.32, marks: [[0.28, -0.25, 0.8], [0.5, 0.3, 0.7], [0.7, -0.1, 0.6]] },
+    { body: '252, 222, 128', belly: '238, 194, 86', mark: '236, 176, 58', markAlpha: 0.45, marks: [[0.22, 0, 1.4], [0.5, 0, 1.3]] },
+    {
+      body: '253, 250, 245', belly: '240, 234, 226', mark: '232, 84, 58', markAlpha: 0.78,
+      // Small and spaced, so red and yellow stay apart instead of blurring into orange.
+      marks: [[0.1, 0.1, 0.6], [0.3, -0.25, 0.55, '248, 200, 60'], [0.5, 0.25, 0.6], [0.7, -0.15, 0.5, '248, 200, 60']],
+    },
   ];
 
   /** One koi: a smooth body that sways behind the head, fins, a fanned tail, markings inside it. */
@@ -155,20 +164,27 @@ export function createLight(canvas: HTMLCanvasElement) {
     // Pectoral fins: translucent, just behind the head, rowing slowly.
     const fin = spine[4]!;
     const beat = calm ? 0.4 : 0.4 + 0.25 * Math.sin(f.phase * 0.5); // fins at half the body's beat
-    g.fillStyle = `rgba(${look.body}, 0.45)`;
+    // Fins and tail take the belly's tone, a shade under the body, with the
+    // body's faint edge: in the body's own colour a pale fish lost its tail
+    // against the pale water.
+    const finEdge = 'rgba(110, 118, 110, 0.18)';
+    g.lineWidth = Math.max(0.6, scale * 0.5);
+    g.strokeStyle = finEdge;
+    g.fillStyle = `rgba(${look.belly}, 0.6)`;
     for (const side of [-1, 1]) {
       const ox = fin.x + perp.x * side * width(0.2) * 0.9;
       const oy = fin.y + perp.y * side * width(0.2) * 0.9;
       g.beginPath();
       g.ellipse(ox, oy, len * 0.075, len * 0.03, Math.atan2(dir.y, dir.x) + Math.PI + side * (0.75 + beat), 0, Math.PI * 2);
       g.fill();
+      g.stroke();
     }
 
     // Tail: two translucent lobes fanned from the end of the spine, following its sway.
     const end = spine[N]!;
     const prev = spine[N - 3]!;
     const back = Math.atan2(end.y - prev.y, end.x - prev.x);
-    g.fillStyle = `rgba(${look.body}, 0.5)`;
+    g.fillStyle = `rgba(${look.belly}, 0.75)`;
     for (const side of [-1, 1]) {
       g.beginPath();
       g.moveTo(end.x, end.y);
@@ -178,6 +194,7 @@ export function createLight(canvas: HTMLCanvasElement) {
       );
       g.quadraticCurveTo(end.x + Math.cos(back) * len * 0.1, end.y + Math.sin(back) * len * 0.1, end.x, end.y);
       g.fill();
+      g.stroke();
     }
 
     // Body, shaded a touch darker along the belly side, then markings blurred inside it.
@@ -194,7 +211,8 @@ export function createLight(canvas: HTMLCanvasElement) {
     g.stroke(body);
     g.save();
     g.clip(body);
-    for (const [at, side, size] of look.marks) {
+    for (const [at, side, size, own] of look.marks) {
+      const colour = own ?? look.mark;
       const k = Math.round(at * N);
       const p = spine[k]!;
       const nn = normal(k);
@@ -208,9 +226,9 @@ export function createLight(canvas: HTMLCanvasElement) {
       g.rotate(Math.atan2(nn.y, nn.x) + Math.PI / 2);
       g.scale(1.7, 1);
       const blot = g.createRadialGradient(0, 0, 0, 0, 0, r);
-      blot.addColorStop(0, `rgba(${look.mark}, ${look.markAlpha})`);
-      blot.addColorStop(0.65, `rgba(${look.mark}, ${look.markAlpha * 0.85})`);
-      blot.addColorStop(1, `rgba(${look.mark}, 0)`);
+      blot.addColorStop(0, `rgba(${colour}, ${look.markAlpha})`);
+      blot.addColorStop(0.65, `rgba(${colour}, ${look.markAlpha * 0.85})`);
+      blot.addColorStop(1, `rgba(${colour}, 0)`);
       g.fillStyle = blot;
       g.beginPath();
       g.arc(0, 0, r, 0, Math.PI * 2);
@@ -256,7 +274,7 @@ export function createLight(canvas: HTMLCanvasElement) {
     g.fillStyle = sky;
     g.fillRect(0, 0, w, horizon);
 
-    // The sun, rising behind the hills; pale petal, never a glare.
+    // The sun, high in the upper right; pale petal, never a glare.
     const sun = SUN;
     const sx = px(sun.x);
     const sy = py(sun.y);
@@ -279,7 +297,7 @@ export function createLight(canvas: HTMLCanvasElement) {
     g.arc(sx, sy, sr * 1.06, 0, Math.PI * 2);
     g.fill();
 
-    // Distant hills in faint ink, farthest palest; they stand in front of the low sun.
+    // Distant hills in faint ink, farthest palest.
     hills(0, '123, 129, 119', 0.13);
     hills(1, '110, 120, 112', 0.17);
     hills(2, '97, 102, 93', 0.22);
