@@ -569,6 +569,7 @@ export default function SongDetail() {
             lyrics={song.lyrics}
             duration={active ? player.duration || song.durationSeconds : song.durationSeconds}
             currentTime={active ? player.currentTime : 0}
+            live={active}
             timings={song.lyricTimings}
             title={song.title}
             artist={song.artistName}

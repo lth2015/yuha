@@ -23,6 +23,7 @@ export function SyncedLyrics({
   artist,
   onSaveTimings,
   compact = false,
+  live = true,
 }: {
   lyrics: string;
   duration: number;
@@ -34,6 +35,12 @@ export function SyncedLyrics({
   /** Owner only. Absent means the correction controls are not offered. */
   onSaveTimings?: (timings: LyricTimings) => Promise<void>;
   compact?: boolean;
+  /**
+   * Whether the player is playing THIS song. The frame-rate clock below is
+   * the player's, whatever it is playing; a page showing another song must
+   * not follow it.
+   */
+  live?: boolean;
 }) {
   const { t } = useI18n();
   /*
@@ -85,11 +92,17 @@ export function SyncedLyrics({
    *
    * The prop is still what this falls back to, and still what updates while
    * paused or seeking, so a song that is not playing shows the right line.
+   *
+   * Only while `live`. The subscription is to the player, not to this song:
+   * with song A in the player bar and song B's page open, B's lines lit up
+   * and scrolled in time with A — the same leak SongDetail's `active` guard
+   * on `currentTime` had closed once already, reopened by this clock.
    */
-  const [liveTime, setLiveTime] = useState(currentTime);
-  useEffect(() => setLiveTime(currentTime), [currentTime]);
+  const [frameTime, setFrameTime] = useState(currentTime);
+  useEffect(() => setFrameTime(currentTime), [currentTime]);
   const player = usePlayer();
-  useEffect(() => player.onTime(setLiveTime), [player]);
+  useEffect(() => (live ? player.onTime(setFrameTime) : undefined), [player, live]);
+  const liveTime = live ? frameTime : currentTime;
 
   const active = activeLineIndex(lines, liveTime);
 
@@ -224,7 +237,7 @@ export function SyncedLyrics({
               a line to a stopped playhead is not a correction, it is a way to
               lose one.
             */}
-            {onSaveTimings && player.status === 'playing' && (
+            {onSaveTimings && live && player.status === 'playing' && (
               <button
                 type="button"
                 className="btn btn--ghost btn--sm lyrics-sync__stamp"

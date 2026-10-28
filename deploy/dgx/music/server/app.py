@@ -235,7 +235,8 @@ def get_whisper():
     return _whisper
 
 
-def transcribe_words(path: Path, lyrics: str):
+def transcribe_words(audio, lyrics: str):
+    """Whisper words for `audio` — a path (the mix) or a 16 kHz mono array (the vocal stem)."""
     from align import guess_language, parse_lyrics
     prompt = " ".join(t for _, t in parse_lyrics(lyrics))[:200]
     # Keep the lock order consistent with every GPU path: GPU first, then the
@@ -245,7 +246,7 @@ def transcribe_words(path: Path, lyrics: str):
         model = get_whisper()
         with _whisper_lock:
             res = model.transcribe(
-                str(path),
+                str(audio) if isinstance(audio, Path) else audio,
                 language=guess_language(lyrics),
                 word_timestamps=True,
                 initial_prompt=prompt or None,
@@ -693,7 +694,15 @@ def healthz():
     return {"ok": True, "model_loaded": _model_state["loaded"],
             "model_error": _model_state["error"], "load_seconds": _model_state["load_seconds"],
             "queue_depth": _q.qsize(), "engine": ENGINE, "aligner_loaded": _align_state["loaded"],
-            "aligner_error": _align_state["error"]}
+            "aligner_error": _align_state["error"], "separation": _separation_status()}
+
+
+def _separation_status():
+    try:
+        import separate
+        return separate.status()
+    except Exception as e:  # numpy/demucs missing: alignment runs on the mix
+        return {"enabled": False, "error": repr(e)[:200]}
 
 
 @app.post("/v1/jobs")
@@ -759,15 +768,49 @@ def align(body: AlignRequest, authorization: Optional[str] = Header(None)):
     if not path.exists():
         raise HTTPException(404, "audio not found")
     t0 = time.time()
+    # Listen to the singer, not the band: Whisper on the separated vocal, and
+    # the stem's loudness as the record of where singing is (see separate.py).
+    # If the stem hears less of the lyrics than the mix would have, the mix is
+    # tried too and the better one kept, so separation can only help coverage.
+    voiced = None
+    stem16 = None
     try:
-        words = transcribe_words(path, body.lyrics)
+        import separate
+        from align import voiced_intervals
+        with _gpu_lock:
+            stem = separate.vocal_stem(path)
+        if stem is not None:
+            mono, sr = stem
+            voiced = voiced_intervals(separate.loudness_envelope(mono, sr), 0.02)
+            stem16 = separate.to_16k(mono, sr)
+    except Exception:
+        log.exception("vocal separation failed; aligning on the mix")
+        voiced, stem16 = None, None
+    voiced = voiced or None  # a stem with no singing in it says nothing about timing
+    out = None
+    if stem16 is not None:
+        try:
+            out = align_lines(body.lyrics, transcribe_words(stem16, body.lyrics),
+                              body.duration_seconds, voiced=voiced)
+            out["heard"] = "vocal_stem"
+        except Exception:
+            log.exception("alignment on the vocal stem failed; trying the mix")
+            out = None
+    try:
+        if out is None or out["coverage"] < ALIGN_MIN_COVERAGE:
+            mix = align_lines(body.lyrics, transcribe_words(path, body.lyrics),
+                              body.duration_seconds, voiced=voiced)
+            mix["heard"] = "mix"
+            if out is None or mix["coverage"] > out["coverage"]:
+                out = mix
     except Exception as e:
         log.exception("alignment failed")
         raise HTTPException(500, f"alignment failed: {e!r}"[:300])
-    out = align_lines(body.lyrics, words, body.duration_seconds)
     out["seconds"] = round(time.time() - t0, 1)
     out["model"] = f"whisper-{WHISPER_MODEL}"
-    log.info("aligned %s coverage=%.2f in %.1fs", m.group(1), out["coverage"], out["seconds"])
+    out["voice_activity"] = voiced is not None
+    log.info("aligned %s coverage=%.2f heard=%s voiced=%s in %.1fs", m.group(1), out["coverage"],
+             out["heard"], out["voice_activity"], out["seconds"])
     if out["coverage"] < ALIGN_MIN_COVERAGE:
         # Too little of the lyrics was heard to trust the timings; YUHA keeps
         # its estimated (and labelled) timeline instead.
