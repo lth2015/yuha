@@ -18,6 +18,7 @@ import {
   type ProductRow,
   openOrderReview,
 } from '@yuha/db';
+import { noticeCancelScheduled } from './billing-notices.js';
 import type { AppContext } from '../context.js';
 import { internalUrl } from '../internal-path.js';
 import { createPurchaseOrder } from './purchase-cap.js';
@@ -344,6 +345,12 @@ export async function cancelSubscription(
   }
 
   await setCancelAtPeriodEnd({ subscriptionId: sub.id, cancelAtPeriodEnd: true });
+  // The same notice the webhook sends, under the same key, so whichever lands first is the only one.
+  await noticeCancelScheduled(ctx, {
+    userId: params.userId,
+    subscriptionId: sub.stripe_subscription_id,
+    periodEnd: result.effectiveAt ?? sub.current_period_end,
+  });
   await trackEvent({
     name: 'subscription_cancelled',
     userRef: params.userId,

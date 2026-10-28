@@ -283,6 +283,7 @@ const BUSINESS_TABLES = [
   // operator who verified it.
   'account_deletions',
   'credit_resets',
+  'customer_notices',
   // Counts only (no text), with a foreign key to users.
   'lyric_drafts',
   'users',

@@ -180,6 +180,15 @@ than applying it as if it were settled.
 
 ---
 
+### Customer notices for refunds and cancellations
+
+Customers are emailed (Japanese, Chinese and English in one body) when a refund
+is recorded, when their subscription is set to end at the close of its period,
+and when it has ended — whether the change was made in the app, in Stripe's
+portal or by an operator in the Stripe dashboard. Each is sent once
+(`customer_notices`, migration 0024), however Stripe redelivers the event.
+`services/billing-notices.ts`.
+
 ## 6. Compensation
 
 For a user who lost credits to something that was our fault:

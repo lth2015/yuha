@@ -26,6 +26,7 @@ import {
   type WebhookEventRow,
 } from '@yuha/db';
 import type { AppContext } from '../context.js';
+import { noticeCancelScheduled, noticeRefund, noticeSubscriptionEnded } from './billing-notices.js';
 import { fulfilPaidOrder, grantEntitlementForOrder } from './fulfilment.js';
 import { reviewPaidCardOrder } from './order-review.js';
 
@@ -566,6 +567,23 @@ async function handleSubscriptionChanged(ctx: AppContext, event: StripeEventLike
       tx,
     );
   });
+
+  /*
+   * The customer is told, whichever door the change came through: this app's
+   * cancel button, Stripe's portal, or an operator in the Stripe dashboard.
+   * Read from the live object, so an out-of-order event cannot announce a
+   * state that has already moved on; each notice is sent once.
+   */
+  const status = live?.status ?? String(obj['status'] ?? '');
+  if (status === 'canceled') {
+    await noticeSubscriptionEnded(ctx, { userId, subscriptionId });
+  } else if (live?.cancelAtPeriodEnd ?? obj['cancel_at_period_end'] === true) {
+    await noticeCancelScheduled(ctx, {
+      userId,
+      subscriptionId,
+      periodEnd: live?.currentPeriodEnd ?? subscriptionPeriod(obj).end,
+    });
+  }
 }
 
 /**
@@ -862,10 +880,13 @@ async function handleRefund(ctx: AppContext, event: StripeEventLike): Promise<vo
     return;
   }
   const order = subject.order;
+  /** Set when this event recorded a refund not seen before: the customer is told after the commit. */
+  let toNotify: { newlyRefunded: number; total: number } | null = null;
 
   await withTx(async (tx) => {
     const occurredAt = new Date(event.created * 1000);
     let wroteSomething = false;
+    let enumeratedInserted = 0;
     for (const r of enumerated) {
       const { inserted } = await recordPayment(
         {
@@ -883,6 +904,7 @@ async function handleRefund(ctx: AppContext, event: StripeEventLike): Promise<vo
         tx,
       );
       wroteSomething = wroteSomething || inserted;
+      if (inserted) enumeratedInserted += r.amount;
     }
 
     const recordedSoFar = async (): Promise<number> => {
@@ -905,6 +927,8 @@ async function handleRefund(ctx: AppContext, event: StripeEventLike): Promise<vo
     };
 
     let recorded = await recordedSoFar();
+    // What had been recorded before this event, for the notice's "this time" figure.
+    const before = recorded - enumeratedInserted;
     if (chargeCumulative > recorded) {
       // A refund whose own event we never saw, or a Charge payload with the
       // refund list collapsed to ids. The charge's cumulative figure is
@@ -929,6 +953,7 @@ async function handleRefund(ctx: AppContext, event: StripeEventLike): Promise<vo
     // Nothing new: a redelivery of an event already settled.
     if (!wroteSomething) return;
     const amount = Math.max(recorded, chargeCumulative);
+    toNotify = { newlyRefunded: Math.max(0, amount - before), total: amount };
 
     await reverseEntitlements(
       ctx,
@@ -951,6 +976,20 @@ async function handleRefund(ctx: AppContext, event: StripeEventLike): Promise<vo
       );
     }
   });
+
+  const settled = toNotify as { newlyRefunded: number; total: number } | null;
+  if (settled && settled.newlyRefunded > 0) {
+    await noticeRefund(ctx, {
+      userId: subject.userId,
+      // One notice per running total reached on this charge: the same refund
+      // arriving as `charge.refunded` and as `refund.created` reaches it once.
+      ref: `${chargeId}:${settled.total}`,
+      amountMinor: settled.newlyRefunded,
+      totalRefundedMinor: settled.total,
+      paidMinor: subject.amountMinor,
+      currency: typeof obj['currency'] === 'string' ? obj['currency'] : 'jpy',
+    });
+  }
 }
 
 /**
