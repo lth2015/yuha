@@ -168,6 +168,29 @@ export async function apiFetch<T>(path: string, opts: RequestOptions = {}): Prom
   }
 }
 
+/**
+ * A POST whose answer is a file — the share video. `request` reads the body
+ * as text, which mangles binary, so this one reads a Blob and only parses the
+ * body as an error when the status says it is one.
+ */
+export async function apiPostForBlob(path: string, body: unknown, timeoutMs = 90_000): Promise<Blob> {
+  const token = getToken();
+  const headers: Record<string, string> = { 'content-type': 'application/json' };
+  if (token) headers['authorization'] = `Bearer ${token}`;
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  let res: Response;
+  try {
+    res = await fetch(`${API_BASE}${path}`, { method: 'POST', headers, body: JSON.stringify(body), signal: controller.signal });
+  } catch (err) {
+    throw new NetworkError(err);
+  } finally {
+    clearTimeout(timer);
+  }
+  if (!res.ok) throw errorFrom(res, await res.text(), token);
+  return res.blob();
+}
+
 /** The error a failed response becomes, including what a 401 does to the session. */
 function errorFrom(res: Response, text: string, requestToken: string | null): ApiError {
   let json: unknown = null;

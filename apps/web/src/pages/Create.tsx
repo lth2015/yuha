@@ -2,8 +2,12 @@ import { OpenGenerations, QueueStatus } from '../components/GenerationQueue';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import {
+  DEDICATION_NOTE_MAX,
+  DEDICATION_TO_MAX,
   ENERGY_LEVELS,
   LYRICS_MAX_CODEPOINTS,
+  OCCASIONS,
+  type Occasion,
   MAX_STYLE_TAGS,
   PROMPT_MAX_CODEPOINTS,
   TITLE_MAX_CODEPOINTS,
@@ -79,6 +83,11 @@ interface Draft {
   energy: number;
   durationSeconds: 30 | 60 | 120 | 180 | 240 | 'auto';
   visibility: 'private' | 'public';
+  /** A song for somebody (docs/GIFT_AND_SHARE_SPEC.md): who, why, and a line for them. */
+  gift: boolean;
+  giftTo: string;
+  giftOccasion: Occasion;
+  giftNote: string;
 }
 
 const DEFAULT_DRAFT: Draft = {
@@ -92,6 +101,10 @@ const DEFAULT_DRAFT: Draft = {
   energy: 0.5,
   durationSeconds: 120,
   visibility: 'private',
+  gift: false,
+  giftTo: '',
+  giftOccasion: 'birthday',
+  giftNote: '',
 };
 
 /**
@@ -224,7 +237,7 @@ function advancedTouched(d: Draft): number {
  */
 export default function Create() {
   const navigate = useNavigate();
-  const { t } = useI18n();
+  const { t, lang } = useI18n();
   const [params, setParams] = useSearchParams();
   const editTrackId = params.get('edit');
   const resumeJobId = params.get('job');
@@ -254,9 +267,11 @@ export default function Create() {
    * worse than losing the draft: the overwrite is valid JSON, so the next
    * mount restores it and the creator's work silently becomes the defaults.
    */
-  const [draft, setDraft] = useState<Draft>(() =>
-    editTrackId ? DEFAULT_DRAFT : air.kind === 'fill' ? { ...DEFAULT_DRAFT, ...air.fields } : readStoredDraft(),
-  );
+  const [draft, setDraft] = useState<Draft>(() => {
+    const start = editTrackId ? DEFAULT_DRAFT : air.kind === 'fill' ? { ...DEFAULT_DRAFT, ...air.fields } : readStoredDraft();
+    // `?gift=1` is where "write one for somebody too" on a received song leads.
+    return params.get('gift') === '1' && !editTrackId ? { ...start, gift: true } : start;
+  });
   const writesOwnLyrics = draft.lyricsBy === 'me' && !draft.instrumental;
   const [more, setMore] = useState(() => advancedTouched(readStoredDraft()) > 0);
   const [job, setJob] = useState<JobView | null>(null);
@@ -484,9 +499,11 @@ export default function Create() {
     if (submitting || credits < 1) return false;
     if (editTrackId) return instructions.trim().length > 0;
     // Mirrors createGenerationRequest: simple mode requires a description,
-    // custom mode is satisfied by the lyrics that made it custom.
-    return mode === 'custom' || draft.prompt.trim().length > 0;
-  }, [submitting, credits, editTrackId, instructions, mode, draft.prompt]);
+    // custom mode is satisfied by the lyrics that made it custom, and a song
+    // for somebody is described by who and why — but needs the who.
+    if (draft.gift && !draft.giftTo.trim()) return false;
+    return mode === 'custom' || draft.prompt.trim().length > 0 || draft.gift;
+  }, [submitting, credits, editTrackId, instructions, mode, draft.prompt, draft.gift, draft.giftTo]);
 
   /*
    * Why the button is off, when it is off for something the writer can fix.
@@ -585,6 +602,16 @@ export default function Create() {
             energy: draft.energy,
             durationSeconds: draft.durationSeconds,
             visibility: draft.visibility,
+            ...(draft.gift && draft.giftTo.trim()
+              ? {
+                  dedication: {
+                    to: draft.giftTo.trim(),
+                    occasion: draft.giftOccasion,
+                    ...(draft.giftNote.trim() ? { note: draft.giftNote.trim() } : {}),
+                    lang,
+                  },
+                }
+              : {}),
           };
       const res = await apiFetch<JobView & { deduplicated: boolean }>(endpoint, {
         method: 'POST',
@@ -984,7 +1011,81 @@ export default function Create() {
           </div>
         )}
 
-        <label htmlFor="prompt">{t('create.prompt.simple')}</label>
+        {/*
+          A song for somebody (docs/GIFT_AND_SHARE_SPEC.md). Above the
+          description, because it changes what the description is: who and
+          why are enough on their own, and whatever is written below becomes
+          detail about them.
+        */}
+        {!editTrackId && (
+          <div className="studio__fork studio__gift">
+            <span className="studio__fork-label" id="gift-label">
+              {t('create.gift')}
+            </span>
+            <div className="seg" role="group" aria-labelledby="gift-label">
+              <button
+                type="button"
+                className={`seg__btn${draft.gift ? '' : ' is-active'}`}
+                aria-pressed={!draft.gift}
+                onClick={() => patch({ gift: false })}
+              >
+                {t('create.gift.self')}
+              </button>
+              <button
+                type="button"
+                className={`seg__btn${draft.gift ? ' is-active' : ''}`}
+                aria-pressed={draft.gift}
+                onClick={() => patch({ gift: true })}
+              >
+                {t('create.gift.someone')}
+              </button>
+            </div>
+            {draft.gift && (
+              <div className="studio__fork-body stack" style={{ gap: 'var(--s2)' }}>
+                <label htmlFor="gift-to">{t('create.gift.to')}</label>
+                <input
+                  id="gift-to"
+                  type="text"
+                  value={draft.giftTo}
+                  onChange={(e) => patch({ giftTo: clampToCodePoints(e.target.value, DEDICATION_TO_MAX) })}
+                  placeholder={t('create.gift.toPlaceholder')}
+                  autoComplete="off"
+                />
+                <span className="studio__gift-label" id="occasion-label">
+                  {t('create.gift.occasion')}
+                </span>
+                <div className="composer__presets-row" role="group" aria-labelledby="occasion-label">
+                  {OCCASIONS.map((o) => (
+                    <button
+                      key={o}
+                      type="button"
+                      className={`chip chip--btn${draft.giftOccasion === o ? ' is-on' : ''}`}
+                      aria-pressed={draft.giftOccasion === o}
+                      onClick={() => patch({ giftOccasion: o })}
+                    >
+                      {t(`gift.occasion.${o}`)}
+                    </button>
+                  ))}
+                </div>
+                <label htmlFor="gift-note">{t('create.gift.note')}</label>
+                <input
+                  id="gift-note"
+                  type="text"
+                  value={draft.giftNote}
+                  onChange={(e) => patch({ giftNote: clampToCodePoints(e.target.value, DEDICATION_NOTE_MAX) })}
+                  placeholder={t('create.gift.notePlaceholder')}
+                  autoComplete="off"
+                />
+                <span className="studio__fork-hint">
+                  {/* Their own lyrics are sung as written: only the page and the brief carry the name then. */}
+                  {t(writesOwnLyrics ? 'create.gift.hintOwn' : 'create.gift.hint')}
+                </span>
+              </div>
+            )}
+          </div>
+        )}
+
+        <label htmlFor="prompt">{t(draft.gift ? 'create.prompt.gift' : 'create.prompt.simple')}</label>
         <textarea
           id="prompt"
           value={draft.prompt}

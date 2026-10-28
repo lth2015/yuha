@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { AudioFormat, JobPhase, JobState, Mood, Scene, TempoHint, TrackState, Visibility, VocalMode, VoiceChoice } from './enums.js';
 import { SECTION_GAP_SECONDS, sectionName } from './sections.js';
+import { dedicationSchema } from './dedication.js';
 
 /**
  * Song creation contract (Suno-class product scope).
@@ -186,9 +187,12 @@ export const createGenerationRequest = z
     durationSeconds: z.union([songDurationSchema, z.literal('auto')]).default(120),
     voice: VoiceChoice.default('auto'),
     visibility: Visibility.default('private'),
+    /** A song for somebody (docs/GIFT_AND_SHARE_SPEC.md). */
+    dedication: dedicationSchema.optional(),
   })
   .superRefine((v, ctx) => {
-    if (v.mode === 'simple' && !v.prompt) {
+    // Who it is for, and why, is enough of a description on its own.
+    if (v.mode === 'simple' && !v.prompt && !v.dedication) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
         path: ['prompt'],
@@ -348,6 +352,8 @@ export const trackView = z.object({
   coverSeed: z.number().int(),
   /** Timings for synced lyrics; null when the song has no lyrics. */
   lyricTimings: lyricTimings.nullable(),
+  /** Who the song was written for; null for a song written for nobody in particular. */
+  dedication: dedicationSchema.nullable(),
   /** How many people licensed this song on the Market. */
   licenseCount: z.number().int().nonnegative(),
   /** True when the viewer has bought a license for this song (download rights). */

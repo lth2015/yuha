@@ -52,6 +52,9 @@ export function hashRequest(userId: string, req: CreateGenerationRequest): strin
     d: req.durationSeconds,
     vo: req.voice,
     v: req.visibility,
+    // Only when present, so every request without one hashes as it always
+    // did — a retry that spans the deploy still finds its job.
+    ...(req.dedication ? { dd: req.dedication } : {}),
   });
   return createHash('sha256').update(canonical).digest('hex');
 }
@@ -157,6 +160,28 @@ export async function createGeneration(
       });
     }
   }
+  if (req.dedication) {
+    /*
+     * A dedication is shown to anybody holding the song's link — the name in
+     * the page's heading and its link preview, the note under it — so both are
+     * screened before anything is spent, the name like a title and the note
+     * like a description.
+     */
+    const checks = [
+      { field: 'dedication.to', result: checkTitle(req.dedication.to) },
+      ...(req.dedication.note ? [{ field: 'dedication.note', result: checkPrompt(req.dedication.note) }] : []),
+    ];
+    for (const { field, result } of checks) {
+      if (!result.allowed) {
+        throw new AppError('PROMPT_BLOCKED', `dedication rejected: ${result.reason}`, {
+          reason: result.reason,
+          hintKey: result.hintKey,
+          appealable: result.appealable,
+          field,
+        });
+      }
+    }
+  }
   if (req.lyrics) {
     const lyricsSafety = checkLyrics(req.lyrics);
     if (!lyricsSafety.allowed) {
@@ -243,6 +268,7 @@ export async function createGeneration(
             durationSeconds,
             vocalMode: req.instrumental ? 'instrumental' : 'with_vocals',
             visibility: req.visibility,
+            dedication: req.dedication ?? null,
           },
         },
         tx,

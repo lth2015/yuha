@@ -158,6 +158,15 @@ Failure modes that cost **nothing**: `PROMPT_BLOCKED`, `VALIDATION_FAILED`,
 `INSUFFICIENT_CREDITS`, `RATE_LIMITED`. A rejected reservation leaves no job row
 at all.
 
+Optional `dedication` — a song for somebody (docs/GIFT_AND_SHARE_SPEC.md):
+`{ "to": "小林", "occasion": "birthday", "note": "谢谢你一直都在", "lang": "zh" }`.
+`to` ≤ 20 and `note` ≤ 120 code points; `occasion` is one of `birthday thanks
+sorry love miss farewell cheer other`; `lang` is the creator's interface
+language, which the brief to the lyric writer is phrased in. Both texts are
+screened (`PROMPT_BLOCKED` with `field: dedication.to | dedication.note`)
+before anything is reserved. With a dedication, simple mode needs no `prompt`.
+The track view carries it back as `dedication` (null for every other song).
+
 ### `GET /v1/jobs/:id`
 
 ```json
@@ -261,6 +270,30 @@ rather than what it sent.
 
 No credit is spent and no audio is touched. Allowed in any state: a failed or
 still-generating song is still the writer's to name.
+
+### `PUT /v1/tracks/:id/share-card`
+Owner only. `{ "png": "<base64>" }` — the 1200×630 link-preview image the
+owner's browser drew (`apps/web/src/lib/share-art.ts`). Must be a PNG of
+exactly that size, ≤ 1.5 MB. Replaces the previous card; removed with the
+account.
+
+### `POST /v1/tracks/:id/share-video` → `video/mp4`
+Owner only. `{ "start": 38.5, "duration": 20, "frames": [{ "at": 0, "jpeg": "<base64>" }, …] }`:
+up to 24 JPEG frames (720×1280), each shown from `at` seconds into the clip
+until the next. The response is the MP4 itself — the frames on the song's own
+audio with a waveform — and is not stored. One encode at a time per API
+process: a second gets `RATE_LIMITED` (try again in ~15 s).
+
+### `GET /v1/share/songs/:id` · `GET /v1/share/songs/:id/card.png`
+The link a share posts. A link-preview crawler (X, Facebook, LINE, Slack…, by
+User-Agent) gets a page of Open Graph / Twitter Card tags describing the song —
+title, who it was written for, its card — with `og:url` pointing back at this
+address; anybody else gets `302` to the song page. Only a public, playable
+song is described; any other id gets the site's own tags, so a private title
+never reaches a crawler. `Cache-Control: private, no-store` and `Vary:
+User-Agent`, because the answer depends on who asks. `card.png` serves the
+uploaded card while the song is public, and redirects to `/brand/og-card.png`
+otherwise.
 
 ### `POST /v1/tracks/:id/adopted`
 Self-reported "I used this in real content". Deliberately distinct from a

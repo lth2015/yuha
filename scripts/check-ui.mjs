@@ -369,7 +369,17 @@ async function fixtures(browser, states) {
 
   let tracks = (await call('GET', '/v1/tracks')).items ?? [];
   if (!tracks.length) {
-    await call('POST', '/v1/generations', { prompt: '傍晚的海边，朋友骑车回家' }, { 'idempotency-key': key() });
+    // Written for somebody, so the song page measured below carries the gift
+    // heading — the longest thing at the top of that page (docs/GIFT_AND_SHARE_SPEC.md).
+    await call(
+      'POST',
+      '/v1/generations',
+      {
+        prompt: '傍晚的海边，朋友骑车回家',
+        dedication: { to: '一起骑车回家的那个朋友', occasion: 'thanks', note: '谢谢你那年夏天陪我走完的那条河堤，下次换我等你。', lang: 'zh' },
+      },
+      { 'idempotency-key': key() },
+    );
     for (let i = 0; i < 60 && !tracks.length; i++) {
       await page.waitForTimeout(1000);
       tracks = (await call('GET', '/v1/tracks')).items ?? [];
