@@ -126,6 +126,9 @@ describe('which field a refusal sends the writer to', () => {
   it('sends a refused title to the title box', () => {
     expect(focusFieldFor(blockedAt('title'), false)).toBe('title');
     expect(focusFieldFor(blockedAt('title'), true)).toBe('title');
+    // A song for somebody: the name and the note have their own boxes.
+    expect(focusFieldFor(blockedAt('dedication.to'), false)).toBe('gift-to');
+    expect(focusFieldFor(blockedAt('dedication.note'), false)).toBe('gift-note');
   });
 
   it('still routes the fields it already knew', () => {

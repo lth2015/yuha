@@ -411,7 +411,7 @@ if (fades.length) {
  *
  * Everything above this point reasons about tokens on page surfaces. The 温度
  * reading does not sit on a page surface: it sits on a generated gradient
- * whose colours come from CoverArt.tsx, at a position chosen by the song's
+ * whose colours come from lib/sleeve.ts, at a position chosen by the song's
  * seed. So the gate reads the families out of the component and composites the
  * reading over each one's lit stop — the brightest ground the scrim can land
  * on — rather than trusting a comment about it. At 42% every family failed.
@@ -421,7 +421,9 @@ if (fades.length) {
  * lighter ground elsewhere. Some put it right under the reading, and a bound
  * that holds for those holds for all of them.
  */
-const TSX = readFileSync(new URL('../apps/web/src/components/CoverArt.tsx', import.meta.url), 'utf8');
+// The sleeve colours moved to lib/sleeve.ts so the share card draws the same
+// ones (docs/GIFT_AND_SHARE_SPEC.md).
+const TSX = readFileSync(new URL('../apps/web/src/lib/sleeve.ts', import.meta.url), 'utf8');
 
 /** `rgb(255 255 255 / 92%)` and `rgb(16 16 14 / 62%)`, the only form used here. */
 function rgbaSpaced(value) {
@@ -449,7 +451,7 @@ const scaleBlock = block(src, '.cover-art__scale');
 if (!famBlock || !indexBlock) {
   failures.push(
     'cannot measure the sleeve reading: ' +
-      (!famBlock ? 'FAMILIES not found in CoverArt.tsx. ' : '') +
+      (!famBlock ? 'FAMILIES not found in lib/sleeve.ts. ' : '') +
       (!indexBlock ? '.cover-art__index not found in styles.css. ' : '') +
       'One of them was renamed, and this pass must follow it rather than fall silent.',
   );
@@ -504,7 +506,7 @@ if (!famBlock || !indexBlock) {
             ? `.cover-art__scale fades the scale name to ${scaleAlpha}; the digits and ` +
               `the letters share one ink, so raise that back toward 1 or darken the scrim.`
             : `Darken the scrim on .cover-art__index, or darken that family's first ` +
-              `colour in CoverArt.tsx.`;
+              `colour in lib/sleeve.ts.`;
         failures.push(
           `the sleeve reading is ${got.toFixed(2)}:1 over the lit stop of \`${name}\` ` +
             `(scrim ${scrim.a}), below ${floor}:1. ${fix}`,

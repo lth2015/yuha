@@ -17,6 +17,7 @@ import lyricsRoutes from './routes/lyrics.js';
 import projectRoutes from './routes/projects.js';
 import publicRoutes from './routes/public.js';
 import rightsRoutes from './routes/rights.js';
+import shareRoutes from './routes/share.js';
 import telemetryRoutes from './routes/telemetry.js';
 import trackRoutes from './routes/tracks.js';
 
@@ -142,6 +143,7 @@ export async function buildServer(ctx: AppContext): Promise<FastifyInstance> {
   await app.register(exploreRoutes, { ctx });
   await app.register(marketRoutes, { ctx });
   await app.register(trackRoutes, { ctx });
+  await app.register(shareRoutes, { ctx });
   await app.register(fileRoutes, { ctx });
   await app.register(billingRoutes, { ctx });
   await app.register(stablecoinRoutes, { ctx });

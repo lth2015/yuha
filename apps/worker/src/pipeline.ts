@@ -1,6 +1,6 @@
 import type { AppContext } from '@yuha/api';
 import { deliver, failJob, handleLateResult, quarantineKey } from '@yuha/api';
-import { musicIntent, type MusicIntent, type VoiceChoice } from '@yuha/contracts';
+import { musicIntent, withDedication, type Dedication, type MusicIntent, type VoiceChoice } from '@yuha/contracts';
 import {
   extendLease,
   deferJobStep,
@@ -158,6 +158,7 @@ async function submitJob(deps: PipelineDeps, job: JobRow): Promise<void> {
     energy: number;
     durationSeconds: number;
     voice?: VoiceChoice;
+    dedication?: Dedication | null;
   };
 
   // ---- text model: turn the creator's description into validated parameters
@@ -168,7 +169,9 @@ async function submitJob(deps: PipelineDeps, job: JobRow): Promise<void> {
     : await ctx.text.extractIntent({
     scene: 'daily_log', // The provider derives the real scene from styles.
     mode: input.mode ?? 'simple',
-    prompt: input.prompt,
+    // A song for somebody: the writer is told who and why, in the creator's
+    // language (docs/GIFT_AND_SHARE_SPEC.md).
+    prompt: withDedication(input.prompt, input.dedication),
     lyrics: input.mode === 'custom' ? (input.lyrics ?? null) : null,
     styles: input.styles ?? [],
     instrumental: input.instrumental ?? true,

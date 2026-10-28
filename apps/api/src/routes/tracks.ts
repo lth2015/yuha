@@ -11,9 +11,11 @@ import {
 } from '@yuha/contracts';
 import type { LyricTimings } from '@yuha/contracts';
 import {
+  forgetShareCard,
   getLicenseSnapshot,
   getMasterAsset,
   getPublicTrack,
+  getShareCard,
   getTrackForUser,
   hasLicense,
   countLicenses,
@@ -66,6 +68,7 @@ async function toTrackView(
     durationSeconds: row.duration_ms / 1000,
     coverSeed: row.cover_seed,
     lyricTimings: (row.lyric_timings ?? null) as LyricTimings | null,
+    dedication: row.dedication ?? null,
     licenseCount: await countLicenses(row.id),
     licensedByMe: viewerId === row.owner_id ? false : await hasLicense(row.id, viewerId),
     createdAt: row.created_at.toISOString(),
@@ -231,6 +234,15 @@ export default async function trackRoutes(app: FastifyInstance, opts: { ctx: App
         'TRACK_SUSPENDED',
         'この楽曲は権利申立の調査中のため削除できません。削除リクエストとして受け付けます。',
       );
+    }
+    // Its link-preview card shows who it was for; it goes now, not with the
+    // account. Best effort: the row keeps the key if the object will not go.
+    const card = await getShareCard(id);
+    if (card) {
+      await ctx.storage
+        .remove('delivery', card.storage_key)
+        .then(() => forgetShareCard(id))
+        .catch((err) => req.log.error({ err, key: card.storage_key }, 'could not remove a share card'));
     }
     await trackEvent({
       name: 'track_deleted',

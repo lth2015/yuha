@@ -6,6 +6,8 @@ import {
   execute,
   failAccountDeletion,
   forgetAsset,
+  forgetShareCard,
+  getShareCard,
   query,
   recordAccountDeletionOutcome,
   type AccountDeletionRow,
@@ -119,12 +121,28 @@ export async function executeAccountDeletion(
         outcome.objectsRemoved += 1;
       }
 
+      // The link-preview image is the owner's too (migration 0026). Same rule
+      // as above: the row goes only once the object has.
+      const card = await getShareCard(track.id);
+      if (card) {
+        try {
+          await ctx.storage.remove('delivery', card.storage_key);
+          await forgetShareCard(track.id);
+          outcome.objectsRemoved += 1;
+        } catch (err) {
+          allGone = false;
+          outcome.objectsFailed += 1;
+          log?.error({ err, key: card.storage_key }, 'could not remove a stored object');
+        }
+      }
+
       // The song leaves the library either way: the owner asked for it to go,
       // and a file we could not reach is not a reason to keep showing them the
-      // song. `tracksErased` counts only the ones that are really gone.
+      // song. `tracksErased` counts only the ones that are really gone. The
+      // dedication goes with the lyrics: it names a person.
       await execute(
         `UPDATE tracks SET deleted_at = UTC_TIMESTAMP(3), state = 'deleted',
-                           lyrics = NULL, lyric_timings = NULL, updated_at = UTC_TIMESTAMP(3)
+                           lyrics = NULL, lyric_timings = NULL, dedication = NULL, updated_at = UTC_TIMESTAMP(3)
           WHERE id = ?`,
         [track.id],
       );

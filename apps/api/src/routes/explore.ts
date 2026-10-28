@@ -43,6 +43,7 @@ export function toPublicTrackView(
     durationSeconds: row.duration_ms / 1000,
     coverSeed: row.cover_seed,
     lyricTimings: (row.lyric_timings ?? null) as LyricTimings | null,
+    dedication: row.dedication ?? null,
     licenseCount: opts.licenseCount ?? 0,
     licensedByMe: opts.licensedByMe ?? null,
     createdAt: row.created_at.toISOString(),
@@ -106,15 +107,18 @@ export default async function exploreRoutes(app: FastifyInstance, opts: { ctx: A
     async () => {
       const rows = await listPublicTracks(SHOWCASE_LIMIT);
       const items = await Promise.all(
-        rows.map(async (row) =>
-          toPublicTrackView(ctx, row, {
+        rows.map(async (row) => ({
+          ...toPublicTrackView(ctx, row, {
             previewUrl: await previewUrlFor(ctx, row.id),
             licenseCount: 0,
             // Nobody is signed in on this route, so there is no "me" to answer
             // for. null is the view's own word for "not known", not for "no".
             licensedByMe: null,
           }),
-        ),
+          // Never on the showcase, even if a gift slipped into the list: who a
+          // song was for is for the people holding its link.
+          dedication: null,
+        })),
       );
       return { items };
     },

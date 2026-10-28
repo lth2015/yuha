@@ -1,5 +1,5 @@
 import type { PoolConnection } from 'mysql2/promise';
-import type { AssetKind, AudioFormat, LyricTimings, TrackState, Visibility, VocalMode } from '@yuha/contracts';
+import type { AssetKind, AudioFormat, Dedication, LyricTimings, TrackState, Visibility, VocalMode } from '@yuha/contracts';
 import { execute, newId, query, queryOne } from './pool.js';
 
 export interface TrackRow {
@@ -20,6 +20,8 @@ export interface TrackRow {
   play_count: number;
   cover_seed: number;
   lyric_timings: LyricTimings | null;
+  /** Who the song was written for (migration 0026); null for most songs. */
+  dedication: Dedication | null;
   created_at: Date;
   updated_at: Date;
   deleted_at: Date | null;
@@ -31,13 +33,13 @@ export type TrackWithArtist = TrackRow & { artist_name: string | null; artist_av
 const TRACK_COLUMNS = `
   id, owner_id, project_id, job_id, title, scene, mood, duration_ms, state,
   suspended_reason, styles, lyrics, vocal_mode, visibility, play_count,
-  cover_seed, lyric_timings, created_at, updated_at, deleted_at
+  cover_seed, lyric_timings, dedication, created_at, updated_at, deleted_at
 `;
 
 const TRACK_SELECT = `
   SELECT t.id, t.owner_id, t.project_id, t.job_id, t.title, t.scene, t.mood, t.duration_ms,
          t.state, t.suspended_reason, t.styles, t.lyrics, t.vocal_mode, t.visibility,
-         t.play_count, t.cover_seed, t.lyric_timings, t.created_at, t.updated_at, t.deleted_at,
+         t.play_count, t.cover_seed, t.lyric_timings, t.dedication, t.created_at, t.updated_at, t.deleted_at,
          u.display_name AS artist_name, u.avatar_url AS artist_avatar
     FROM tracks t
     JOIN users u ON u.id = t.owner_id
@@ -61,6 +63,14 @@ function normaliseRow<T>(row: T): T {
       r.lyric_timings = JSON.parse(r.lyric_timings as string);
     } catch {
       r.lyric_timings = null;
+    }
+  }
+  const d = row as { dedication?: unknown };
+  if (typeof d.dedication === 'string') {
+    try {
+      d.dedication = JSON.parse(d.dedication as string);
+    } catch {
+      d.dedication = null;
     }
   }
   return row;
@@ -95,6 +105,7 @@ export async function insertTrack(
     vocalMode?: VocalMode;
     visibility?: Visibility;
     coverSeed?: number;
+    dedication?: Dedication | null;
   },
   tx: PoolConnection,
 ): Promise<TrackRow> {
@@ -102,8 +113,8 @@ export async function insertTrack(
   // A retried delivery must not create a second track for the same job.
   await execute(
     `INSERT INTO tracks (id, owner_id, project_id, job_id, title, scene, mood, duration_ms, state,
-                         styles, lyrics, vocal_mode, visibility, cover_seed)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                         styles, lyrics, vocal_mode, visibility, cover_seed, dedication)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
      ON DUPLICATE KEY UPDATE updated_at = UTC_TIMESTAMP(3)`,
     [
       id,
@@ -120,6 +131,7 @@ export async function insertTrack(
       params.vocalMode ?? 'instrumental',
       params.visibility ?? 'private',
       params.coverSeed ?? 0,
+      params.dedication ? JSON.stringify(params.dedication) : null,
     ],
     tx,
   );
@@ -219,6 +231,10 @@ export async function listPublicTracks(limit: number): Promise<TrackWithArtist[]
   const rows = await query<TrackWithArtist>(
     `${TRACK_SELECT}
       WHERE t.visibility = 'public' AND t.state = 'deliverable' AND t.deleted_at IS NULL
+        -- A song written for somebody is theirs: "public" on a gift means the
+        -- link opens for the person it was sent to, not that it is shown to
+        -- every visitor of the home page with their name and the note on it.
+        AND t.dedication IS NULL
       ORDER BY t.created_at DESC
       LIMIT ?`,
     [limit],
@@ -353,6 +369,8 @@ export async function softDeleteTrack(
          AND rc.status IN ('received','under_review','suspended')
         SET t.deleted_at = UTC_TIMESTAMP(3),
             t.state = 'deleted',
+            -- Who the song was for names a person; it goes with the song.
+            t.dedication = NULL,
             t.updated_at = UTC_TIMESTAMP(3)
       WHERE t.id = ? AND t.owner_id = ? AND t.deleted_at IS NULL
         AND rc.id IS NULL`,

@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import type { MusicIntent } from '@yuha/contracts';
+import type { Dedication, MusicIntent } from '@yuha/contracts';
 import {
   consumeReservation,
   compensateUnits,
@@ -93,7 +93,7 @@ export async function deliver(ctx: AppContext, params: DeliverParams): Promise<{
     // not charge a second time.
     if (!delivered) return null;
 
-    const input = job.input as { visibility?: 'private' | 'public'; title?: string | null };
+    const input = job.input as { visibility?: 'private' | 'public'; title?: string | null; dedication?: Dedication | null };
 
     // The track row must exist before the job can reference it, so the id is
     // derived from the job id up front and used for both.
@@ -113,6 +113,7 @@ export async function deliver(ctx: AppContext, params: DeliverParams): Promise<{
         vocalMode: intent.vocalMode,
         visibility: input.visibility === 'public' ? 'public' : 'private',
         coverSeed: coverSeedFor(trackId),
+        dedication: input.dedication ?? null,
       },
       tx,
     );

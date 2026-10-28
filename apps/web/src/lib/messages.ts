@@ -108,7 +108,7 @@ function blockedField(err: ApiError): string | undefined {
 /** Composer fields that live inside the collapsed "more settings" panel. */
 export const FIELDS_IN_MORE_PANEL = ['title'] as const;
 
-export type FocusField = 'prompt' | 'lyrics' | 'instructions' | 'title';
+export type FocusField = 'prompt' | 'lyrics' | 'instructions' | 'title' | 'gift-to' | 'gift-note';
 
 /**
  * Which box to send the writer back to after a refusal.
@@ -131,6 +131,9 @@ export function focusFieldFor(err: unknown, editing: boolean): FocusField | null
   const named = blockedField(err);
   if (named === 'title') return 'title';
   if (named === 'lyrics') return 'lyrics';
+  // A song for somebody: the name and the note are screened as well.
+  if (named === 'dedication.to') return 'gift-to';
+  if (named === 'dedication.note') return 'gift-note';
   if (named === 'prompt') return editing ? 'instructions' : 'prompt';
   if (err.code === 'PROMPT_BLOCKED') return editing ? 'instructions' : 'prompt';
   return null;

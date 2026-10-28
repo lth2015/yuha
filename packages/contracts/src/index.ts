@@ -9,3 +9,4 @@ export * from './billing.js';
 export * from './license.js';
 export * from './common.js';
 export * from './air.js';
+export * from './dedication.js';

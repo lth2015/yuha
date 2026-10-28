@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { TITLE_MAX_CODEPOINTS, type LyricTimings, type ProductView, type TrackView } from '@yuha/contracts';
-import { apiFetch } from '../lib/api';
+import { API_BASE, apiFetch, apiPostForBlob } from '../lib/api';
+import { drawVideoFrame, frameJpeg, planShareClip, shareCardPng } from '../lib/share-art';
+import { resolveLyricTimings } from '../lib/lyrics';
 import { clampToCodePoints } from '../lib/codepoints';
 import { createInFlightGuard, PENDING_AFTER_MS } from '../lib/in-flight';
 import { formatTime, usePlayer } from '../lib/player';
@@ -55,6 +57,24 @@ export default function SongDetail() {
   const [actionError, setActionError] = useState<unknown>(null);
   const [busy, setBusy] = useState(false);
   const [licenseProduct, setLicenseProduct] = useState<ProductView | null>(null);
+  /** "Send it to them" just published the song: open its share menu straight away. */
+  const [sendNow, setSendNow] = useState(false);
+  /** The look of the song whose share card was last uploaded (see uploadCard). */
+  const cardSent = useRef<string | null>(null);
+  /*
+   * The card goes up as soon as an owner's song is public — on load and the
+   * moment it is published — not only when the share menu opens: a link
+   * copied in the first second would otherwise be fetched by a crawler
+   * before the card exists, and X, Facebook and LINE keep the first preview
+   * they see. `uploadCard` is defined below the loading return; the ref
+   * carries it up here.
+   */
+  const uploadCardRef = useRef<() => void>(() => undefined);
+  useEffect(() => {
+    if (song && me?.userId === song.artistId && song.visibility === 'public' && song.state === 'deliverable') {
+      uploadCardRef.current();
+    }
+  }, [song, me?.userId]);
   /*
    * Renaming. The title was chosen once, at generation, by someone who had not
    * heard the song yet, so it is the one piece of a finished song that most
@@ -211,20 +231,89 @@ export default function SongDetail() {
     }
   };
 
-  const setVisibility = async (visibility: 'public' | 'private') => {
+  const setVisibility = async (visibility: 'public' | 'private'): Promise<boolean> => {
+    // Only "send it to them" opens the menu by itself, and only that once.
+    setSendNow(false);
     setBusy(true);
     setActionError(null);
     try {
       await apiFetch(`/v1/tracks/${song.trackId}/visibility`, { method: 'POST', body: { visibility } });
       setSong({ ...song, visibility });
+      return true;
     } catch (err) {
       // There was no catch: offline, the menu kept the old label and said
       // nothing, so publishing appeared to work and had not.
       setActionError(err);
+      return false;
     } finally {
       setBusy(false);
     }
   };
+
+  /*
+   * "Send it to them" on a private gift: sending means the link has to open,
+   * so say that before doing it (docs/GIFT_AND_SHARE_SPEC.md), then open the
+   * share menu on the published song.
+   */
+  const sendGift = async () => {
+    if (!window.confirm(t('song.gift.confirmPublic'))) return;
+    if (await setVisibility('public')) setSendNow(true);
+  };
+
+  /*
+   * The link preview's picture, drawn here and uploaded when the owner opens
+   * the share menu — before they can pick where to post, so it is in place by
+   * the time a crawler asks. Once per look of the song: a rename or a gift
+   * line changes the picture, a second open does not.
+   */
+  /** The words on the share card and the video frames, in the reader's language. */
+  const shareLabels = () => {
+    const d = song.dedication;
+    return {
+      site: t('share.card.site'),
+      lang,
+      ...(d
+        ? { to: t('song.gift.to', { to: d.to }), ...(d.occasion !== 'other' ? { occasion: t(`gift.line.${d.occasion}`) } : {}) }
+        : { detail: song.styles.map((x) => styleLabel(x, t)).join(' / ') }),
+    };
+  };
+
+  /*
+   * The share video (docs/GIFT_AND_SHARE_SPEC.md): twenty seconds from the
+   * chorus, each sung line on its own frame, drawn here and put on the song's
+   * audio by the API. Returned as a file for the phone's share sheet.
+   */
+  const makeVideo = async (): Promise<File> => {
+    const lines = song.lyrics ? resolveLyricTimings(song.lyrics, song.durationSeconds, song.lyricTimings).lines : [];
+    const plan = planShareClip(lines, song.durationSeconds);
+    const labels = shareLabels();
+    const frames = [];
+    for (const f of plan.frames) {
+      const canvas = await drawVideoFrame(song, labels, f.line, (plan.start + f.at) / song.durationSeconds);
+      frames.push({ at: f.at, jpeg: await frameJpeg(canvas) });
+    }
+    const blob = await apiPostForBlob(`/v1/tracks/${song.trackId}/share-video`, { start: plan.start, duration: plan.duration, frames });
+    const name = `${song.title.replace(/[\\/:*?"<>|]+/g, ' ').trim() || 'yuha'}.mp4`;
+    return new File([blob], name, { type: 'video/mp4' });
+  };
+
+  const uploadCard = () => {
+    const d = song.dedication;
+    const look = JSON.stringify([song.title, song.coverSeed, song.styles, d, lang]);
+    if (cardSent.current === look) return;
+    cardSent.current = look;
+    void shareCardPng(song, shareLabels())
+      .then((png) => apiFetch(`/v1/tracks/${song.trackId}/share-card`, { method: 'PUT', body: { png } }))
+      .catch(() => {
+        // The post still works with the site's own picture; try again next open.
+        cardSent.current = null;
+      });
+  };
+  uploadCardRef.current = uploadCard;
+  const shareUrl = `${API_BASE || window.location.origin}/v1/share/songs/${song.trackId}`;
+  const shareText = song.dedication
+    ? t('song.gift.shareText', { to: song.dedication.to, title: song.title })
+    : undefined;
 
   const remove = async () => {
     if (!window.confirm(t('song.confirmDelete', { title: song.title }))) return;
@@ -319,6 +408,15 @@ export default function SongDetail() {
         </div>
 
         <div className="song-spread__info">
+          {song.dedication && (
+            <div className="song-gift">
+              <span className="song-gift__to">{t('song.gift.to', { to: song.dedication.to })}</span>
+              {song.dedication.occasion !== 'other' && (
+                <strong className="song-gift__line">{t(`gift.line.${song.dedication.occasion}`)}</strong>
+              )}
+              {song.dedication.note && <p className="song-gift__note">{song.dedication.note}</p>}
+            </div>
+          )}
           <p className="eyebrow song-spread__eyebrow">
             {t(song.visibility === 'public' ? 'song.public' : isOwner ? 'song.private' : 'song.work')} ·{' '}
             {t(song.vocalMode === 'instrumental' ? 'song.instrumental' : 'song.vocals')} · {formatTime(song.durationSeconds)}
@@ -407,10 +505,20 @@ export default function SongDetail() {
             <div className="song-spread__actions-main">
             {song.visibility === 'public' && (
               <ShareMenu
-                url={`${window.location.origin}/song/${song.trackId}`}
+                url={shareUrl}
                 title={song.title}
+                text={shareText}
                 primary={isOwner}
+                label={isOwner && song.dedication ? t('song.gift.send') : undefined}
+                autoOpen={sendNow}
+                onOpen={isOwner ? uploadCard : undefined}
+                makeVideo={isOwner && song.state === 'deliverable' ? makeVideo : undefined}
               />
+            )}
+            {isOwner && song.dedication && song.visibility !== 'public' && song.state === 'deliverable' && (
+              <button type="button" className="text-action is-strong" onClick={() => void sendGift()} disabled={busy}>
+                {t('song.gift.send')}
+              </button>
             )}
             {isOwner && (
               <>
@@ -451,8 +559,8 @@ export default function SongDetail() {
                 */}
                 <button
                   type="button"
-                  className={`text-action${song.visibility === 'public' ? '' : ' is-strong'}`}
-                  onClick={() => setVisibility(song.visibility === 'public' ? 'private' : 'public')}
+                  className={`text-action${song.visibility === 'public' || song.dedication ? '' : ' is-strong'}`}
+                  onClick={() => void setVisibility(song.visibility === 'public' ? 'private' : 'public')}
                   disabled={busy}
                 >
                   {t(song.visibility === 'public' ? 'song.unpublish' : 'song.publish')}
@@ -532,6 +640,21 @@ export default function SongDetail() {
             <p className="song-spread__note">{t('song.licensesSold', { n: song.licenseCount })}</p>
           )}
           {runtime?.syntheticAudio && <p className="song-spread__note">{t('song.demo')}</p>}
+
+          {/*
+            Somebody who was sent a song is the person most likely to want to
+            send one. Not shown to the owner, who is already here for that.
+          */}
+          {!isOwner && song.visibility === 'public' && (
+            <p className="song-gift__again">
+              <Link
+                className="text-action is-strong"
+                to={me ? '/create?gift=1' : `/auth?next=${encodeURIComponent('/create?gift=1')}`}
+              >
+                {t(song.dedication ? 'song.gift.again' : 'song.gift.again.plain')}
+              </Link>
+            </p>
+          )}
 
           <div className="song-spread__player">
             <span className="song-spread__time num">
