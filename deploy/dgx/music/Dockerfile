@@ -51,6 +51,10 @@ RUN pip install -r /opt/server-requirements.txt
 # on the container's arm64 CUDA torch. The torch constraint keeps it from
 # pulling its own.
 RUN pip install openai-whisper
+# Vocal separation for alignment (server/separate.py): Whisper listens to the
+# singer instead of the mix. Best effort — under the torch constraint above,
+# and if it cannot install, alignment runs on the mix as it always did.
+RUN pip install demucs || echo "WARN: demucs not installed; alignment will use the full mix"
 
 # ---- 4. Hard fail the build if torch got replaced / lost CUDA, or ACE-Step can't import.
 # No GPU driver exists during `docker build`, so libcuda.so.1 is absent; transformer_engine

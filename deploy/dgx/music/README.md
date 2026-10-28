@@ -51,6 +51,35 @@ Then update `AUDIO_BASE_URL` in `.env` and `docker compose up -d`.
 - Jobs/mp3: `./data/` · Weights: `~/.cache/ace-step/checkpoints`
 - Quality/speed knob: `ACE_INFER_STEPS` in `.env` (default 60; 27 is ACE-Step's fast setting)
 
+## Lyric alignment (`POST /v1/align`)
+
+Whisper (`WHISPER_MODEL`, default `turbo`) supplies the clock; the known
+lyrics are matched onto its words character by character (`server/align.py`).
+On the full mix that clock smears across instrumentals: the first line after
+an interlude lit up while the band was still playing, and the last line before
+one stayed lit through it. So the vocal is taken out first:
+
+- **Demucs (`htdemucs`) separates the vocal** (`server/separate.py`) and
+  Whisper transcribes the stem. If the stem hears less of the lyrics than the
+  mix, the mix is transcribed too and the better match kept.
+- **The stem's loudness is the record of where singing is.** A line whose
+  start falls in silence moves to where the voice comes back (never past the
+  first character Whisper heard in it); an end that falls in silence moves
+  back to where the voice stopped.
+- **A lone matched character no longer sets a line's time.** A common
+  character found inside another line's mumble used to start its line seconds
+  early.
+
+The response says what was used: `heard` (`vocal_stem` / `mix`) and
+`voice_activity`; the log line `aligned … heard=… voiced=…` says the same.
+`/healthz` → `separation` reports whether demucs loaded. Weights (~80MB)
+download to `~/.cache/torch` on first use. `ALIGN_SEPARATE=off` in `.env`
+returns to aligning on the mix without a rebuild.
+
+This runs on the DGX, so merging changes nothing here: `./update.sh` rebuilds
+the music service when `server/` changed. Songs already made keep the timings
+they were given.
+
 ## Still to confirm (§3)
 
 - License / output rights: read the model card + LICENSE text directly — https://huggingface.co/ACE-Step/ACE-Step-v1-3.5B and https://github.com/ace-step/ACE-Step — and quote the relevant lines, not just "commercial OK".

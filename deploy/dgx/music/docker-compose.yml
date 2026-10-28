@@ -15,6 +15,7 @@ services:
       - ${HOME}/.cache/ace-step:/root/.cache/ace-step     # model weights (persistent, several GB)
       - ${HOME}/.cache/huggingface:/root/.cache/huggingface
       - ${HOME}/.cache/whisper:/root/.cache/whisper          # alignment model (~1.5GB, first use)
+      - ${HOME}/.cache/torch:/root/.cache/torch              # demucs vocal separation (~80MB, first use)
       - ./data:/data                                       # jobs + mp3 output
     ipc: host
     ulimits:
