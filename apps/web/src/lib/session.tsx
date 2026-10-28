@@ -190,6 +190,9 @@ export function formatJst(iso: string | null | undefined, withTime = true): stri
     /* private browsing */
   }
   return new Intl.DateTimeFormat(locale, {
+    // Without this the browser's own zone was used, under labels that say
+    // 日本时间: nine hours off for anyone reading outside Japan.
+    timeZone: 'Asia/Tokyo',
     year: 'numeric',
     month: 'short',
     day: 'numeric',
