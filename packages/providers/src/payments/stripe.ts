@@ -88,13 +88,21 @@ export class StripePaymentsAdapter implements PaymentsAdapter {
     // drives only what the pricing page claims we accept. A parameter that
     // changed nothing would just be another surface that looks like it does.
     //
-    // Not even payment_method_options: it was left behind carrying a
-    // wechat_pay `client` for a session that no longer names wechat_pay, and
-    // whether Stripe accepts options for an unlisted method could not be
-    // checked from here. If it rejects them, every one-time checkout would
-    // fail the moment the flag was switched on — the opposite of adding a way
-    // to pay. Checkout's hosted page is a web surface, so there is nothing
-    // here it needs telling.
+    // payment_method_options carries one entry, for cards, which every
+    // session offers whatever else the account enables: an option for a
+    // method the session might not name (the old wechat_pay `client`) is
+    // what could be rejected, and that is not this.
+    //
+    // 3-D Secure on every card payment (product owner, 2026-10-27, after a
+    // subscriber noticed none was asked for). Japan's card security guideline
+    // (v5.0) asks EC merchants to authenticate with EMV 3-D Secure, and a
+    // card saved in Link is otherwise often charged without it. `any` asks
+    // Stripe to authenticate whenever the card supports 3DS and overrides
+    // Radar's dynamic rules for this session; whether the issuer then shows
+    // a one-time password or passes it frictionlessly is the issuer's call.
+    // Stripe documents the parameter on Checkout Sessions
+    // (docs.stripe.com/payments/3d-secure/authentication-flow); renewals are
+    // charged off-session and are not affected.
 
     const session = await this.stripe.checkout.sessions.create(
       {
@@ -103,6 +111,7 @@ export class StripePaymentsAdapter implements PaymentsAdapter {
         success_url: params.successUrl,
         cancel_url: params.cancelUrl,
         client_reference_id: params.orderId,
+        payment_method_options: { card: { request_three_d_secure: 'any' } },
         ...(params.existingCustomerId
           ? { customer: params.existingCustomerId }
           : { customer_email: params.userEmail }),
