@@ -90,6 +90,29 @@ try {
     check(((await page.getAttribute('#stage', 'aria-label')) ?? '').length > 20, `${lang}: the stage has no spoken description`);
     await everyWidth(page, lang, 'ready');
 
+    /*
+     * The picture keeps its shape when the box changes without a window
+     * resize (a phone toolbar collapsing, an in-app browser settling): the
+     * drawing buffer must follow the canvas's displayed size, or the whole
+     * scene is stretched. It was, on phones, until the buffer was re-fitted
+     * every frame.
+     */
+    // Two frames, not a timeout: long enough for a per-frame fit, too short for
+    // an unrelated window resize to rescue a buffer that only follows events.
+    await page.evaluate(
+      () =>
+        new Promise((done) => {
+          document.getElementById('stage').style.bottom = '-120px';
+          requestAnimationFrame(() => requestAnimationFrame(done));
+        }),
+    );
+    const fit = await page.evaluate(() => {
+      const c = document.getElementById('light');
+      return Math.abs(c.width / c.height - c.clientWidth / c.clientHeight);
+    });
+    check(fit < 0.01, `${lang}: the canvas buffer did not follow its box (aspect off by ${fit.toFixed(3)}), so the picture is stretched`);
+    await page.evaluate(() => { document.getElementById('stage').style.bottom = ''; });
+
     // The keyboard alone can play.
     await page.focus('#stage');
     await page.keyboard.down(' ');

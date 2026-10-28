@@ -38,10 +38,22 @@ export function createLight(canvas: HTMLCanvasElement) {
   let scale = 1;
   let scene: SceneId = 'paper';
 
+  /*
+   * The drawing buffer follows the canvas's displayed size, checked every
+   * frame rather than on `resize` alone. A phone's box changes without that
+   * event: a toolbar collapsing, an in-app browser (WeChat) settling its
+   * height after load, a rotation reported late. The buffer then kept the old
+   * shape and the CSS box stretched it, and the whole picture was squashed
+   * on a phone. Comparing two numbers per frame costs nothing.
+   */
   const resize = () => {
     scale = Math.min(2, devicePixelRatio || 1);
-    canvas.width = canvas.clientWidth * scale;
-    canvas.height = canvas.clientHeight * scale;
+    canvas.width = Math.round(canvas.clientWidth * scale);
+    canvas.height = Math.round(canvas.clientHeight * scale);
+  };
+  const fitBuffer = () => {
+    const s = Math.min(2, devicePixelRatio || 1);
+    if (canvas.width !== Math.round(canvas.clientWidth * s) || canvas.height !== Math.round(canvas.clientHeight * s)) resize();
   };
   resize();
   addEventListener('resize', resize);
@@ -445,6 +457,7 @@ export function createLight(canvas: HTMLCanvasElement) {
   }
 
   function draw(now: number) {
+    fitBuffer();
     g.clearRect(0, 0, canvas.width, canvas.height);
     if (scene === 'lake') lakeBackdrop(now);
     const short = Math.min(canvas.width, canvas.height);
