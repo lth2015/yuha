@@ -37,7 +37,11 @@ die() { printf '\n!! %s\n' "$*" >&2; exit 1; }
 # ---------------------------------------------------------------- what ships
 SHA=$(git -C "$ROOT" rev-parse --short HEAD)
 BRANCH=$(git -C "$ROOT" rev-parse --abbrev-ref HEAD)
-DIRTY=$(git -C "$ROOT" status --porcelain)
+# Untracked files elsewhere never reach the box — deploy_yuha.sh ships `git
+# ls-files` — so a scratch folder (tmp/, a bundle) must not block a deploy.
+# Under music/ they do ship: upload_music copies server/*.py off the disk.
+DIRTY=$( { git -C "$ROOT" status --porcelain --untracked-files=no
+           git -C "$ROOT" status --porcelain --untracked-files=all -- deploy/dgx/music | grep '^??' || true; } )
 
 say "shipping $BRANCH @ $SHA"
 if [[ -n "$DIRTY" ]]; then
@@ -92,7 +96,7 @@ esac
 # files only: server/ holds a __pycache__ directory, and scp without -r
 # refuses a directory and exits non-zero, which `set -e` turns into a stop
 upload_music() {
-  ssh "$DGX" "mkdir -p $MR/server ~/.cache/whisper"
+  ssh "$DGX" "mkdir -p $MR/server ~/.cache/whisper ~/.cache/torch"
   scp -q music/server/*.py music/server/requirements.txt "$DGX:yuha-spark/server/"
   scp -q music/Dockerfile music/docker-compose.yml "$DGX:yuha-spark/"
 }

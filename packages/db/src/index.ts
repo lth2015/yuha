@@ -17,4 +17,5 @@ export * from './admin-stats.js';
 export * from './admin-lists.js';
 export * from './lyric-drafts.js';
 export * from './credit-resets.js';
+export * from './lyric-realignments.js';
 export * from './customer-notices.js';

@@ -78,7 +78,7 @@ returns to aligning on the mix without a rebuild.
 
 This runs on the DGX, so merging changes nothing here: `./update.sh` rebuilds
 the music service when `server/` changed. Songs already made keep the timings
-they were given.
+they were given — an admin re-aligns them from the console (docs/LYRIC_ALIGNMENT.md).
 
 ## Still to confirm (§3)
 

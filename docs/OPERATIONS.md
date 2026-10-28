@@ -287,6 +287,14 @@ first. The card shows exactly what a reset will give before the button, and
 offers 继续 if a pod roll interrupted one. Rules and implementation:
 [CREDIT_RESET.md](CREDIT_RESET.md).
 
+## 6c. Re-aligning lyrics
+
+After `deploy/dgx/update.sh` ships an aligner change, songs made before it
+keep their old timing until an admin runs 重新对齐歌词 on the same 运营 tab.
+It re-aligns sung songs one at a time on the DGX, rewrites a song only when
+the aligner heard it, never touches an owner's correction, and offers 继续 if
+a pod roll interrupted it. Rules: [LYRIC_ALIGNMENT.md](LYRIC_ALIGNMENT.md).
+
 ## 7. Rights complaints
 
 1. A complaint arrives at `POST /v1/rights-cases` — no account, no payment.

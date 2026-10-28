@@ -37,6 +37,7 @@ import { executeAccountDeletion } from '../services/deletion.js';
 import { decideHeldOrder, heldOrderQueue } from '../services/order-review.js';
 import { findCustomers, getCustomer, giftCredits } from '../services/operator-grant.js';
 import { creditResetOverview, getCreditResetView, startCreditReset } from '../services/credit-reset.js';
+import { getLyricRealignView, lyricRealignOverview, startLyricRealign } from '../services/lyric-realign.js';
 import { changeRole, reactivateAccount, suspendAccount } from '../services/account-admin.js';
 
 /**
@@ -347,6 +348,32 @@ export default async function adminRoutes(app: FastifyInstance, opts: { ctx: App
       .object({ reason: z.string().trim().min(3).max(500), idempotencyKey: idempotencyKeySchema })
       .parse(req.body);
     const view = await startCreditReset(ctx, {
+      idempotencyKey: body.idempotencyKey,
+      reason: body.reason,
+      actorId: req.user!.id,
+      actorRole: req.user!.role,
+    });
+    return reply.status(202).send(view);
+  });
+
+  /*
+   * Lyric re-alignment (docs/LYRIC_ALIGNMENT.md). Admin only: every song is a
+   * GPU job on the box that renders customers' songs. GET shows how many
+   * songs a run would visit and the recent runs; POST starts one (or
+   * continues the one its key started) and returns at once, 202.
+   */
+  app.get('/v1/admin/lyric-realignments', { preHandler: adminOnly }, async () => lyricRealignOverview(ctx));
+
+  app.get('/v1/admin/lyric-realignments/:id', { preHandler: adminOnly }, async (req) => {
+    const { id } = z.object({ id: z.string().uuid() }).parse(req.params);
+    return getLyricRealignView(id);
+  });
+
+  app.post('/v1/admin/lyric-realignments', { preHandler: adminOnly }, async (req, reply) => {
+    const body = z
+      .object({ reason: z.string().trim().min(3).max(500), idempotencyKey: idempotencyKeySchema })
+      .parse(req.body);
+    const view = await startLyricRealign(ctx, {
       idempotencyKey: body.idempotencyKey,
       reason: body.reason,
       actorId: req.user!.id,
