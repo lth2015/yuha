@@ -71,8 +71,25 @@ export default fp(async function authPlugin(
      * enrolment is an ordinary authenticated route, so a locked-out admin can
      * still set up their authenticator and come back.
      */
-    if (opts.adminMfaRequired && !(await getEnabledMfaFactor(req.user!.id))) {
-      throw new AppError('MFA_REQUIRED', 'staff accounts need two-factor authentication — enrol first');
+    if (opts.adminMfaRequired) {
+      const factor = await getEnabledMfaFactor(req.user!.id);
+      if (!factor) {
+        throw new AppError('MFA_REQUIRED', 'staff accounts need two-factor authentication — enrol first');
+      }
+      /*
+       * And this session presented it — after the factor it presented was set
+       * up. Asking only whether the account had a factor let a session copied
+       * before the admin enrolled into the console the moment they did, and a
+       * factor set up again would not retire sessions verified against the
+       * old one (security review YSEC02).
+       */
+      if (adapter.sessionMfaAt) {
+        const at = adapter.sessionMfaAt(req.headers.authorization!.slice('Bearer '.length).trim());
+        const since = factor.confirmed_at ? Math.floor(factor.confirmed_at.getTime() / 1000) : Infinity;
+        if (at === null || at < since) {
+          throw new AppError('MFA_REQUIRED', 'sign in again with your second factor to use the console');
+        }
+      }
     }
   });
 

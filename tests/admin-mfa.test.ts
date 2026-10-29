@@ -39,7 +39,8 @@ afterAll(async () => {
 const overview = (user: TestUser) =>
   h.app.inject({ method: 'GET', url: '/v1/admin/overview', headers: { ...user.authHeader, ...freshIp() } });
 
-async function enrolMfa(user: TestUser): Promise<void> {
+/** Enrols and returns the session the confirmation hands back, which carries the second factor. */
+async function enrolMfa(user: TestUser): Promise<TestUser & { secret: string }> {
   const enroll = await h.app.inject({
     method: 'POST',
     url: '/v1/auth/mfa/enroll',
@@ -53,6 +54,9 @@ async function enrolMfa(user: TestUser): Promise<void> {
     payload: { code: totpAt(enroll.json().secret as string, Date.now()) } as never,
   });
   expect(confirm.statusCode).toBe(200);
+  const token = confirm.json().token as string;
+  expect(token).toBeTruthy();
+  return { ...user, token, authHeader: { authorization: `Bearer ${token}` }, secret: enroll.json().secret as string };
 }
 
 describe('an admin without a second factor', () => {
@@ -78,8 +82,57 @@ describe('an admin without a second factor', () => {
      */
     const admin = await h.createUser({ email: 'enrolling-admin@example.jp', role: 'admin' });
     expect((await overview(admin)).statusCode).toBe(403);
+    const verified = await enrolMfa(admin);
+    expect((await overview(verified)).statusCode).toBe(200);
+  });
+});
+
+/*
+ * The gate asked "does the account have a factor", not "did this session
+ * present one". A session copied before the admin enrolled became a console
+ * session the moment they did (security review YSEC02).
+ */
+describe('a session from before the factor', () => {
+  it('stays out of the console after the admin enrols', async () => {
+    const admin = await h.createUser({ email: 'old-session-admin@example.jp', role: 'admin' });
     await enrolMfa(admin);
-    expect((await overview(admin)).statusCode).toBe(200);
+    const res = await overview(admin); // the token from before enrolment
+    expect(res.statusCode).toBe(403);
+    expect(res.json().error?.code).toBe('MFA_REQUIRED');
+  });
+
+  it('is let in once it signs in with the second factor', async () => {
+    const admin = await h.createUser({ email: 'relogin-admin@example.jp', role: 'admin' });
+    const { secret } = await enrolMfa(admin);
+    const challenge = await import('../apps/api/src/services/mfa.js').then((m) =>
+      m.issueMfaChallenge(h.ctx, (admin as { id: string }).id, admin.email),
+    );
+    const res = await h.app.inject({
+      method: 'POST',
+      url: '/v1/auth/mfa/verify',
+      headers: freshIp(),
+      payload: { challengeToken: challenge, code: totpAt(secret, Date.now()) } as never,
+    });
+    expect(res.statusCode).toBe(200);
+    const signedIn = { ...admin, authHeader: { authorization: `Bearer ${res.json().token as string}` } };
+    expect((await overview(signedIn)).statusCode).toBe(200);
+  });
+
+  it('a factor set up again retires sessions verified against the old one', async () => {
+    const admin = await h.createUser({ email: 'reenrol-admin@example.jp', role: 'admin' });
+    const first = await enrolMfa(admin);
+    expect((await overview(first)).statusCode).toBe(200);
+    const off = await h.app.inject({
+      method: 'POST',
+      url: '/v1/auth/mfa/disable',
+      headers: { ...first.authHeader, ...freshIp() },
+      payload: { code: totpAt(first.secret, Date.now()) } as never,
+    });
+    expect(off.statusCode).toBe(200);
+    // Confirmation timestamps are to the second; let the clock move past it.
+    await new Promise((ok) => setTimeout(ok, 1100));
+    await enrolMfa(first);
+    expect((await overview(first)).statusCode).toBe(403);
   });
 });
 

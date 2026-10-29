@@ -175,3 +175,59 @@ describe('a correct code', () => {
     expect(rows[0]!.locked_until).toBeNull();
   });
 });
+
+/*
+ * Turning the factor off checked the code and nothing else: wrong codes were
+ * not counted and an existing lock was not consulted, so a stolen session
+ * could guess at it without limit (security review YSEC01).
+ */
+describe('turning the factor off', () => {
+  const disable = (user: TestUser, code: string, ip: string) =>
+    h.app.inject({
+      method: 'POST',
+      url: '/v1/auth/mfa/disable',
+      headers: { ...user.authHeader, 'x-forwarded-for': ip },
+      payload: { code } as never,
+    });
+
+  it('counts wrong codes against the account and stops at the lock, whatever the address', async () => {
+    const user = await h.createUser({ email: 'disable-lock@example.jp' });
+    const { secret } = await enrolled(user);
+    for (let i = 0; i < 5; i += 1) {
+      const res = await disable(user, '000000', `203.0.113.${10 + i}`);
+      expect(res.statusCode).toBe(401);
+    }
+    const [row] = await query<{ failed_attempts: number; locked_until: Date | null }>(
+      `SELECT failed_attempts, locked_until FROM mfa_factors f JOIN users u ON u.id = f.user_id WHERE u.email = ?`,
+      ['disable-lock@example.jp'],
+    );
+    expect(Number(row!.failed_attempts)).toBe(5);
+    expect(row!.locked_until).not.toBeNull();
+    // Locked: even the right code does not turn it off.
+    const right = await disable(user, totpAt(secret, Date.now()), '203.0.113.99');
+    expect(right.statusCode).toBe(401);
+    const still = await h.app.inject({ method: 'GET', url: '/v1/auth/mfa/status', headers: user.authHeader });
+    expect(still.json()).toMatchObject({ enabled: true });
+  });
+
+  it('does not spend a recovery code while locked', async () => {
+    const user = await h.createUser({ email: 'disable-recovery@example.jp' });
+    const enroll = await h.app.inject({ method: 'POST', url: '/v1/auth/mfa/enroll', headers: user.authHeader });
+    const secret = enroll.json().secret as string;
+    const confirm = await h.app.inject({
+      method: 'POST',
+      url: '/v1/auth/mfa/confirm',
+      headers: user.authHeader,
+      payload: { code: totpAt(secret, Date.now()) } as never,
+    });
+    const recovery = (confirm.json().recoveryCodes as string[])[0]!;
+    for (let i = 0; i < 5; i += 1) await disable(user, '000000', `203.0.113.${30 + i}`);
+    expect((await disable(user, recovery, '203.0.113.50')).statusCode).toBe(401);
+    const [row] = await query<{ recovery_codes: unknown }>(
+      `SELECT f.recovery_codes FROM mfa_factors f JOIN users u ON u.id = f.user_id WHERE u.email = ?`,
+      ['disable-recovery@example.jp'],
+    );
+    const stored = typeof row!.recovery_codes === 'string' ? JSON.parse(row!.recovery_codes) : row!.recovery_codes;
+    expect(stored).toHaveLength((confirm.json().recoveryCodes as string[]).length);
+  });
+});

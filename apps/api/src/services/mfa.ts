@@ -106,13 +106,55 @@ export async function confirmMfa(
 export async function disableMfa(ctx: AppContext, params: { userId: string; code: string }): Promise<void> {
   const factor = await getEnabledMfaFactor(params.userId);
   if (!factor) throw new AppError('MFA_NOT_ENROLLED', 'two-factor is not enabled');
-
-  const secret = secretBox(ctx).decrypt(factor.secret_encrypted);
-  const ok =
-    verifyTotp(secret, params.code) ||
-    (await consumeRecoveryCode({ userId: params.userId, hash: hashRecoveryCode(params.code) }));
-  if (!ok) throw new AppError('MFA_INVALID_CODE', 'the code did not match');
+  /*
+   * The same account limit as signing in. This compared the code and nothing
+   * else: wrong codes were not counted and a lock was not consulted, so a
+   * stolen session could guess at the one thing standing between it and
+   * turning the factor off (security review YSEC01).
+   */
+  await checkSecondFactor(ctx, params.userId, factor, params.code);
   await disableMfaFactor(params.userId);
+}
+
+/**
+ * A code checked against the account's factor under the account's limit:
+ * a lock refuses before anything is compared (so a locked account spends no
+ * recovery code), a wrong code counts, a right one clears the count. Returns
+ * whether it was the authenticator (rather than a recovery code) that matched.
+ */
+async function checkSecondFactor(
+  ctx: AppContext,
+  userId: string,
+  factor: { locked_until: Date | null; secret_encrypted: string },
+  code: string,
+): Promise<{ totpOk: boolean }> {
+  if (factor.locked_until && factor.locked_until.getTime() > Date.now()) {
+    throw new AppError('MFA_INVALID_CODE', 'too many incorrect codes — wait a few minutes and try again');
+  }
+  const totpSecret = secretBox(ctx).decrypt(factor.secret_encrypted);
+  // Verified once and remembered: re-running verifyTotp at the end to decide
+  // which factor was used can straddle a 30-second step boundary and report a
+  // TOTP login as a spent recovery code.
+  const totpOk = verifyTotp(totpSecret, code);
+  const codeOk = totpOk || (await consumeRecoveryCode({ userId, hash: hashRecoveryCode(code) }));
+  if (!codeOk) {
+    const { lockedUntil } = await recordMfaFailure({
+      userId,
+      maxAttempts: MFA_MAX_FAILED_ATTEMPTS,
+      lockSeconds: MFA_LOCK_SECONDS,
+    });
+    // The same message either way: whether the account is now locked is not
+    // something an attacker should learn from a wrong guess.
+    throw new AppError(
+      'MFA_INVALID_CODE',
+      lockedUntil && lockedUntil.getTime() > Date.now()
+        ? 'too many incorrect codes — wait a few minutes and try again'
+        : 'the code did not match',
+    );
+  }
+  // A correct code clears the slate, including a lock already earned.
+  await clearMfaFailures(userId);
+  return { totpOk };
 }
 
 /**
@@ -157,33 +199,7 @@ export async function verifyMfaChallenge(
    * Checked before the code is compared, so a locked account costs an attacker
    * a database read and tells them nothing about whether the code was right.
    */
-  if (factor.locked_until && factor.locked_until.getTime() > Date.now()) {
-    throw new AppError('MFA_INVALID_CODE', 'too many incorrect codes — wait a few minutes and try again');
-  }
-
-  const totpSecret = secretBox(ctx).decrypt(factor.secret_encrypted);
-  // Verified once and remembered: re-running verifyTotp at the end to decide
-  // which factor was used can straddle a 30-second step boundary and report a
-  // TOTP login as a spent recovery code.
-  const totpOk = verifyTotp(totpSecret, params.code);
-  const codeOk = totpOk || (await consumeRecoveryCode({ userId, hash: hashRecoveryCode(params.code) }));
-  if (!codeOk) {
-    const { lockedUntil } = await recordMfaFailure({
-      userId,
-      maxAttempts: MFA_MAX_FAILED_ATTEMPTS,
-      lockSeconds: MFA_LOCK_SECONDS,
-    });
-    // The same message either way: whether the account is now locked is not
-    // something an attacker should learn from a wrong guess.
-    throw new AppError(
-      'MFA_INVALID_CODE',
-      lockedUntil && lockedUntil.getTime() > Date.now()
-        ? 'too many incorrect codes — wait a few minutes and try again'
-        : 'the code did not match',
-    );
-  }
-  // A correct code clears the slate, including a lock already earned.
-  await clearMfaFailures(userId);
+  const { totpOk } = await checkSecondFactor(ctx, userId, factor, params.code);
 
   // Single use: a redeemed challenge never mints a second session.
   const challengeHash = createHash('sha256').update(params.challengeToken).digest('hex');
