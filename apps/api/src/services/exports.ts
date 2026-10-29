@@ -112,6 +112,55 @@ export async function createExport(
     throw new AppError('TRACK_SUSPENDED', `licence record is ${licence.status}`);
   }
 
+  /*
+   * The whole song, as MP3, for its owner: the delivered master itself.
+   *
+   * This went through ffmpeg like a clip — decode, loudnorm (which resamples
+   * to 192 kHz internally), encode again — about ten seconds of one core for
+   * a three-minute song, on a pod that requests a quarter of one and behind a
+   * proxy with its own deadline. Full-length downloads of new songs failed
+   * in production with a generic error, and the best case was a
+   * second-generation copy of a file the DGX had already mastered to the
+   * same loudness. A licensee still gets a rendered export: the master asset
+   * is the owner's, and its download link is re-issued by owner.
+   */
+  const wholeSong =
+    req.format === 'mp3' &&
+    master.format === 'mp3' &&
+    clipStartMs === 0 &&
+    !req.fadeOut &&
+    clipDurationMs >= master.duration_ms - ctx.config.AUDIO_DURATION_TOLERANCE_MS &&
+    !viaLicense &&
+    master.owner_id === params.userId;
+  if (wholeSong) {
+    const signed = await ctx.storage.signedUrl({
+      zone: 'delivery',
+      key: master.storage_key,
+      ttlSeconds: ctx.config.DOWNLOAD_URL_TTL_SECONDS,
+      filename: downloadFilename(track.title, 'mp3'),
+    });
+    await trackEvent({
+      name: 'export_created',
+      userRef: params.userId,
+      props: { track_id: track.id, duration: req.clipDurationSeconds, format: 'mp3', master: true },
+      runMode: ctx.config.mode,
+      isInternal: ctx.config.isDemo,
+    });
+    return {
+      exportId: master.id,
+      trackId: track.id,
+      format: 'mp3',
+      clipStartSeconds: 0,
+      clipDurationSeconds: master.duration_ms / 1000,
+      fadeOut: false,
+      byteSize: master.byte_size,
+      sha256: master.sha256,
+      downloadUrl: signed.url,
+      downloadUrlExpiresAt: signed.expiresAt.toISOString(),
+      reused: true,
+    };
+  }
+
   const hash = paramsHash(req);
   const existing = await findAsset({
     trackId: track.id,

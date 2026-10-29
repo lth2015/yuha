@@ -367,6 +367,19 @@ export async function createStablecoinQuote(
           },
         );
       }
+      /*
+       * A prepared intent means the wallet was handed the transfer, and the
+       * money may already be on its way. Re-quoting cancelled it all the
+       * same, so a payer whose page reloaded mid-payment was offered a new
+       * price to pay again while the first transfer was in flight. While its
+       * quote is live it is resumed as it was; after that, nothing new is
+       * issued until the sweep could have seen the payment arrive.
+       */
+      if (openForPayer.state !== 'quoted') {
+        const held = await getQuote(openForPayer.quote_id, tx);
+        if (held && held.token_key === token.key && held.expires_at.getTime() > Date.now()) return viewQuote(held);
+        throw paymentInFlight(ctx, order.id, held);
+      }
       await closeIntent({ intentId: openForPayer.id, state: 'cancelled' }, tx);
     }
 
@@ -398,6 +411,11 @@ export async function createStablecoinQuote(
           'a payment for this order may already be on its way on another network — finish it, or wait for its quote to expire',
           { reason: 'otherChain', orderId: order.id },
         );
+      }
+      // The same, from another wallet on this chain: that payment may be in
+      // flight too, and superseding its intent leaves it nothing to attach to.
+      if (openForOrder.state !== 'quoted') {
+        throw paymentInFlight(ctx, order.id, await getQuote(openForOrder.quote_id, tx));
       }
       await closeIntent({ intentId: openForOrder.id, state: 'cancelled' }, tx);
     }
@@ -445,6 +463,22 @@ export async function createStablecoinQuote(
     );
     return viewQuote(quote);
   });
+}
+
+function paymentInFlight(ctx: AppContext, orderId: string, held: StablecoinQuoteRow | undefined): AppError {
+  return new AppError(
+    'CONFLICT',
+    'a payment for this order may already be on its way — finish it, or wait until it can no longer arrive',
+    {
+      reason: 'paymentInFlight',
+      orderId,
+      // When the sweep frees the slot: the quote's expiry plus the grace it
+      // waits for a late-scanned payment.
+      releasesAt: held
+        ? new Date(held.expires_at.getTime() + ctx.config.STABLECOIN_INTENT_GRACE_SECONDS * 1000).toISOString()
+        : null,
+    },
+  );
 }
 
 /**

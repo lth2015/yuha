@@ -125,6 +125,7 @@ export type WalletProblem =
   | 'noGas'
   // Refusals the server explained (payConflict), not reported by the wallet.
   | 'walletBusy'
+  | 'paymentInFlight'
   | 'orderClosed'
   | 'quoteExpired'
   | 'otherChain'
@@ -364,7 +365,7 @@ export function canPayVerdict(params: { tokenBalance: bigint; nativeBalance: big
  * now names the reason; this reads it, and nothing it does not recognise.
  */
 export type PayConflict =
-  | { reason: 'walletBusy'; orderId: string | null; releasesAt: string | null }
+  | { reason: 'walletBusy' | 'paymentInFlight'; orderId: string | null; releasesAt: string | null }
   | { reason: 'orderClosed'; orderId: string | null }
   | { reason: 'quoteExpired' }
   | { reason: 'otherChain' };
@@ -375,7 +376,8 @@ export function payConflict(details: unknown): PayConflict | null {
   const str = (v: unknown) => (typeof v === 'string' && v ? v : null);
   switch (d['reason']) {
     case 'walletBusy':
-      return { reason: 'walletBusy', orderId: str(d['orderId']), releasesAt: str(d['releasesAt']) };
+    case 'paymentInFlight':
+      return { reason: d['reason'], orderId: str(d['orderId']), releasesAt: str(d['releasesAt']) };
     case 'orderClosed':
       return { reason: 'orderClosed', orderId: str(d['orderId']) };
     case 'quoteExpired':

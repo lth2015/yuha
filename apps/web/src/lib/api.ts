@@ -24,13 +24,16 @@ export class ApiError extends Error {
   readonly code: ErrorCode;
   readonly status: number;
   readonly details: unknown;
+  /** The server's id for this request, to quote when reporting a failure. */
+  readonly requestId: string | null;
 
-  constructor(code: ErrorCode, message: string, status: number, details?: unknown) {
+  constructor(code: ErrorCode, message: string, status: number, details?: unknown, requestId?: string | null) {
     super(message);
     this.name = 'ApiError';
     this.code = code;
     this.status = status;
     this.details = details;
+    this.requestId = requestId ?? null;
   }
 }
 
@@ -199,7 +202,7 @@ function errorFrom(res: Response, text: string, requestToken: string | null): Ap
   } catch {
     json = null;
   }
-  const body = json as { error?: { code?: ErrorCode; message?: string; details?: unknown } } | null;
+  const body = json as { error?: { code?: ErrorCode; message?: string; details?: unknown; requestId?: string } } | null;
   const code = body?.error?.code ?? 'INTERNAL_ERROR';
   /*
    * An expired or revoked session drops the stale token — and says so.
@@ -220,7 +223,7 @@ function errorFrom(res: Response, text: string, requestToken: string | null): Ap
       /* no window: nothing is rendering, so nothing needs telling */
     }
   }
-  return new ApiError(code, body?.error?.message ?? res.statusText, res.status, body?.error?.details);
+  return new ApiError(code, body?.error?.message ?? res.statusText, res.status, body?.error?.details, body?.error?.requestId ?? null);
 }
 
 /**

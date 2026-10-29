@@ -51,6 +51,11 @@ describe('payConflict', () => {
       releasesAt: '2026-10-29T07:30:00.000Z',
     });
     expect(payConflict({ reason: 'walletBusy', orderId: 'o1', releasesAt: null })).toMatchObject({ releasesAt: null });
+    expect(payConflict({ reason: 'paymentInFlight', orderId: 'o5', releasesAt: '2026-10-29T07:30:00.000Z' })).toEqual({
+      reason: 'paymentInFlight',
+      orderId: 'o5',
+      releasesAt: '2026-10-29T07:30:00.000Z',
+    });
     expect(payConflict({ reason: 'orderClosed', orderId: 'o2' })).toEqual({ reason: 'orderClosed', orderId: 'o2' });
     expect(payConflict({ reason: 'quoteExpired' })).toEqual({ reason: 'quoteExpired' });
     expect(payConflict({ reason: 'otherChain', orderId: 'o3' })).toEqual({ reason: 'otherChain' });

@@ -190,7 +190,7 @@ export function StablecoinPay() {
         return;
       }
       setError(null);
-      if (conflict.reason === 'walletBusy') setReleasesAt(conflict.releasesAt);
+      if (conflict.reason === 'walletBusy' || conflict.reason === 'paymentInFlight') setReleasesAt(conflict.releasesAt);
       if (conflict.reason === 'quoteExpired') setQuote(null);
       setProblem(conflict.reason);
       /*

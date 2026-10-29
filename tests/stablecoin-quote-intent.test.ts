@@ -218,6 +218,63 @@ describe('one open payment per wallet', () => {
     expect(Math.abs(Date.parse(details.releasesAt) - expected)).toBeLessThan(2000);
   });
 
+  /*
+   * A prepared intent means the wallet was handed the transfer; the money may
+   * be on its way. Returning to the order cancelled it all the same and
+   * issued a new quote, so a payer whose page reloaded mid-payment was asked
+   * to pay again while the first transfer was still in flight (review R1).
+   */
+  const prepareOrder = (user: TestUser, orderId: string) => prepare(user, orderId);
+  const intentState = async (quoteId: string) =>
+    (await query<{ state: string; open_key: string | null }>(`SELECT state, open_key FROM stablecoin_intents WHERE quote_id = ?`, [quoteId]))[0]!;
+
+  it('resumes a prepared payment instead of cancelling it, from a fresh page', async () => {
+    const user = await h.createUser({ email: 'resume@example.jp' });
+    const payer = await linkWallet(user, accountA);
+    const first = await quote(user, { priceKey: 'drop_5', idempotencyKey: 'resume-0001', tokenKey: 'jpyc', payer });
+    expect((await prepareOrder(user, first.json().orderId)).statusCode).toBe(200);
+    const back = await quote(user, { priceKey: 'drop_5', idempotencyKey: 'resume-0002', tokenKey: 'jpyc', payer });
+    expect(back.statusCode).toBe(200);
+    expect(back.json().quoteId).toBe(first.json().quoteId);
+    expect(await intentState(first.json().quoteId)).toMatchObject({ state: 'prepared' });
+  });
+
+  it('resumes it on the same page too', async () => {
+    const user = await h.createUser({ email: 'resume2@example.jp' });
+    const payer = await linkWallet(user, accountA);
+    const first = await quote(user, { priceKey: 'drop_5', idempotencyKey: 'resume-0003', tokenKey: 'jpyc', payer });
+    await prepareOrder(user, first.json().orderId);
+    const again = await quote(user, { priceKey: 'drop_5', idempotencyKey: 'resume-0003', tokenKey: 'jpyc', payer });
+    expect(again.json().quoteId).toBe(first.json().quoteId);
+  });
+
+  it('refuses a new price while a prepared payment may still arrive, and says until when', async () => {
+    const user = await h.createUser({ email: 'inflight@example.jp' });
+    const payer = await linkWallet(user, accountA);
+    const first = await quote(user, { priceKey: 'drop_5', idempotencyKey: 'inflight-001', tokenKey: 'jpyc', payer });
+    await prepareOrder(user, first.json().orderId);
+    await query(`UPDATE stablecoin_quotes SET expires_at = UTC_TIMESTAMP(3) - INTERVAL 1 SECOND WHERE id = ?`, [
+      first.json().quoteId,
+    ]);
+    const back = await quote(user, { priceKey: 'drop_5', idempotencyKey: 'inflight-002', tokenKey: 'jpyc', payer });
+    expect(back.statusCode).toBe(409);
+    expect(back.json().error.details).toMatchObject({ reason: 'paymentInFlight', orderId: first.json().orderId });
+    expect(typeof back.json().error.details.releasesAt).toBe('string');
+    expect(await intentState(first.json().quoteId)).toMatchObject({ state: 'prepared' });
+  });
+
+  it('refuses another wallet superseding a prepared payment for the same order', async () => {
+    const user = await h.createUser({ email: 'inflight2@example.jp' });
+    const a = await linkWallet(user, accountA);
+    const b = await linkWallet(user, accountB);
+    const first = await quote(user, { priceKey: 'drop_5', idempotencyKey: 'inflight-003', tokenKey: 'jpyc', payer: a });
+    await prepareOrder(user, first.json().orderId);
+    const other = await quote(user, { priceKey: 'drop_5', idempotencyKey: 'inflight-003', tokenKey: 'jpyc', payer: b });
+    expect(other.statusCode).toBe(409);
+    expect(other.json().error.details).toMatchObject({ reason: 'paymentInFlight' });
+    expect(await intentState(first.json().quoteId)).toMatchObject({ state: 'prepared' });
+  });
+
   it('names a paid order as closed, so the page can show it paid instead of an error', async () => {
     const user = await h.createUser({ email: 'closed-why@example.jp' });
     const payer = await linkWallet(user, accountA);
