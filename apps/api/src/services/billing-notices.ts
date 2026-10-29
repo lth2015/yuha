@@ -1,4 +1,4 @@
-import { claimCustomerNotice, getUser } from '@yuha/db';
+import { claimCustomerNotice, getUser, releaseCustomerNotice } from '@yuha/db';
 import type { AppContext } from '../context.js';
 
 /**
@@ -14,7 +14,8 @@ import type { AppContext } from '../context.js';
  *  - a subscription that has ended (`noticeSubscriptionEnded`).
  *
  * Each is claimed once in `customer_notices` before it is sent, because Stripe
- * delivers events at least once and describes one refund in two events.
+ * delivers events at least once and describes one refund in two events. A
+ * claim whose send did not go out is given back, so the next event can.
  *
  * Three languages in one body. `users` records no locale (notices.ts says
  * why), and these customers read Japanese, Chinese and English, so all three
@@ -49,12 +50,24 @@ async function sendOnce(
   ctx: AppContext,
   params: { userId: string; kind: string; ref: string; subject: string; text: string },
 ): Promise<void> {
+  let claimed = false;
   try {
     const user = await getUser(params.userId);
     if (!user || user.status === 'deleted' || user.deleted_at) return;
     if (!(await claimCustomerNotice({ userId: params.userId, kind: params.kind, ref: params.ref }))) return;
-    await ctx.email.send({ to: user.email, subject: params.subject, text: params.text });
+    claimed = true;
+    const sent = await ctx.email.send({ to: user.email, subject: params.subject, text: params.text });
+    // Claimed is not delivered. The claim was kept whatever the adapter
+    // answered, so one failed send lost the notice for good (review S2).
+    if (!sent.delivered) {
+      claimed = false;
+      await releaseCustomerNotice({ userId: params.userId, kind: params.kind, ref: params.ref });
+      log({ msg: 'billing_notice_not_delivered', kind: params.kind, userId: params.userId });
+    }
   } catch (err) {
+    if (claimed) {
+      await releaseCustomerNotice({ userId: params.userId, kind: params.kind, ref: params.ref }).catch(() => undefined);
+    }
     log({ msg: 'billing_notice_failed', kind: params.kind, userId: params.userId, error: (err as Error).message });
   }
 }

@@ -32,6 +32,15 @@ export function ErrorNotice({ error, onRetry }: { error: unknown; onRetry?: () =
     <div className={`alert alert--${msg.tone}`} role="alert" aria-live="assertive">
       <div className="alert__title">{t(msg.titleKey)}</div>
       <div>{t(nextLineKey(msg.nextKey, hintKey))}</div>
+      {/*
+        A failure the person cannot fix is one they report, and "it did not
+        work" cannot be found in a log. The server's request id can.
+      */}
+      {error instanceof ApiError && error.requestId && (error.status >= 500 || error.code === 'INTERNAL_ERROR') && (
+        <div className="alert__next small">
+          {t('common.requestId')} <code style={{ userSelect: 'all' }}>{error.requestId}</code>
+        </div>
+      )}
       {appealable && (
         <div className="alert__next small">
           {t('common.rightsNotice')}

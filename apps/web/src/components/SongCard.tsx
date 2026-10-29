@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useLayoutEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import type { TrackView } from '@yuha/contracts';
 import { apiFetch } from '../lib/api';
@@ -60,6 +60,25 @@ export function SongCard({
   const [busy, setBusy] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
+  /*
+   * Kept on screen. The panel hangs from the card's right edge and is wider
+   * than a phone's half-width card, so the first column's panel started
+   * 13px left of the screen and its left edge was cut off (review, 393px).
+   * Measured once it is laid out, and moved by just enough.
+   */
+  useLayoutEffect(() => {
+    const panel = panelRef.current;
+    if (!menuOpen || !panel) return;
+    panel.style.right = '';
+    // The opening animation scales from the top-right corner, so the right
+    // edge is where it will settle and the width is the untransformed one.
+    const right = panel.getBoundingClientRect().right;
+    const left = right - panel.offsetWidth;
+    const gutter = 8;
+    const over = left < gutter ? gutter - left : right > window.innerWidth - gutter ? window.innerWidth - gutter - right : 0;
+    if (over !== 0) panel.style.right = `${parseFloat(getComputedStyle(panel).right) - over}px`;
+  }, [menuOpen]);
   const closeMenu = useCallback(() => setMenuOpen(false), []);
   useDismiss(menuRef, menuOpen, closeMenu);
   /*
@@ -229,7 +248,7 @@ export function SongCard({
                 <span className="icon icon--dots" aria-hidden="true" />
               </button>
               {menuOpen && (
-                <div className="menu__panel" role="menu">
+                <div className="menu__panel" role="menu" ref={panelRef}>
                   <Link role="menuitem" to={`/song/${song.trackId}`} onClick={closeMenu}>
                     <span className="icon icon--note" aria-hidden="true" />
                     {t('card.open')}

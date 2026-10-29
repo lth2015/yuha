@@ -13,7 +13,7 @@
  */
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { randomUUID } from 'node:crypto';
-import { getBalance, grantUnits, listBatches, query, reconcileBalances, reserveUnit, withTx } from '@yuha/db';
+import { getBalance, grantUnits, listBatches, query, queryOne, reconcileBalances, reserveUnit, resetAccount, withTx, type CreditResetRow } from '@yuha/db';
 import { createHarness, resetData, teardown, type Harness, type TestUser } from './helpers/harness.js';
 
 let h: Harness;
@@ -155,6 +155,51 @@ describe('a reset', () => {
     expect(resumed.id).toBe(done.id);
     for (const u of users) expect(await available(u)).toBe(5);
     expect(await reconcileBalances()).toEqual([]);
+  });
+
+  /*
+   * Review S1. Two API pods: one is still walking reset A's accounts when A
+   * is finished by the other and an admin starts B. The slow runner's next
+   * account expired every credit_reset batch not its own — B's included —
+   * and A's floor had already been given, so the account was left at 0.
+   */
+  it('a runner still holding a finished reset changes nothing, and never expires a newer reset', async () => {
+    const u = await h.createUser();
+    const a = await reset();
+    const b = await reset();
+    expect(await available(u)).toBe(5);
+    const staleA = (await queryOne<CreditResetRow>(`SELECT * FROM credit_resets WHERE id = ?`, [a.id]))!;
+    const out = await withTx((tx) => resetAccount(staleA, u.id, tx));
+    expect(out).toEqual({ topped: 0, bonus: 0 });
+    expect(await available(u)).toBe(5);
+    void b;
+  });
+
+  /*
+   * Review R3. "Paid since the last reset, and not refunded in full"
+   * (docs/CREDIT_RESET.md) was read off the credits: a batch not revoked.
+   * Buy five, use one, refund in full — four are revoked, the used one keeps
+   * the batch active, and the refunded buyer got the paying customer's bonus.
+   */
+  it('gives no paid bonus for a purchase refunded in full, in the preview or the run', async () => {
+    const refunded = await h.createUser();
+    const partial = await h.createUser();
+    for (const [user, status] of [[refunded, 'refunded'], [partial, 'partially_refunded']] as const) {
+      const orderId = randomUUID();
+      await query(
+        `INSERT INTO orders (id, user_id, price_key, price_version, kind, amount_minor, currency, status, idempotency_key, metadata, payment_method)
+         SELECT ?, ?, price_key, version, kind, amount_minor, currency, ?, ?, '{}', 'card' FROM product_catalog WHERE price_key = 'drop_5' ORDER BY version DESC LIMIT 1`,
+        [orderId, user.id, status, `o-${orderId}`],
+      );
+      await withTx((tx) =>
+        grantUnits({ userId: user.id, source: 'one_time_order', sourceRef: orderId, units: 1, reason: 'test_purchase' }, tx),
+      );
+    }
+    const preview = (await overview(admin)).json().preview;
+    expect(preview.bonusAccounts).toBe(1);
+    await reset();
+    expect(await available(refunded)).toBe(5); // 1 still held + 4 top-up, no bonus
+    expect(await available(partial)).toBe(10); // partly refunded still paid: + 5
   });
 
   it('shows beforehand what it will give, and the run gives exactly that', async () => {
