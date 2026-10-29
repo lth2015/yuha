@@ -7,7 +7,10 @@ import { LOCALES } from '../lib/money';
 import {
   countdown,
   explorerTxUrl,
+  balanceOfCall,
+  canPayVerdict,
   formatAtomic,
+  hexToBigInt,
   chainCopy,
   knownChainParams,
   parseChainId,
@@ -145,6 +148,8 @@ export function StablecoinPay() {
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<unknown>(null);
   const [problem, setProblem] = useState<WalletProblem | null>(null);
+  /** What the wallet holds against what the transfer needs, when the check before signing found it short. */
+  const [shortfall, setShortfall] = useState<{ have: string; need: string } | null>(null);
   const [idempotencyKey] = useState(() => newIdempotencyKey('scpay'));
   const [methodsChecked, setMethodsChecked] = useState(false);
   const [methodsError, setMethodsError] = useState<unknown>(null);
@@ -384,6 +389,38 @@ export function StablecoinPay() {
         setChainId(onChain);
         return;
       }
+      /*
+       * Can it pay? Read through the payer's own wallet, so it is their node's
+       * answer about their address. A read that fails decides nothing: the
+       * wallet's own simulation is still there behind it.
+       */
+      const verdict = await (async () => {
+        try {
+          const [token, native] = await Promise.all([
+            p.request({ method: 'eth_call', params: [{ to: prepared.to, data: balanceOfCall(account) }, 'latest'] }),
+            p.request({ method: 'eth_getBalance', params: [account, 'latest'] }),
+          ]);
+          return canPayVerdict({
+            tokenBalance: hexToBigInt(token),
+            nativeBalance: hexToBigInt(native),
+            needAtomic: BigInt(prepared.amountAtomic),
+          });
+        } catch {
+          return { ok: true } as const;
+        }
+      })();
+      if (!verdict.ok) {
+        if (verdict.reason === 'tokenShort') {
+          setShortfall({
+            have: formatAtomic(verdict.haveAtomic.toString(), quote.tokenDecimals),
+            need: formatAtomic(verdict.needAtomic.toString(), quote.tokenDecimals),
+          });
+          setProblem(quote.tokenKey === 'jpyc' ? 'tokenShortJpyc' : 'tokenShort');
+        } else {
+          setProblem('noGas');
+        }
+        return;
+      }
       const hash = (await p.request({
         method: 'eth_sendTransaction',
         params: [
@@ -512,7 +549,14 @@ export function StablecoinPay() {
 
       {problem && (
         <div className="alert alert--warn" role="alert" aria-live="assertive">
-          {t(`scpay.err.${problem}`, { network: net.network, gas: net.gas })}
+          {t(`scpay.err.${problem}`, {
+            network: net.network,
+            gas: net.gas,
+            token: quote?.tokenKey.toUpperCase() ?? '',
+            have: shortfall?.have ?? '',
+            need: shortfall?.need ?? '',
+            address: quote ? `${quote.tokenAddress.slice(0, 6)}…${quote.tokenAddress.slice(-4)}` : '',
+          })}
         </div>
       )}
       <ErrorNotice error={error} />

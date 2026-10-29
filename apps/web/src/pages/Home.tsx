@@ -466,6 +466,29 @@ export default function Home() {
 
       </section>
 
+      {/*
+        A song for somebody (docs/GIFT_AND_SHARE_SPEC.md). It lived only behind
+        a switch at the top of /create, which nobody on the home page ever
+        sees. /create is behind sign-in, and the guard carries ?gift=1 through
+        it. Not in the iOS build, which cannot generate.
+      */}
+      {!IOS_BUILD && (
+        <section className="gift-entry" aria-labelledby="gift-entry-heading">
+          <div className="gift-entry__text">
+            <span className="gift-entry__kicker">{t('home.gift.kicker')}</span>
+            <h2 id="gift-entry-heading">{t('home.gift.title')}</h2>
+            <p>{t('home.gift.body')}</p>
+            <Link className="btn btn--primary" to="/create?gift=1">
+              {t('home.gift.cta')}
+            </Link>
+          </div>
+          <div className="gift-entry__tag" aria-hidden="true">
+            <span>{t('home.gift.tagTo')}</span>
+            <strong>{t('gift.line.birthday')}</strong>
+          </div>
+        </section>
+      )}
+
       {/* Air composition: a static page beside this app (apps/air), so a plain
           link, not a router one. Not in the iOS build, which does not carry it. */}
       {!IOS_BUILD && (
