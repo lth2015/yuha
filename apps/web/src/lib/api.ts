@@ -182,16 +182,22 @@ export async function apiPostForBlob(path: string, body: unknown, timeoutMs = 90
   if (token) headers['authorization'] = `Bearer ${token}`;
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
-  let res: Response;
+  /*
+   * The deadline covers the body as well as the headers. It was cleared once
+   * the headers arrived, so a response that started and then stalled left
+   * the button saying "making" for ever (review S3). The abort signal also
+   * ends a body read in progress.
+   */
   try {
-    res = await fetch(`${API_BASE}${path}`, { method: 'POST', headers, body: JSON.stringify(body), signal: controller.signal });
+    const res = await fetch(`${API_BASE}${path}`, { method: 'POST', headers, body: JSON.stringify(body), signal: controller.signal });
+    if (!res.ok) throw errorFrom(res, await res.text(), token);
+    return await res.blob();
   } catch (err) {
+    if (err instanceof ApiError) throw err;
     throw new NetworkError(err);
   } finally {
     clearTimeout(timer);
   }
-  if (!res.ok) throw errorFrom(res, await res.text(), token);
-  return res.blob();
 }
 
 /** The error a failed response becomes, including what a 401 does to the session. */

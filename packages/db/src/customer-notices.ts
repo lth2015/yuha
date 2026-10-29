@@ -15,3 +15,16 @@ export async function claimCustomerNotice(params: { userId: string; kind: string
   );
   return res.affectedRows === 1;
 }
+
+/**
+ * Gives a claim back when the notice did not go out, so the next attempt can
+ * send it. A claim taken and then not delivered was a notice lost for good:
+ * every later event for the same refund found it claimed (review S2).
+ */
+export async function releaseCustomerNotice(params: { userId: string; kind: string; ref: string }): Promise<void> {
+  await execute(`DELETE FROM customer_notices WHERE user_id = ? AND kind = ? AND ref = ?`, [
+    params.userId,
+    params.kind,
+    params.ref.slice(0, 191),
+  ]);
+}

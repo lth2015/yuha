@@ -572,6 +572,13 @@ export default function SongDetail() {
             <div className="song-spread__actions-main">
             {song.visibility === 'public' && (
               <ShareMenu
+                /*
+                 * One menu per song. The SPA keeps this page mounted when it
+                 * moves from song A to song B, and the menu kept A's finished
+                 * video, ready to send under B's text — or A's video landed
+                 * on B when it finished making after the move (review R2).
+                 */
+                key={song.trackId}
                 url={shareUrl}
                 title={song.title}
                 text={shareText}

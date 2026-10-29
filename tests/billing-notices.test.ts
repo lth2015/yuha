@@ -203,3 +203,50 @@ describe('checkout', () => {
     for (const p of seen) expect(p['payment_method_options']).toEqual({ card: { request_three_d_secure: 'any' } });
   });
 });
+
+/*
+ * Review S2: the claim was kept whether or not the mail left. One SMTP
+ * failure, and the second event for the same refund found it claimed.
+ */
+describe('a notice that did not go out', () => {
+  it('is sent by the next attempt', async () => {
+    const { noticeRefund } = await import('../apps/api/src/services/billing-notices.js');
+    const user = await h.createUser({ email: 'retry-notice@example.jp' });
+    let calls = 0;
+    const sent: EmailMessage[] = [];
+    h.ctx.email = {
+      kind: 'smtp',
+      async send(m: EmailMessage): Promise<EmailResult> {
+        calls += 1;
+        if (calls === 1) return { delivered: false, id: null };
+        sent.push(m);
+        return { delivered: true, id: 'ok' };
+      },
+    };
+    const params = { userId: user.id, ref: 'ch_retry', amountMinor: 980, totalRefundedMinor: 980, paidMinor: 980, currency: 'jpy' };
+    await noticeRefund(h.ctx, params);
+    await noticeRefund(h.ctx, params);
+    await noticeRefund(h.ctx, params);
+    expect(calls).toBe(2);
+    expect(sent).toHaveLength(1);
+  });
+
+  it('is retried after the adapter throws, too', async () => {
+    const { noticeRefund } = await import('../apps/api/src/services/billing-notices.js');
+    const user = await h.createUser({ email: 'retry-notice2@example.jp' });
+    let calls = 0;
+    h.ctx.email = {
+      kind: 'smtp',
+      async send(): Promise<EmailResult> {
+        calls += 1;
+        if (calls === 1) throw new Error('smtp down');
+        return { delivered: true, id: 'ok' };
+      },
+    };
+    const params = { userId: user.id, ref: 'ch_retry2', amountMinor: 980, totalRefundedMinor: 980, paidMinor: 980, currency: 'jpy' };
+    await noticeRefund(h.ctx, params);
+    await noticeRefund(h.ctx, params);
+    expect(calls).toBe(2);
+  });
+});
+
