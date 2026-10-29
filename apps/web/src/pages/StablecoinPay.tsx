@@ -11,6 +11,7 @@ import {
   canPayVerdict,
   formatAtomic,
   hexToBigInt,
+  payConflict,
   chainCopy,
   knownChainParams,
   parseChainId,
@@ -177,10 +178,40 @@ export function StablecoinPay() {
     setError(null);
   }, []);
 
-  const fromServer = useCallback((err: unknown) => {
-    setProblem(null);
-    setError(err);
-  }, []);
+  /** When the wallet's slot frees, for the walletBusy message. */
+  const [releasesAt, setReleasesAt] = useState<string | null>(null);
+
+  const fromServer = useCallback(
+    (err: unknown) => {
+      setProblem(null);
+      const conflict = err instanceof ApiError && err.code === 'CONFLICT' ? payConflict(err.details) : null;
+      if (!conflict) {
+        setError(err);
+        return;
+      }
+      setError(null);
+      if (conflict.reason === 'walletBusy') setReleasesAt(conflict.releasesAt);
+      if (conflict.reason === 'quoteExpired') setQuote(null);
+      setProblem(conflict.reason);
+      /*
+       * A closed order is most often a paid one — money sent from the wallet
+       * directly, found by the scanner while this page sat on an old quote.
+       * Ask, so the page can say "paid" instead of refusing.
+       */
+      if (conflict.reason === 'orderClosed' && conflict.orderId) {
+        void apiFetch<PaymentStatusResponse>(`/v1/orders/${conflict.orderId}/payment-status`)
+          .then(async (res) => {
+            setStatus(res);
+            if (res.entitlementGranted) {
+              setProblem(null);
+              await refreshEntitlements();
+            }
+          })
+          .catch(() => undefined);
+      }
+    },
+    [refreshEntitlements],
+  );
 
   // A late-injecting extension, and the wallet changing its mind about which
   // account or chain it is on while this page is open.
@@ -556,6 +587,9 @@ export function StablecoinPay() {
             have: shortfall?.have ?? '',
             need: shortfall?.need ?? '',
             address: quote ? `${quote.tokenAddress.slice(0, 6)}…${quote.tokenAddress.slice(-4)}` : '',
+            at: releasesAt
+              ? new Date(releasesAt).toLocaleTimeString(LOCALES[lang], { hour: '2-digit', minute: '2-digit' })
+              : '—',
           })}
         </div>
       )}

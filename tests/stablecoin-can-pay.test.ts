@@ -41,3 +41,23 @@ describe('the reads it makes', () => {
     expect(() => hexToBigInt(null)).toThrow();
   });
 });
+
+describe('payConflict', () => {
+  it('reads the reasons the server names, and nothing else', async () => {
+    const { payConflict } = await import('../apps/web/src/lib/stablecoin');
+    expect(payConflict({ reason: 'walletBusy', orderId: 'o1', releasesAt: '2026-10-29T07:30:00.000Z' })).toEqual({
+      reason: 'walletBusy',
+      orderId: 'o1',
+      releasesAt: '2026-10-29T07:30:00.000Z',
+    });
+    expect(payConflict({ reason: 'walletBusy', orderId: 'o1', releasesAt: null })).toMatchObject({ releasesAt: null });
+    expect(payConflict({ reason: 'orderClosed', orderId: 'o2' })).toEqual({ reason: 'orderClosed', orderId: 'o2' });
+    expect(payConflict({ reason: 'quoteExpired' })).toEqual({ reason: 'quoteExpired' });
+    expect(payConflict({ reason: 'otherChain', orderId: 'o3' })).toEqual({ reason: 'otherChain' });
+    // An older server, or a conflict this page has no words for: the generic notice.
+    expect(payConflict({ orderId: 'o4' })).toBeNull();
+    expect(payConflict({ reason: 'somethingNew' })).toBeNull();
+    expect(payConflict(undefined)).toBeNull();
+    expect(payConflict('walletBusy')).toBeNull();
+  });
+});

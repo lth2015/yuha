@@ -149,14 +149,98 @@ describe('a JPYC quote', () => {
 });
 
 describe('one open payment per wallet', () => {
+  /*
+   * The waiting order here is for something else (a song id on it stands in
+   * for a licence, a different purchase): the page asking now is not a
+   * return to it, so it is not adopted.
+   */
+  const waitOnOtherProduct = async (user: TestUser, payer: string, key: string) => {
+    const first = await quote(user, { priceKey: 'drop_5', idempotencyKey: key, tokenKey: 'jpyc', payer });
+    expect(first.statusCode).toBe(200);
+    await query(`UPDATE orders SET metadata = JSON_SET(metadata, '$.track_id', 'another-song') WHERE id = ?`, [
+      first.json().orderId,
+    ]);
+    return first;
+  };
+
   it('refuses a second order while one is waiting', async () => {
     const user = await h.createUser({ email: 'one@example.jp' });
     const payer = await linkWallet(user, accountA);
-    expect((await quote(user, { priceKey: 'drop_5', idempotencyKey: 'wait-one-001', tokenKey: 'jpyc', payer })).statusCode).toBe(
-      200,
-    );
+    await waitOnOtherProduct(user, payer, 'wait-one-001');
     const second = await quote(user, { priceKey: 'drop_5', idempotencyKey: 'wait-one-002', tokenKey: 'jpyc', payer });
     expect(second.statusCode).toBe(409);
+  });
+
+  /*
+   * A page holds its idempotency key in memory, so coming back to it — after
+   * buying gas, say — is a new key and a new order, which the rule above then
+   * refused for as long as the abandoned quote held the wallet: twenty-five
+   * minutes, or for as long as the scanner was failing, since the sweep that
+   * frees the slot runs only after a successful pass. The same person buying
+   * the same thing from the same wallet is that order coming back.
+   */
+  it('takes a fresh page for the same thing as a return to the waiting order', async () => {
+    const user = await h.createUser({ email: 'return@example.jp' });
+    const payer = await linkWallet(user, accountA);
+    const first = await quote(user, { priceKey: 'drop_5', idempotencyKey: 'return-0001', tokenKey: 'jpyc', payer });
+    const back = await quote(user, { priceKey: 'drop_5', idempotencyKey: 'return-0002', tokenKey: 'jpyc', payer });
+    expect(back.statusCode).toBe(200);
+    expect(back.json().orderId).toBe(first.json().orderId);
+    expect(back.json().quoteId).not.toBe(first.json().quoteId);
+    const open = await query<{ n: number }>(
+      `SELECT COUNT(*) AS n FROM stablecoin_intents WHERE order_id = ? AND open_key IS NOT NULL`,
+      [first.json().orderId],
+    );
+    expect(Number(open[0]!.n)).toBe(1);
+    // Only one order exists: the second key did not make another.
+    const orders = await query<{ n: number }>(`SELECT COUNT(*) AS n FROM orders WHERE user_id = ?`, [user.id]);
+    expect(Number(orders[0]!.n)).toBe(1);
+  });
+
+  /*
+   * The refusal used to be a bare CONFLICT, which the page rendered as "the
+   * state changed, loading the latest" — and loaded nothing. A payer who came
+   * back to a fresh page after buying gas was stuck with no way to learn that
+   * an earlier quote still held their wallet, or until when.
+   */
+  it('says why, and when the waiting payment lets go of the wallet', async () => {
+    const user = await h.createUser({ email: 'one-why@example.jp' });
+    const payer = await linkWallet(user, accountA);
+    const first = await waitOnOtherProduct(user, payer, 'wait-why-001');
+    const second = await quote(user, { priceKey: 'drop_5', idempotencyKey: 'wait-why-002', tokenKey: 'jpyc', payer });
+    expect(second.statusCode).toBe(409);
+    const details = second.json().error.details as { reason: string; orderId: string; releasesAt: string };
+    expect(details.reason).toBe('walletBusy');
+    expect(details.orderId).toBe(first.json().orderId);
+    // Quote expiry plus the grace the expiry sweep waits, which is when the
+    // worker frees the slot — not the bare expiry, when it is still held.
+    const expected = Date.parse(first.json().expiresAt) + h.ctx.config.STABLECOIN_INTENT_GRACE_SECONDS * 1000;
+    expect(Math.abs(Date.parse(details.releasesAt) - expected)).toBeLessThan(2000);
+  });
+
+  it('names a paid order as closed, so the page can show it paid instead of an error', async () => {
+    const user = await h.createUser({ email: 'closed-why@example.jp' });
+    const payer = await linkWallet(user, accountA);
+    const first = await quote(user, { priceKey: 'drop_5', idempotencyKey: 'closed-why-01', tokenKey: 'jpyc', payer });
+    await query(`UPDATE orders SET status = 'paid' WHERE id = ?`, [first.json().orderId]);
+    const again = await quote(user, { priceKey: 'drop_5', idempotencyKey: 'closed-why-01', tokenKey: 'jpyc', payer });
+    expect(again.statusCode).toBe(409);
+    expect(again.json().error.details).toMatchObject({ reason: 'orderClosed', orderId: first.json().orderId });
+    const prep = await prepare(user, first.json().orderId);
+    expect(prep.statusCode).toBe(409);
+    expect(prep.json().error.details).toMatchObject({ reason: 'orderClosed', orderId: first.json().orderId });
+  });
+
+  it('names an expired quote at prepare', async () => {
+    const user = await h.createUser({ email: 'expired-why@example.jp' });
+    const payer = await linkWallet(user, accountA);
+    const first = await quote(user, { priceKey: 'drop_5', idempotencyKey: 'expired-why-1', tokenKey: 'jpyc', payer });
+    await query(`UPDATE stablecoin_quotes SET expires_at = UTC_TIMESTAMP(3) - INTERVAL 1 SECOND WHERE order_id = ?`, [
+      first.json().orderId,
+    ]);
+    const prep = await prepare(user, first.json().orderId);
+    expect(prep.statusCode).toBe(409);
+    expect(prep.json().error.details).toMatchObject({ reason: 'quoteExpired' });
   });
 
   it('lets the same order be re-quoted, superseding the old price', async () => {

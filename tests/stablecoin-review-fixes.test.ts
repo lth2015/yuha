@@ -367,6 +367,12 @@ describe('a quote nobody paid', () => {
     await query(`UPDATE stablecoin_quotes SET expires_at = UTC_TIMESTAMP(3) - INTERVAL 1 MINUTE WHERE id = ?`, [
       first.quoteId,
     ]);
+    // A different purchase (a song id stands in for a licence): a return to
+    // the SAME purchase from a fresh page is adopted, not refused, so only
+    // something else is held back until the sweep.
+    await query(`UPDATE orders SET metadata = JSON_SET(metadata, '$.track_id', 'another-song') WHERE id = ?`, [
+      first.orderId,
+    ]);
 
     // Before the sweep: a different order is refused.
     await expect(quote(user, 'stale-0002')).rejects.toThrow(/already has a payment waiting/);
