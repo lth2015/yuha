@@ -4,8 +4,6 @@ import {
   getTrack,
   insertRightsCase,
   query,
-  setLicenseStatus,
-  setTrackState,
   writeAuditLog,
 } from '@yuha/db';
 import type { AppContext } from '../context.js';
@@ -48,30 +46,24 @@ export default async function rightsRoutes(app: FastifyInstance, opts: { ctx: Ap
         evidence: body.evidenceUrls,
       });
 
-      // A credible, track-identified claim pauses distribution while it is
-      // reviewed. SEC-10 is explicit that a pause is NOT a finding of
-      // infringement, which the response says in so many words.
-      if (track && track.state === 'deliverable') {
-        await setTrackState({
-          trackId: track.id,
-          state: 'suspended',
-          reason: `rights_case:${created.case_number}`,
-        });
-        await setLicenseStatus({
-          trackId: track.id,
-          status: 'suspended',
-          reason: `rights_case:${created.case_number}`,
-        });
-        await writeAuditLog({
-          actorId: null,
-          actorRole: 'system',
-          action: 'track.suspended',
-          subjectType: 'track',
-          subjectId: track.id,
-          reason: `rights case ${created.case_number} received`,
-          after: { state: 'suspended' },
-        });
-      }
+      /*
+       * Received, not acted on. Every claim naming a deliverable song used to
+       * pause it on the spot: anyone holding a share link could take a
+       * creator's song and its buyers' licences offline with one anonymous,
+       * evidence-free request (security review YSEC03). Filing stays free and
+       * needs no account; pausing is now a decision — an admin marking the
+       * case under review (routes/admin.ts) — which is what the public page
+       * already promised: paused "if there are reasonable grounds".
+       */
+      await writeAuditLog({
+        actorId: null,
+        actorRole: 'system',
+        action: 'rights_case.received',
+        subjectType: 'rights_case',
+        subjectId: created.id,
+        reason: `rights case ${created.case_number} received`,
+        after: { trackId: track?.id ?? null },
+      });
 
       return reply.status(201).send({
         caseNumber: created.case_number,
@@ -79,6 +71,7 @@ export default async function rightsRoutes(app: FastifyInstance, opts: { ctx: Ap
         receivedAt: created.created_at.toISOString(),
         notice:
           'お申し立てを受け付けました。1営業日以内に受領のご連絡をします。' +
+          '相当の理由があると判断した場合は、調査の間、該当楽曲の配信を一時停止します。' +
           '調査中の一時停止は侵害の認定を意味しません。' +
           'すでに利用者の端末や外部プラットフォームに保存されたファイルを技術的に回収することはできません。',
       });

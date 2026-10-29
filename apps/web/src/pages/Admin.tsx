@@ -391,6 +391,17 @@ function OverviewPanel({ part }: { part: 'ops' | 'review' }) {
                     <td>
                       {isAdmin ? (
                         <div className="row">
+                          {/* A claim no longer pauses the song by itself; taking it up does. */}
+                          {c.status === 'received' && c.trackId && (
+                            <button
+                              type="button"
+                              className="btn"
+                              disabled={busy === c.id}
+                              onClick={() => void resolveCase(c.id, 'under_review')}
+                            >
+                              {t('admin.cases.pause')}
+                            </button>
+                          )}
                           <button
                             type="button"
                             className="btn btn--ghost"

@@ -8,6 +8,7 @@ import {
   unitsGrantedByActorSince,
   getAccountDeletion,
   getRightsCase,
+  getTrack,
   listAccountDeletions,
   listAuditLogs,
   listAuditForConsole,
@@ -560,7 +561,15 @@ export default async function adminRoutes(app: FastifyInstance, opts: { ctx: App
     const updated = await updateRightsCase({ id, status: body.status, resolution: body.reason, assignedTo: req.user!.id });
 
     if (before.track_id) {
-      if (body.status === 'dismissed' || body.status === 'restored') {
+      // Under review is where a pause is decided: a claim no longer pauses a
+      // song on arrival (rights.ts), so taking it up is the act that does.
+      if (body.status === 'under_review') {
+        const track = await getTrack(before.track_id);
+        if (track?.state === 'deliverable') {
+          await setTrackState({ trackId: before.track_id, state: 'suspended', reason: `rights_case:${before.case_number}` });
+          await setLicenseStatus({ trackId: before.track_id, status: 'suspended', reason: `rights_case:${before.case_number}` });
+        }
+      } else if (body.status === 'dismissed' || body.status === 'restored') {
         await setTrackState({ trackId: before.track_id, state: 'deliverable', reason: null });
         await setLicenseStatus({ trackId: before.track_id, status: 'active', reason: body.reason });
       } else if (body.status === 'upheld') {
