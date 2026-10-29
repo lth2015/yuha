@@ -16,7 +16,7 @@ afterAll(async () => {
 });
 
 describe('security headers', () => {
-  it.each(['/health', '/v1/share/songs/00000000-0000-0000-0000-000000000000'])('are on %s', async (url) => {
+  it.each(['/health', '/v1/share/songs/f47ac10b-58cc-4372-a567-0e02b2c3d479'])('are on %s', async (url) => {
     const res = await h.app.inject({ method: 'GET', url, headers: { 'user-agent': 'Twitterbot/1.0' } });
     expect(res.headers['x-content-type-options']).toBe('nosniff');
     expect(res.headers['x-frame-options']).toBe('DENY');
