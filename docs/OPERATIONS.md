@@ -298,10 +298,15 @@ a pod roll interrupted it. Rules: [LYRIC_ALIGNMENT.md](LYRIC_ALIGNMENT.md).
 ## 7. Rights complaints
 
 1. A complaint arrives at `POST /v1/rights-cases` — no account, no payment.
-2. If it identifies a track, distribution is suspended immediately and the
-   licence snapshot moves to `suspended`. New download links stop being issued.
-3. Acknowledge the reporter within one business day.
-4. Investigate, then resolve as `dismissed` / `restored` (track returns to
+2. It is recorded and audited (`rights_case.received`); nothing is paused yet.
+   Until 2026-10-29 a claim naming a track suspended it on arrival, which let
+   one anonymous, evidence-free request take any song offline.
+3. Acknowledge the reporter within one business day, and check the console's
+   rights tab daily: a received case waits on a person.
+4. If there are reasonable grounds, take it up — **審査開始・配信停止**
+   (`under_review`): distribution is suspended and the licence snapshot moves
+   to `suspended`; new download links stop being issued.
+5. Investigate, then resolve as `dismissed` / `restored` (track returns to
    deliverable) or `upheld` (track stays suspended, licence revoked).
 
 Every resolution requires a reason and is audited. Admin role only.
@@ -314,6 +319,28 @@ Two things to state honestly, in this order, whenever a suspension happens:
   promise retrieval.
 
 A track under an open case cannot be deleted by its owner, so evidence survives.
+
+---
+
+## 7a. Browser security headers on the web app
+
+The web app's HTML is served by S3 behind CloudFront, so its response headers
+are a CloudFront **response headers policy** on that distribution. Nothing in
+this repository sets them, and the API's own headers do not reach those pages.
+The security review of 2026-10-29 found none set. Attach a policy with:
+
+| Header | Value |
+| --- | --- |
+| `X-Frame-Options` | `DENY` |
+| `Content-Security-Policy` | `frame-ancestors 'none'` first. Add a full policy in **Report-Only** until Google sign-in, Stripe redirects, audio, downloads and fonts are confirmed, then enforce it |
+| `X-Content-Type-Options` | `nosniff` |
+| `Referrer-Policy` | `strict-origin-when-cross-origin` |
+| `Strict-Transport-Security` | `max-age=31536000` once every subdomain serves HTTPS. Decide `includeSubDomains`/`preload` separately |
+| `Permissions-Policy` | `camera=(self), microphone=(), geolocation=()` (Air uses the camera) |
+
+Check it against the real entry point, with `curl -sI https://yuha.studio/`,
+and by framing the site from another origin. The API sets the first four
+itself (`server.ts`).
 
 ---
 

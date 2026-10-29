@@ -22,14 +22,14 @@
     "@aws-sdk/s3-request-presigner": "^3.717.0",
     "@yuha/contracts": "workspace:*",
     "@yuha/db": "workspace:*",
-    "nodemailer": "^6.9.16",
+    "nodemailer": "~10.0.16",
     "stripe": "^17.5.0",
     "viem": "2.57.3",
     "zod": "^3.24.1"
   },
   "devDependencies": {
     "@types/node": "^22.10.2",
-    "@types/nodemailer": "^6.4.17",
+    "@types/nodemailer": "~8.0.2",
     "typescript": "^5.7.2"
   }
 }
