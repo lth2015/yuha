@@ -2256,6 +2256,12 @@ textarea.is-full { border-color: var(--danger); }
   border-radius: var(--r-card);
   background: var(--surface);
 }
+/* Straight after the hero, the hero's own 64px bottom padding, the score's
+   32px margin and this card's 48px stacked into ~144px of nothing between
+   the score and the card. The score's margin alone is the gap, the same 32px
+   that separates this card from the next one. */
+.hero:has(+ .gift-entry) { padding-bottom: 0; }
+.hero + .gift-entry { margin-top: 0; }
 .gift-entry__text { max-width: 34rem; }
 .gift-entry__kicker { display: block; margin-bottom: var(--s1); font-size: var(--t-caption); color: var(--link); letter-spacing: 0.04em; }
 .gift-entry h2 { margin: 0 0 var(--s2); font-size: var(--t-heading); font-weight: 600; }
