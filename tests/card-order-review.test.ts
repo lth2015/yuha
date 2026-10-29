@@ -66,13 +66,15 @@ async function staffUser(email: string, role: 'support' | 'admin'): Promise<Test
     headers: { ...user.authHeader, ...freshIp() },
   });
   expect(enroll.statusCode, enroll.body).toBe(200);
-  await h.app.inject({
+  const confirm = await h.app.inject({
     method: 'POST',
     url: '/v1/auth/mfa/confirm',
     headers: { ...user.authHeader, ...freshIp() },
     payload: { code: totpAt(enroll.json().secret as string, Date.now()) } as never,
   });
-  return user;
+  // The console takes the session that presented the factor, not the one from before it.
+  const token = confirm.json().token as string;
+  return { ...user, token, authHeader: { authorization: `Bearer ${token}` } };
 }
 
 /** The simulated session id behind a checkout URL. */

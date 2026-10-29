@@ -17,6 +17,12 @@ export interface AuthAdapter {
   readonly kind: string;
   /** Verifies a bearer token and returns the local user. */
   verify(token: string): Promise<UserRow>;
+  /**
+   * When the session behind `token` presented a second factor (epoch
+   * seconds), or null if it never did. Absent for an adapter whose sessions
+   * are not ours to describe (Cognito), which keeps the account-level check.
+   */
+  sessionMfaAt?(token: string): number | null;
 }
 
 /**
@@ -130,6 +136,10 @@ export class DevAuthAdapter implements AuthAdapter {
     if (!existing) throw new AppError('UNAUTHENTICATED', 'session no longer maps to an account');
     return existing;
   }
+
+  sessionMfaAt(token: string): number | null {
+    return this.issuer.verify(token, 'dev')?.mfa ?? null;
+  }
 }
 
 /**
@@ -156,6 +166,10 @@ export class GoogleSessionAdapter implements AuthAdapter {
     const user = await findByExternalId('google', claims.sub);
     if (!user) throw new AppError('UNAUTHENTICATED', 'session no longer maps to an account');
     return user;
+  }
+
+  sessionMfaAt(token: string): number | null {
+    return this.issuer.verify(token, 'google')?.mfa ?? null;
   }
 }
 

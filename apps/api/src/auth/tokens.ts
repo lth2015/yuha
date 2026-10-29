@@ -15,16 +15,23 @@ export interface SessionClaims {
   email: string;
   exp: number;
   nonce: string;
+  /**
+   * When this session presented a second factor (epoch seconds), if it did.
+   * The console asks the session, not the account: a session from before the
+   * account enrolled must not become a console session when it does.
+   */
+  mfa?: number;
 }
 
 export class SessionTokenIssuer {
   constructor(private readonly secret: string, private readonly ttlSeconds = 7 * 24 * 3600) {}
 
-  issue(params: { provider: string; externalId: string; email: string }): {
+  issue(params: { provider: string; externalId: string; email: string; mfaVerified?: boolean }): {
     token: string;
     expiresAt: Date;
   } {
-    const exp = Math.floor(Date.now() / 1000) + this.ttlSeconds;
+    const now = Math.floor(Date.now() / 1000);
+    const exp = now + this.ttlSeconds;
     const body = Buffer.from(
       JSON.stringify({
         provider: params.provider,
@@ -32,6 +39,7 @@ export class SessionTokenIssuer {
         email: params.email,
         exp,
         nonce: randomBytes(8).toString('hex'),
+        ...(params.mfaVerified ? { mfa: now } : {}),
       } satisfies SessionClaims),
       'utf8',
     ).toString('base64url');

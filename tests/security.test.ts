@@ -548,7 +548,7 @@ describe('SEC-08: licence snapshots are immutable', () => {
 });
 
 describe('SEC-10: rights complaints', () => {
-  it('a complaint needs no account and no payment, and suspends distribution', async () => {
+  it('a complaint needs no account and no payment, and is received without pausing anything', async () => {
     const owner = await h.createUser({ credits: 2 });
     const { trackId } = await deliverTrack(owner, 'rights-key-001');
 
@@ -571,8 +571,43 @@ describe('SEC-10: rights complaints', () => {
     expect(res.json().notice).toContain('回収することはできません');
     expect(res.json().notice).toContain('侵害の認定を意味しません');
 
+    /*
+     * Not paused by the claim itself. One anonymous, evidence-free request
+     * used to take any song and its licences offline (security review
+     * YSEC03); a pause is now an admin's decision to take the case up.
+     */
+    expect((await getTrack(trackId))!.state).toBe('deliverable');
+    expect((await getLicenseSnapshot(trackId))!.status).not.toBe('suspended');
+  });
+
+  it('an admin taking the case up pauses distribution, and dismissing it restores it', async () => {
+    const owner = await h.createUser({ credits: 2 });
+    const admin = await h.createUser({ role: 'admin' });
+    const { trackId } = await deliverTrack(owner, 'rights-key-pause');
+    const filed = await h.app.inject({
+      method: 'POST',
+      url: '/v1/rights-cases',
+      payload: {
+        trackId,
+        reporterName: '権利 太郎',
+        reporterEmail: 'rights@example.test',
+        claimType: 'copyright',
+        description: 'この楽曲は当社管理楽曲に酷似しています。詳細は添付のとおりです。',
+      } as never,
+    });
+    const caseRow = (await query<{ id: string }>(`SELECT id FROM rights_cases WHERE case_number = ?`, [filed.json().caseNumber]))[0]!;
+    const decide = (status: string) =>
+      h.app.inject({
+        method: 'POST',
+        url: `/v1/admin/rights-cases/${caseRow.id}/resolve`,
+        headers: admin.authHeader,
+        payload: { status, reason: '内容を確認しました' } as never,
+      });
+    expect((await decide('under_review')).statusCode).toBe(200);
     expect((await getTrack(trackId))!.state).toBe('suspended');
     expect((await getLicenseSnapshot(trackId))!.status).toBe('suspended');
+    expect((await decide('dismissed')).statusCode).toBe(200);
+    expect((await getTrack(trackId))!.state).toBe('deliverable');
   });
 
   it('a suspended track cannot be exported or downloaded', async () => {
@@ -593,6 +628,15 @@ describe('SEC-10: rights complaints', () => {
         claimType: 'copyright',
         description: '当社の管理楽曲との類似を主張します。証拠を添付します。',
       } as never,
+    });
+    // An admin takes the case up, which is what pauses distribution now.
+    const admin = await h.createUser({ role: 'admin' });
+    const [rc] = await query<{ id: string }>(`SELECT id FROM rights_cases WHERE track_id = ?`, [trackId]);
+    await h.app.inject({
+      method: 'POST',
+      url: `/v1/admin/rights-cases/${rc!.id}/resolve`,
+      headers: admin.authHeader,
+      payload: { status: 'under_review', reason: '内容を確認しました' } as never,
     });
 
     const exportRes = await h.app.inject({

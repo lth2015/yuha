@@ -246,6 +246,12 @@ jobs:
       - name: Publish the matching web artifact
         run: |
           set -euo pipefail
+          # Source maps are not published (vite.config.ts). `--delete` below
+          # removes any already in the bucket; this refuses a build that has one.
+          if find apps/web/dist -name '*.map' | grep -q .; then
+            echo "apps/web/dist contains source maps; refusing to publish them" >&2
+            exit 1
+          fi
           aws s3 sync apps/web/dist/ "s3://$WEB_BUCKET/" --delete
           aws cloudfront create-invalidation \
             --distribution-id "$CLOUDFRONT_DISTRIBUTION_ID" \

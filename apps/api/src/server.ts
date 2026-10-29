@@ -92,6 +92,23 @@ export async function buildServer(ctx: AppContext): Promise<FastifyInstance> {
     timeWindow: '1 minute',
   });
 
+  /*
+   * Browser hardening on everything the API answers (security review
+   * YSEC04). The API serves JSON, files, and one HTML page — the share
+   * preview — none of which is meant to be framed or sniffed. The web app's
+   * own HTML comes from S3/CloudFront, whose response headers are set there
+   * (docs/OPERATIONS.md), not here.
+   */
+  app.addHook('onSend', async (_req, reply, payload) => {
+    reply.header('x-content-type-options', 'nosniff');
+    reply.header('x-frame-options', 'DENY');
+    reply.header('referrer-policy', 'strict-origin-when-cross-origin');
+    if (!reply.hasHeader('content-security-policy')) {
+      reply.header('content-security-policy', "frame-ancestors 'none'");
+    }
+    return payload;
+  });
+
   /**
    * Stripe signature verification needs the exact bytes that were sent, so the
    * webhook routes keep their raw body instead of being parsed to an object

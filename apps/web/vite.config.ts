@@ -102,7 +102,13 @@ export default defineConfig(({ command, mode }) => {
     build: {
       // Static output served from S3/CloudFront (§4.2).
       outDir: ios ? 'dist-ios' : 'dist',
-      sourcemap: !ios,
+      /*
+       * No source maps in what is published (security review YSEC05). The
+       * bucket is public and nothing here reads them back — there is no error
+       * tracker to give them to. The deploy's `s3 sync --delete` removes the
+       * ones already uploaded, and it refuses a build that has any.
+       */
+      sourcemap: false,
     },
   };
 });

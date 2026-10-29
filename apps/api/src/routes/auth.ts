@@ -480,10 +480,26 @@ export default async function authRoutes(
     const body = z.object({ code: z.string().regex(/^\d{6}$/) }).parse(req.body);
     const result = await confirmMfa(ctx, { userId: req.user!.id, code: body.code });
     void noticeAccountChange(ctx, { email: req.user!.email, change: 'mfa_enabled', at: new Date() });
-    return result;
+    /*
+     * A session that has just presented the factor, to replace this one.
+     * The console asks whether the SESSION presented a second factor, so the
+     * session this request came in on — possibly a copy someone else holds —
+     * does not gain the console by the account enrolling (YSEC02).
+     */
+    const session = sessionIssuerFor(ctx).issue({
+      provider: req.user!.auth_provider === 'google' ? 'google' : 'dev',
+      externalId: req.user!.external_id,
+      email: req.user!.email,
+      mfaVerified: true,
+    });
+    return { ...result, token: session.token, expiresAt: session.expiresAt.toISOString() };
   });
 
-  app.post('/v1/auth/mfa/disable', { preHandler: app.requireAuth }, async (req) => {
+  app.post('/v1/auth/mfa/disable', {
+    preHandler: app.requireAuth,
+    // Per address as well as per account (the account lock is in disableMfa).
+    config: { rateLimit: { max: 12, timeWindow: '1 minute' } },
+  }, async (req) => {
     const body = z.object({ code: z.string().min(6).max(16) }).parse(req.body);
     await disableMfa(ctx, { userId: req.user!.id, code: body.code });
     // The one an attacker performs. Turning a second factor off is the change
@@ -513,6 +529,7 @@ export default async function authRoutes(
         provider: user.auth_provider === 'google' ? 'google' : 'dev',
         externalId: user.external_id,
         email: user.email,
+        mfaVerified: true,
       });
       // The third place a session is minted. Missing one of these would mean a
       // sign-in that is silently never noticed — which is the failure mode

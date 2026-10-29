@@ -22,6 +22,7 @@ interface Measured {
 
 interface Overview {
   mode: string;
+  build?: { sha: string | null; startedAt: string };
   disclaimer: string;
   operations: {
     jobsByState: Record<string, number>;
@@ -179,6 +180,11 @@ function OverviewPanel({ part }: { part: 'ops' | 'review' }) {
       <div className="row">
         <Badge>{overview.mode}</Badge>
         <Badge tone={isAdmin ? 'badge--accent' : ''}>{me?.role}</Badge>
+        {overview.build && (
+          <span className="small muted" style={{ fontFamily: 'var(--mono)' }}>
+            build {overview.build.sha ? overview.build.sha.slice(0, 7) : '—'} · {formatJst(overview.build.startedAt, false)}
+          </span>
+        )}
       </div>
       <NetxSwitch isAdmin={isAdmin} />
       {isAdmin && <CreditReset />}
@@ -391,6 +397,17 @@ function OverviewPanel({ part }: { part: 'ops' | 'review' }) {
                     <td>
                       {isAdmin ? (
                         <div className="row">
+                          {/* A claim no longer pauses the song by itself; taking it up does. */}
+                          {c.status === 'received' && c.trackId && (
+                            <button
+                              type="button"
+                              className="btn"
+                              disabled={busy === c.id}
+                              onClick={() => void resolveCase(c.id, 'under_review')}
+                            >
+                              {t('admin.cases.pause')}
+                            </button>
+                          )}
                           <button
                             type="button"
                             className="btn btn--ghost"

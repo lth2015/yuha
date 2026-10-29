@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import QRCode from 'qrcode';
 import { Link } from 'react-router-dom';
-import { apiFetch } from '../lib/api';
+import { apiFetch, setToken } from '../lib/api';
 import { rich, useI18n } from '../lib/i18n';
 import { formatJst, useSession } from '../lib/session';
 import { ErrorNotice } from '../components/common';
@@ -95,10 +95,13 @@ export default function Account() {
     setMfaBusy(true);
     setError(null);
     try {
-      const res = await apiFetch<{ recoveryCodes: string[] }>('/v1/auth/mfa/confirm', {
+      const res = await apiFetch<{ recoveryCodes: string[]; token?: string }>('/v1/auth/mfa/confirm', {
         method: 'POST',
         body: { code: mfaCode },
       });
+      // The session that just presented the factor replaces this one: the
+      // console accepts only a session that did, not merely an account that has one.
+      if (res.token) setToken(res.token);
       setRecoveryCodes(res.recoveryCodes);
       setEnrollment(null);
       setMfaCode('');
