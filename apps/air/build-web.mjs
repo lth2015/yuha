@@ -21,7 +21,7 @@ const outDir = resolve(process.argv[2] ?? join(root, '..', 'web', 'dist', 'air')
 const BASE = '/air/';
 
 process.env['AIR_PAGE'] = 'index';
-await build({ root, configFile: join(root, 'vite.config.ts'), base: BASE, logLevel: 'warn', build: { outDir, emptyOutDir: true } });
+await build({ root, configFile: join(root, 'vite.config.ts'), base: BASE, logLevel: 'warn', build: { outDir, emptyOutDir: true, sourcemap: false } });
 
 // Each of these has broken a deploy somewhere before: say so here, not in production.
 const html = readFileSync(join(outDir, 'index.html'), 'utf8');
@@ -31,4 +31,7 @@ if (refs.length === 0 || wrong.length) throw new Error(`build-web: asset URLs mu
 for (const u of refs) if (!existsSync(join(outDir, u.slice(BASE.length)))) throw new Error(`build-web: ${u} is referenced but was not built`);
 const extra = readdirSync(outDir).filter((f) => f.endsWith('.html') && f !== 'index.html');
 if (extra.length) throw new Error(`build-web: development pages in the output: ${extra.join(', ')}`);
+// deploy.yml refuses to publish a dist with source maps in it; vite.config.ts keeps them for development.
+const maps = readdirSync(outDir, { recursive: true }).filter((f) => String(f).endsWith('.map'));
+if (maps.length) throw new Error(`build-web: source maps in the output: ${maps.join(', ')}`);
 console.log(`wrote ${outDir}/index.html (${refs.length} assets under ${BASE}assets/)`);
