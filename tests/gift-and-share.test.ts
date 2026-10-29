@@ -110,6 +110,80 @@ describe('a song for somebody', () => {
   });
 });
 
+/*
+ * Editing who a song is for. The occasion used to be preselected as 生日 and
+ * an anniversary song went out as 「お誕生日おめでとう」, on its page and on
+ * its X card, with no way to correct it short of making another song.
+ */
+describe('changing the dedication', () => {
+  const edit = (user: TestUser, id: string, body: Record<string, unknown>) =>
+    h.app.inject({ method: 'POST', url: `/v1/tracks/${id}/dedication`, headers: user.authHeader, payload: body as never });
+
+  it('lets the owner correct who, why and the line, keeping the language it was written in', async () => {
+    const user = await h.createUser({ credits: 3 });
+    const { trackId } = await song(user, { dedication });
+    const res = await edit(user, trackId!, { to: '小林さん', occasion: 'other', note: '一周年おめでとう' });
+    expect(res.statusCode).toBe(200);
+    const want = { to: '小林さん', occasion: 'other', note: '一周年おめでとう', lang: 'zh' };
+    expect(res.json().dedication).toEqual(want);
+    const view = await h.app.inject({ method: 'GET', url: `/v1/tracks/${trackId}`, headers: user.authHeader });
+    expect(view.json().dedication).toEqual(want);
+  });
+
+  it('removes the line when it is cleared', async () => {
+    const user = await h.createUser({ credits: 3 });
+    const { trackId } = await song(user, { dedication });
+    const res = await edit(user, trackId!, { to: '小林', occasion: 'thanks', note: '' });
+    expect(res.json().dedication).toEqual({ to: '小林', occasion: 'thanks', lang: 'zh' });
+  });
+
+  it('screens the new name and line as creation does', async () => {
+    const user = await h.createUser({ credits: 3 });
+    const { trackId } = await song(user, { dedication });
+    const res = await edit(user, trackId!, { to: '小林', occasion: 'thanks', note: '打给我 090-1234-5678' });
+    expect(res.statusCode).toBe(422);
+    expect(res.json().error.details.field).toBe('dedication.note');
+    const view = await h.app.inject({ method: 'GET', url: `/v1/tracks/${trackId}`, headers: user.authHeader });
+    expect(view.json().dedication).toEqual(dedication);
+  });
+
+  it('is the owner’s alone, and a stranger cannot tell the song exists', async () => {
+    const owner = await h.createUser({ credits: 3 });
+    const other = await h.createUser({ credits: 0 });
+    const { trackId } = await song(owner, { dedication });
+    await publish(owner, trackId!);
+    const res = await edit(other, trackId!, { to: '别人', occasion: 'love' });
+    expect(res.statusCode).toBe(404);
+  });
+
+  it('does not turn a song that was not a gift into one', async () => {
+    const user = await h.createUser({ credits: 3 });
+    const { trackId } = await song(user);
+    const res = await edit(user, trackId!, { to: '小林', occasion: 'thanks' });
+    expect(res.statusCode).toBe(409);
+  });
+
+  it('takes down the old preview card, which shows the old name', async () => {
+    const user = await h.createUser({ credits: 3 });
+    const { trackId } = await song(user, { dedication });
+    await publish(user, trackId!);
+    const put = await h.app.inject({
+      method: 'PUT',
+      url: `/v1/tracks/${trackId}/share-card`,
+      headers: user.authHeader,
+      payload: { png: png(1200, 630) } as never,
+    });
+    expect(put.statusCode).toBe(200);
+    await edit(user, trackId!, { to: '小林さん', occasion: 'other' });
+    const card = await queryOne<{ n: number }>(`SELECT COUNT(*) AS n FROM share_cards WHERE track_id = ?`, [trackId]);
+    expect(Number(card!.n)).toBe(0);
+    // And the preview a crawler reads carries the new name.
+    const res = await share(trackId!, BOT);
+    expect(res.body).toContain('小林さん');
+    expect(res.body).not.toContain('生日快乐');
+  });
+});
+
 describe('the share link', () => {
   it('sends a person to the song’s page', async () => {
     const user = await h.createUser({ credits: 3 });

@@ -30,6 +30,14 @@ export const dedicationSchema = z.object({
 });
 export type Dedication = z.infer<typeof dedicationSchema>;
 
+/**
+ * The owner correcting a dedication on a finished song. No `lang`: that is
+ * the language the song's brief was written in, which a correction does not
+ * change, so the stored value is kept.
+ */
+export const editDedicationRequest = dedicationSchema.omit({ lang: true });
+export type EditDedicationRequest = z.infer<typeof editDedicationRequest>;
+
 const OCCASION_WORDS: Record<Dedication['lang'], Record<Occasion, string>> = {
   zh: { birthday: '生日', thanks: '感谢', sorry: '道歉', love: '告白', miss: '想念', farewell: '送别', cheer: '加油打气', other: '' },
   ja: { birthday: '誕生日', thanks: '感謝', sorry: 'お詫び', love: '告白', miss: '会いたい気持ち', farewell: 'お別れ', cheer: '応援', other: '' },

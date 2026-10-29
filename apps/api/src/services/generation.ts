@@ -39,6 +39,30 @@ import type { AppContext } from '../context.js';
  * separates GEN-01 (replay, return the same job) from GEN-02 (different body,
  * return 409 and change nothing).
  */
+
+/**
+ * A dedication is shown to anybody holding the song's link — the name in the
+ * page's heading and its link preview, the note under it — so both are
+ * screened, the name like a title and the note like a description: before
+ * anything is spent at creation, and again whenever the owner changes them.
+ */
+export function screenDedication(d: { to: string; note?: string | undefined }): void {
+  const checks = [
+    { field: 'dedication.to', result: checkTitle(d.to) },
+    ...(d.note ? [{ field: 'dedication.note', result: checkPrompt(d.note) }] : []),
+  ];
+  for (const { field, result } of checks) {
+    if (!result.allowed) {
+      throw new AppError('PROMPT_BLOCKED', `dedication rejected: ${result.reason}`, {
+        reason: result.reason,
+        hintKey: result.hintKey,
+        appealable: result.appealable,
+        field,
+      });
+    }
+  }
+}
+
 export function hashRequest(userId: string, req: CreateGenerationRequest): string {
   const canonical = JSON.stringify({
     u: userId,
@@ -160,28 +184,7 @@ export async function createGeneration(
       });
     }
   }
-  if (req.dedication) {
-    /*
-     * A dedication is shown to anybody holding the song's link — the name in
-     * the page's heading and its link preview, the note under it — so both are
-     * screened before anything is spent, the name like a title and the note
-     * like a description.
-     */
-    const checks = [
-      { field: 'dedication.to', result: checkTitle(req.dedication.to) },
-      ...(req.dedication.note ? [{ field: 'dedication.note', result: checkPrompt(req.dedication.note) }] : []),
-    ];
-    for (const { field, result } of checks) {
-      if (!result.allowed) {
-        throw new AppError('PROMPT_BLOCKED', `dedication rejected: ${result.reason}`, {
-          reason: result.reason,
-          hintKey: result.hintKey,
-          appealable: result.appealable,
-          field,
-        });
-      }
-    }
-  }
+  if (req.dedication) screenDedication(req.dedication);
   if (req.lyrics) {
     const lyricsSafety = checkLyrics(req.lyrics);
     if (!lyricsSafety.allowed) {

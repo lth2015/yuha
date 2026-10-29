@@ -345,6 +345,42 @@ export async function renameTrack(
   );
 }
 
+/**
+ * The owner's correction of who a song is for. Only a song that already is a
+ * gift: this does not turn one into a gift. True when the row changed hands
+ * of its dedication. Read back, because `affectedRows` counts rows matched
+ * (CLAUDE.md, CLIENT_FOUND_ROWS).
+ */
+export async function setTrackDedication(
+  params: { trackId: string; ownerId: string; dedication: Dedication },
+  tx?: PoolConnection,
+): Promise<boolean> {
+  await execute(
+    `UPDATE tracks SET dedication = ?, updated_at = UTC_TIMESTAMP(3)
+      WHERE id = ? AND owner_id = ? AND deleted_at IS NULL AND dedication IS NOT NULL`,
+    [JSON.stringify(params.dedication), params.trackId, params.ownerId],
+    tx,
+  );
+  const row = await queryOne<{ dedication: unknown }>(
+    `SELECT dedication FROM tracks WHERE id = ? AND owner_id = ? AND deleted_at IS NULL`,
+    [params.trackId, params.ownerId],
+    tx,
+  );
+  // MySQL's JSON type reorders keys, so compare the fields, not the text.
+  const stored = (typeof row?.dedication === 'string' ? JSON.parse(row.dedication) : row?.dedication) as
+    | Partial<Dedication>
+    | null
+    | undefined;
+  const want = params.dedication;
+  return (
+    !!stored &&
+    stored.to === want.to &&
+    stored.occasion === want.occasion &&
+    (stored.note ?? null) === (want.note ?? null) &&
+    stored.lang === want.lang
+  );
+}
+
 /** Fire-and-forget engagement counter; rate limited at the route, not here. */
 export async function incrementPlayCount(trackId: string): Promise<void> {
   await execute(

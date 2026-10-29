@@ -2,6 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import {
   AppError,
   createExportRequest,
+  editDedicationRequest,
   listTracksQuery,
   lyricTimings,
   markCorrected,
@@ -22,6 +23,7 @@ import {
   listAssets,
   listTracks,
   renameTrack,
+  setTrackDedication,
   setTrackLyricTimings,
   softDeleteTrack,
   trackEvent,
@@ -31,6 +33,7 @@ import { licenseStateFor } from '../services/market.js';
 import type { AppContext } from '../context.js';
 import { createExport, issueDownloadUrl } from '../services/exports.js';
 import { LICENSE_DISCLAIMER } from '../services/delivery.js';
+import { screenDedication } from '../services/generation.js';
 import { toPublicTrackView } from './explore.js';
 
 async function toTrackView(
@@ -344,6 +347,49 @@ export default async function trackRoutes(app: FastifyInstance, opts: { ctx: App
       isInternal: ctx.config.isDemo,
     });
     return { trackId: track.id, title };
+  });
+
+  /**
+   * POST /v1/tracks/:id/dedication — the owner corrects who the song is for.
+   *
+   * The occasion used to be preselected, and an anniversary song went out as
+   * 「お誕生日おめでとう」 with nothing to do about it but make another. Only a
+   * song that is already a gift: this does not make one a gift, which would
+   * also take it off the showcase without anybody deciding to. The name and
+   * the line are screened as at creation; the lyrics already sung stay as
+   * they are. The stored preview card shows the old name, so it goes now and
+   * the owner's page draws a new one.
+   */
+  app.post('/v1/tracks/:id/dedication', { preHandler: app.requireAuth }, async (req) => {
+    const { id } = req.params as { id: string };
+    const track = await getTrackForUser(id, req.user!.id);
+    if (!track) throw new AppError('NOT_FOUND', 'song not found');
+    if (!track.dedication) throw new AppError('CONFLICT', 'this song was not written for somebody');
+
+    const parsed = editDedicationRequest.safeParse(req.body);
+    if (!parsed.success) throw new AppError('VALIDATION_FAILED', 'a dedication needs a name and an occasion, within their limits');
+    const { to, occasion, note } = parsed.data;
+    screenDedication({ to, note });
+
+    const dedication = { to, occasion, ...(note ? { note } : {}), lang: track.dedication.lang };
+    if (!(await setTrackDedication({ trackId: track.id, ownerId: req.user!.id, dedication }))) {
+      throw new AppError('CONFLICT', 'the song changed while it was being edited');
+    }
+    const card = await getShareCard(track.id);
+    if (card) {
+      await ctx.storage
+        .remove('delivery', card.storage_key)
+        .then(() => forgetShareCard(track.id))
+        .catch((err) => req.log.error({ err, key: card.storage_key }, 'could not remove a share card'));
+    }
+    await trackEvent({
+      name: 'dedication_edited',
+      userRef: req.user!.id,
+      props: { track_id: track.id },
+      runMode: ctx.config.mode,
+      isInternal: ctx.config.isDemo,
+    });
+    return { trackId: track.id, dedication };
   });
 
   app.post('/v1/tracks/:id/adopted', { preHandler: app.requireAuth }, async (req, reply) => {
