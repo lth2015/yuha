@@ -22,6 +22,7 @@ interface Measured {
 
 interface Overview {
   mode: string;
+  build?: { sha: string | null; startedAt: string };
   disclaimer: string;
   operations: {
     jobsByState: Record<string, number>;
@@ -179,6 +180,11 @@ function OverviewPanel({ part }: { part: 'ops' | 'review' }) {
       <div className="row">
         <Badge>{overview.mode}</Badge>
         <Badge tone={isAdmin ? 'badge--accent' : ''}>{me?.role}</Badge>
+        {overview.build && (
+          <span className="small muted" style={{ fontFamily: 'var(--mono)' }}>
+            build {overview.build.sha ? overview.build.sha.slice(0, 7) : '—'} · {formatJst(overview.build.startedAt, false)}
+          </span>
+        )}
       </div>
       <NetxSwitch isAdmin={isAdmin} />
       {isAdmin && <CreditReset />}

@@ -90,6 +90,7 @@ jobs:
           docker buildx build \
             --platform linux/amd64 \
             --file Dockerfile.api \
+            --build-arg BUILD_SHA="$SHA" \
             --tag "$ECR_REGISTRY/music/api:$IMAGE_TAG" \
             --cache-from type=gha,scope=api \
             --cache-to type=gha,mode=max,scope=api \
@@ -108,6 +109,7 @@ jobs:
           docker buildx build \
             --platform linux/amd64 \
             --file Dockerfile.worker \
+            --build-arg BUILD_SHA="$SHA" \
             --tag "$ECR_REGISTRY/music/worker:$IMAGE_TAG" \
             --cache-from type=gha,scope=worker \
             --cache-to type=gha,mode=max,scope=worker \

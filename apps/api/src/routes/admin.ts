@@ -51,6 +51,9 @@ import { changeRole, reactivateAccount, suspendAccount } from '../services/accou
  *     before/after state. The column is NOT NULL, so an unexplained privileged
  *     action cannot be recorded — and therefore cannot happen.
  */
+/** When this API process started, for the overview's build line. */
+const PROCESS_STARTED_AT = new Date().toISOString();
+
 export default async function adminRoutes(app: FastifyInstance, opts: { ctx: AppContext }) {
   const { ctx } = opts;
   const staff = app.requireRole(['support', 'admin']);
@@ -84,6 +87,9 @@ export default async function adminRoutes(app: FastifyInstance, opts: { ctx: App
     ]);
     return {
       mode: ctx.config.mode,
+      // Which code is answering: an acceptance record names this, not a
+      // local checkout. Staff only, like everything here.
+      build: { sha: process.env['BUILD_SHA'] ?? null, startedAt: PROCESS_STARTED_AT },
       operations: { ...ops, ledgerDiscrepancies: discrepancies.length },
       cost,
       revenue,

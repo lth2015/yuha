@@ -36,6 +36,10 @@ RUN apt-get update \
 
 ENV NODE_ENV=production
 ENV NODE_EXTRA_CA_CERTS=/etc/ssl/certs/rds-global-bundle.pem
+# The commit this image was built from, so an acceptance check can say which
+# code it ran against (admin overview → build). Late, so it does not bust the cache.
+ARG BUILD_SHA=unknown
+ENV BUILD_SHA=$BUILD_SHA
 WORKDIR /app
 RUN mkdir -p /app/secrets /app/app-secrets /mnt/secrets/api /mnt/secrets/worker
 RUN groupadd --gid 10001 loopscene \
