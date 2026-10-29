@@ -589,6 +589,13 @@ async function processAudio(
         providerRequestId: audioRef.providerRequestId,
       });
       if (alignment.status === 'ok') {
+        if (alignment.fallbackReason) {
+          log('warn', 'lyric alignment fell back to an estimate', {
+            jobId: job.id,
+            trackId: delivered.trackId,
+            reason: alignment.fallbackReason,
+          });
+        }
         await setTrackLyricTimings({ trackId: delivered.trackId, timings: alignment.timings }).catch((err) =>
           log('warn', 'lyric timing storage failed', { jobId: job.id, error: (err as Error).message }),
         );

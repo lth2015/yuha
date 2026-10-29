@@ -17,7 +17,12 @@ export interface AlignmentRequest {
 }
 
 export type AlignmentResult =
-  | { status: 'ok'; timings: LyricTimings }
+  | {
+      status: 'ok';
+      timings: LyricTimings;
+      /** Set when these timings are a fallback: why the aligner before it did not answer. */
+      fallbackReason?: string;
+    }
   | { status: 'failed'; reason: string };
 
 export interface AlignmentProvider {

@@ -53,7 +53,24 @@ Then update `AUDIO_BASE_URL` in `.env` and `docker compose up -d`.
 
 ## Lyric alignment (`POST /v1/align`)
 
-Whisper (`WHISPER_MODEL`, default `turbo`) supplies the clock; the known
+**First, forced alignment (`server/forced.py`, `ALIGN_METHOD=forced`, the
+default).** Whisper was being asked to transcribe a song whose words we
+already know. Now the known lyrics are romanised (fugashi + cutlet, pypinyin
+and hangul-romanize are already in the image for ACE-Step) and placed on the
+vocal stem by torchaudio's MMS_FA CTC model.
+
+- forced_align runs on its CPU kernel, because the image builds torchaudio
+  without CUDA. The model itself runs on the GPU.
+- Digits and acronyms (JPYC) are star tokens.
+- If at least `ALIGN_FORCED_MIN_COVERAGE` (0.6) of the lettered units were
+  found, that result is returned with `method: forced`, `model: mms-fa`.
+  Otherwise everything below runs as before.
+- The log line is `forced alignment <job> coverage=…`.
+- The weights (~1.2GB) download to `~/.cache/torch` on the first alignment.
+- `ALIGN_METHOD=whisper` in `.env` turns forced alignment off without a
+  rebuild.
+
+**Then, or instead:** Whisper (`WHISPER_MODEL`, default `turbo`) supplies the clock; the known
 lyrics are matched onto its words character by character (`server/align.py`).
 On the full mix that clock smears across instrumentals: the first line after
 an interlude lit up while the band was still playing, and the last line before

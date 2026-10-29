@@ -26,6 +26,12 @@ describe('FallbackAlignmentProvider', () => {
 
     const result = await new FallbackAlignmentProvider(primary, fallback).align(request);
     expect(result).toMatchObject({ status: 'ok', timings: { source: 'estimated', aligner: 'estimated-v1' } });
+    /*
+     * And says why. The reason was dropped here, and the worker logs only a
+     * result that is not ok — so a song shown as 「估算同步」 left no trace of
+     * whether the aligner timed out, heard too little, or was down.
+     */
+    expect(result).toMatchObject({ fallbackReason: 'aligner_http_422' });
   });
 
   it('preserves real alignment rather than overwriting it with an estimate', async () => {
@@ -62,7 +68,7 @@ describe('FallbackAlignmentProvider', () => {
     };
 
     await expect(new FallbackAlignmentProvider(primary, fallback).align(request)).resolves.toMatchObject({
-      status: 'ok', timings: { source: 'estimated' },
+      status: 'ok', timings: { source: 'estimated' }, fallbackReason: 'aligner_threw: connection reset',
     });
   });
 });

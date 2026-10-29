@@ -11,16 +11,47 @@ them says which:
 
 A new song is aligned once, by the worker, right after delivery
 (`apps/worker/src/pipeline.ts`). If the aligner is down or hears too little of
-the lyrics (`ALIGN_MIN_COVERAGE`), the song keeps the estimate.
+the lyrics, the song keeps the estimate, and the worker logs
+`lyric alignment fell back to an estimate` with the reason. The reason is one
+of `aligner_timeout`, `aligner_http_422 low_coverage coverage=0.62` or
+`aligner_threw: …`. Before 2026-10-29 that reason was discarded, so an
+estimated song left no trace of why.
 
 ## How the aligner listens
 
-`deploy/dgx/music/README.md` → "Lyric alignment" has the detail. In short:
-Demucs separates the vocal, Whisper transcribes the vocal stem, the known
-lyrics are matched onto Whisper's words character by character, and the
-stem's loudness corrects line starts and ends that Whisper smeared across an
-instrumental. The aligner runs on the DGX, so it is updated by
-`deploy/dgx/update.sh`, not by a merge.
+`deploy/dgx/music/README.md` → "Lyric alignment" has the detail. In short,
+Demucs separates the vocal first. Then:
+
+1. **Forced alignment (`ALIGN_METHOD=forced`, the default since 2026-10-29,
+   `forced.py`).** The known lyrics are romanised:
+   - Japanese with fugashi + cutlet;
+   - Chinese with pypinyin;
+   - Korean with hangul-romanize.
+
+   torchaudio's MMS_FA CTC model then places every unit on the stem by
+   Viterbi. A digit, an acronym sung letter by letter (JPYC), or anything
+   else without letters becomes a star token that matches any sound. A star
+   also opens every line, to absorb breaths and ad-libs.
+
+   Its coverage is the share of lettered units found with a mean frame
+   posterior ≥ 0.05. If that is at least `ALIGN_FORCED_MIN_COVERAGE` (0.6),
+   the result is used.
+2. **Whisper (the fallback, and the whole path under
+   `ALIGN_METHOD=whisper`).** Whisper transcribes the vocal stem, the known
+   lyrics are matched onto its words character by character, and the stem's
+   loudness corrects line starts and ends that Whisper smeared across an
+   instrumental. It is gated by `ALIGN_MIN_COVERAGE` (0.85).
+
+Why forced is first: Whisper's word times are a by-product of recognition,
+and a sung word it did not recognise had no time at all. Such lines were
+spread by character count between their neighbours, which is the "some
+lines early, some late" people noticed. A song Whisper covered less than
+85% of was given up on and shown as 估算同步. Forced alignment answers only
+"where is each known unit sung", and answers it for every unit.
+
+The aligner runs on the DGX, so it is updated by `deploy/dgx/update.sh`, not
+by a merge. The first forced alignment after an update downloads the MMS_FA
+weights (about 1.2 GB) into the mounted `~/.cache/torch`.
 
 ## Re-aligning songs made before an improvement
 
