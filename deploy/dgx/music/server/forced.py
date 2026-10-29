@@ -18,10 +18,10 @@ order, by construction. How sure it is comes from the same posteriors.
 The model reads romanised text (a-z and '), so each line is cut into units
 that carry their own romanisation: a word for Japanese (fugashi + cutlet,
 already in the image for ACE-Step), a character for Chinese (pypinyin), a
-syllable block for Korean, a word for Latin script. Anything the model has no
-letters for — digits, acronyms sung letter by letter, symbols — becomes the
-star token, which matches any sound, so it takes up its time without
-claiming to know what was sung. A star also sits between lines, to absorb
+syllable block for Korean, a word for Latin script. Digits are read as number
+words and acronyms as letter names (`spoken`). Anything still without letters
+becomes the star token, which matches any sound, so it takes up its time
+without claiming to know what was sung. A star also sits between lines, to absorb
 breaths and ad-libs that are not in the lyrics.
 
 Pure-python pieces (units, grouping, the result shape) are separate from the
@@ -88,14 +88,59 @@ def _is_acronym(word: str) -> bool:
     return len(word) >= 2 and word.isascii() and word.isalpha() and word.isupper()
 
 
-def _latin_units(li: int, text: str, start: int, end: int, out: List[Unit]) -> None:
+# Letter names as a singer says them. A first version made acronyms and
+# digits star tokens, and on a real song the star swallowed the line around
+# them: 「いま JPYCで送れるよ」 was left 0.8 s for twelve characters, because a
+# star matches any sound and the star took the "JPYC" and most of what
+# followed. Said aloud, they are ordinary units.
+_LETTERS_JA = dict(zip("ABCDEFGHIJKLMNOPQRSTUVWXYZ", (
+    "ei bii shii dii ii efu jii eichi ai jei kei eru emu enu oo pii kyuu aaru esu tii yuu bui "
+    "daburyuu ekkusu wai zetto").split()))
+_LETTERS_EN = dict(zip("ABCDEFGHIJKLMNOPQRSTUVWXYZ", (
+    "ay bee see dee ee ef jee aitch eye jay kay el em en oh pee cue ar ess tee you vee "
+    "doubleyou ex why zee").split()))
+_ZH_DIGITS = "ling yi er san si wu liu qi ba jiu".split()
+
+
+def _zh_number(n: int) -> str:
+    if n < 10:
+        return _ZH_DIGITS[n]
+    if n < 100:
+        tens, ones = divmod(n, 10)
+        return ("" if tens == 1 else _ZH_DIGITS[tens]) + "shi" + (_ZH_DIGITS[ones] if ones else "")
+    # Years and longer numbers are read digit by digit (二零二六).
+    return "".join(_ZH_DIGITS[int(d)] for d in str(n))
+
+
+def spoken(word: str, lang: Optional[str]) -> str:
+    """Letters for a digit run or an acronym as it is sung; '' if unknown."""
+    if word.isdigit():
+        n = int(word)
+        if lang == "zh":
+            return _zh_number(n)
+        try:
+            from num2words import num2words
+            if lang == "ja":
+                ja = _japanese()
+                return clean_letters(ja[1].romaji(num2words(n, lang="ja"))) if ja else ""
+            return clean_letters(num2words(n, lang="ko" if lang == "ko" else "en"))
+        except Exception:
+            return ""
+    if _is_acronym(word):
+        names = _LETTERS_JA if lang == "ja" else _LETTERS_EN
+        return "".join(names.get(c, "") for c in word)
+    return ""
+
+
+def _latin_units(li: int, text: str, start: int, end: int, out: List[Unit],
+                 lang: Optional[str] = None) -> None:
     for m in re.finditer(r"[A-Za-z']+|\d+", text[start:end]):
         word = m.group(0)
         a, b = start + m.start(), start + m.end()
-        # An acronym is sung as letter names (JPYC, DJ), and a digit as a
-        # number word in whatever language the song is in; neither is the
-        # letters on the page.
-        letters = STAR if word.isdigit() or _is_acronym(word) else clean_letters(word)
+        if word.isdigit() or _is_acronym(word):
+            letters = spoken(word, lang)
+        else:
+            letters = clean_letters(word)
         out.append(Unit(li, a, b, letters or STAR))
 
 
@@ -115,7 +160,7 @@ def line_units(li: int, text: str, lang: Optional[str],
                 if not any(norm_char(c) for c in surface):
                     continue  # punctuation and spaces are not sung
                 if re.fullmatch(r"[A-Za-z0-9']+", surface):
-                    _latin_units(li, text, at, pos, out)
+                    _latin_units(li, text, at, pos, out, lang)
                     continue
                 out.append(Unit(li, at, pos, clean_letters(roman) or STAR))
             return out
@@ -133,7 +178,7 @@ def line_units(li: int, text: str, lang: Optional[str],
                 j = i
                 while j < len(text) and re.match(r"[A-Za-z0-9']", text[j]):
                     j += 1
-                _latin_units(li, text, i, j, out)
+                _latin_units(li, text, i, j, out, lang)
                 i = j
                 continue
             if norm_char(ch):
@@ -151,7 +196,7 @@ def line_units(li: int, text: str, lang: Optional[str],
         for m in re.finditer(r"\S+", text):
             word = m.group(0)
             if re.fullmatch(r"[A-Za-z0-9']+", word):
-                _latin_units(li, text, m.start(), m.end(), out)
+                _latin_units(li, text, m.start(), m.end(), out, lang)
                 continue
             if any(norm_char(c) for c in word):
                 letters = clean_letters(tr.translit(word)) if tr else ""
@@ -164,7 +209,7 @@ def line_units(li: int, text: str, lang: Optional[str],
             continue
         if re.fullmatch(r"[A-Za-z0-9'.,!?;:\-]+", word):
             core = word.strip(".,!?;:-")
-            letters = STAR if core.isdigit() or _is_acronym(core) else clean_letters(core)
+            letters = spoken(core, lang) if core.isdigit() or _is_acronym(core) else clean_letters(core)
         else:
             letters = clean_letters(word)
         out.append(Unit(li, m.start(), m.end(), letters or STAR))

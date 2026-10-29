@@ -5,7 +5,7 @@ romanisers are stubbed where a test needs one.
 """
 import unittest
 
-from forced import STAR, Unit, build_result, group_spans, line_units, lyric_units, token_plan
+from forced import STAR, Unit, build_result, group_spans, line_units, lyric_units, spoken, token_plan
 
 DICT = {c: i + 1 for i, c in enumerate("abcdefghijklmnopqrstuvwxyz'")}
 DICT["-"] = 0
@@ -35,12 +35,20 @@ class UnitTests(unittest.TestCase):
         self.assertEqual([(u.first, u.last, u.letters) for u in units],
                          [(0, 3, "chiisana"), (3, 4, "en"), (4, 5, "ga")])
 
-    def test_digits_and_acronyms_are_stars_and_punctuation_is_not_a_unit(self):
-        # 「1円は1JPYC」: a digit is a number word in the song's language and an
-        # acronym is sung as letter names — neither is the letters on the page.
+    def test_acronyms_are_letter_names_and_punctuation_is_not_a_unit(self):
+        # 「1円は1JPYC」: as stars, these swallowed the line around them on a
+        # real song. JPYC is sung as letter names.
         units = line_units(0, "「1円は1JPYC」", "ja", fake_ja)
-        self.assertEqual([u.letters for u in units], [STAR, "en", "wa", STAR, STAR])
         self.assertEqual([(u.first, u.last) for u in units], [(1, 2), (2, 3), (3, 4), (4, 5), (5, 9)])
+        self.assertEqual(units[4].letters, "jeipiiwaishii")
+        self.assertEqual([u.letters for u in units[1:3]], ["en", "wa"])
+
+    def test_numbers_are_read_in_the_songs_language(self):
+        self.assertEqual(spoken("15", "zh"), "shiwu")
+        self.assertEqual(spoken("25", "zh"), "ershiwu")
+        self.assertEqual(spoken("2026", "zh"), "erlingerliu")
+        self.assertEqual(spoken("DJ", "en"), "deejay")
+        self.assertEqual(spoken("hello", "en"), "")
 
     def test_chinese_is_one_unit_per_character(self):
         units = line_units(0, "晚风，吹过", "zh")
@@ -49,7 +57,7 @@ class UnitTests(unittest.TestCase):
 
     def test_english_words(self):
         units = line_units(0, "Stay with me, DJ!", "en")
-        self.assertEqual([u.letters for u in units], ["stay", "with", "me", STAR])
+        self.assertEqual([u.letters for u in units], ["stay", "with", "me", "deejay"])
 
     def test_section_tags_are_not_sung(self):
         parsed, units = lyric_units("[Verse]\nStay with me\n[Chorus]\nGo", lang="en")
