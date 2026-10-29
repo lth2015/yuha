@@ -1383,6 +1383,8 @@ textarea.is-full { border-color: var(--danger); }
 .song-gift__line { font-size: var(--t-heading); line-height: 1.25; color: var(--ink); font-weight: 700; }
 .song-gift__note { margin: 0; font-size: var(--t-lead); line-height: 1.6; color: var(--ink); overflow-wrap: anywhere; }
 .song-gift__again { margin: var(--s4) 0 0; }
+.song-gift__edit { justify-self: start; }
+.song-gift-edit { gap: var(--s2); margin-bottom: var(--s4); padding-left: var(--s3); border-left: 3px solid var(--petal); }
 .song-spread__player { display: flex; flex-direction: column; align-items: stretch; gap: 6px; margin-top: var(--s6); }
 .song-spread__time { font-size: var(--t-caption); color: var(--muted); white-space: nowrap; }
 /* The transport is the song's own score; it needs room, so the row it sits

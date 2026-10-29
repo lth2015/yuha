@@ -14,6 +14,7 @@ import { LOCALES, formatMoney } from '../lib/money';
 import { useSession } from '../lib/session';
 import { canBePaid } from '../lib/purchase';
 import { CoverArt } from '../components/CoverArt';
+import { DedicationEditor } from '../components/DedicationEditor';
 import { ErrorNotice } from '../components/common';
 import { Score } from '../components/Score';
 import { ShareMenu } from '../components/ShareMenu';
@@ -107,6 +108,19 @@ export default function SongDetail() {
   const [downloading, setDownloading] = useState(false);
   const downloadGuard = useRef(createInFlightGuard());
   const renameButton = useRef<HTMLButtonElement>(null);
+  const [editingGift, setEditingGift] = useState(false);
+  const giftEditButton = useRef<HTMLButtonElement>(null);
+  const giftEditWasOpen = useRef(false);
+  // Focus goes back to "edit" when the editor closes, once the button is
+  // back in the document: focus left on a removed field drops a keyboard
+  // reader at the top of the page.
+  useEffect(() => {
+    if (editingGift) giftEditWasOpen.current = true;
+    else if (giftEditWasOpen.current) {
+      giftEditWasOpen.current = false;
+      giftEditButton.current?.focus();
+    }
+  }, [editingGift]);
   // `player.currentTime` re-renders this several times a second while the song
   // plays; the score itself only depends on the seed.
   const songScore = useMemo(() => (song ? scoreFromSeed(song.coverSeed, 72) : null), [song?.coverSeed]);
@@ -437,14 +451,38 @@ export default function SongDetail() {
         </div>
 
         <div className="song-spread__info">
-          {song.dedication && (
-            <div className="song-gift">
-              <span className="song-gift__to">{t('song.gift.to', { to: song.dedication.to })}</span>
-              {song.dedication.occasion !== 'other' && (
-                <strong className="song-gift__line">{t(`gift.line.${song.dedication.occasion}`)}</strong>
-              )}
-              {song.dedication.note && <p className="song-gift__note">{song.dedication.note}</p>}
-            </div>
+          {song.dedication && editingGift && isOwner ? (
+            <DedicationEditor
+              trackId={song.trackId}
+              dedication={song.dedication}
+              onSaved={(dedication) => {
+                // The page's own card upload notices the change (its key
+                // includes the dedication) and draws the card again.
+                setSong({ ...song, dedication });
+                setEditingGift(false);
+              }}
+              onCancel={() => setEditingGift(false)}
+            />
+          ) : (
+            song.dedication && (
+              <div className="song-gift">
+                <span className="song-gift__to">{t('song.gift.to', { to: song.dedication.to })}</span>
+                {song.dedication.occasion !== 'other' && (
+                  <strong className="song-gift__line">{t(`gift.line.${song.dedication.occasion}`)}</strong>
+                )}
+                {song.dedication.note && <p className="song-gift__note">{song.dedication.note}</p>}
+                {isOwner && (
+                  <button
+                    type="button"
+                    ref={giftEditButton}
+                    className="text-action song-gift__edit"
+                    onClick={() => setEditingGift(true)}
+                  >
+                    {t('song.gift.edit')}
+                  </button>
+                )}
+              </div>
+            )
           )}
           <p className="eyebrow song-spread__eyebrow">
             {t(song.visibility === 'public' ? 'song.public' : isOwner ? 'song.private' : 'song.work')} ·{' '}
