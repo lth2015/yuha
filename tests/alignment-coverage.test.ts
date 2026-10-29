@@ -38,4 +38,24 @@ describe('HTTP alignment coverage', () => {
     vi.stubGlobal('fetch', async () => Response.json({ lines }));
     expect(await provider.align(request)).toMatchObject({ status: 'failed' });
   });
+
+  /*
+   * The DGX answers 422 with what it heard when too little of the lyrics was
+   * recognised. The adapter kept only the status, so "heard 40%" and "heard
+   * 84%" read the same in a log — and one of those is a threshold question.
+   */
+  it('keeps what the aligner said about a refusal', async () => {
+    vi.stubGlobal('fetch', async () => Response.json({ error: 'low_coverage', coverage: 0.6213 }, { status: 422 }));
+    expect(await provider.align(request)).toMatchObject({
+      status: 'failed',
+      reason: 'aligner_http_422 low_coverage coverage=0.62',
+    });
+  });
+
+  it('names a timeout as a timeout', async () => {
+    vi.stubGlobal('fetch', async () => {
+      throw Object.assign(new Error('This operation was aborted'), { name: 'AbortError' });
+    });
+    expect(await provider.align(request)).toMatchObject({ status: 'failed', reason: 'aligner_timeout' });
+  });
 });

@@ -58,7 +58,14 @@ export class HttpAlignmentProvider implements AlignmentProvider {
         signal: controller.signal,
         redirect: 'error',
       });
-      if (!res.ok) return { status: 'failed', reason: `aligner_http_${res.status}` };
+      if (!res.ok) {
+        // The DGX's refusal says what it heard ({error, coverage}); keep it,
+        // so "heard 40%" and "heard 84%" do not read the same in a log.
+        const body = (await res.json().catch(() => null)) as { error?: unknown; coverage?: unknown } | null;
+        const why = typeof body?.error === 'string' ? ` ${body.error.slice(0, 40)}` : '';
+        const heard = typeof body?.coverage === 'number' ? ` coverage=${body.coverage.toFixed(2)}` : '';
+        return { status: 'failed', reason: `aligner_http_${res.status}${why}${heard}` };
+      }
       const json = (await res.json()) as Record<string, unknown>;
 
       const read = (obj: unknown, path: string): unknown =>
@@ -105,6 +112,7 @@ export class HttpAlignmentProvider implements AlignmentProvider {
       }
       return { status: 'ok', timings };
     } catch (err) {
+      if ((err as Error).name === 'AbortError') return { status: 'failed', reason: 'aligner_timeout' };
       return { status: 'failed', reason: (err as Error).message };
     } finally {
       clearTimeout(timer);

@@ -86,7 +86,12 @@ interface Draft {
   /** A song for somebody (docs/GIFT_AND_SHARE_SPEC.md): who, why, and a line for them. */
   gift: boolean;
   giftTo: string;
-  giftOccasion: Occasion;
+  /**
+   * No default: a preselected 「生日」 labelled an anniversary song
+   * 「お誕生日おめでとう」 on its page and on its X card, because nobody
+   * changes a choice that already looks made.
+   */
+  giftOccasion: Occasion | null;
   giftNote: string;
 }
 
@@ -103,7 +108,7 @@ const DEFAULT_DRAFT: Draft = {
   visibility: 'private',
   gift: false,
   giftTo: '',
-  giftOccasion: 'birthday',
+  giftOccasion: null,
   giftNote: '',
 };
 
@@ -196,6 +201,9 @@ function readStoredDraft(): Draft {
     if (stored.lyrics.trim() && !(JSON.parse(saved) as Partial<Draft>).lyricsBy) {
       stored.lyricsBy = 'me';
     }
+    // A draft saved with the gift switched off carries the old preselected
+    // 'birthday', which was never a choice anybody made.
+    if (!stored.gift) stored.giftOccasion = null;
     return stored;
   } catch {
     return DEFAULT_DRAFT;
@@ -501,9 +509,9 @@ export default function Create() {
     // Mirrors createGenerationRequest: simple mode requires a description,
     // custom mode is satisfied by the lyrics that made it custom, and a song
     // for somebody is described by who and why — but needs the who.
-    if (draft.gift && !draft.giftTo.trim()) return false;
+    if (draft.gift && (!draft.giftTo.trim() || !draft.giftOccasion)) return false;
     return mode === 'custom' || draft.prompt.trim().length > 0 || draft.gift;
-  }, [submitting, credits, editTrackId, instructions, mode, draft.prompt, draft.gift, draft.giftTo]);
+  }, [submitting, credits, editTrackId, instructions, mode, draft.prompt, draft.gift, draft.giftTo, draft.giftOccasion]);
 
   /*
    * Why the button is off, when it is off for something the writer can fix.
@@ -519,8 +527,13 @@ export default function Create() {
    */
   const blockedReason = useMemo(() => {
     if (submitting || credits < 1 || canSubmit) return null;
-    return editTrackId ? 'create.needInstructions' : 'create.needPrompt';
-  }, [submitting, credits, canSubmit, editTrackId]);
+    if (editTrackId) return 'create.needInstructions';
+    // A gift with nobody named said "describe the song" — about a field that
+    // was not what was missing.
+    if (draft.gift && !draft.giftTo.trim()) return 'create.needGiftTo';
+    if (draft.gift && !draft.giftOccasion) return 'create.needOccasion';
+    return 'create.needPrompt';
+  }, [submitting, credits, canSubmit, editTrackId, draft.gift, draft.giftTo, draft.giftOccasion]);
 
   const promptAtLimit = promptLength >= PROMPT_MAX_CODEPOINTS;
   const lyricsAtLimit = lyricsLength >= LYRICS_MAX_CODEPOINTS;
@@ -602,7 +615,7 @@ export default function Create() {
             energy: draft.energy,
             durationSeconds: draft.durationSeconds,
             visibility: draft.visibility,
-            ...(draft.gift && draft.giftTo.trim()
+            ...(draft.gift && draft.giftTo.trim() && draft.giftOccasion
               ? {
                   dedication: {
                     to: draft.giftTo.trim(),

@@ -72,6 +72,13 @@ WHISPER_MODEL = os.environ.get("WHISPER_MODEL", "turbo")
 # part of the vocal.  The app retains its honest estimated/unsynchronised
 # presentation when this gate refuses an alignment.
 ALIGN_MIN_COVERAGE = float(os.environ.get("ALIGN_MIN_COVERAGE", "0.85"))
+# How the lyrics are placed on the vocal (forced.py): `forced` places the known
+# lyrics with a CTC acoustic model and falls back to Whisper; `whisper` is the
+# transcribe-and-match path alone. Forced coverage is the share of lettered
+# units the model found with some confidence — a different measure from
+# Whisper's, so it has its own gate.
+ALIGN_METHOD = os.environ.get("ALIGN_METHOD", "forced").lower()
+ALIGN_FORCED_MIN_COVERAGE = float(os.environ.get("ALIGN_FORCED_MIN_COVERAGE", "0.6"))
 # Vocal-quality knobs, chosen from bench_vocals.py results rather than by ear.
 TAG_STYLE = os.environ.get("TAG_STYLE", "v1")            # v1 = original prompt, v2 = short tags + vocal descriptor
 VOCAL_TAKES = max(1, int(os.environ.get("VOCAL_TAKES", "1")))  # >1: render N seeds, keep the most intelligible
@@ -788,7 +795,19 @@ def align(body: AlignRequest, authorization: Optional[str] = Header(None)):
         voiced, stem16 = None, None
     voiced = voiced or None  # a stem with no singing in it says nothing about timing
     out = None
-    if stem16 is not None:
+    # The known lyrics placed on the stem (forced.py). Whisper below is the
+    # fallback, and the only path when separation is unavailable.
+    if stem16 is not None and ALIGN_METHOD == "forced":
+        try:
+            import forced
+            with _gpu_lock:
+                fa = forced.force_align(body.lyrics, stem16, body.duration_seconds, device="cuda")
+            log.info("forced alignment %s coverage=%.2f", m.group(1), fa["coverage"])
+            if fa["coverage"] >= ALIGN_FORCED_MIN_COVERAGE:
+                out = {**fa, "heard": "vocal_stem", "method": "forced"}
+        except Exception:
+            log.exception("forced alignment failed; trying Whisper")
+    if out is None and stem16 is not None:
         try:
             out = align_lines(body.lyrics, transcribe_words(stem16, body.lyrics),
                               body.duration_seconds, voiced=voiced)
@@ -797,7 +816,7 @@ def align(body: AlignRequest, authorization: Optional[str] = Header(None)):
             log.exception("alignment on the vocal stem failed; trying the mix")
             out = None
     try:
-        if out is None or out["coverage"] < ALIGN_MIN_COVERAGE:
+        if out is None or (out.get("method") != "forced" and out["coverage"] < ALIGN_MIN_COVERAGE):
             mix = align_lines(body.lyrics, transcribe_words(path, body.lyrics),
                               body.duration_seconds, voiced=voiced)
             mix["heard"] = "mix"
@@ -807,11 +826,13 @@ def align(body: AlignRequest, authorization: Optional[str] = Header(None)):
         log.exception("alignment failed")
         raise HTTPException(500, f"alignment failed: {e!r}"[:300])
     out["seconds"] = round(time.time() - t0, 1)
-    out["model"] = f"whisper-{WHISPER_MODEL}"
+    forced_ok = out.get("method") == "forced"
+    out.setdefault("method", "whisper")
+    out["model"] = "mms-fa" if forced_ok else f"whisper-{WHISPER_MODEL}"
     out["voice_activity"] = voiced is not None
     log.info("aligned %s coverage=%.2f heard=%s voiced=%s in %.1fs", m.group(1), out["coverage"],
              out["heard"], out["voice_activity"], out["seconds"])
-    if out["coverage"] < ALIGN_MIN_COVERAGE:
+    if not forced_ok and out["coverage"] < ALIGN_MIN_COVERAGE:
         # Too little of the lyrics was heard to trust the timings; YUHA keeps
         # its estimated (and labelled) timeline instead.
         return JSONResponse(status_code=422, content={"error": "low_coverage", **out})

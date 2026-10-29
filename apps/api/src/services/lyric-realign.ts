@@ -133,6 +133,9 @@ async function runLyricRealign(ctx: AppContext, id: string, actorRole: string): 
             .catch(() => null)
         : null;
       const timings = result?.status === 'ok' ? result.timings : null;
+      if (result?.status === 'ok' && result.fallbackReason) {
+        console.log(JSON.stringify({ level: 'warn', component: 'lyric_realign', ts: new Date().toISOString(), msg: 'lyric_realign_estimated', runId: id, trackId: song.id, reason: result.fallbackReason }));
+      }
       await withTxRetry((tx) => finishRealignedTrack(run, song.id, timings, tx));
     }
   }
