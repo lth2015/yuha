@@ -43,6 +43,14 @@ this repository has `docs/` sections about. So:
 - Two open intents for one payer is therefore not a UX nicety but the
   correctness precondition. It must be enforced by a unique index, not by a
   check in application code.
+- A payer who comes back to a fresh payment page for the **same purchase**
+  (same user, product, price version and song) while their wallet's slot is
+  held re-quotes that waiting order instead of being refused (2026-10-29).
+  The page keeps its idempotency key in memory, so leaving to buy gas and
+  returning used to meet the refusal until the expiry sweep ran. Re-quoting
+  supersedes the old intent exactly as a same-key re-quote does, so the
+  one-open-intent rule is untouched; a different purchase is still refused,
+  now with `details.reason = 'walletBusy'` and `releasesAt`.
 
 Everything else in §7 stands.
 

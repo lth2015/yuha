@@ -123,6 +123,11 @@ export type WalletProblem =
   | 'tokenShort'
   | 'tokenShortJpyc'
   | 'noGas'
+  // Refusals the server explained (payConflict), not reported by the wallet.
+  | 'walletBusy'
+  | 'orderClosed'
+  | 'quoteExpired'
+  | 'otherChain'
   | 'unknown';
 
 interface ProviderError {
@@ -348,4 +353,36 @@ export function canPayVerdict(params: { tokenBalance: bigint; nativeBalance: big
   // is the wallet's estimate to make, so only "none" is refused here.
   if (params.nativeBalance === 0n) return { ok: false, reason: 'noGas' };
   return { ok: true };
+}
+
+/**
+ * Why the server refused a quote or a prepare, when it said.
+ *
+ * A bare CONFLICT rendered as "the state changed — loading the latest", and
+ * nothing was loaded: a payer whose wallet was held by an earlier quote
+ * pressed the button again and again and read the same sentence. The server
+ * now names the reason; this reads it, and nothing it does not recognise.
+ */
+export type PayConflict =
+  | { reason: 'walletBusy'; orderId: string | null; releasesAt: string | null }
+  | { reason: 'orderClosed'; orderId: string | null }
+  | { reason: 'quoteExpired' }
+  | { reason: 'otherChain' };
+
+export function payConflict(details: unknown): PayConflict | null {
+  if (!details || typeof details !== 'object') return null;
+  const d = details as Record<string, unknown>;
+  const str = (v: unknown) => (typeof v === 'string' && v ? v : null);
+  switch (d['reason']) {
+    case 'walletBusy':
+      return { reason: 'walletBusy', orderId: str(d['orderId']), releasesAt: str(d['releasesAt']) };
+    case 'orderClosed':
+      return { reason: 'orderClosed', orderId: str(d['orderId']) };
+    case 'quoteExpired':
+      return { reason: 'quoteExpired' };
+    case 'otherChain':
+      return { reason: 'otherChain' };
+    default:
+      return null;
+  }
 }

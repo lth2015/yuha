@@ -108,6 +108,37 @@ function viewQuote(q: StablecoinQuoteRow): QuoteResult {
   };
 }
 
+/**
+ * The order this wallet is already waiting to pay, when asking again is a
+ * return to it.
+ *
+ * The page keeps its idempotency key in memory, so a payer who leaves to buy
+ * gas and comes back arrives with a new key — a new order — and "one open
+ * payment per wallet" refused it while the abandoned quote held the slot:
+ * twenty-five minutes at best, and indefinitely while the scanner was failing,
+ * because the sweep that frees slots runs only after a successful pass. The
+ * same person paying for the same thing from the same wallet is that order
+ * coming back, and re-quoting the same order is already how a price is
+ * refreshed. Anything else — another product, another song, another person —
+ * still meets the refusal.
+ */
+async function waitingOrderToReturnTo(params: {
+  userId: string;
+  chainId: number;
+  payer: string;
+  priceKey: string;
+  priceVersion: number;
+  trackId: string | null;
+}) {
+  const intent = await findOpenIntentForPayer({ chainId: params.chainId, payer: params.payer });
+  if (!intent) return undefined;
+  const order = await getOrderForUser(intent.order_id, params.userId);
+  if (!order) return undefined;
+  if (order.price_key !== params.priceKey || order.price_version !== params.priceVersion) return undefined;
+  if (((order.metadata['track_id'] as string | undefined) ?? null) !== params.trackId) return undefined;
+  return order;
+}
+
 export async function createStablecoinQuote(
   ctx: AppContext,
   params: {
@@ -184,7 +215,16 @@ export async function createStablecoinQuote(
     throw new AppError('SERVICE_DISABLED', 'stablecoin quoting is defined for JPY prices only');
   }
 
-  const existing = await findOrderByIdempotencyKey(params.userId, params.idempotencyKey);
+  const existing =
+    (await findOrderByIdempotencyKey(params.userId, params.idempotencyKey)) ??
+    (await waitingOrderToReturnTo({
+      userId: params.userId,
+      chainId: token.chainId,
+      payer,
+      priceKey: product.price_key,
+      priceVersion: product.version,
+      trackId: params.trackId ?? null,
+    }));
   if (existing) {
     // Same guard the card path has, and for the same reason: `drop_5` and
     // `market_license` are both 980 JPY, so an amount check cannot catch a key
@@ -203,7 +243,7 @@ export async function createStablecoinQuote(
      * payment was taken, delivered nothing, and answered `fulfilled`.
      */
     if (['paid', 'refunded', 'partially_refunded'].includes(existing.status)) {
-      throw new AppError('CONFLICT', 'this order can no longer be paid');
+      throw new AppError('CONFLICT', 'this order can no longer be paid', { reason: 'orderClosed', orderId: existing.id });
     }
     assertNotCardClaimed(existing);
   }
@@ -291,7 +331,7 @@ export async function createStablecoinQuote(
     const current = await getOrderForUser(order.id, params.userId, tx);
     if (!current) throw new AppError('NOT_FOUND', 'order not found');
     if (['paid', 'refunded', 'partially_refunded'].includes(current.status)) {
-      throw new AppError('CONFLICT', 'this order can no longer be paid');
+      throw new AppError('CONFLICT', 'this order can no longer be paid', { reason: 'orderClosed', orderId: current.id });
     }
     assertNotCardClaimed(current);
 
@@ -309,10 +349,22 @@ export async function createStablecoinQuote(
     const openForPayer = await findOpenIntentForPayer({ chainId: token.chainId, payer }, tx);
     if (openForPayer) {
       if (openForPayer.order_id !== order.id) {
+        /*
+         * `releasesAt` is when the expiry sweep frees the slot: the quote's
+         * expiry plus the grace it waits for a late-scanned payment. A page
+         * that only said "the state changed" left the payer nothing to do.
+         */
+        const held = await getQuote(openForPayer.quote_id, tx);
         throw new AppError(
           'CONFLICT',
           'this wallet already has a payment waiting — finish or cancel it before starting another',
-          { orderId: openForPayer.order_id },
+          {
+            reason: 'walletBusy',
+            orderId: openForPayer.order_id,
+            releasesAt: held
+              ? new Date(held.expires_at.getTime() + ctx.config.STABLECOIN_INTENT_GRACE_SECONDS * 1000).toISOString()
+              : null,
+          },
         );
       }
       await closeIntent({ intentId: openForPayer.id, state: 'cancelled' }, tx);
@@ -344,7 +396,7 @@ export async function createStablecoinQuote(
         throw new AppError(
           'CONFLICT',
           'a payment for this order may already be on its way on another network — finish it, or wait for its quote to expire',
-          { orderId: order.id },
+          { reason: 'otherChain', orderId: order.id },
         );
       }
       await closeIntent({ intentId: openForOrder.id, state: 'cancelled' }, tx);
@@ -441,7 +493,7 @@ export async function prepareStablecoinPayment(
     // wallet live transfer calldata for a refunded order invites a payment that
     // `markOrderPaid` will not accept.
     if (['paid', 'refunded', 'partially_refunded'].includes(order.status)) {
-      throw new AppError('CONFLICT', 'this order can no longer be paid');
+      throw new AppError('CONFLICT', 'this order can no longer be paid', { reason: 'orderClosed', orderId: order.id });
     }
 
     const intent = await findOpenIntentForOrder(params.orderId, tx);
@@ -449,7 +501,7 @@ export async function prepareStablecoinPayment(
     const quote = await getQuote(intent.quote_id, tx);
     if (!quote) throw new AppError('NOT_FOUND', 'quote not found');
     if (quote.expires_at.getTime() <= Date.now()) {
-      throw new AppError('CONFLICT', 'that quote has expired — ask for a new one');
+      throw new AppError('CONFLICT', 'that quote has expired — ask for a new one', { reason: 'quoteExpired' });
     }
 
     // Built from the stored quote, not from anything in the request: the amount,
@@ -457,7 +509,7 @@ export async function prepareStablecoinPayment(
     // calldata it can check rather than fields it has to assemble.
     const data = encodeTransferCalldata(quote.receiver, BigInt(quote.amount_atomic));
     if (!(await markIntentPrepared({ intentId: intent.id, predictedNonce: null }, tx))) {
-      throw new AppError('CONFLICT', 'that payment is no longer open — ask for a new quote');
+      throw new AppError('CONFLICT', 'that payment is no longer open — ask for a new quote', { reason: 'quoteExpired' });
     }
 
     return {
