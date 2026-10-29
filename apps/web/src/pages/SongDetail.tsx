@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { TITLE_MAX_CODEPOINTS, type LyricTimings, type ProductView, type TrackView } from '@yuha/contracts';
-import { API_BASE, apiFetch, apiPostForBlob } from '../lib/api';
+import { API_BASE, ApiError, apiFetch, apiPostForBlob } from '../lib/api';
 import { drawVideoFrame, frameJpeg, planShareClip, shareCardPng } from '../lib/share-art';
 import { resolveLyricTimings } from '../lib/lyrics';
 import { clampToCodePoints } from '../lib/codepoints';
@@ -15,6 +15,7 @@ import { useSession } from '../lib/session';
 import { canBePaid } from '../lib/purchase';
 import { CoverArt } from '../components/CoverArt';
 import { DedicationEditor } from '../components/DedicationEditor';
+import { IssueReport } from '../components/IssueReport';
 import { ErrorNotice } from '../components/common';
 import { Score } from '../components/Score';
 import { ShareMenu } from '../components/ShareMenu';
@@ -109,6 +110,8 @@ export default function SongDetail() {
   const downloadGuard = useRef(createInFlightGuard());
   const renameButton = useRef<HTMLButtonElement>(null);
   const [editingGift, setEditingGift] = useState(false);
+  /** The private problem report (docs/ISSUE_REPORTS_SPEC.md); a prefill when opened from a failure. */
+  const [reporting, setReporting] = useState<null | { kind?: 'download_failed'; requestId?: string | null }>(null);
   const giftEditButton = useRef<HTMLButtonElement>(null);
   const giftEditWasOpen = useRef(false);
   // Focus goes back to "edit" when the editor closes, once the button is
@@ -709,6 +712,29 @@ export default function SongDetail() {
 
           {/* Beside the buttons that caused it, not in place of the page. */}
           <ErrorNotice error={actionError} />
+          {/* A failure the owner cannot fix is one they report, with its request id attached. */}
+          {isOwner && actionError instanceof ApiError && actionError.requestId && !reporting && (
+            <button
+              type="button"
+              className="text-action"
+              onClick={() => setReporting({ kind: 'download_failed', requestId: actionError.requestId })}
+            >
+              {t('issue.reportThis')}
+            </button>
+          )}
+          {isOwner && reporting && (
+            <IssueReport
+              trackId={song.trackId}
+              currentSeconds={active ? player.currentTime : null}
+              prefill={reporting.kind ? { kind: reporting.kind, requestId: reporting.requestId ?? null } : undefined}
+              onClose={() => setReporting(null)}
+            />
+          )}
+          {isOwner && !reporting && song.state === 'deliverable' && (
+            <button type="button" className="text-action song-spread__report" onClick={() => setReporting({})}>
+              {t('issue.open')}
+            </button>
+          )}
 
           {song.licenseCount > 0 && (
             <p className="song-spread__note">{t('song.licensesSold', { n: song.licenseCount })}</p>

@@ -1384,6 +1384,18 @@ textarea.is-full { border-color: var(--danger); }
 .song-gift__note { margin: 0; font-size: var(--t-lead); line-height: 1.6; color: var(--ink); overflow-wrap: anywhere; }
 .song-gift__again { margin: var(--s4) 0 0; }
 .song-gift__edit { justify-self: start; }
+/* The private problem report (docs/ISSUE_REPORTS_SPEC.md): a panel in the page's flow. */
+.issue-report { gap: var(--s3); margin: var(--s4) 0; padding: var(--s4); border: 1px solid var(--line); border-radius: var(--r-card); background: var(--surface); }
+.issue-report h2 { margin: 0; font-size: var(--t-lead); font-weight: 600; }
+.issue-report h2:focus { outline: none; }
+.issue-report textarea { width: 100%; resize: vertical; }
+.issue-report__consent { display: flex; gap: var(--s2); align-items: flex-start; }
+.issue-report__consent input { margin-top: 3px; flex: none; }
+.issue-report__history h3 { margin: 0; font-size: var(--t-body); font-weight: 600; }
+.issue-report__history ul { margin: 0; padding-left: 1.1em; display: grid; gap: var(--s2); }
+.issue-report__history p { margin: var(--s1) 0 0; color: var(--muted); }
+.song-spread__report { margin-top: var(--s2); }
+.issue-queue__song { display: inline-flex; align-items: center; min-height: 24px; }
 .song-gift-edit { gap: var(--s2); margin-bottom: var(--s4); padding-left: var(--s3); border-left: 3px solid var(--petal); }
 .song-spread__player { display: flex; flex-direction: column; align-items: stretch; gap: 6px; margin-top: var(--s6); }
 .song-spread__time { font-size: var(--t-caption); color: var(--muted); white-space: nowrap; }

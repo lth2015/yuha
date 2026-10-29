@@ -6,6 +6,7 @@ import { formatMoney, formatJst, useSession } from '../lib/session';
 import { NetxSwitch } from '../components/admin/NetxSwitch';
 import { CreditReset } from '../components/admin/CreditReset';
 import { LyricRealign } from '../components/admin/LyricRealign';
+import { IssueQueue } from '../components/admin/IssueQueue';
 import { Badge, ErrorNotice, Loading } from '../components/common';
 import { CustomerConsole } from '../components/CustomerConsole';
 import { HeldOrderConsole } from '../components/HeldOrderConsole';
@@ -367,6 +368,7 @@ function OverviewPanel({ part }: { part: 'ops' | 'review' }) {
 
       {part === 'review' && (
       <>
+      <IssueQueue />
       <section className="stack">
         <h2 style={{ fontSize: 18 }}>{t('admin.cases.h2')}</h2>
         {cases.length === 0 ? (
