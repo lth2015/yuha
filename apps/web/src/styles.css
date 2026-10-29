@@ -2242,10 +2242,41 @@ textarea.is-full { border-color: var(--danger); }
  * Never laid at full strength under text: a stretched hill band behind a
  * paragraph read as overlapping text, and a framed picture read as a box.
  */
+/*
+ * "Write one for somebody" on the home page (docs/GIFT_AND_SHARE_SPEC.md).
+ * The same frame as the Air card below it; on the right, a tag in a sleeve's
+ * colours with the first line a recipient sees, tilted like a label tied on.
+ */
+.gift-entry {
+  position: relative;
+  display: flex; align-items: center; justify-content: space-between; gap: var(--s6);
+  margin: var(--s12) 0 0;
+  padding: var(--s8) var(--s6);
+  border: 1px solid var(--line);
+  border-radius: var(--r-card);
+  background: var(--surface);
+}
+.gift-entry__text { max-width: 34rem; }
+.gift-entry__kicker { display: block; margin-bottom: var(--s1); font-size: var(--t-caption); color: var(--link); letter-spacing: 0.04em; }
+.gift-entry h2 { margin: 0 0 var(--s2); font-size: var(--t-heading); font-weight: 600; }
+.gift-entry p { margin: 0 0 var(--s4); color: var(--muted); }
+.gift-entry__tag {
+  flex: none; display: grid; gap: 6px; padding: var(--s4) var(--s6);
+  border-radius: var(--r-control);
+  /* The ember sleeve, taken darker: white on #F46B45 is under 3:1. */
+  background: radial-gradient(120% 120% at 20% 10%, #E8693F 0%, #C2411F 55%, #7E2A17 100%);
+  color: #fff; transform: rotate(-4deg);
+  box-shadow: var(--shadow-pop);
+}
+.gift-entry__tag span { font-size: var(--t-body); color: rgb(255 255 255 / 90%); }
+.gift-entry__tag strong { font-size: var(--t-heading); font-weight: 700; }
+@media (max-width: 640px) {
+  .gift-entry { flex-direction: column-reverse; align-items: flex-start; }
+}
 .air-entry {
   position: relative;
   overflow: hidden;
-  margin: var(--s12) 0 0;
+  margin: var(--s8) 0 0;
   padding: var(--s8) var(--s6);
   border: 1px solid var(--line);
   border-radius: var(--r-card);

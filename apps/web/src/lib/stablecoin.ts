@@ -119,6 +119,10 @@ export type WalletProblem =
   | 'unknownChain'
   | 'wrongChain'
   | 'insufficientFunds'
+  // Found before signing (canPayVerdict), not reported by the wallet.
+  | 'tokenShort'
+  | 'tokenShortJpyc'
+  | 'noGas'
   | 'unknown';
 
 interface ProviderError {
@@ -303,4 +307,45 @@ export function jstMonthRange(month: string): { from: string; to: string } | nul
  */
 export function mayDecidePayments(role: string | undefined): boolean {
   return role === 'admin';
+}
+
+/**
+ * Can this wallet actually pay, asked before the wallet is asked to sign.
+ *
+ * A transfer the wallet cannot cover reverts, and the only thing the payer
+ * saw was MetaMask's own "This transaction is likely to fail" over "980
+ * Unknown" — no word of why. The likeliest why is not a typo but a second
+ * token: JPYC Prepaid, the pre-資金移動業 JPYC, is a different contract under
+ * the same name, and a wallet full of it holds none of the JPYC we accept.
+ * So the page reads the balance of the token it is about to move, and the
+ * chain's own coin for the fee, through the payer's wallet, and says which
+ * one is short.
+ */
+export type CanPay =
+  | { ok: true }
+  | { ok: false; reason: 'tokenShort'; haveAtomic: bigint; needAtomic: bigint }
+  | { ok: false; reason: 'noGas' };
+
+/** `balanceOf(owner)` calldata. */
+export function balanceOfCall(owner: string): string {
+  const addr = owner.toLowerCase().replace(/^0x/, '');
+  if (!/^[0-9a-f]{40}$/.test(addr)) throw new Error('not an address');
+  return `0x70a08231${addr.padStart(64, '0')}`;
+}
+
+/** A hex quantity or a 32-byte word as a bigint; "0x" and empty read as zero. */
+export function hexToBigInt(value: unknown): bigint {
+  if (typeof value !== 'string') throw new Error('not hex');
+  const hex = value.replace(/^0x/, '');
+  return hex ? BigInt(`0x${hex}`) : 0n;
+}
+
+export function canPayVerdict(params: { tokenBalance: bigint; nativeBalance: bigint; needAtomic: bigint }): CanPay {
+  if (params.tokenBalance < params.needAtomic) {
+    return { ok: false, reason: 'tokenShort', haveAtomic: params.tokenBalance, needAtomic: params.needAtomic };
+  }
+  // Any fee at all needs some of the chain's coin; how much a transfer costs
+  // is the wallet's estimate to make, so only "none" is refused here.
+  if (params.nativeBalance === 0n) return { ok: false, reason: 'noGas' };
+  return { ok: true };
 }

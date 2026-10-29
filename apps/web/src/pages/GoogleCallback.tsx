@@ -45,7 +45,8 @@ export default function GoogleCallback() {
       navigate('/auth', { replace: true });
       return;
     }
-    const next = takeStoredNext() ?? '/create';
+    // Same default as the sign-in page: home, unless somewhere was asked for.
+    const next = takeStoredNext() ?? '/';
     apiFetch<{ token: string; user: MeView } | { mfaRequired: true; challengeToken: string }>(
       '/v1/auth/google/exchange',
       {

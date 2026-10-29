@@ -74,12 +74,15 @@ export default function Auth() {
 
   const googleError = params.get('google_error');
   // Returning from Google with an error drops `next` from the URL, so a retry
-  // would overwrite the stored destination with /create. Only on that return
-  // trip is the stored value trusted; a fresh visit decides for itself.
+  // would overwrite the stored destination with the default. Only on that
+  // return trip is the stored value trusted; a fresh visit decides for itself.
+  // With nowhere asked for, sign-in lands on the home page: it holds the
+  // simple composer, Air and the way into a song for somebody, where /create
+  // opened straight onto the full form.
   const next =
     safeInternalPath(params.get('next')) ??
     (googleError ? safeInternalPath(readStoredNext()) : null) ??
-    '/create';
+    '/';
   const canSubmit = email.includes('@') && ageConfirmed && termsAccepted && !submitting;
 
   // Retry starts a second request without cancelling the first. A slow first
