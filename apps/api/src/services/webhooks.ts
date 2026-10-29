@@ -269,6 +269,7 @@ async function handleCheckoutCompleted(ctx: AppContext, event: StripeEventLike):
           kind: 'payment',
           stripeObjectId: pi,
           amountMinor: order.amount_minor,
+          currency: order.currency,
           status: 'succeeded',
           occurredAt: new Date(event.created * 1000),
         },
@@ -448,6 +449,14 @@ async function handleInvoicePaid(ctx: AppContext, event: StripeEventLike): Promi
     if (typeof charge === 'string') {
       await recordPayment(
         {
+          /*
+           * The first invoice is the money for the order that opened the
+           * subscription, so its row names that order — otherwise the ops
+           * panel counts every subscription order as paid without a payment.
+           * Renewals carry the same order id in their metadata and are not
+           * that order's money, so they stay unlinked, as before.
+           */
+          orderId: invoice['billing_reason'] === 'subscription_create' ? orderId : null,
           userId,
           kind: 'payment',
           stripeObjectId: charge,
@@ -456,6 +465,7 @@ async function handleInvoicePaid(ctx: AppContext, event: StripeEventLike): Promi
           // so without this there is no route from the refund to the period.
           stripeInvoiceId: invoiceId || null,
           amountMinor: Number(invoice['amount_paid'] ?? 0),
+          currency: typeof invoice['currency'] === 'string' ? invoice['currency'] : undefined,
           status: 'succeeded',
           occurredAt: new Date(event.created * 1000),
         },

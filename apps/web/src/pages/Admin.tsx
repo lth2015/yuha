@@ -46,12 +46,14 @@ interface Overview {
     adoptedCount: number;
   };
   revenue: {
-    currency: string;
+    /** Null when the window has no payment rows: there is no currency to name. */
+    currency: string | null;
     grossMinor: number;
     refundedMinor: number;
     paymentFeeMinor: number;
     netMinor: number;
     paidOrderCount: number;
+    paidOrdersWithoutPayment: number;
     refundCount: number;
     disputeCount: number;
     ungrantedPaidOrders: number;
@@ -80,6 +82,14 @@ interface RightsCase {
  * §11 requires an immature or missing sample to be shown as "not computable"
  * with the reason, never as 0% — a zero would read as a real, bad result.
  */
+/**
+ * A revenue figure, or a dash when the window holds no payment to take a
+ * currency from. Formatting 0 as dollars was how "$0 for 5 orders" appeared.
+ */
+function revenueMoney(amountMinor: number, currency: string | null): string {
+  return currency ? formatMoney(amountMinor, currency) : '—';
+}
+
 function Metric({ label, m, percent = true }: { label: string; m: Measured; percent?: boolean }) {
   const { t } = useI18n();
   return (
@@ -306,12 +316,12 @@ function OverviewPanel({ part }: { part: 'ops' | 'review' }) {
           <div className="card" style={{ gap: 4 }}>
             <span className="small muted">{t('admin.rev.grossLabel')}</span>
             <strong className="num" style={{ fontSize: 20 }}>
-              {formatMoney(overview.revenue.grossMinor, overview.revenue.currency)}
+              {revenueMoney(overview.revenue.grossMinor, overview.revenue.currency)}
             </strong>
             <span className="small muted num">
               {t('admin.rev.refundFee', {
-                refund: formatMoney(overview.revenue.refundedMinor, overview.revenue.currency),
-                fee: formatMoney(overview.revenue.paymentFeeMinor, overview.revenue.currency),
+                refund: revenueMoney(overview.revenue.refundedMinor, overview.revenue.currency),
+                fee: revenueMoney(overview.revenue.paymentFeeMinor, overview.revenue.currency),
               })}
             </span>
           </div>
@@ -320,6 +330,11 @@ function OverviewPanel({ part }: { part: 'ops' | 'review' }) {
             <strong className="num" style={{ fontSize: 24 }}>
               {overview.revenue.paidOrderCount}
             </strong>
+            {overview.revenue.paidOrdersWithoutPayment > 0 && (
+              <span className="small" style={{ color: 'var(--danger)' }}>
+                {t('admin.rev.withoutPayment', { n: overview.revenue.paidOrdersWithoutPayment })}
+              </span>
+            )}
           </div>
           <div className="card" style={{ gap: 4 }}>
             <span className="small muted">{t('admin.rev.ungranted')}</span>

@@ -131,13 +131,33 @@ export async function costSummary(windowDays = 30): Promise<CostSummary> {
 }
 
 export interface RevenueSummary {
-  /** Currency of these figures, or `'mixed'`. Orders carry their own. */
-  currency: string;
+  /**
+   * Currency of the money figures, `'mixed'` when the window holds more than
+   * one, and null when the window holds no payment rows at all — there is then
+   * no currency to name. This used to answer `'usd'` for an empty window, in a
+   * service that sells only in yen, and the panel printed "$0" beside five
+   * paid orders.
+   */
+  currency: string | null;
+  /** Money recorded in `payments`: card, on-chain, and subscription invoices that carried a charge. */
   grossMinor: number;
   refundedMinor: number;
   paymentFeeMinor: number;
   netMinor: number;
+  /**
+   * Orders paid in the window — `paid`, `refunded` or `partially_refunded`
+   * with `paid_at` inside it. The dashboard's definition, so the two agree; a
+   * refund does not un-pay an order, it is counted separately below.
+   */
   paidOrderCount: number;
+  /**
+   * Of those, the ones with no payment row of their own, whose money is
+   * therefore NOT in `grossMinor`. Zero is what agreement with the dashboard
+   * looks like; anything else says how much of gross the panel cannot see.
+   * Subscription renewals have no order and are not counted here — they are
+   * in gross only when their invoice carried a charge.
+   */
+  paidOrdersWithoutPayment: number;
   refundCount: number;
   disputeCount: number;
   /** Orders that were charged but whose entitlement is still missing (PAY-11). */
@@ -158,9 +178,14 @@ export async function revenueSummary(windowDays = 30): Promise<RevenueSummary> {
                   WHERE occurred_at >= DATE_SUB(UTC_TIMESTAMP(3), INTERVAL ? DAY)), 0) AS fees,
        COALESCE((SELECT SUM(net_minor) FROM payments
                   WHERE occurred_at >= DATE_SUB(UTC_TIMESTAMP(3), INTERVAL ? DAY)), 0) AS net,
-       (SELECT COUNT(*) FROM orders
-         WHERE status = 'paid'
-           AND paid_at >= DATE_SUB(UTC_TIMESTAMP(3), INTERVAL ? DAY))                  AS paid_orders,
+       (SELECT COUNT(*) FROM orders o
+         WHERE o.status IN ('paid','refunded','partially_refunded')
+           AND o.paid_at >= DATE_SUB(UTC_TIMESTAMP(3), INTERVAL ? DAY))                AS paid_orders,
+       (SELECT COUNT(*) FROM orders o
+         WHERE o.status IN ('paid','refunded','partially_refunded')
+           AND o.paid_at >= DATE_SUB(UTC_TIMESTAMP(3), INTERVAL ? DAY)
+           AND NOT EXISTS (SELECT 1 FROM payments p
+                            WHERE p.order_id = o.id AND p.kind = 'payment'))           AS uncovered,
        (SELECT COUNT(*) FROM payments
          WHERE kind = 'refund'
            AND occurred_at >= DATE_SUB(UTC_TIMESTAMP(3), INTERVAL ? DAY))              AS refunds,
@@ -176,19 +201,20 @@ export async function revenueSummary(windowDays = 30): Promise<RevenueSummary> {
        -- single-currency — the same silent mixing this column exists to stop.
        (SELECT GROUP_CONCAT(DISTINCT currency) FROM payments
          WHERE occurred_at >= DATE_SUB(UTC_TIMESTAMP(3), INTERVAL ? DAY))               AS currencies`,
-    [d, d, d, d, d, d, d, d],
+    [d, d, d, d, d, d, d, d, d],
   );
   const seen = String(row?.['currencies'] ?? '')
     .split(',')
     .map((c) => c.trim())
     .filter(Boolean);
   return {
-    currency: seen.length === 1 ? seen[0]! : seen.length === 0 ? 'usd' : 'mixed',
+    currency: seen.length === 1 ? seen[0]! : seen.length === 0 ? null : 'mixed',
     grossMinor: num(row?.['gross']),
     refundedMinor: num(row?.['refunded']),
     paymentFeeMinor: num(row?.['fees']),
     netMinor: num(row?.['net']),
     paidOrderCount: num(row?.['paid_orders']),
+    paidOrdersWithoutPayment: num(row?.['uncovered']),
     refundCount: num(row?.['refunds']),
     disputeCount: num(row?.['disputes']),
     ungrantedPaidOrders: num(row?.['ungranted']),

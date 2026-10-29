@@ -101,13 +101,13 @@ const MUTATIONS = [
   {
     name: 'confirm-the-intent-before-asking-if-the-order-moved',
     file: `${S}/stablecoin-settle.ts`,
-    from: `    if (!changed) {
+    from: `    if (!changed || !paid) {
       await closeIntent({ intentId: intent.id, state: 'review' }, tx);
       return { kind: 'unpayable' as const, orderId: intent.order_id };
     }
     await closeIntent({ intentId: intent.id, state: 'confirmed' }, tx);`,
     to: `    await closeIntent({ intentId: intent.id, state: 'confirmed' }, tx);
-    if (!changed) {
+    if (!changed || !paid) {
       return { kind: 'unpayable' as const, orderId: intent.order_id };
     }`,
     tests: ['tests/stablecoin-review-fixes.test.ts'],
@@ -193,11 +193,12 @@ const MUTATIONS = [
   {
     name: 'the-console-discards-whether-the-order-moved',
     file: `${S}/stablecoin-admin.ts`,
-    from: `    if (!changed) {
+    from: `    if (!changed || !paid) {
       throw new AppError('CONFLICT', 'that order can no longer be marked paid — it is not in a payable state');
     }
-    return item.order_id;`,
-    to: '    void changed;\n    return item.order_id;',
+    // Without evidence there is no transfer to key the money on`,
+    // Drops the `changed` guard only; `paid` still has to be narrowed to compile.
+    to: "    void changed;\n    if (!paid) throw new AppError('NOT_FOUND', 'order not found');\n    // Without evidence there is no transfer to key the money on",
     tests: ['tests/stablecoin-admin.test.ts'],
   },
   {

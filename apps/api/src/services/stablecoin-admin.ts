@@ -20,7 +20,7 @@ import {
   type AccountingRow,
 } from '@yuha/db';
 import { sameAddress, toDisplayAddress, whitelistedTokens } from '@yuha/providers';
-import { fulfilStablecoinOrder } from './stablecoin-settle.js';
+import { fulfilStablecoinOrder, recordStablecoinPayment } from './stablecoin-settle.js';
 
 /**
  * What an operator can do about a payment the system would not decide alone.
@@ -186,12 +186,31 @@ export async function decideStablecoinReview(
      * the payment had been accepted while the item left the only queue that
      * would have brought it back.
      */
-    const { changed } = await markOrderPaid(
+    const { order: paid, changed } = await markOrderPaid(
       { orderId: item.order_id, paymentIntentId: null, receiptUrl: null, customerId: null },
       tx,
     );
-    if (!changed) {
+    if (!changed || !paid) {
       throw new AppError('CONFLICT', 'that order can no longer be marked paid — it is not in a payable state');
+    }
+    // Without evidence there is no transfer to key the money on, and the order
+    // shows in the ops panel as paid without a payment record — which is true.
+    if (item.tx_hash && item.log_index !== null && item.received_atomic !== null) {
+      await recordStablecoinPayment(
+        {
+          order: paid,
+          chainId: item.chain_id,
+          txHash: item.tx_hash,
+          logIndex: item.log_index,
+          amountAtomic: item.received_atomic,
+          occurredAt: item.block_time ?? new Date(),
+          token: { key: item.token_key, address: null, decimals: item.token_decimals },
+          quoteId: null,
+          priceJpy: item.price_jpy,
+          settledBy: 'operator_review',
+        },
+        tx,
+      );
     }
     return item.order_id;
   });
@@ -325,14 +344,29 @@ export async function decideOrphanTransfer(params: {
     // something. An operator must not be able to spend it twice.
     if (!claimed) throw new AppError('CONFLICT', 'that transfer has already been credited to an order');
 
-    const { changed } = await markOrderPaid(
+    const { order: paid, changed } = await markOrderPaid(
       { orderId: order.id, paymentIntentId: null, receiptUrl: null, customerId: null },
       tx,
     );
-    if (!changed) {
+    if (!changed || !paid) {
       throw new AppError('CONFLICT', 'that order can no longer be marked paid — it is not in a payable state');
     }
     await confirmIntentByDecision(intent.id, tx);
+    await recordStablecoinPayment(
+      {
+        order: paid,
+        chainId: orphan.chain_id,
+        txHash: orphan.tx_hash,
+        logIndex: orphan.log_index,
+        amountAtomic: orphan.amount_atomic,
+        occurredAt: orphan.block_time ?? new Date(),
+        token: { key: quote.token_key, address: quote.token_address, decimals: quote.token_decimals },
+        quoteId: quote.id,
+        priceJpy: quote.price_jpy,
+        settledBy: 'operator_orphan',
+      },
+      tx,
+    );
     return order.id;
   });
 

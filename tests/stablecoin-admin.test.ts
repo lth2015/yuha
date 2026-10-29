@@ -198,6 +198,17 @@ describe('deciding', () => {
     const orders = await query<{ status: string }>(`SELECT status FROM orders WHERE id = ?`, [orderId]);
     expect(orders[0]!.status).toBe('paid');
 
+    // The money is on the ledger the ops panel sums: the order's yen price,
+    // with what actually arrived (one atomic unit short) kept in `raw`.
+    const payments = await query<{ amount_minor: number; currency: string; raw: unknown }>(
+      `SELECT amount_minor, currency, raw FROM payments WHERE order_id = ? AND kind = 'payment'`,
+      [orderId],
+    );
+    expect(payments).toHaveLength(1);
+    expect([payments[0]!.amount_minor, payments[0]!.currency]).toEqual([980, 'jpy']);
+    const raw = (typeof payments[0]!.raw === 'string' ? JSON.parse(payments[0]!.raw) : payments[0]!.raw) as Record<string, unknown>;
+    expect(raw).toMatchObject({ settledBy: 'operator_review', amountAtomic: (AMOUNT - 1n).toString() });
+
     const audit = await query<{ action: string; reason: string; actor_id: string }>(
       `SELECT action, reason, actor_id FROM audit_logs WHERE subject_id = ?`,
       [intentId],
@@ -299,6 +310,15 @@ describe('money an operator has to attach by hand', () => {
     expect(orders[0]!.status).toBe('paid');
     expect(orders[0]!.granted).not.toBeNull();
     expect((await balanceOf(user.id)).available).toBe(5);
+
+    const payments = await query<{ amount_minor: number; raw: unknown }>(
+      `SELECT amount_minor, raw FROM payments WHERE order_id = ? AND kind = 'payment'`,
+      [orderId],
+    );
+    expect(payments).toHaveLength(1);
+    expect(payments[0]!.amount_minor).toBe(980);
+    const raw = (typeof payments[0]!.raw === 'string' ? JSON.parse(payments[0]!.raw) : payments[0]!.raw) as Record<string, unknown>;
+    expect(raw).toMatchObject({ settledBy: 'operator_orphan', amountAtomic: AMOUNT.toString() });
 
     // And it leaves the queue, with who did it and why on the audit row.
     expect((await transfers(admin)).json().unattributed).toHaveLength(0);

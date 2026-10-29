@@ -535,6 +535,11 @@ export async function recordPayment(
      */
     stripeInvoiceId?: string | null;
     amountMinor: number;
+    /**
+     * ISO currency of `amountMinor`, lowercased. Defaults to the column's own
+     * default, `jpy`, which is what every row written before this existed got.
+     */
+    currency?: string;
     feeMinor?: number;
     netMinor?: number;
     status: string;
@@ -546,9 +551,9 @@ export async function recordPayment(
 ): Promise<{ inserted: boolean }> {
   const res = await execute(
     `INSERT IGNORE INTO payments
-       (id, order_id, user_id, kind, stripe_object_id, stripe_invoice_id, amount_minor,
+       (id, order_id, user_id, kind, stripe_object_id, stripe_invoice_id, amount_minor, currency,
         fee_minor, net_minor, status, payout_id, occurred_at, raw)
-     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
     [
       newId(),
       params.orderId ?? null,
@@ -557,6 +562,7 @@ export async function recordPayment(
       params.stripeObjectId,
       params.stripeInvoiceId ?? null,
       params.amountMinor,
+      (params.currency ?? 'jpy').toLowerCase(),
       params.feeMinor ?? 0,
       params.netMinor ?? 0,
       params.status,

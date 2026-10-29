@@ -8,10 +8,13 @@ import {
   markRefundOwed,
   recordAttempt,
   recordOrphanTransfer,
+  recordPayment,
   recordTransferEvent,
   withTx,
   withTxRetry,
+  type OrderRow,
   type StablecoinIntentRow,
+  type Tx,
   type StablecoinQuoteRow,
 } from '@yuha/db';
 import {
@@ -318,15 +321,30 @@ export async function settleStablecoinObservation(
      * intent), and the accounting export DOES show as settled revenue. The
      * caller was handed the word "review" and there was nothing in review.
      */
-    const { changed } = await markOrderPaid(
+    const { order: paid, changed } = await markOrderPaid(
       { orderId: intent.order_id, paymentIntentId: null, receiptUrl: null, customerId: null },
       tx,
     );
-    if (!changed) {
+    if (!changed || !paid) {
       await closeIntent({ intentId: intent.id, state: 'review' }, tx);
       return { kind: 'unpayable' as const, orderId: intent.order_id };
     }
     await closeIntent({ intentId: intent.id, state: 'confirmed' }, tx);
+    await recordStablecoinPayment(
+      {
+        order: paid,
+        chainId,
+        txHash: observation.transaction.hash,
+        logIndex: evidenceLogIndex,
+        amountAtomic: evidenceValue.toString(),
+        occurredAt: new Date(observation.block.timestampMs),
+        token: { key: quote.token_key, address: quote.token_address, decimals: quote.token_decimals },
+        quoteId: quote.id,
+        priceJpy: quote.price_jpy,
+        settledBy: 'scanner',
+      },
+      tx,
+    );
     return { kind: 'paid' as const, orderId: intent.order_id };
   });
 
@@ -352,6 +370,65 @@ export async function settleStablecoinObservation(
     return { kind: 'review', orderId: settled.orderId, reason: 'paid for something already held' };
   }
   return { kind: 'fulfilled', orderId: settled.orderId };
+}
+
+/**
+ * The money of a settled on-chain payment, on the same ledger card money is on.
+ *
+ * Settlement marked the order paid and wrote nothing to `payments`, so the ops
+ * panel — which sums `payments` — never saw on-chain revenue while the
+ * dashboard, which sums `orders`, did: five paid orders and ¥6,900 on one
+ * screen, $0 on the other. Every path that marks a stablecoin order paid
+ * calls this in the same transaction: the scanner, an operator accepting a
+ * payment from review, and an operator attaching an orphan transfer.
+ *
+ * The amount is the order's own price in the order's currency, the figure the
+ * dashboard sums; what actually moved on chain is in `raw`, and for an
+ * operator-accepted short payment the two differ by design. The key is the
+ * evidence row's own (chain, tx, log), so the unique (kind, stripe_object_id)
+ * refuses a second row for one transfer.
+ */
+export async function recordStablecoinPayment(
+  p: {
+    order: OrderRow;
+    chainId: number;
+    txHash: string;
+    logIndex: number;
+    amountAtomic: string;
+    occurredAt: Date;
+    token: { key: string; address: string | null; decimals: number };
+    quoteId: string | null;
+    priceJpy: number;
+    settledBy: 'scanner' | 'operator_review' | 'operator_orphan';
+  },
+  tx: Tx,
+): Promise<void> {
+  await recordPayment(
+    {
+      orderId: p.order.id,
+      userId: p.order.user_id,
+      kind: 'payment',
+      stripeObjectId: `chain:${p.chainId}:${p.txHash}:${p.logIndex}`,
+      amountMinor: p.order.amount_minor,
+      currency: p.order.currency,
+      status: 'succeeded',
+      occurredAt: p.occurredAt,
+      raw: {
+        rail: 'stablecoin',
+        tokenKey: p.token.key,
+        chainId: p.chainId,
+        tokenAddress: p.token.address,
+        tokenDecimals: p.token.decimals,
+        txHash: p.txHash,
+        logIndex: p.logIndex,
+        amountAtomic: p.amountAtomic,
+        quoteId: p.quoteId,
+        priceJpy: p.priceJpy,
+        settledBy: p.settledBy,
+      },
+    },
+    tx,
+  );
 }
 
 function attemptFrom(obs: ChainObservation, intent: StablecoinIntentRow, verdict: Verdict) {
