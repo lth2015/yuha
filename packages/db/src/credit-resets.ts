@@ -39,6 +39,25 @@ export interface CreditResetRow {
 
 /** Sources that mean the account paid: a pack bought, or a subscription period paid for. */
 const PAID_SOURCES = `('one_time_order','subscription_period')`;
+
+/**
+ * Batch `b` was paid for and not refunded in full (docs/CREDIT_RESET.md).
+ *
+ * This was `b.status <> 'revoked'`: the credits standing in for the money.
+ * Buy five, use one, refund in full, and four are revoked while the used one
+ * keeps the batch active — so a refunded buyer kept qualifying for the paid
+ * bonus. The money says it: a one-time order whose status is `refunded`, or
+ * a subscription period whose recorded refunds reach what the period cost.
+ * A partial refund still paid for something.
+ */
+const PAID_NOT_REFUNDED = (b: string) => `${b}.source IN ${PAID_SOURCES} AND ${b}.status <> 'revoked'
+  AND NOT EXISTS (SELECT 1 FROM orders o WHERE ${b}.source = 'one_time_order' AND o.id = ${b}.source_ref AND o.status = 'refunded')
+  AND NOT (${b}.source = 'subscription_period' AND COALESCE((
+        SELECT -SUM(p.amount_minor) FROM payments p
+         WHERE p.kind = 'refund' AND p.status = 'succeeded'
+           AND p.stripe_invoice_id = SUBSTRING_INDEX(${b}.source_ref, ':', -1)), 0)
+      >= COALESCE((SELECT pc.amount_minor FROM product_catalog pc
+                    WHERE pc.price_key = ${b}.product_key AND pc.version = ${b}.price_version), 1))`;
 /** The first reset looks this far back for payments. */
 const FIRST_WINDOW_DAYS = 30;
 
@@ -101,18 +120,32 @@ export async function accountsAfter(cursor: string | null, limit: number): Promi
  * Returns what it gave; zero for an account already done by this reset.
  */
 export async function resetAccount(reset: CreditResetRow, userId: string, tx: PoolConnection): Promise<{ topped: number; bonus: number }> {
+  /*
+   * Only while this reset is still the one running, read under the reset
+   * row's lock in this transaction. The runner's guard was an in-process
+   * Set, so on two pods a runner could still be walking reset A's accounts
+   * after A finished and B began; its next account expired B's credits and
+   * gave nothing back (review S1). Locked here, `finishCreditReset` and a
+   * new reset's creation wait for the account in hand, and the next one
+   * sees A is done.
+   */
+  const live = await queryOne<{ status: string }>(`SELECT status FROM credit_resets WHERE id = ? FOR UPDATE`, [reset.id], tx);
+  if (live?.status !== 'running') return { topped: 0, bonus: 0 };
+
   await lockUserEntitlements(userId, tx);
   const prefix = `${reset.id}:`;
 
-  // Earlier resets' credits end now. Expiry is by date, as for every other batch,
-  // so the ledger needs no entry and reconciliation is untouched.
+  // Earlier resets' credits end now — earlier only: never a newer reset's,
+  // whatever a stale caller holds. Expiry is by date, as for every other
+  // batch, so the ledger needs no entry and reconciliation is untouched.
   await execute(
-    `UPDATE entitlement_batches
-        SET expires_at = UTC_TIMESTAMP(3), updated_at = UTC_TIMESTAMP(3)
-      WHERE user_id = ? AND source = 'credit_reset' AND status = 'active'
-        AND LEFT(source_ref, ?) <> ?
-        AND (expires_at IS NULL OR expires_at > UTC_TIMESTAMP(3))`,
-    [userId, prefix.length, prefix],
+    `UPDATE entitlement_batches b
+       JOIN credit_resets r ON r.id = SUBSTRING_INDEX(b.source_ref, ':', 1)
+        SET b.expires_at = UTC_TIMESTAMP(3), b.updated_at = UTC_TIMESTAMP(3)
+      WHERE b.user_id = ? AND b.source = 'credit_reset' AND b.status = 'active'
+        AND r.id <> ? AND r.created_at <= ?
+        AND (b.expires_at IS NULL OR b.expires_at > UTC_TIMESTAMP(3))`,
+    [userId, reset.id, reset.created_at],
     tx,
   );
 
@@ -138,8 +171,8 @@ export async function resetAccount(reset: CreditResetRow, userId: string, tx: Po
   let bonus = 0;
   if (reset.bonus_units > 0 && !has('bonus')) {
     const paid = await queryOne<{ n: number }>(
-      `SELECT COUNT(*) AS n FROM entitlement_batches
-        WHERE user_id = ? AND source IN ${PAID_SOURCES} AND status <> 'revoked' AND created_at > ?`,
+      `SELECT COUNT(*) AS n FROM entitlement_batches b
+        WHERE b.user_id = ? AND ${PAID_NOT_REFUNDED('b')} AND b.created_at > ?`,
       [userId, reset.window_start],
       tx,
     );
@@ -201,8 +234,8 @@ export async function previewCreditReset(floor: number, bonus: number, windowSta
                      AND b.effective_from <= UTC_TIMESTAMP(3)
                      AND (b.expires_at IS NULL OR b.expires_at > UTC_TIMESTAMP(3))), 0)) AS top,
                 EXISTS (SELECT 1 FROM entitlement_batches p
-                         WHERE p.user_id = u.id AND p.source IN ${PAID_SOURCES}
-                           AND p.status <> 'revoked' AND p.created_at > ?) AS paid
+                         WHERE p.user_id = u.id AND ${PAID_NOT_REFUNDED('p')}
+                           AND p.created_at > ?) AS paid
            FROM users u
           WHERE u.status = 'active' AND u.deleted_at IS NULL
        ) t`,
