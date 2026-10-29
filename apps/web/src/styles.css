@@ -1117,6 +1117,7 @@ textarea.is-full { border-color: var(--danger); }
 
 /* song card: cover + caption, no card chrome (spec) */
 .song-card { position: relative; display: flex; flex-direction: column; min-width: 0; }
+.song-card.is-menu-open { z-index: 40; }
 .song-card__art { position: relative; border-radius: var(--r-card); overflow: hidden; }
 .song-card__art .cover-art { width: 100%; height: 100%; display: block; }
 .song-card__play {

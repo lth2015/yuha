@@ -148,7 +148,10 @@ export function SongCard({
 
   return (
     <article
-      className="song-card"
+      // Lifted while its menu is open: each card's entrance animation makes it
+      // its own stacking context, so without this the next card painted over
+      // the menu and hid everything below its first two items.
+      className={`song-card${menuOpen ? ' is-menu-open' : ''}`}
       data-active={active || undefined}
       style={{ '--i': index } as React.CSSProperties}
     >
@@ -222,6 +225,12 @@ export function SongCard({
                     <span className="icon icon--note" aria-hidden="true" />
                     {t('card.open')}
                   </Link>
+                  {onRemove && song.state === 'deliverable' && (
+                    <Link role="menuitem" to={`/song/${song.trackId}?share=1`} onClick={closeMenu}>
+                      <span className="icon icon--link" aria-hidden="true" />
+                      {t('card.share')}
+                    </Link>
+                  )}
                   {canDownload && (
                     <a
                       role="menuitem"
@@ -236,15 +245,14 @@ export function SongCard({
                   )}
                   {onRemove && (
                     <>
-                      <button
-                        type="button"
-                        role="menuitem"
-                        onClick={() => setVisibility(song.visibility === 'public' ? 'private' : 'public')}
-                        disabled={busy}
-                      >
-                        <span className="icon icon--link" aria-hidden="true" />
-                        {t(song.visibility === 'public' ? 'card.unpublish' : 'card.publish')}
-                      </button>
+                      {/* Publishing is "分享" above now (it asks first, then opens
+                          the share menu); taking the link back stays here. */}
+                      {song.visibility === 'public' && (
+                        <button type="button" role="menuitem" onClick={() => setVisibility('private')} disabled={busy}>
+                          <span className="icon icon--link" aria-hidden="true" />
+                          {t('card.unpublish')}
+                        </button>
+                      )}
                       <span className="menu__rule" role="separator" />
                       <button type="button" role="menuitem" className="menu__danger" onClick={remove} disabled={busy}>
                         <span className="icon icon--trash" aria-hidden="true" />
