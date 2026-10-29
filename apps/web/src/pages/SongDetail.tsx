@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Link, useNavigate, useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { TITLE_MAX_CODEPOINTS, type LyricTimings, type ProductView, type TrackView } from '@yuha/contracts';
 import { API_BASE, apiFetch, apiPostForBlob } from '../lib/api';
 import { drawVideoFrame, frameJpeg, planShareClip, shareCardPng } from '../lib/share-art';
@@ -70,6 +70,26 @@ export default function SongDetail() {
    * carries it up here.
    */
   const uploadCardRef = useRef<() => void>(() => undefined);
+  /*
+   * `?share=1` — "分享" from a card's menu in the library. Opens the share
+   * menu; a private song is offered for publishing first, with the same
+   * warning "送给 TA" gives. Once per arrival, then dropped from the address.
+   */
+  const [params, setParams] = useSearchParams();
+  const shareIntentRef = useRef<() => void>(() => undefined);
+  const shareHandled = useRef(false);
+  useEffect(() => {
+    // `me` too: on a cold load the song can arrive before the session, and the
+    // intent must not be spent before we know whether this is the owner.
+    if (!song || !me || shareHandled.current || params.get('share') !== '1') return;
+    shareHandled.current = true;
+    shareIntentRef.current();
+    setParams((prev) => {
+      const next = new URLSearchParams(prev);
+      next.delete('share');
+      return next;
+    }, { replace: true });
+  }, [song, me, params, setParams]);
   useEffect(() => {
     if (song && me?.userId === song.artistId && song.visibility === 'public' && song.state === 'deliverable') {
       uploadCardRef.current();
@@ -310,6 +330,15 @@ export default function SongDetail() {
       });
   };
   uploadCardRef.current = uploadCard;
+  shareIntentRef.current = () => {
+    if (!isOwner || song.state !== 'deliverable') return;
+    if (song.visibility === 'public') {
+      setSendNow(true);
+      return;
+    }
+    if (!window.confirm(t(song.dedication ? 'song.gift.confirmPublic' : 'song.share.confirmPublic'))) return;
+    void setVisibility('public').then((ok) => ok && setSendNow(true));
+  };
   const shareUrl = `${API_BASE || window.location.origin}/v1/share/songs/${song.trackId}`;
   const shareText = song.dedication
     ? t('song.gift.shareText', { to: song.dedication.to, title: song.title })
