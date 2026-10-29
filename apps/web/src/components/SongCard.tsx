@@ -165,6 +165,15 @@ export function SongCard({
           size={300}
           playing={playing}
         />
+        {/*
+          The whole sleeve opens the song — where sharing, the lyrics and the
+          rest live — not only the title under it. Out of the tab order and
+          hidden from assistive tech: the title link right below is the same
+          destination with a name, and two identical links per card would be
+          read out twice. The play button and the badges come after it in the
+          document, so they sit on top and keep their own jobs.
+        */}
+        <Link className="song-card__open" to={`/song/${song.trackId}`} tabIndex={-1} aria-hidden="true" />
         {active && <Eq live={playing} className="song-card__eq" />}
         <button
           type="button"
