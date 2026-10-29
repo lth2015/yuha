@@ -172,6 +172,13 @@ describe('executing deletion', () => {
       [trackId],
     );
     expect(assets.length).toBeGreaterThan(0);
+    const report = await h.app.inject({
+      method: 'POST',
+      url: `/v1/tracks/${trackId}/issues`,
+      headers: user.authHeader,
+      payload: { kind: 'other', note: 'words about my own song', audioConsent: true } as never,
+    });
+    expect(report.statusCode).toBe(201);
     await requestDeletion(user);
 
     const res = await verifyAndExecute(admin, await deletionId(user.id));
@@ -191,6 +198,8 @@ describe('executing deletion', () => {
     // TINYINT(1) comes back as a real boolean — createPool's typeCast does
     // that deliberately, and `UserRow.marketing_opt_in` is typed `boolean`.
     expect(after!.marketing_opt_in).toBe(false);
+    // What they wrote about their songs, and the permission to listen, go too.
+    expect(await query(`SELECT id FROM issue_reports WHERE user_id = ?`, [user.id])).toHaveLength(0);
   });
 
   /*

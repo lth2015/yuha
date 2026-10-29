@@ -197,6 +197,9 @@ export async function executeAccountDeletion(
      * prevent.
      */
     await execute(`DELETE FROM known_sign_in_sources WHERE user_id = ?`, [deletion.user_id]);
+    // Their problem reports: what they wrote about their songs, and the
+    // permission they gave staff to listen (docs/ISSUE_REPORTS_SPEC.md).
+    await execute(`DELETE FROM issue_reports WHERE user_id = ?`, [deletion.user_id]);
 
     await anonymiseUser({ userId: deletion.user_id, tombstone: randomUUID().slice(0, 12) });
     await recordAccountDeletionOutcome({ id: deletion.id, outcome });

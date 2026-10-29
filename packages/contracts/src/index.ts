@@ -10,3 +10,4 @@ export * from './license.js';
 export * from './common.js';
 export * from './air.js';
 export * from './dedication.js';
+export * from './issue-reports.js';

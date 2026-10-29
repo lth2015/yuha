@@ -20,3 +20,4 @@ export * from './credit-resets.js';
 export * from './lyric-realignments.js';
 export * from './share-cards.js';
 export * from './customer-notices.js';
+export * from './issue-reports.js';
