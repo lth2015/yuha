@@ -15,7 +15,8 @@
     "build": "tsc -p tsconfig.json && node ../../scripts/copy-migrations.mjs",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "migrate": "tsx --env-file-if-exists=../../.env src/cli.ts migrate",
-    "reset": "tsx --env-file-if-exists=../../.env src/cli.ts reset"
+    "reset": "tsx --env-file-if-exists=../../.env src/cli.ts reset",
+    "invariants": "tsx --env-file-if-exists=../../.env src/cli.ts invariants"
   },
   "dependencies": {
     "@yuha/contracts": "workspace:*",

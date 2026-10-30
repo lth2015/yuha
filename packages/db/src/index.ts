@@ -21,3 +21,4 @@ export * from './lyric-realignments.js';
 export * from './share-cards.js';
 export * from './customer-notices.js';
 export * from './issue-reports.js';
+export * from './invariants.js';

@@ -15,6 +15,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { randomUUID } from 'node:crypto';
 import { getBalance, grantUnits, listBatches, query, queryOne, reconcileBalances, reserveUnit, resetAccount, withTx, type CreditResetRow } from '@yuha/db';
 import { createHarness, resetData, teardown, type Harness, type TestUser } from './helpers/harness.js';
+import { allowInvariantBreach } from './helpers/invariant-guard.js';
 
 let h: Harness;
 let admin: TestUser;
@@ -182,6 +183,9 @@ describe('a reset', () => {
    * the batch active, and the refunded buyer got the paying customer's bonus.
    */
   it('gives no paid bonus for a purchase refunded in full, in the preview or the run', async () => {
+    // An order written as refunded with its credit still granted: the reset
+    // must judge by the order, whatever the batch says.
+    allowInvariantBreach('refunded-order-left-nothing-spendable');
     const refunded = await h.createUser();
     const partial = await h.createUser();
     for (const [user, status] of [[refunded, 'refunded'], [partial, 'partially_refunded']] as const) {

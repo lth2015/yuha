@@ -3,6 +3,8 @@ import { defineConfig } from 'vitest/config';
 export default defineConfig({
   test: {
     include: ['tests/**/*.test.ts'],
+    // The logic rules hold after every test that used the database.
+    setupFiles: ['tests/helpers/invariant-guard.ts'],
     // The credit ledger tests deliberately race concurrent transactions against
     // one MySQL instance. Running files in parallel would let unrelated
     // suites truncate the tables mid-race, so they run one at a time.

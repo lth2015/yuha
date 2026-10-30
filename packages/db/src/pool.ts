@@ -55,6 +55,11 @@ function createPool(opts: DbOptions): mysql.Pool {
   });
 }
 
+/** Whether `initDb` has run and the pool is open — for code that may run without a database. */
+export function dbReady(): boolean {
+  return pool !== undefined;
+}
+
 export function initDb(opts: DbOptions): mysql.Pool {
   pool ??= createPool(opts);
   return pool;
