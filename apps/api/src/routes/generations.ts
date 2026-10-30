@@ -6,9 +6,9 @@ import {
   createGenerationRequest,
   idempotencyKeySchema,
 } from '@yuha/contracts';
-import { getBalance, getTrackForUser, listOpenJobs, trackEvent } from '@yuha/db';
+import { getBalance, getTrackForUser, listOpenJobs, listUnfinishedJobs, trackEvent } from '@yuha/db';
 import type { AppContext } from '../context.js';
-import { cancelGeneration, createGeneration, getJobViews, getJobView } from '../services/generation.js';
+import { cancelGeneration, createGeneration, getJobDraft, getJobViews, getJobView } from '../services/generation.js';
 
 export default async function generationRoutes(app: FastifyInstance, opts: { ctx: AppContext }) {
   const { ctx } = opts;
@@ -57,6 +57,23 @@ export default async function generationRoutes(app: FastifyInstance, opts: { ctx
       });
     },
   );
+
+  /**
+   * Jobs that ended without a song in the last 30 days, so one that failed
+   * while the page was closed can be found again (docs/TASK_RECOVERY_SPEC.md).
+   * Registered before `/v1/jobs/:id` only for readability: find-my-way
+   * prefers the static segment either way.
+   */
+  app.get('/v1/jobs/unfinished', { preHandler: app.requireAuth }, async (req) => {
+    const rows = await listUnfinishedJobs(req.user!.id);
+    return { items: await getJobViews(ctx, rows) };
+  });
+
+  /** The settings a job was submitted with, for its owner to try again. */
+  app.get('/v1/jobs/:id/draft', { preHandler: app.requireAuth }, async (req) => {
+    const { id } = req.params as { id: string };
+    return getJobDraft(id, req.user!.id);
+  });
 
   /** GET /v1/jobs/:id — owner-scoped status polling with backoff hints. */
   app.get('/v1/jobs/:id', { preHandler: app.requireAuth }, async (req) => {

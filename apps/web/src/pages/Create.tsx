@@ -1,4 +1,4 @@
-import { OpenGenerations, QueueStatus } from '../components/GenerationQueue';
+import { JobOutcome, OpenGenerations, QueueStatus, UnfinishedGenerations } from '../components/GenerationQueue';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import {
@@ -10,8 +10,10 @@ import {
   type Occasion,
   MAX_STYLE_TAGS,
   PROMPT_MAX_CODEPOINTS,
+  SONG_DURATIONS,
   TITLE_MAX_CODEPOINTS,
   STYLE_TAG_MAX_LENGTH,
+  type GenerationDraft,
   type JobView,
   type TrackView,
   type VoiceChoice,
@@ -216,6 +218,37 @@ function readStoredDraft(): Draft {
  * without hiding *state*: a folded panel holding a non-default setting that
  * the page gives no sign of is a worse failure than the long form it replaced.
  */
+/**
+ * A finished job's settings as a draft, for 「再试一次」 (docs/TASK_RECOVERY_SPEC.md).
+ * The stored duration is the length the song was fitted to, so a song asked
+ * for as `auto` comes back as the length it was given.
+ */
+function draftFromJob(d: GenerationDraft): Draft {
+  const duration = SONG_DURATIONS.find((n) => n === d.durationSeconds) ?? DEFAULT_DRAFT.durationSeconds;
+  return {
+    ...DEFAULT_DRAFT,
+    title: d.title ?? '',
+    prompt: d.prompt,
+    lyricsBy: d.mode === 'custom' && d.lyrics ? 'me' : 'ai',
+    lyrics: d.lyrics ?? '',
+    styles: d.styles,
+    voice: d.voice,
+    instrumental: d.instrumental,
+    energy: d.energy,
+    durationSeconds: duration,
+    visibility: d.visibility,
+    gift: Boolean(d.dedication),
+    giftTo: d.dedication?.to ?? '',
+    giftOccasion: d.dedication?.occasion ?? null,
+    giftNote: d.dedication?.note ?? '',
+  };
+}
+
+/** Whether a draft holds anything somebody wrote, so replacing it would lose work. */
+function hasWriting(d: Draft): boolean {
+  return [d.title, d.prompt, d.lyrics, d.giftTo, d.giftNote].some((v) => v.trim() !== '');
+}
+
 function advancedTouched(d: Draft): number {
   let n = 0;
   if (d.title.trim()) n += 1;
@@ -249,16 +282,20 @@ export default function Create() {
   const [params, setParams] = useSearchParams();
   const editTrackId = params.get('edit');
   const resumeJobId = params.get('job');
+  /** 「再试一次」: a finished job whose settings fill the form (docs/TASK_RECOVERY_SPEC.md). */
+  const retryJobId = params.get('retry');
   const { me, entitlements, refreshEntitlements, runtime } = useSession();
   /**
    * A sketch from Air composition (`?air=`, lib/air-prefill.ts), decided once
    * at mount, before the draft, so the draft's own lazy initializer can take
    * it: no effect races the save below. `edit` and `job` win over it.
    */
-  const [air] = useState(() => (editTrackId || resumeJobId ? ({ kind: 'none' } as const) : airPrefillPlan(params.get('air'), readStoredDraft(), t)));
+  const [air] = useState(() => (editTrackId || resumeJobId || retryJobId ? ({ kind: 'none' } as const) : airPrefillPlan(params.get('air'), readStoredDraft(), t)));
   const [airNotice, setAirNotice] = useState(() => (air.kind === 'fill' ? 'filled' : air.kind === 'none' ? null : air.kind));
   /** The draft the sketch replaced, held so the banner can give it back. Read before the save below overwrites it. */
   const [setAside, setSetAside] = useState<Draft | null>(() => (air.kind === 'fill' && air.setAside ? readStoredDraft() : null));
+  /** Set once a job's settings have filled the form; the banner says so and offers the draft they replaced. */
+  const [retried, setRetried] = useState(false);
   /**
    * A sung sketch asks for its lyrics to be written now (POST /v1/lyrics/draft),
    * so they are in the box to read and edit before anything is generated. When
@@ -430,6 +467,48 @@ export default function Create() {
       .catch((err) => { if (!gone) setError(err); });
     return () => { gone = true; };
   }, [resumeJobId, editTrackId, me]);
+
+  /*
+   * 「再试一次」. The settings fill the form and nothing is submitted: the
+   * creator reads them, may change them (a refused song usually needs other
+   * words), and presses generate with the credit shown. A fresh idempotency
+   * key, so the same settings make a new job instead of finding the failed
+   * one. A draft with writing in it is set aside, not lost.
+   */
+  const draftNow = useRef(draft);
+  draftNow.current = draft;
+  useEffect(() => {
+    if (!retryJobId || editTrackId || !me) return;
+    let gone = false;
+    apiFetch<GenerationDraft>(`/v1/jobs/${encodeURIComponent(retryJobId)}/draft`)
+      .then((d) => {
+        if (gone) return;
+        const next = draftFromJob(d);
+        const current = draftNow.current;
+        setSetAside(hasWriting(current) && JSON.stringify(current) !== JSON.stringify(next) ? current : null);
+        setDraft(next);
+        setRetried(true);
+        if (advancedTouched(next) > 0) setMore(true);
+        setJob(null);
+        setResult(null);
+        setError(null);
+        idemKey.current = newIdempotencyKey();
+        setParams(
+          (prev) => {
+            const rest = new URLSearchParams(prev);
+            rest.delete('retry');
+            return rest;
+          },
+          { replace: true },
+        );
+      })
+      .catch((err) => {
+        if (!gone) setError(err);
+      });
+    return () => {
+      gone = true;
+    };
+  }, [retryJobId, editTrackId, me, setParams]);
 
   // ---- job polling with backoff (no request is held open waiting for audio)
   useEffect(() => {
@@ -710,9 +789,7 @@ export default function Create() {
         </h1>
         <p className="muted wait-page__sub">
           {failed
-            ? job.errorCode === 'upstream_rejected'
-              ? t('create.job.failedUpstream')
-              : t('create.job.failedTech')
+            ? t(`job.failure.${job.failure ?? 'technical'}`)
             : done
               ? t('create.job.done')
               : job.phase === 'queued'
@@ -724,6 +801,8 @@ export default function Create() {
                     max: job.estimate.maxSeconds,
                   })}
         </p>
+
+        {failed && <JobOutcome job={job} />}
 
         <QueueStatus job={job} onUpdate={setJob} onCancelled={() => {
           setJob(null); setResult(null); setError(null);
@@ -771,9 +850,15 @@ export default function Create() {
 
         <div className="wait-page__actions">
           {failed ? (
-            <button type="button" className="btn btn--primary" onClick={startAnother}>
-              {t('create.job.startAnother')}
-            </button>
+            <>
+              {/* The same settings, back in the form to read before anything is spent. */}
+              <Link to={`/create?retry=${encodeURIComponent(job.jobId)}`} className="btn btn--primary">
+                {t('job.retry')}
+              </Link>
+              <button type="button" className="btn" onClick={startAnother}>
+                {t('create.job.startAnother')}
+              </button>
+            </>
           ) : (
             <Link to="/library" className="btn">
               {t('wait.goLibrary')}
@@ -941,7 +1026,35 @@ export default function Create() {
   return (
     <div className="studio">
       {me && <OpenGenerations onResume={setJob} />}
+      {me && <UnfinishedGenerations withinHours={24} />}
       {head}
+
+      {retried && (
+        <div className="studio__edit studio__air" role="status">
+          <div className="studio__edit-icon" aria-hidden="true">
+            <span className="icon icon--edit" />
+          </div>
+          <div>
+            <strong>{t('job.retry.banner')}</strong>
+            {setAside && (
+              <div className="studio__air-choice">
+                <span>{t('create.air.setAside')}</span>
+                <button
+                  type="button"
+                  className="btn btn--sm"
+                  onClick={() => {
+                    setDraft(setAside);
+                    setSetAside(null);
+                    setRetried(false);
+                  }}
+                >
+                  {t('create.air.restore')}
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       {airNotice && (
         <div className="studio__edit studio__air" role="status">

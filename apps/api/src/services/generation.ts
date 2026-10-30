@@ -3,11 +3,16 @@ import {
   AppError,
   JOB_STATE_TO_PHASE,
   SONG_DURATIONS,
+  failureKind,
   fitDurationToLyrics,
   type CreateGenerationRequest,
+  type CreditOutcome,
+  type Dedication,
+  type GenerationDraft,
   type JobView,
 } from '@yuha/contracts';
 import {
+  creditOutcomes,
   enqueueOutbox,
   getBalance,
   getJobByIdempotencyKey,
@@ -270,6 +275,8 @@ export async function createGeneration(
             energy: req.energy,
             durationSeconds,
             vocalMode: req.instrumental ? 'instrumental' : 'with_vocals',
+            // The worker reads this; without it every song was made with `auto`.
+            voice: req.voice,
             visibility: req.visibility,
             dedication: req.dedication ?? null,
           },
@@ -418,7 +425,7 @@ export function estimateFor(ctx: AppContext, job: JobRow): JobView['estimate'] {
   };
 }
 
-export function toJobView(ctx: AppContext, job: JobRow): JobView {
+export function toJobView(ctx: AppContext, job: JobRow, credit: CreditOutcome): JobView {
   const input = job.input as {
     mode?: 'simple' | 'custom';
     title?: string | null;
@@ -448,13 +455,43 @@ export function toJobView(ctx: AppContext, job: JobRow): JobView {
     createdAt: job.created_at.toISOString(),
     updatedAt: job.updated_at.toISOString(),
     demo: ctx.config.isDemo,
+    credit,
+    failure: failureKind(job.state, job.error_code),
   };
 }
 
 /** Reuse already owner-scoped rows; list views need one queue query, not N+1. */
 export async function getJobViews(ctx: AppContext, jobs: readonly JobRow[]): Promise<JobView[]> {
-  const positions = await queuePositions(jobs);
-  return jobs.map((job) => ({ ...toJobView(ctx, job), queuePosition: positions.get(job.id) ?? null }));
+  const [positions, credits] = await Promise.all([queuePositions(jobs), creditOutcomes(jobs.map((j) => j.id))]);
+  return jobs.map((job) => ({
+    ...toJobView(ctx, job, credits.get(job.id) ?? 'none'),
+    queuePosition: positions.get(job.id) ?? null,
+  }));
+}
+
+/**
+ * The settings a job was submitted with, for its owner to try again
+ * (docs/TASK_RECOVERY_SPEC.md). Read from the stored input, which is what the
+ * job was actually made from; a job from before `voice` was stored gets `auto`,
+ * which is what it was made with.
+ */
+export async function getJobDraft(jobId: string, userId: string): Promise<GenerationDraft> {
+  const job = await getJobForUser(jobId, userId);
+  if (!job) throw new AppError('NOT_FOUND', 'job not found');
+  const input = job.input as Partial<GenerationDraft> & { voice?: GenerationDraft['voice'] };
+  return {
+    mode: input.mode ?? 'simple',
+    title: input.title ?? null,
+    prompt: input.prompt ?? '',
+    lyrics: input.lyrics ?? null,
+    styles: input.styles ?? [],
+    instrumental: input.instrumental ?? true,
+    energy: input.energy ?? 0.5,
+    durationSeconds: input.durationSeconds ?? 120,
+    voice: input.voice ?? 'auto',
+    visibility: input.visibility ?? 'private',
+    dedication: (input.dedication as Dedication | null | undefined) ?? null,
+  };
 }
 
 export async function getJobView(ctx: AppContext, jobId: string, userId: string): Promise<JobView> {

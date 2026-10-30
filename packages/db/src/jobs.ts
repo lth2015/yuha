@@ -424,6 +424,22 @@ export async function listOpenJobs(userId: string, limit = 20): Promise<JobRow[]
 }
 
 /**
+ * The owner's jobs that ended without a song in the last `days` days —
+ * failed, refused or cancelled — so one that ended while the page was closed
+ * can be found again (docs/TASK_RECOVERY_SPEC.md).
+ */
+export async function listUnfinishedJobs(userId: string, days = 30, limit = 20): Promise<JobRow[]> {
+  return query<JobRow>(
+    `SELECT ${JOB_COLUMNS} FROM generation_jobs
+      WHERE user_id = ? AND state IN ('FAILED','REJECTED','CANCELLED')
+        AND created_at >= UTC_TIMESTAMP(3) - INTERVAL ? DAY
+      ORDER BY created_at DESC
+      LIMIT ?`,
+    [userId, days, limit],
+  );
+}
+
+/**
  * Jobs the provider accepted and never finished.
  *
  * `UPSTREAM_ENGAGED_STATES` has been in the contracts package with no caller

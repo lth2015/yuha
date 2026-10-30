@@ -2735,3 +2735,15 @@ textarea.is-full { border-color: var(--danger); }
      size; a third of a 360 px screen leaves 96. */
   .admin-tabs__tab { font-size: var(--t-caption); }
 }
+
+/* Task recovery (docs/TASK_RECOVERY_SPEC.md): why a job ended, what became of its credit. */
+.job-outcome { display: flex; flex-direction: column; gap: var(--s2); margin: calc(-1 * var(--s4)) 0 var(--s6); max-width: 46ch; }
+.job-outcome__line { margin: 0; }
+.job-outcome__ref { margin: 0; overflow-wrap: anywhere; }
+.job-outcome__id { user-select: all; }
+/* Beats `.open-generations__row > div`, which stacks the text column. */
+.open-generations__row > .unfinished__actions { display: flex; flex-direction: row; gap: var(--s2); flex: none; }
+@media (max-width: 600px) {
+  .unfinished__row { flex-direction: column; align-items: stretch; gap: var(--s2); }
+  .unfinished__actions > .btn { flex: 1; }
+}

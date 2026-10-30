@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { OpenGenerations } from '../components/GenerationQueue';
+import { OpenGenerations, UnfinishedGenerations } from '../components/GenerationQueue';
 import { Link, useNavigate } from 'react-router-dom';
 import type { TrackView } from '@yuha/contracts';
 import { apiFetch } from '../lib/api';
@@ -144,6 +144,7 @@ export default function Library() {
   return (
     <div className="stack">
       <OpenGenerations onResume={(job) => navigate(`/create?job=${encodeURIComponent(job.jobId)}`)} />
+      <UnfinishedGenerations />
       <div className="section-head">
         <h1>{t('lib.title')}</h1>
         <Link to="/create" className="btn btn--primary btn--sm">

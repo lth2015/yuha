@@ -414,6 +414,43 @@ export async function releaseReservation(
 }
 
 /**
+ * What became of each job's credit, read from its ledger entries
+ * (docs/TASK_RECOVERY_SPEC.md). One query for any number of jobs.
+ *
+ * The unique key on (job, entry type) means each type appears at most once
+ * per job, so the presence of a type is the whole answer.
+ */
+export async function creditOutcomes(
+  jobIds: readonly string[],
+): Promise<Map<string, 'held' | 'spent' | 'returned' | 'compensated' | 'none'>> {
+  const out = new Map<string, 'held' | 'spent' | 'returned' | 'compensated' | 'none'>();
+  if (jobIds.length === 0) return out;
+  const rows = await query<{ job_id: string; entry_type: string }>(
+    `SELECT job_id, entry_type FROM ledger_entries
+      WHERE job_id IN (${jobIds.map(() => '?').join(',')})
+        AND entry_type IN ('reserve','consume','release','compensate')`,
+    [...jobIds],
+  );
+  const types = new Map<string, Set<string>>();
+  for (const row of rows) {
+    if (!types.has(row.job_id)) types.set(row.job_id, new Set());
+    types.get(row.job_id)!.add(row.entry_type);
+  }
+  for (const id of jobIds) {
+    const t = types.get(id) ?? new Set<string>();
+    out.set(
+      id,
+      t.has('consume') ? 'spent'
+        : t.has('release') && t.has('compensate') ? 'compensated'
+        : t.has('release') ? 'returned'
+        : t.has('reserve') ? 'held'
+        : 'none',
+    );
+  }
+  return out;
+}
+
+/**
  * Issues make-good credits as a NEW batch rather than editing an existing one.
  * Used when a batch expired while a job was still running (GEN-11) or when
  * support corrects a mis-charge — the original flow stays visible in the ledger.

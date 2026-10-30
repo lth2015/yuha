@@ -104,6 +104,9 @@ const PAGES = [
   // Opened from Air composition's parameter card: the form filled from a sketch (lib/air-prefill.ts).
   { name: 'create-air', path: '/create?air=2-calm-slow-mellow-soft-wide-rise-sung', as: 'creator' },
   { name: 'library', path: '/library', as: 'creator' },
+  // A job that ended without a song (docs/TASK_RECOVERY_SPEC.md): its page, and its settings back in the form.
+  { name: 'create-job-ended', path: '/create?job=:job', as: 'creator' },
+  { name: 'create-retry', path: '/create?retry=:job', as: 'creator' },
   { name: 'checkout-confirm', path: '/checkout/confirm?price=drop_5', as: 'creator' },
   { name: 'settings-billing', path: '/settings/billing', as: 'creator' },
   { name: 'settings-account', path: '/settings/account', as: 'creator' },
@@ -398,6 +401,21 @@ async function fixtures(browser, states) {
     await call('POST', '/v1/dev/simulate-payment', { sessionId, outcome: 'paid' });
     order = co.orderId;
   }
+  // A job that ended without a song, so the home page, the library and the
+  // composer show the recovery list, and the failure page has one to show.
+  // Cancelled before the worker takes it; if the worker wins, try again.
+  let job = (await call('GET', '/v1/jobs/unfinished')).items?.[0]?.jobId;
+  for (let i = 0; !job && i < 3; i++) {
+    const made = await call(
+      'POST',
+      '/v1/generations',
+      { prompt: '下班路上经过的那家关了很多年的唱片店，橱窗里还贴着褪色的海报，想写一首慢慢走回家的歌', voice: 'male' },
+      { 'idempotency-key': key() },
+    );
+    const res = await call('POST', `/v1/jobs/${made.jobId}/cancel`, {});
+    if (res.cancelled) job = made.jobId;
+  }
+  if (!job) throw new Error('fixtures: could not make a job that ended without a song');
   await ctx.close();
 
   const actx = await browser.newContext({ storageState: states.admin });
@@ -416,14 +434,14 @@ async function fixtures(browser, states) {
     });
   }, [USERS.creator, `ui-check-grant-${new Date().toISOString().slice(0, 10)}`]);
   await actx.close();
-  return { track, order };
+  return { track, order, job };
 }
 
 mkdirSync(SHOTS, { recursive: true });
 const browser = await chromium.launch();
 const states = { creator: await signIn(browser, 'creator'), admin: await signIn(browser, 'admin') };
 const data = await fixtures(browser, states);
-for (const p of PAGES) p.path = p.path.replace(':track', data.track).replace(':order', data.order);
+for (const p of PAGES) p.path = p.path.replace(':track', data.track).replace(':order', data.order).replace(':job', data.job);
 let failures = 0;
 let warnings = 0;
 let checked = 0;
