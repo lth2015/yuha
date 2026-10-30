@@ -1001,6 +1001,9 @@ textarea.is-full { border-color: var(--danger); }
 .wait-page__rail .is-done { color: var(--muted); }
 .wait-page__rail .is-current { color: var(--ink); font-weight: 500; }
 .wait-page__actions { display: flex; gap: var(--s4); flex-wrap: wrap; }
+/* Once the take is over the actions lead, above the score, not after it. */
+.job-outcome + .wait-page__actions,
+.wait-page__sub + .wait-page__actions { margin-bottom: var(--s8); }
 
 .status-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--line); flex: none; }
 .wait-page__rail .is-done .status-dot { background: var(--muted); }

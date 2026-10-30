@@ -791,13 +791,42 @@ export default function Create() {
      */
     const done = job.phase === 'done';
     const stepIdx = PHASE_STEPS.indexOf(job.phase as (typeof PHASE_STEPS)[number]);
+    const actions = (
+      <div className="wait-page__actions">
+        {failed ? (
+          <>
+            {/* The same settings, back in the form to read before anything is spent. */}
+            <Link to={`/create?retry=${encodeURIComponent(job.jobId)}`} className="btn btn--primary">
+              {t('job.retry')}
+            </Link>
+            <button type="button" className="btn" onClick={startAnother}>
+              {t('create.job.startAnother')}
+            </button>
+          </>
+        ) : (
+          <>
+            {/* The finished song first: it is what the page was waiting for. */}
+            {result && result.previewUrl && (
+              <Link to={`/song/${result.trackId}`} className="btn btn--primary">
+                {t('create.job.open', { title: result.title })}
+              </Link>
+            )}
+            <Link to="/library" className="btn">
+              {t('wait.goLibrary')}
+            </Link>
+          </>
+        )}
+      </div>
+    );
     return (
       <div className="wait-page" aria-live="polite">
         <p className="eyebrow">
           {failed ? t('wait.failedEyebrow') : done ? t('wait.doneEyebrow') : t('wait.eyebrow')}
         </p>
         <h1 className="wait-page__title">
-          {failed ? t('create.job.failed') : (job.title ?? t('create.defaultTitle'))}
+          {failed
+            ? t(job.failure === 'cancelled' ? 'create.job.cancelled' : 'create.job.failed')
+            : (job.title ?? t('create.defaultTitle'))}
         </h1>
         <p className="muted wait-page__sub">
           {failed
@@ -810,6 +839,14 @@ export default function Create() {
         {!failed && !done && job.phase !== 'queued' && <p className="small muted">{t('create.job.noCancel')}</p>}
 
         {failed && <JobOutcome job={job} />}
+
+        {/*
+          Over, the next step comes straight after what happened to the credit.
+          Below the score and the six steps it sat under the fold on a 760 px
+          phone, behind a rail with every step grey — progress that never
+          happened, drawn where the way forward should be.
+        */}
+        {(failed || done) && actions}
 
         <QueueStatus job={job} onUpdate={setJob} onCancelled={() => {
           setJob(null); setResult(null); setError(null);
@@ -842,7 +879,7 @@ export default function Create() {
           label={t('wait.scoreAria')}
         />
 
-        <ol className="wait-page__rail">
+        {!failed && <ol className="wait-page__rail">
           {PHASE_STEPS.map((phase, i) => (
             <li
               key={phase}
@@ -853,33 +890,9 @@ export default function Create() {
               {t(`create.phase.${phase}`)}
             </li>
           ))}
-        </ol>
+        </ol>}
 
-        <div className="wait-page__actions">
-          {failed ? (
-            <>
-              {/* The same settings, back in the form to read before anything is spent. */}
-              <Link to={`/create?retry=${encodeURIComponent(job.jobId)}`} className="btn btn--primary">
-                {t('job.retry')}
-              </Link>
-              <button type="button" className="btn" onClick={startAnother}>
-                {t('create.job.startAnother')}
-              </button>
-            </>
-          ) : (
-            <>
-              {/* The finished song first: it is what the page was waiting for. */}
-              {result && result.previewUrl && (
-                <Link to={`/song/${result.trackId}`} className="btn btn--primary">
-                  {t('create.job.open', { title: result.title })}
-                </Link>
-              )}
-              <Link to="/library" className="btn">
-                {t('wait.goLibrary')}
-              </Link>
-            </>
-          )}
-        </div>
+        {!failed && !done && actions}
 
         <p className="small muted" style={{ marginTop: 'var(--s6)' }}>
           {job.jobId.slice(0, 8)} · {job.durationSeconds}s ·{' '}
