@@ -25,6 +25,7 @@
     "check:type": "node scripts/check-type-scale.mjs",
     "check:ui": "node scripts/check-ui.mjs",
     "check:invariants": "pnpm --filter @yuha/db invariants",
+    "probe:quality": "node scripts/quality-probe.mjs",
     "pretest": "node scripts/check-build-fresh.mjs",
     "test": "vitest run",
     "test:watch": "vitest",

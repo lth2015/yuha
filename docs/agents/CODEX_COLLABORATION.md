@@ -86,6 +86,14 @@
 - Codex 在验收中发现「这两件事不该同时成立」，在报告里用下面的格式写出规则。
 - Claude 把规则写进代码，加上反例测试，再修缺陷。
 
+## 固定测试歌曲
+
+Codex 负责按 [docs/quality/PROBE_RUNBOOK.md](../quality/PROBE_RUNBOOK.md) 定期生成并检查中、日、英固定测试歌曲：
+- 每周一次；DGX 更新后、和生成相关的 PR 上线后再各跑一次；
+- 自动检查由 `pnpm probe:quality --spend` 完成；
+- 试听由产品负责人或 Codex 完成；
+- 结果贴到 GitHub issue。
+
 ## 结果放在哪里
 
 | 内容 | 放在 | 原因 |
