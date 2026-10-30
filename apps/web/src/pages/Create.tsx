@@ -510,6 +510,18 @@ export default function Create() {
     };
   }, [retryJobId, editTrackId, me, setParams]);
 
+  /*
+   * The wait view replaces the form in place, and the form is long: submitting
+   * from its bottom left the page scrolled to where the button had been, so a
+   * phone showed the empty end of the score and the step list, with the
+   * title, the estimate and the queue card above the fold. A new job starts at
+   * the top.
+   */
+  const shownJobId = job?.jobId ?? null;
+  useEffect(() => {
+    if (shownJobId) window.scrollTo({ top: 0 });
+  }, [shownJobId]);
+
   // ---- job polling with backoff (no request is held open waiting for audio)
   useEffect(() => {
     if (!job || ['done', 'failed'].includes(job.phase)) {
@@ -855,14 +867,17 @@ export default function Create() {
               </button>
             </>
           ) : (
-            <Link to="/library" className="btn">
-              {t('wait.goLibrary')}
-            </Link>
-          )}
-          {result && result.previewUrl && (
-            <Link to={`/song/${result.trackId}`} className="btn btn--primary">
-              {t('create.job.open', { title: result.title })}
-            </Link>
+            <>
+              {/* The finished song first: it is what the page was waiting for. */}
+              {result && result.previewUrl && (
+                <Link to={`/song/${result.trackId}`} className="btn btn--primary">
+                  {t('create.job.open', { title: result.title })}
+                </Link>
+              )}
+              <Link to="/library" className="btn">
+                {t('wait.goLibrary')}
+              </Link>
+            </>
           )}
         </div>
 

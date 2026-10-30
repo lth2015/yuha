@@ -169,7 +169,7 @@ export function CheckoutConfirm() {
         </div>
 
         <div className="table-wrap">
-          <table style={{ minWidth: 0 }}>
+          <table className="terms-table" style={{ minWidth: 0 }}>
             <tbody>
               <tr>
                 <th>{t('checkout.label.amount')}</th>
