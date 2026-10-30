@@ -259,6 +259,18 @@ export default function Home() {
     idemKey.current = newIdempotencyKey();
   };
 
+  /*
+   * The wait view replaces the form in place, and the form is long: submitting
+   * from its bottom left the page scrolled to where the button had been, so a
+   * phone showed the empty end of the score and the step list, with the
+   * title, the estimate and the queue card above the fold. A new job starts at
+   * the top.
+   */
+  const shownJobId = job?.jobId ?? null;
+  useEffect(() => {
+    if (shownJobId) window.scrollTo({ top: 0 });
+  }, [shownJobId]);
+
   // Poll the job to terminal state, then hand over to the song page.
   useEffect(() => {
     if (!job || ['done', 'failed'].includes(job.phase)) {

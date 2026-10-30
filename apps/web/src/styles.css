@@ -2757,3 +2757,8 @@ textarea.is-full { border-color: var(--danger); }
 .credit-history__units { flex: none; font-weight: 600; min-width: 3ch; text-align: right; }
 .credit-history__units[data-sign="1"] { color: var(--ok); }
 .issue-queue__resolve textarea { width: 100%; }
+
+/* Purchase terms are read before paying, so they wrap rather than hide past
+   the right edge: `th, td { white-space: nowrap }` cut the contents and the
+   refund rule mid-sentence at 393 px, inside a scroller nobody swipes. */
+.terms-table td { white-space: normal; overflow-wrap: anywhere; }
