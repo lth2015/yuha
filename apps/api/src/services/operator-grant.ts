@@ -1,6 +1,8 @@
 import { AppError } from '@yuha/contracts';
 import {
   balancesFor,
+  compensateUnits,
+  creditOutcomes,
   findUsersByEmail,
   getBalance,
   getUser,
@@ -11,6 +13,8 @@ import {
   unitsGrantedByActorSince,
   withTxRetry,
   writeAuditLog,
+  type GrantResult,
+  type Tx,
   type UserRow,
   listAuditForConsole,
   query,
@@ -153,6 +157,10 @@ export async function getCustomer(userId: string): Promise<OperatorUserView> {
     listAuditForConsole({ limit: 20, subjectUserId: userId }),
   ]);
 
+  // The ledger's answer per job, the same one the owner sees, so support can
+  // confirm "was my credit returned?" against the job id the owner quotes.
+  const credits = await creditOutcomes(recentJobs.map((j) => j.id));
+
   return {
     ...viewOf(user),
     balance,
@@ -180,6 +188,7 @@ export async function getCustomer(userId: string): Promise<OperatorUserView> {
       errorCode: j.error_code,
       trackId: j.track_id,
       createdAt: j.created_at.toISOString(),
+      credit: credits.get(j.id) ?? 'none',
     })),
     activity: activity.items
       // Opening the record is audited too; listing every look would drown the
@@ -397,4 +406,94 @@ export async function giftCredits(
       remainingToday: perDay > 0 ? perDay - already - params.units : -1,
     };
   });
+}
+
+/**
+ * Credits given back for something we broke, on an operator's authority
+ * (`POST /v1/admin/users/:id/compensate`, and resolving a problem report with
+ * compensation — docs/FAILURE_COMPENSATION_SPEC.md). Runs inside the caller's
+ * transaction so a caller that also writes something else (the report's
+ * resolution) commits both or neither.
+ *
+ * With a `jobId` the ledger's unique (job, compensate) key allows one per
+ * job: a second call returns the existing batch with `created: false`.
+ */
+export async function compensateAsOperator(
+  ctx: AppContext,
+  params: {
+    actor: { id: string; role: string };
+    userId: string;
+    jobId: string | null;
+    units: number;
+    reason: string;
+  },
+  tx: Tx,
+): Promise<GrantResult> {
+  /*
+   * The operator's own row first, then the day's total — the same shape
+   * the gift path uses, and for the same reason.
+   *
+   * This route is capped at 20 units per call and was capped at nothing
+   * per day, while the gift path's daily cap was being described as the
+   * protection against a compromised operator account. Twenty at a time,
+   * repeated, is unbounded; and this one is open to `support`, which is
+   * the wider door of the two. The allowance is its own
+   * (`ADMIN_COMPENSATION_MAX_UNITS_PER_DAY`) and larger, because a real
+   * outage means compensating many people at once.
+   */
+  await lockUser(params.actor.id, tx);
+  // And the recipient, before its status is read — same reasoning as
+  // `giftCredits`, same lock order, so the two cannot deadlock each other
+  // except operator-against-operator, which the retry absorbs.
+  await lockUser(params.userId, tx);
+  const recipient = await getUser(params.userId, tx);
+  if (!recipient || recipient.status === 'deleted' || recipient.deleted_at) {
+    throw new AppError('NOT_FOUND', 'no such account');
+  }
+  if (recipient.status !== 'active') {
+    throw new AppError('FORBIDDEN', `this account is ${recipient.status}`);
+  }
+
+  const perDay = ctx.config.ADMIN_COMPENSATION_MAX_UNITS_PER_DAY;
+  if (perDay > 0) {
+    const already = await unitsGrantedByActorSince(
+      {
+        actorId: params.actor.id,
+        sources: ['compensation'],
+        since: new Date(Date.now() - 86_400_000),
+      },
+      tx,
+    );
+    if (already + params.units > perDay) {
+      throw new AppError('VALIDATION_FAILED', 'this would pass your daily compensation limit', {
+        limitPerDay: perDay,
+        alreadyToday: already,
+      });
+    }
+  }
+
+  const res = await compensateUnits(
+    {
+      userId: params.userId,
+      jobId: params.jobId,
+      units: params.units,
+      reason: `operator_compensation: ${params.reason}`,
+      actorId: params.actor.id,
+      validityDays: ctx.config.EXPIRED_BATCH_COMPENSATION_DAYS,
+    },
+    tx,
+  );
+  await writeAuditLog(
+    {
+      actorId: params.actor.id,
+      actorRole: params.actor.role,
+      action: 'entitlement.compensated',
+      subjectType: 'user',
+      subjectId: params.userId,
+      reason: params.reason,
+      after: { units: params.units, batchId: res.batch.id, created: res.created },
+    },
+    tx,
+  );
+  return res;
 }

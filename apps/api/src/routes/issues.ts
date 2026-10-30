@@ -10,11 +10,14 @@ import {
   insertIssueReport,
   listIssueReports,
   listIssueReportsForTrack,
+  lockIssueReport,
   resolveIssueReport,
+  withTxRetry,
   writeAuditLog,
   type IssueReportRow,
 } from '@yuha/db';
 import type { AppContext } from '../context.js';
+import { compensateAsOperator } from '../services/operator-grant.js';
 
 /**
  * Reporting a problem with one song, privately (docs/ISSUE_REPORTS_SPEC.md).
@@ -36,6 +39,7 @@ function view(r: IssueReportRow): IssueReportView {
     resolution: r.resolution,
     createdAt: r.created_at.toISOString(),
     resolvedAt: r.resolved_at ? r.resolved_at.toISOString() : null,
+    compensatedUnits: r.compensated_units ?? null,
   };
 }
 
@@ -134,24 +138,57 @@ export default async function issueRoutes(app: FastifyInstance, opts: { ctx: App
     return { url: signed.url, expiresAt: signed.expiresAt.toISOString() };
   });
 
+  /**
+   * Resolves a report, optionally giving one credit back for the song
+   * (docs/FAILURE_COMPENSATION_SPEC.md). One transaction: a refused
+   * compensation — the song already compensated, the operator's daily
+   * allowance spent — leaves the report open and the balance untouched.
+   */
   app.post('/v1/admin/issues/:id/resolve', { preHandler: staff }, async (req) => {
-    const { id } = req.params as { id: string };
-    const body = z.object({ reason: z.string().trim().min(5).max(500) }).parse(req.body);
-    const report = await getIssueReport(id);
-    if (!report) throw new AppError('NOT_FOUND', 'report not found');
-    if (!(await resolveIssueReport({ id, resolution: body.reason, resolvedBy: req.user!.id }))) {
-      throw new AppError('CONFLICT', 'this report was already resolved');
-    }
-    await writeAuditLog({
-      actorId: req.user!.id,
-      actorRole: req.user!.role,
-      action: 'issue_report.resolved',
-      subjectType: 'issue_report',
-      subjectId: id,
-      reason: body.reason,
-      before: { status: 'open' },
-      after: { status: 'resolved' },
+    const { id } = z.object({ id: z.string().uuid() }).parse(req.params);
+    const body = z
+      .object({ reason: z.string().trim().min(5).max(500), compensate: z.boolean().default(false) })
+      .parse(req.body);
+    const compensatedUnits = await withTxRetry(async (tx) => {
+      const report = await lockIssueReport(id, tx);
+      if (!report) throw new AppError('NOT_FOUND', 'report not found');
+      if (report.status !== 'open') throw new AppError('CONFLICT', 'this report was already resolved');
+      let compensation: { batchId: string; units: number } | null = null;
+      if (body.compensate) {
+        const track = await getTrack(report.track_id, tx);
+        if (!track?.job_id) throw new AppError('CONFLICT', 'this song has no generation to compensate');
+        const res = await compensateAsOperator(
+          ctx,
+          {
+            actor: req.user!,
+            userId: report.user_id,
+            jobId: track.job_id,
+            units: 1,
+            reason: `${report.report_number}: ${body.reason}`.slice(0, 200),
+          },
+          tx,
+        );
+        // One per song: the ledger's (job, compensate) key handed back the
+        // earlier batch instead of writing a second one.
+        if (!res.created) throw new AppError('CONFLICT', 'this song was already compensated');
+        compensation = { batchId: res.batch.id, units: 1 };
+      }
+      await resolveIssueReport({ id, resolution: body.reason, resolvedBy: req.user!.id, compensation }, tx);
+      await writeAuditLog(
+        {
+          actorId: req.user!.id,
+          actorRole: req.user!.role,
+          action: 'issue_report.resolved',
+          subjectType: 'issue_report',
+          subjectId: id,
+          reason: body.reason,
+          before: { status: 'open' },
+          after: { status: 'resolved', compensatedUnits: compensation?.units ?? null },
+        },
+        tx,
+      );
+      return compensation?.units ?? null;
     });
-    return { status: 'resolved' };
+    return { status: 'resolved', compensatedUnits };
   });
 }

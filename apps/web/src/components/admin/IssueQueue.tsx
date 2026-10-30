@@ -52,13 +52,20 @@ export function IssueQueue() {
     }
   };
 
-  const resolve = async (id: string) => {
-    const reason = window.prompt(t('admin.issues.resolvePrompt'));
-    if (!reason || reason.trim().length < 5) return;
+  /** The report being resolved: its note, and whether a credit goes back with it. */
+  const [resolving, setResolving] = useState<{ id: string; reason: string; compensate: boolean } | null>(null);
+
+  const resolve = async () => {
+    if (!resolving || resolving.reason.trim().length < 5) return;
+    const { id } = resolving;
     setBusy(id);
     setError(null);
     try {
-      await apiFetch(`/v1/admin/issues/${id}/resolve`, { method: 'POST', body: { reason: reason.trim() } });
+      await apiFetch(`/v1/admin/issues/${id}/resolve`, {
+        method: 'POST',
+        body: { reason: resolving.reason.trim(), compensate: resolving.compensate },
+      });
+      setResolving(null);
       await load();
     } catch (err) {
       setError(err);
@@ -105,10 +112,56 @@ export function IssueQueue() {
                 ) : (
                   <span className="small muted">{t('admin.issues.noConsent')}</span>
                 )}
-                <button type="button" className="btn btn--primary btn--sm" disabled={busy === r.id} onClick={() => void resolve(r.id)}>
-                  {t('admin.issues.resolve')}
-                </button>
+                {resolving?.id !== r.id && (
+                  <button
+                    type="button"
+                    className="btn btn--primary btn--sm"
+                    disabled={busy === r.id}
+                    onClick={() => setResolving({ id: r.id, reason: '', compensate: false })}
+                  >
+                    {t('admin.issues.resolve')}
+                  </button>
+                )}
               </div>
+              {resolving?.id === r.id && (
+                <form
+                  className="stack issue-queue__resolve"
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    void resolve();
+                  }}
+                >
+                  <label htmlFor={`resolve-${r.id}`} className="small">{t('admin.issues.resolvePrompt')}</label>
+                  <textarea
+                    id={`resolve-${r.id}`}
+                    rows={2}
+                    maxLength={500}
+                    value={resolving.reason}
+                    onChange={(e) => setResolving({ ...resolving, reason: e.target.value })}
+                  />
+                  {/* One credit, against this song's generation; the server refuses a second for the same song. */}
+                  <label className="issue-report__consent">
+                    <input
+                      type="checkbox"
+                      checked={resolving.compensate}
+                      onChange={(e) => setResolving({ ...resolving, compensate: e.target.checked })}
+                    />
+                    <span>{t('admin.issues.compensate')}</span>
+                  </label>
+                  <div className="row" style={{ flexWrap: 'wrap', gap: 'var(--s2)' }}>
+                    <button
+                      type="submit"
+                      className="btn btn--primary btn--sm"
+                      disabled={busy === r.id || resolving.reason.trim().length < 5}
+                    >
+                      {t('admin.issues.resolve')}
+                    </button>
+                    <button type="button" className="text-action" onClick={() => setResolving(null)}>
+                      {t('song.rename.cancel')}
+                    </button>
+                  </div>
+                </form>
+              )}
             </li>
           ))}
         </ul>

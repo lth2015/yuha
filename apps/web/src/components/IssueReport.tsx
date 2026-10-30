@@ -137,6 +137,7 @@ export function IssueReport(props: {
                 {r.atSeconds !== null && <> · {formatTime(r.atSeconds)}</>} ·{' '}
                 <strong>{t(`issue.status.${r.status}`)}</strong>
                 {r.resolution && <p className="small">{r.resolution}</p>}
+                {r.compensatedUnits ? <p className="small"><strong>{t('issue.compensated', { n: r.compensatedUnits })}</strong></p> : null}
               </li>
             ))}
           </ul>

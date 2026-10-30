@@ -18,6 +18,7 @@ import {
   listProducts,
   toJst,
 } from '../services/billing.js';
+import { creditHistory } from '../services/credit-history.js';
 
 export default async function billingRoutes(app: FastifyInstance, opts: { ctx: AppContext }) {
   const { ctx } = opts;
@@ -101,6 +102,11 @@ export default async function billingRoutes(app: FastifyInstance, opts: { ctx: A
   app.get('/v1/entitlements', { preHandler: app.requireAuth }, async (req) =>
     getEntitlements(req.user!.id),
   );
+
+  /** One line per event in the caller's credits, from the ledger (docs/FAILURE_COMPENSATION_SPEC.md). */
+  app.get('/v1/credits/history', { preHandler: app.requireAuth }, async (req) => ({
+    items: await creditHistory(req.user!.id),
+  }));
 
   app.post(
     '/v1/subscription/portal',

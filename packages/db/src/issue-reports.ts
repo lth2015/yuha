@@ -16,6 +16,9 @@ export interface IssueReportRow {
   resolution: string | null;
   resolved_by: string | null;
   resolved_at: Date | null;
+  /** Migration 0028 (docs/FAILURE_COMPENSATION_SPEC.md): the credit given back on resolution, if any. */
+  compensation_batch_id: string | null;
+  compensated_units: number | null;
   created_at: Date;
   updated_at: Date;
 }
@@ -110,18 +113,39 @@ export async function getIssueReport(id: string): Promise<IssueReportRow | null>
 }
 
 /** True when this call moved it from open to resolved; false when it already was. */
-export async function resolveIssueReport(params: { id: string; resolution: string; resolvedBy: string }): Promise<boolean> {
-  return withTx(async (tx) => {
+/**
+ * Marks an open report resolved. Inside `tx` when given, so a compensation
+ * written in the same transaction stands or falls with the resolution.
+ */
+export async function resolveIssueReport(
+  params: {
+    id: string;
+    resolution: string;
+    resolvedBy: string;
+    compensation?: { batchId: string; units: number } | null;
+  },
+  tx?: PoolConnection,
+): Promise<boolean> {
+  const run = async (conn: PoolConnection) => {
     // Under the row's lock: who resolved it is not evidence of THIS call
     // doing so — the same person resolving twice would read as success.
-    const row = await queryOne<{ status: string }>(`SELECT status FROM issue_reports WHERE id = ? FOR UPDATE`, [params.id], tx);
+    const row = await queryOne<{ status: string }>(`SELECT status FROM issue_reports WHERE id = ? FOR UPDATE`, [params.id], conn);
     if (row?.status !== 'open') return false;
     await execute(
-      `UPDATE issue_reports SET status = 'resolved', resolution = ?, resolved_by = ?, resolved_at = UTC_TIMESTAMP(3)
+      `UPDATE issue_reports
+          SET status = 'resolved', resolution = ?, resolved_by = ?, resolved_at = UTC_TIMESTAMP(3),
+              compensation_batch_id = ?, compensated_units = ?
         WHERE id = ?`,
-      [params.resolution, params.resolvedBy, params.id],
-      tx,
+      [params.resolution, params.resolvedBy, params.compensation?.batchId ?? null, params.compensation?.units ?? null, params.id],
+      conn,
     );
     return true;
-  });
+  };
+  return tx ? run(tx) : withTx(run);
+}
+
+/** Locks an open report for resolution, so its checks and its writes see the same row. */
+export async function lockIssueReport(id: string, tx: PoolConnection): Promise<IssueReportRow | null> {
+  const row = await queryOne<IssueReportRow>(`SELECT * FROM issue_reports WHERE id = ? FOR UPDATE`, [id], tx);
+  return row ? parsed(row) : null;
 }

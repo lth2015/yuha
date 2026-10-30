@@ -36,4 +36,6 @@ export interface IssueReportView {
   resolution: string | null;
   createdAt: string;
   resolvedAt: string | null;
+  /** Credits given back when it was resolved (docs/FAILURE_COMPENSATION_SPEC.md), or null. */
+  compensatedUnits: number | null;
 }
