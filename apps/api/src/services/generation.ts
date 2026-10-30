@@ -270,6 +270,8 @@ export async function createGeneration(
             energy: req.energy,
             durationSeconds,
             vocalMode: req.instrumental ? 'instrumental' : 'with_vocals',
+            // The worker reads this; without it every song was made with `auto`.
+            voice: req.voice,
             visibility: req.visibility,
             dedication: req.dedication ?? null,
           },
