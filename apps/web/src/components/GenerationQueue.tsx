@@ -148,6 +148,12 @@ export function UnfinishedGenerations({ withinHours }: { withinHours?: number })
     window.addEventListener('focus', load);
     return () => { gone = true; window.removeEventListener('focus', load); };
   }, []);
+  /*
+   * Without a window this is the Library's month-long record, not a prompt:
+   * an orange "try again" on every row would outrank the person's own songs
+   * for thirty days, including songs they cancelled on purpose.
+   */
+  const archive = !withinHours;
   const since = withinHours ? Date.now() - withinHours * 3600_000 : 0;
   const shown = jobs.filter((job) => new Date(job.updatedAt).getTime() >= since);
   if (!shown.length) return null;
@@ -159,10 +165,12 @@ export function UnfinishedGenerations({ withinHours }: { withinHours?: number })
         <span className="small muted">
           {formatJst(job.updatedAt)} · {job.failure ? t(`job.failure.short.${job.failure}`) : ''} · {t(`job.credit.short.${job.credit}`)}
         </span>
+        {/* The full id is what support asks for (docs/TASK_RECOVERY_SPEC.md). */}
+        {archive && <span className="small muted job-outcome__ref">{t('job.ref')} {job.jobId}</span>}
       </div>
       <div className="unfinished__actions">
         <Link className="btn btn--sm" to={`/create?job=${encodeURIComponent(job.jobId)}`}>{t('job.view')}</Link>
-        <Link className="btn btn--sm btn--primary" to={`/create?retry=${encodeURIComponent(job.jobId)}`}>{t('job.retry')}</Link>
+        <Link className={archive ? 'btn btn--sm' : 'btn btn--sm btn--primary'} to={`/create?retry=${encodeURIComponent(job.jobId)}`}>{t('job.retry')}</Link>
       </div>
     </div>)}
   </section>;
