@@ -21,6 +21,10 @@ interface Measured {
   unavailableReason: string | null;
 }
 
+type QualityMetric = { numerator: number; denominator: number; misses: string[] };
+type QualityReport = Record<'completion' | 'playable' | 'complete' | 'length' | 'lyricsAligned' | 'approval', QualityMetric>;
+const QUALITY_ROWS = ['completion', 'playable', 'complete', 'length', 'lyricsAligned', 'approval'] as const;
+
 interface Overview {
   mode: string;
   build?: { sha: string | null; startedAt: string };
@@ -50,6 +54,12 @@ interface Overview {
       wait: { samples: number; p50Seconds: number; p90Seconds: number };
       byLength: Array<{ durationSeconds: number; samples: number; p50Seconds: number; p90Seconds: number }>;
     };
+  };
+  /** docs/GENERATION_QUALITY_SPEC.md */
+  quality?: {
+    build: string | null;
+    all: { day: QualityReport; week: QualityReport };
+    current: { day: QualityReport; week: QualityReport } | null;
   };
   cost: {
     deliveredCount: number;
@@ -129,6 +139,59 @@ function Metric({ label, m, percent = true }: { label: string; m: Measured; perc
  * change feature switches. Every mutation demands a reason, which is written to
  * the audit log with the before/after state.
  */
+/**
+ * What "succeeded" means, four ways, for this build and for all
+ * (docs/GENERATION_QUALITY_SPEC.md). Each cell is the rate and the counts it
+ * came from, so three songs are never read as a trend; the week's misses for
+ * all builds are listed as job ids to open in the customer view.
+ */
+function QualityCard({ q }: { q: NonNullable<Overview['quality']> }) {
+  const { t } = useI18n();
+  const cell = (m: QualityMetric | undefined) =>
+    !m || m.denominator === 0 ? '—' : `${Math.round((m.numerator / m.denominator) * 100)}% (${m.numerator}/${m.denominator})`;
+  const columns: Array<[string, QualityReport | undefined]> = [
+    [t('admin.quality.currentDay'), q.current?.day],
+    [t('admin.quality.currentWeek'), q.current?.week],
+    [t('admin.quality.allDay'), q.all.day],
+    [t('admin.quality.allWeek'), q.all.week],
+  ];
+  return (
+    <div className="card stack">
+      <h3>{t('admin.quality.h3')}</h3>
+      <div className="table-wrap table-wrap--stack">
+        <table>
+          <thead>
+            <tr>
+              <th>{t('admin.quality.metric')}</th>
+              {columns.map(([label]) => <th key={label}>{label}</th>)}
+            </tr>
+          </thead>
+          <tbody>
+            {QUALITY_ROWS.map((row) => (
+              <tr key={row}>
+                <td>{t(`admin.quality.${row}`)}</td>
+                {columns.map(([label, r]) => <td key={label} className="num">{cell(r?.[row])}</td>)}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      {QUALITY_ROWS.some((row) => q.all.week[row].misses.length > 0) && (
+        <ul className="small muted" style={{ margin: 0, paddingLeft: 18 }}>
+          {QUALITY_ROWS.filter((row) => q.all.week[row].misses.length > 0).map((row) => (
+            <li key={row} className="num" style={{ overflowWrap: 'anywhere' }}>
+              {t(`admin.quality.${row}`)}: {q.all.week[row].misses.join(', ')}
+            </li>
+          ))}
+        </ul>
+      )}
+      <p className="small muted" style={{ margin: 0 }}>
+        {q.build ? t('admin.quality.noteBuild', { sha: q.build.slice(0, 7) }) : t('admin.quality.noteNoBuild')}
+      </p>
+    </div>
+  );
+}
+
 /**
  * The logic rules over this deployment's data: things that must never be true
  * at once (docs/agents/CODEX_COLLABORATION.md). All holding is one line; a
@@ -339,6 +402,7 @@ function OverviewPanel({ part }: { part: 'ops' | 'review' }) {
         </div>
 
         <p className="small muted">{t('admin.ops.rateBasis')}</p>
+        {overview.quality && <QualityCard q={overview.quality} />}
         {ops.invariants && <InvariantsCard rules={ops.invariants} />}
         {ops.queue && <QueueCard q={ops.queue} />}
         <div className="card stack">

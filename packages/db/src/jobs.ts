@@ -79,14 +79,16 @@ export interface InsertJobInput {
   providerRequestKey: string;
   input: Record<string, unknown>;
   state?: JobState;
+  /** Defaults to this process's BUILD_SHA; tests pass one to stand for another build. */
+  buildSha?: string | null;
 }
 
 export async function insertJob(input: InsertJobInput, tx: PoolConnection): Promise<JobRow> {
   const id = newId();
   await execute(
     `INSERT INTO generation_jobs
-       (id, user_id, project_id, idempotency_key, request_hash, provider_request_key, input, state)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+       (id, user_id, project_id, idempotency_key, request_hash, provider_request_key, input, state, build_sha)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       id,
       input.userId,
@@ -96,6 +98,8 @@ export async function insertJob(input: InsertJobInput, tx: PoolConnection): Prom
       input.providerRequestKey,
       toJson(input.input),
       input.state ?? 'VALIDATING',
+      // The build that created it (docs/GENERATION_QUALITY_SPEC.md).
+      input.buildSha ?? process.env['BUILD_SHA'] ?? null,
     ],
     tx,
   );
