@@ -1,0 +1,60 @@
+{
+  "about": "Fixed probe songs for docs/quality/PROBE_RUNBOOK.md. Original lyrics written for this purpose. Change a probe only by adding a new id: results are compared by id over time.",
+  "durationSeconds": 60,
+  "probes": [
+    {
+      "id": "zh-numbers",
+      "lang": "zh",
+      "tests": "数字、英文缩写和中英混排是否被唱出、并对上时间轴",
+      "title": "3号线的末班车",
+      "styles": ["city pop", "piano"],
+      "voice": "female",
+      "lyrics": "[Verse]\n晚上11点半 3号线还在跑\n车厢里只剩我 和一首旧歌\nDJ在耳机里 说明天会更好\n我数着站名 一站一站往回找\n\n[Chorus]\n末班车 末班车 别那么快\n让我把今天 慢慢放下来\n2号出口的风 还是那么轻\n回家的路 我一个人也能听"
+    },
+    {
+      "id": "zh-ballad",
+      "lang": "zh",
+      "tests": "普通中文抒情，作为对照",
+      "title": "窗台上的光",
+      "styles": ["ballad", "acoustic"],
+      "voice": "male",
+      "lyrics": "[Verse]\n早晨的光落在窗台上\n你留下的杯子还温着\n我学着把日子过得慢\n像你从前说的那样\n\n[Chorus]\n如果风经过你的城市\n替我说一声我很好\n那些没说完的话\n就交给春天去回答"
+    },
+    {
+      "id": "ja-numbers",
+      "lang": "ja",
+      "tests": "数字・カタカナ・英字の混在が歌われ、時間軸に合っているか",
+      "title": "7時のホーム",
+      "styles": ["j-pop", "band"],
+      "voice": "female",
+      "lyrics": "[Verse]\n朝7時のホーム 1円玉を握って\nコンビニのコーヒー 片手に乗り込んだ\nスマホの画面に 「OK」とだけ送って\n窓の外の街が 少しずつ動きだす\n\n[Chorus]\nきょうもいい日になれ 小さな声で\n3つ目の駅で 深呼吸して\n誰も知らない 僕だけの合図\nまた明日も ここから始めよう"
+    },
+    {
+      "id": "ja-ballad",
+      "lang": "ja",
+      "tests": "普通の日本語バラード（対照）",
+      "title": "夕立のあと",
+      "styles": ["ballad", "strings"],
+      "voice": "male",
+      "lyrics": "[Verse]\n夕立のあとの 匂いがして\n傘をたたんで 空を見上げた\n君が笑った あの交差点\n今も信号は 青に変わる\n\n[Chorus]\n忘れたふりを してるだけさ\n水たまりに 映る夕焼け\nもう一度だけ 名前を呼べば\n届くような 気がしたんだ"
+    },
+    {
+      "id": "en-numbers",
+      "lang": "en",
+      "tests": "Numbers, acronyms and contractions are sung and land on the timeline",
+      "title": "4 A.M. on the Overpass",
+      "styles": ["indie pop", "synth"],
+      "voice": "male",
+      "lyrics": "[Verse]\nIt's 4 a.m. on the overpass\nTwenty-two trucks and a broken glass\nThe radio plays an old 45\nAnd the NYC lights say we're still alive\n\n[Chorus]\nHold on, hold on, the night is long\nI count to 10 and I sing along\nWe don't need a map, we don't need a plan\nJust the road ahead and the hum of the van"
+    },
+    {
+      "id": "en-ballad",
+      "lang": "en",
+      "tests": "Plain English ballad (control)",
+      "title": "Paper Boats",
+      "styles": ["folk", "acoustic"],
+      "voice": "female",
+      "lyrics": "[Verse]\nWe folded paper boats in May\nAnd set them down to drift away\nYou said the river knows the sea\nAnd one day it would carry me\n\n[Chorus]\nSo let the water take the weight\nLet every slow thing learn to wait\nI kept the last boat in my hand\nTo show you that I understand"
+    }
+  ]
+}

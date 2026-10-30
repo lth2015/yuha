@@ -311,6 +311,15 @@ Migrations run from the harness, so a fresh schema needs nothing else. 386 of
 386 passed on `_b` while the sibling was still running on the default schema,
 which is both the fix and the proof that the collision was all it ever was.
 
+The other session can be your own. Killing `concurrently` to stop `pnpm dev`
+leaves its `tsx watch` children running, so a dev API and worker kept
+working against the test database through later suites: three failures that
+passed alone, and a probe song submitted by one worker and polled by another
+that had never heard of it (the demo provider keeps jobs in memory), waiting
+forever. Before a suite, `ps aux | grep -E '[t]sx/dist/cli.mjs|[c]oncurrently'`
+must print nothing; kill those by pid, and never with `pkill -f` on a pattern
+your own shell's command line also matches.
+
 ### Running the suite from outside this machine
 
 An agent session that runs in a cloud container cannot reach this machine's
