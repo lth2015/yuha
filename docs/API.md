@@ -173,8 +173,14 @@ The track view carries it back as `dedication` (null for every other song).
 { "jobId": "…", "state": "PROCESSING", "phase": "processing",
   "trackId": null, "errorCode": null,
   "estimate": { "minSeconds": 30, "maxSeconds": 120, "delayed": false },
-  "demo": true }
+  "demo": true, "credit": "held", "failure": null }
 ```
+
+`credit` is what the ledger says became of the job's credit: `held`, `spent`,
+`returned`, `compensated` (its batch expired mid-flight and a new credit was
+issued) or `none`. `failure` is why it ended without a song: `refused`,
+`timeout`, `cancelled`, `technical`, or `null`. Clients render these and do
+not infer either from `state` (docs/TASK_RECOVERY_SPEC.md).
 
 `estimate` is a **range**, never a percentage — UI-04 forbids a fabricated
 precise progress figure. `delayed` flips after `JOB_DELAY_WARNING_SECONDS`
@@ -183,8 +189,20 @@ precise progress figure. `delayed` flips after `JOB_DELAY_WARNING_SECONDS`
 Poll with backoff. The client escalates 1.5s → 8s.
 
 ### `GET /v1/jobs`
-Unfinished jobs for the caller, so the studio restores in-flight work after a
+Jobs still in flight for the caller, so the studio restores in-flight work after a
 reload or re-login (GEN-10).
+
+### `GET /v1/jobs/unfinished`
+The caller's jobs that ended without a song (FAILED, REJECTED, CANCELLED) in
+the last 30 days, newest first, at most 20, as job views. A job that failed
+while the page was closed is found here.
+
+### `GET /v1/jobs/:id/draft`
+The settings the job was submitted with, shaped as a `POST /v1/generations`
+body (`mode`, `title`, `prompt`, `lyrics`, `styles`, `instrumental`, `energy`,
+`durationSeconds`, `voice`, `visibility`, `dedication`), for 「再试一次」.
+Owner only; anyone else gets 404. Submitting it is a new job under a new
+idempotency key.
 
 ### `POST /v1/jobs/:id/cancel`
 

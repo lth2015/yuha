@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { AudioFormat, JobPhase, JobState, Mood, Scene, TempoHint, TrackState, Visibility, VocalMode, VoiceChoice } from './enums.js';
 import { SECTION_GAP_SECONDS, sectionName } from './sections.js';
-import { dedicationSchema } from './dedication.js';
+import { dedicationSchema, type Dedication } from './dedication.js';
 
 /**
  * Song creation contract (Suno-class product scope).
@@ -260,6 +260,50 @@ export const jobEstimate = z.object({
   delayed: z.boolean(),
 });
 
+/**
+ * What happened to the credit a job reserved, read from the ledger
+ * (docs/TASK_RECOVERY_SPEC.md) — never inferred from the job's state.
+ *
+ * `held`: reserved, not yet settled. `spent`: consumed by a delivered song.
+ * `returned`: released back to the batch it came from. `compensated`: that
+ * batch had expired, so a new credit was issued. `none`: nothing reserved.
+ */
+export const CreditOutcome = z.enum(['held', 'spent', 'returned', 'compensated', 'none']);
+export type CreditOutcome = z.infer<typeof CreditOutcome>;
+
+/** Why a job ended without a song, in terms a person can act on. */
+export const FailureKind = z.enum(['refused', 'timeout', 'cancelled', 'technical']);
+export type FailureKind = z.infer<typeof FailureKind>;
+
+const REFUSED_CODES = new Set(['upstream_rejected', 'text_model_refused']);
+
+export function failureKind(state: JobState, errorCode: string | null): FailureKind | null {
+  if (state === 'CANCELLED' || errorCode === 'cancelled_by_user') return 'cancelled';
+  if (state !== 'FAILED' && state !== 'REJECTED') return null;
+  if (state === 'REJECTED' || (errorCode && REFUSED_CODES.has(errorCode))) return 'refused';
+  if (errorCode === 'queue_wait_timeout') return 'timeout';
+  return 'technical';
+}
+
+/**
+ * The settings a job was submitted with, for its owner to try again
+ * (GET /v1/jobs/:id/draft). Shaped as a create request, so submitting it
+ * unchanged is a valid generation.
+ */
+export interface GenerationDraft {
+  mode: CreateMode;
+  title: string | null;
+  prompt: string;
+  lyrics: string | null;
+  styles: string[];
+  instrumental: boolean;
+  energy: number;
+  durationSeconds: number;
+  voice: VoiceChoice;
+  visibility: Visibility;
+  dedication: Dedication | null;
+}
+
 export const jobView = z.object({
   jobId: z.string().uuid(),
   projectId: z.string().uuid(),
@@ -281,6 +325,8 @@ export const jobView = z.object({
   updatedAt: z.string(),
   /** true while the run mode is demo, so the UI can keep the banner visible. */
   demo: z.boolean(),
+  credit: CreditOutcome,
+  failure: FailureKind.nullable(),
 });
 export type JobView = z.infer<typeof jobView>;
 
