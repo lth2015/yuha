@@ -36,7 +36,7 @@ import { NETX_BSC } from '@yuha/providers';
 import { NETX_PAUSE_SETTING, type AppContext } from '../context.js';
 import { executeAccountDeletion } from '../services/deletion.js';
 import { decideHeldOrder, heldOrderQueue } from '../services/order-review.js';
-import { findCustomers, getCustomer, giftCredits } from '../services/operator-grant.js';
+import { compensateAsOperator, findCustomers, getCustomer, giftCredits } from '../services/operator-grant.js';
 import { creditResetOverview, getCreditResetView, startCreditReset } from '../services/credit-reset.js';
 import { getLyricRealignView, lyricRealignOverview, startLyricRealign } from '../services/lyric-realign.js';
 import { changeRole, reactivateAccount, suspendAccount } from '../services/account-admin.js';
@@ -439,75 +439,13 @@ export default async function adminRoutes(app: FastifyInstance, opts: { ctx: App
       .extend({ units: z.number().int().min(1).max(20), jobId: z.string().uuid().optional() })
       .parse(req.body);
 
-    const result = await withTxRetry(async (tx) => {
-      /*
-       * The operator's own row first, then the day's total — the same shape
-       * the gift path uses, and for the same reason.
-       *
-       * This route is capped at 20 units per call and was capped at nothing
-       * per day, while the gift path's daily cap was being described as the
-       * protection against a compromised operator account. Twenty at a time,
-       * repeated, is unbounded; and this one is open to `support`, which is
-       * the wider door of the two. The allowance is its own
-       * (`ADMIN_COMPENSATION_MAX_UNITS_PER_DAY`) and larger, because a real
-       * outage means compensating many people at once.
-       */
-      await lockUser(req.user!.id, tx);
-      // And the recipient, before its status is read — same reasoning as
-      // `giftCredits`, same lock order, so the two cannot deadlock each other
-      // except operator-against-operator, which the retry absorbs.
-      await lockUser(id, tx);
-      const recipient = await getUser(id, tx);
-      if (!recipient || recipient.status === 'deleted' || recipient.deleted_at) {
-        throw new AppError('NOT_FOUND', 'no such account');
-      }
-      if (recipient.status !== 'active') {
-        throw new AppError('FORBIDDEN', `this account is ${recipient.status}`);
-      }
-
-      const perDay = ctx.config.ADMIN_COMPENSATION_MAX_UNITS_PER_DAY;
-      if (perDay > 0) {
-        const already = await unitsGrantedByActorSince(
-          {
-            actorId: req.user!.id,
-            sources: ['compensation'],
-            since: new Date(Date.now() - 86_400_000),
-          },
-          tx,
-        );
-        if (already + body.units > perDay) {
-          throw new AppError('VALIDATION_FAILED', 'this would pass your daily compensation limit', {
-            limitPerDay: perDay,
-            alreadyToday: already,
-          });
-        }
-      }
-
-      const res = await compensateUnits(
-        {
-          userId: id,
-          jobId: body.jobId ?? null,
-          units: body.units,
-          reason: `operator_compensation: ${body.reason}`,
-          actorId: req.user!.id,
-          validityDays: ctx.config.EXPIRED_BATCH_COMPENSATION_DAYS,
-        },
+    const result = await withTxRetry((tx) =>
+      compensateAsOperator(
+        ctx,
+        { actor: req.user!, userId: id, jobId: body.jobId ?? null, units: body.units, reason: body.reason },
         tx,
-      );
-      await writeAuditLog(
-        {
-          actorId: req.user!.id,
-          actorRole: req.user!.role,
-          action: 'entitlement.compensated',
-          subjectType: 'user',
-          subjectId: id,
-          reason: body.reason,
-          after: { units: body.units, batchId: res.batch.id, created: res.created },
-        },
-        tx,
-      );
-      return res;
-    });
+      ),
+    );
     return { batchId: result.batch.id, created: result.created, units: body.units };
   });
 

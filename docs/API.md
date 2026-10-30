@@ -350,6 +350,16 @@ Payment, fee, refund and net amounts for reconciliation (PAY-11).
 Balance, per-batch detail with expiry, and subscription state including
 `endsAtJst` — the exact JST instant UI-11 requires.
 
+### `GET /v1/credits/history`
+The caller's credit history for the last 180 days, newest first, at most 100
+lines (docs/FAILURE_COMPENSATION_SPEC.md). One line per event:
+`generation` (one per job, with the ledger's `credit` outcome and `units`
+-1 or 0; a credit reissued because its batch expired mid-flight is folded in
+as `compensated`), `grant` (`source`, `productKey`), `compensation` (from
+support; `jobId`, `trackId`, `title` and the problem report's `reportNumber`
+when there is one; the operator's reason is never returned) and `revoke`
+(credits taken back by a refund, negative `units`).
+
 ### `POST /v1/subscription/cancel`
 
 ```json
@@ -466,6 +476,7 @@ never from a token claim.
 | `GET /v1/admin/credit-resets` | **admin** | What a credit reset started now would give (`preview`: accounts, topped accounts/units, bonus accounts/units, floor, bonus, payment window start) and the last 10 resets. [CREDIT_RESET.md](CREDIT_RESET.md) |
 | `POST /v1/admin/credit-resets` | **admin** | Starts a credit reset, or continues the one its `idempotencyKey` started; reason required (audited). `202` at once; it runs in the background. `409 CONFLICT` while another is unfinished |
 | `GET /v1/admin/credit-resets/:id` | **admin** | One reset's progress and totals |
+| `POST /v1/admin/issues/:id/resolve` | support / admin | Resolves a problem report with a note the owner sees. `compensate: true` also gives 1 credit back against the song's generation job, in the same transaction and under the same daily allowance as `compensate` below: a song already compensated is 409 and the report stays open |
 | `POST /v1/admin/users/:id/compensate` | support / admin | A make-good for a failure of ours. Capped at 20 per call and at `ADMIN_COMPENSATION_MAX_UNITS_PER_DAY` per operator per rolling day, recorded as `compensation`. Refuses a deleted or suspended account. Deliberately open to support where `grant` is not |
 | `POST /v1/admin/order-reviews/:id/decide` | **admin** | Release and deliver, or refuse — reason required. Refusing does not refund; that happens in Stripe |
 | `GET /v1/admin/stablecoin-payments` | support | Payments in review, money with no order to attach it to, and refunds owed |

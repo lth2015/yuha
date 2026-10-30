@@ -6,6 +6,7 @@ import { formatJst, useSession } from '../lib/session';
 import { useI18n } from '../lib/i18n';
 import { LOCALES, formatMoney } from '../lib/money';
 import { Badge, ErrorNotice, Loading } from '../components/common';
+import { CreditHistory, sourceKey } from '../components/CreditHistory';
 
 /**
  * The contract type, not a hand-written copy. The local duplicate had drifted:
@@ -173,19 +174,7 @@ export default function Billing() {
               <tbody>
                 {ent.batches.map((b) => (
                   <tr key={b.batchId}>
-                    <td>
-                      {b.source === 'one_time_order'
-                        ? t('bill.src.one_time')
-                        : b.source === 'subscription_period'
-                          ? t('bill.src.subscription')
-                          : b.source === 'compensation'
-                            ? t('bill.src.compensation')
-                            : b.source === 'promo_trial'
-                              ? t('bill.src.trial')
-                              : b.source === 'credit_reset'
-                                ? t('bill.src.reset')
-                                : t('bill.src.adjust')}
-                    </td>
+                    <td>{t(sourceKey(b.source))}</td>
                     <td className="num">{b.grantedUnits}</td>
                     <td className="num">{b.availableUnits}</td>
                     <td className="small muted">
@@ -212,6 +201,8 @@ export default function Billing() {
           </Link>
         </div>
       </section>
+
+      <CreditHistory />
 
       <section className="panel stack">
         <h2 className="section-title">{t('bill.plan')}</h2>

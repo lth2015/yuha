@@ -67,7 +67,15 @@ interface Detail {
     status: string;
     createdAt: string;
   }>;
-  recentJobs?: Array<{ jobId: string; state: string; errorCode: string | null; trackId: string | null; createdAt: string }>;
+  recentJobs?: Array<{
+    jobId: string;
+    state: string;
+    errorCode: string | null;
+    trackId: string | null;
+    createdAt: string;
+    /** The ledger's answer, the same one the owner sees (docs/FAILURE_COMPENSATION_SPEC.md). */
+    credit: 'held' | 'spent' | 'returned' | 'compensated' | 'none';
+  }>;
   activity?: Array<{ action: string; actorEmail: string | null; reason: string; createdAt: string }>;
 }
 
@@ -159,6 +167,32 @@ export function CustomerConsole() {
           }
         : f,
     );
+  };
+
+  /**
+   * One credit back for one generation (docs/FAILURE_COMPENSATION_SPEC.md),
+   * through the existing compensation route with the job attached, so the
+   * ledger allows it once per job and the owner's history links it to the song.
+   */
+  const [compensating, setCompensating] = useState<string | null>(null);
+  const compensate = async (jobId: string) => {
+    if (!detail) return;
+    const why = window.prompt(t('admin.cust.jobs.compensatePrompt'));
+    if (!why || why.trim().length < 5) return;
+    setCompensating(jobId);
+    setError(null);
+    try {
+      const res = await apiFetch<{ created: boolean }>(`/v1/admin/users/${detail.userId}/compensate`, {
+        method: 'POST',
+        body: { units: 1, jobId, reason: why.trim() },
+      });
+      if (!res.created) window.alert(t('admin.cust.jobs.alreadyCompensated'));
+      await refresh();
+    } catch (err) {
+      setError(err);
+    } finally {
+      setCompensating(null);
+    }
   };
 
   const gift = async () => {
@@ -405,15 +439,31 @@ export function CustomerConsole() {
                       <tr>
                         <th>{t('admin.orders.col.when')}</th>
                         <th>{t('admin.cust.jobs.col.state')}</th>
-                        <th>{t('admin.cust.jobs.col.error')}</th>
+                        <th>{t('admin.cust.jobs.col.credit')}</th>
+                        <th>{t('job.ref')}</th>
                       </tr>
                     </thead>
                     <tbody>
                       {detail.recentJobs.map((j) => (
                         <tr key={j.jobId}>
                           <td className="small muted">{formatJst(j.createdAt, true)}</td>
-                          <td className="small">{j.state}</td>
-                          <td className="small muted">{j.errorCode ?? '—'}</td>
+                          <td className="small">
+                            {j.state}
+                            {j.errorCode && <span className="muted"> · {j.errorCode}</span>}
+                          </td>
+                          <td className="small">{t(`job.credit.short.${j.credit}`)}</td>
+                          {/* The id the owner quotes from their failure page, to match it here. */}
+                          <td className="small" style={{ whiteSpace: 'normal', minWidth: '12ch' }}>
+                            <span className="muted num" style={{ display: 'block', wordBreak: 'break-all', userSelect: 'all' }}>{j.jobId}</span>
+                            <button
+                              type="button"
+                              className="btn btn--sm"
+                              disabled={compensating === j.jobId}
+                              onClick={() => void compensate(j.jobId)}
+                            >
+                              {t('admin.cust.jobs.compensate')}
+                            </button>
+                          </td>
                         </tr>
                       ))}
                     </tbody>

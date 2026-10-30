@@ -2747,3 +2747,13 @@ textarea.is-full { border-color: var(--danger); }
   .unfinished__row { flex-direction: column; align-items: stretch; gap: var(--s2); }
   .unfinished__actions > .btn { flex: 1; }
 }
+
+/* Credit history (docs/FAILURE_COMPENSATION_SPEC.md): one line per event, the change on the right. */
+.credit-history { list-style: none; margin: 0; padding: 0; }
+.credit-history__row { display: flex; align-items: center; gap: var(--s3); padding: 10px 0; border-top: 1px solid var(--line); }
+.credit-history__row:first-child { border-top: 0; }
+.credit-history__what { min-width: 0; flex: 1; display: flex; flex-direction: column; gap: 2px; }
+.credit-history__what > a, .credit-history__what > span:first-child { overflow-wrap: anywhere; min-height: 32px; display: inline-flex; align-items: center; }
+.credit-history__units { flex: none; font-weight: 600; min-width: 3ch; text-align: right; }
+.credit-history__units[data-sign="1"] { color: var(--ok); }
+.issue-queue__resolve textarea { width: 100%; }

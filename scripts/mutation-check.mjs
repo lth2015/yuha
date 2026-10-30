@@ -822,10 +822,10 @@ const MUTATIONS = [
     // Compensation is 20 per call and was unbounded per day, while the gift
     // cap was being documented as the compromised-account protection.
     name: 'compensation-has-no-daily-limit',
-    file: 'apps/api/src/routes/admin.ts',
-    from: '      const perDay = ctx.config.ADMIN_COMPENSATION_MAX_UNITS_PER_DAY;',
-    to: '      const perDay = 0;',
-    tests: ['tests/operator-grant.test.ts'],
+    file: 'apps/api/src/services/operator-grant.ts',
+    from: '  const perDay = ctx.config.ADMIN_COMPENSATION_MAX_UNITS_PER_DAY;',
+    to: '  const perDay = 0;',
+    tests: ['tests/operator-grant.test.ts', 'tests/failure-compensation.test.ts'],
   },
   {
     // A Price billed every second month agrees on every other field and bills
@@ -1061,12 +1061,12 @@ const MUTATIONS = [
     // compensate is open to support and had neither the uuid check nor the
     // deleted/suspended refusal that grant has.
     name: 'compensation-may-credit-a-deleted-account',
-    file: 'apps/api/src/routes/admin.ts',
+    file: 'apps/api/src/services/operator-grant.ts',
     // Only the deleted/suspended half is written out; `!recipient` keeps
     // throwing so the narrowing below survives and the build is about the
     // defect rather than about TypeScript.
-    from: "      if (!recipient || recipient.status === 'deleted' || recipient.deleted_at) {",
-    to: '      if (!recipient) {',
+    from: "  if (!recipient || recipient.status === 'deleted' || recipient.deleted_at) {",
+    to: '  if (!recipient) {',
     tests: ['tests/operator-grant.test.ts'],
   },
   {

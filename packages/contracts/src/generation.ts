@@ -304,6 +304,21 @@ export interface GenerationDraft {
   dedication: Dedication | null;
 }
 
+/**
+ * One line of the owner's credit history (docs/FAILURE_COMPENSATION_SPEC.md).
+ *
+ * A generation is one line however many ledger entries it took (reserve,
+ * consume or release, and a reissue when its batch expired mid-flight); its
+ * `credit` is the ledger's answer and `units` what it cost: -1 spent or held,
+ * 0 returned or reissued. A compensation from support is its own line and
+ * never carries the staff member's note.
+ */
+export type CreditHistoryItem =
+  | { kind: 'generation'; at: string; jobId: string; trackId: string | null; title: string | null; credit: CreditOutcome; units: number }
+  | { kind: 'grant'; at: string; source: string; productKey: string | null; units: number }
+  | { kind: 'compensation'; at: string; units: number; jobId: string | null; trackId: string | null; title: string | null; reportNumber: string | null }
+  | { kind: 'revoke'; at: string; units: number };
+
 export const jobView = z.object({
   jobId: z.string().uuid(),
   projectId: z.string().uuid(),
