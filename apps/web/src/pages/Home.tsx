@@ -1,4 +1,4 @@
-import { JobOutcome, OpenGenerations, QueueStatus, UnfinishedGenerations } from '../components/GenerationQueue';
+import { JobOutcome, OpenGenerations, QueueStatus, UnfinishedGenerations, etaText } from '../components/GenerationQueue';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import type { JobView, TrackView } from '@yuha/contracts';
@@ -312,7 +312,8 @@ export default function Home() {
       <div className="wait-page" aria-live="polite">
         <p className="eyebrow">{failed ? t('wait.failedEyebrow') : t('wait.eyebrow')}</p>
         <h1 className="wait-page__title">{failed ? t('wait.failedTitle') : t(phaseKey(job.phase))}</h1>
-        <p className="muted wait-page__sub">{failed ? t(`job.failure.${job.failure ?? 'technical'}`) : t('wait.sub')}</p>
+        <p className="muted wait-page__sub">{failed ? t(`job.failure.${job.failure ?? 'technical'}`) : etaText(job, t)}</p>
+        {!failed && job.phase !== 'queued' && <p className="small muted">{t('create.job.noCancel')}</p>}
         {failed && <JobOutcome job={job} />}
 
         {/* Their own description, being written to tape. The written region is

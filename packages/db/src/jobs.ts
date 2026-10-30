@@ -556,6 +556,69 @@ export async function startMusicDispatch(
   return getJob(job.id, tx);
 }
 
+/** One finished song's timing (docs/GENERATION_QUEUE_SPEC.md). */
+export interface GenerationTiming {
+  /** From being sent to the provider to delivery. */
+  genSeconds: number;
+  /** The song's length, as asked for. */
+  durationSeconds: number;
+  /** From creation to being sent to the provider. */
+  waitSeconds: number;
+}
+
+/**
+ * How long a provider's recent songs really took, newest first, at most 200.
+ * Anchored on `dispatch_started_at` (when this side sent it), falling back to
+ * `submitted_at` for rows from before that column existed.
+ */
+export async function recentGenerationTimings(providerId: string, days: number): Promise<GenerationTiming[]> {
+  const rows = await query<{ gen_ms: number; wait_ms: number; duration: unknown }>(
+    `SELECT TIMESTAMPDIFF(MICROSECOND, COALESCE(dispatch_started_at, submitted_at), delivered_at) / 1000 AS gen_ms,
+            TIMESTAMPDIFF(MICROSECOND, created_at, COALESCE(dispatch_started_at, submitted_at)) / 1000 AS wait_ms,
+            JSON_EXTRACT(input, '$.durationSeconds') AS duration
+       FROM generation_jobs
+      WHERE provider_id = ? AND state = 'DELIVERED'
+        AND delivered_at >= UTC_TIMESTAMP(3) - INTERVAL ? DAY
+        AND COALESCE(dispatch_started_at, submitted_at) IS NOT NULL
+      ORDER BY delivered_at DESC
+      LIMIT 200`,
+    [providerId, days],
+  );
+  return rows
+    .map((r) => ({
+      genSeconds: Number(r.gen_ms) / 1000,
+      waitSeconds: Math.max(0, Number(r.wait_ms) / 1000),
+      durationSeconds: Number(r.duration) || 120,
+    }))
+    .filter((t) => Number.isFinite(t.genSeconds) && t.genSeconds > 0);
+}
+
+/** The provider's queue as it stands, for the console (docs/GENERATION_QUEUE_SPEC.md). */
+export async function queueState(providerId: string): Promise<{
+  running: number;
+  waiting: number;
+  oldestWaitSeconds: number | null;
+  timeouts7d: number;
+}> {
+  const row = await queryOne<{ running: number; waiting: number; oldest: number | null; timeouts: number }>(
+    `SELECT
+       (SELECT COUNT(*) FROM generation_jobs WHERE provider_id = ?
+          AND (state IN ('SUBMITTED','UNKNOWN','PROCESSING') OR (state = 'QUEUED' AND dispatch_started_at IS NOT NULL))) AS running,
+       (SELECT COUNT(*) FROM generation_jobs WHERE provider_id = ? AND state = 'QUEUED' AND dispatch_started_at IS NULL) AS waiting,
+       (SELECT TIMESTAMPDIFF(SECOND, MIN(created_at), UTC_TIMESTAMP(3)) FROM generation_jobs
+         WHERE provider_id = ? AND state = 'QUEUED' AND dispatch_started_at IS NULL) AS oldest,
+       (SELECT COUNT(*) FROM generation_jobs WHERE provider_id = ? AND error_code = 'queue_wait_timeout'
+          AND finished_at >= UTC_TIMESTAMP(3) - INTERVAL 7 DAY) AS timeouts`,
+    [providerId, providerId, providerId, providerId],
+  );
+  return {
+    running: Number(row?.running ?? 0),
+    waiting: Number(row?.waiting ?? 0),
+    oldestWaitSeconds: row?.oldest === null || row?.oldest === undefined ? null : Number(row.oldest),
+    timeouts7d: Number(row?.timeouts ?? 0),
+  };
+}
+
 /** Positions for a pre-authorized list; never return another user's job data. */
 export async function queuePositions(jobs: readonly JobRow[]): Promise<Map<string, number>> {
   const queued = jobs.filter((j) => j.state === 'QUEUED' && !j.dispatch_started_at);

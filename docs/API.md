@@ -182,9 +182,15 @@ issued) or `none`. `failure` is why it ended without a song: `refused`,
 `timeout`, `cancelled`, `technical`, or `null`. Clients render these and do
 not infer either from `state` (docs/TASK_RECOVERY_SPEC.md).
 
-`estimate` is a **range**, never a percentage — UI-04 forbids a fabricated
-precise progress figure. `delayed` flips after `JOB_DELAY_WARNING_SECONDS`
-(default 180) so the UI stops promising an imminent result.
+`estimate` is a **range** of seconds left, never a percentage — UI-04 forbids
+a fabricated precise progress figure. It is the middle half (25th–75th
+percentile) of what the provider's songs took over the last seven days, for
+this length or scaled to it, plus a typical song per concurrency wave of jobs
+ahead (docs/GENERATION_QUEUE_SPEC.md). `basis: "default"` with `samples` under
+five means there was too little to measure and the old fixed range was used;
+the UI then gives no figure. `delayed` flips once a running song is 1.5× past
+its own upper bound. A waiting job also carries `queueDeadlineAt`: when it is
+cancelled and its credit returned if it has not started.
 
 Poll with backoff. The client escalates 1.5s → 8s.
 

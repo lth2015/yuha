@@ -21,6 +21,8 @@ import {
   listSettings,
   markAccountDeletionVerified,
   query,
+  queueState,
+  recentGenerationTimings,
   reconcileBalances,
   reporting,
   setLicenseStatus,
@@ -35,6 +37,7 @@ import {
 import { NETX_BSC } from '@yuha/providers';
 import { NETX_PAUSE_SETTING, type AppContext } from '../context.js';
 import { executeAccountDeletion } from '../services/deletion.js';
+import { percentiles } from '../services/estimate.js';
 import { decideHeldOrder, heldOrderQueue } from '../services/order-review.js';
 import { compensateAsOperator, findCustomers, getCustomer, giftCredits } from '../services/operator-grant.js';
 import { creditResetOverview, getCreditResetView, startCreditReset } from '../services/credit-reset.js';
@@ -53,6 +56,11 @@ import { changeRole, reactivateAccount, suspendAccount } from '../services/accou
  */
 /** When this API process started, for the overview's build line. */
 const PROCESS_STARTED_AT = new Date().toISOString();
+
+const pctSeconds = (xs: number[]) => {
+  const p = percentiles(xs);
+  return { p50Seconds: p.p50, p90Seconds: p.p90 };
+};
 
 export default async function adminRoutes(app: FastifyInstance, opts: { ctx: AppContext }) {
   const { ctx } = opts;
@@ -78,19 +86,45 @@ export default async function adminRoutes(app: FastifyInstance, opts: { ctx: App
   // ------------------------------------------------------------- overview
 
   app.get('/v1/admin/overview', { preHandler: staff }, async () => {
-    const [ops, cost, revenue, funnel, discrepancies] = await Promise.all([
+    const providerId = ctx.music.capabilities().providerId;
+    const [ops, cost, revenue, funnel, discrepancies, queue, timings] = await Promise.all([
       reporting.operationsSnapshot(),
       reporting.costSummary(30),
       reporting.revenueSummary(30),
       reporting.funnelSummary(),
       reconcileBalances(),
+      queueState(providerId),
+      recentGenerationTimings(providerId, 7),
     ]);
     return {
       mode: ctx.config.mode,
       // Which code is answering: an acceptance record names this, not a
       // local checkout. Staff only, like everything here.
       build: { sha: process.env['BUILD_SHA'] ?? null, startedAt: PROCESS_STARTED_AT },
-      operations: { ...ops, ledgerDiscrepancies: discrepancies.length },
+      operations: {
+        ...ops,
+        ledgerDiscrepancies: discrepancies.length,
+        /*
+         * The generation queue (docs/GENERATION_QUEUE_SPEC.md): the
+         * concurrency this process runs with — the ConfigMap is not in the
+         * repository, so this is where its value can be read — what is
+         * running and waiting now, and what the last seven days took.
+         */
+        queue: {
+          providerId,
+          concurrency: ctx.music.capabilities().maxConcurrency,
+          queueDeadlineSeconds: ctx.config.JOB_QUEUE_DEADLINE_SECONDS,
+          ...queue,
+          generation: { samples: timings.length, ...pctSeconds(timings.map((t) => t.genSeconds)) },
+          wait: { samples: timings.length, ...pctSeconds(timings.map((t) => t.waitSeconds)) },
+          byLength: Object.entries(
+            timings.reduce<Record<string, number[]>>((acc, t) => {
+              (acc[t.durationSeconds] ??= []).push(t.genSeconds);
+              return acc;
+            }, {}),
+          ).map(([seconds, xs]) => ({ durationSeconds: Number(seconds), samples: xs.length, ...pctSeconds(xs) })),
+        },
+      },
       cost,
       revenue,
       funnel,

@@ -2,7 +2,6 @@ import { createHash } from 'node:crypto';
 import {
   AppError,
   JOB_STATE_TO_PHASE,
-  SONG_DURATIONS,
   failureKind,
   fitDurationToLyrics,
   type CreateGenerationRequest,
@@ -37,6 +36,7 @@ import {
 } from '@yuha/db';
 import { checkLyrics, checkPrompt, checkTitle } from '@yuha/providers';
 import type { AppContext } from '../context.js';
+import { estimateFromTimings, providerTimings, type Timing } from './estimate.js';
 
 /**
  * Canonical hash of the request body. Two submissions under the same
@@ -408,24 +408,33 @@ export async function assertWithinDailyBudget(ctx: AppContext): Promise<void> {
  * Estimated wait, expressed as a range. UI-04 forbids a fabricated precise
  * percentage; longer songs honestly take longer.
  */
-export function estimateFor(ctx: AppContext, job: JobRow): JobView['estimate'] {
-  const startedAt = (job.queued_at ?? job.created_at).getTime();
-  const elapsed = (Date.now() - startedAt) / 1000;
-  const delayed = elapsed > ctx.config.JOB_DELAY_WARNING_SECONDS;
+/**
+ * A job's estimate, from the provider's recent timings and the job's place in
+ * line (docs/GENERATION_QUEUE_SPEC.md). A finished job has nothing left.
+ */
+export function estimateFor(
+  ctx: AppContext,
+  job: JobRow,
+  timings: readonly Timing[],
+  position: number | null,
+): JobView['estimate'] {
   if (['DELIVERED', 'FAILED', 'REJECTED', 'CANCELLED'].includes(job.state)) {
-    return { minSeconds: 0, maxSeconds: 0, delayed: false };
+    return { minSeconds: 0, maxSeconds: 0, delayed: false, basis: 'default', samples: 0 };
   }
   const input = job.input as { durationSeconds?: number };
-  const d = input.durationSeconds ?? 120;
-  const scale = SONG_DURATIONS.includes(d as (typeof SONG_DURATIONS)[number]) ? d / 120 : 1;
-  return {
-    minSeconds: Math.round(30 * Math.min(scale, 2)),
-    maxSeconds: Math.round(120 * Math.min(scale, 2)),
-    delayed,
-  };
+  const sentAt = job.dispatch_started_at ?? job.submitted_at;
+  const waiting = job.state === 'QUEUED' && !job.dispatch_started_at;
+  return estimateFromTimings({
+    timings,
+    durationSeconds: input.durationSeconds ?? 120,
+    // `position` counts the running jobs and this one; nothing known means first.
+    ahead: waiting && position ? position - 1 : 0,
+    concurrency: ctx.music.capabilities().maxConcurrency,
+    runningSeconds: !waiting && sentAt ? (Date.now() - sentAt.getTime()) / 1000 : waiting ? null : 0,
+  });
 }
 
-export function toJobView(ctx: AppContext, job: JobRow, credit: CreditOutcome): JobView {
+export function toJobView(ctx: AppContext, job: JobRow, credit: CreditOutcome, estimate: JobView['estimate']): JobView {
   const input = job.input as {
     mode?: 'simple' | 'custom';
     title?: string | null;
@@ -451,7 +460,7 @@ export function toJobView(ctx: AppContext, job: JobRow, credit: CreditOutcome): 
     visibility: input.visibility ?? 'private',
     trackId: job.track_id,
     errorCode: job.error_code,
-    estimate: estimateFor(ctx, job),
+    estimate,
     createdAt: job.created_at.toISOString(),
     updatedAt: job.updated_at.toISOString(),
     demo: ctx.config.isDemo,
@@ -462,11 +471,22 @@ export function toJobView(ctx: AppContext, job: JobRow, credit: CreditOutcome): 
 
 /** Reuse already owner-scoped rows; list views need one queue query, not N+1. */
 export async function getJobViews(ctx: AppContext, jobs: readonly JobRow[]): Promise<JobView[]> {
-  const [positions, credits] = await Promise.all([queuePositions(jobs), creditOutcomes(jobs.map((j) => j.id))]);
-  return jobs.map((job) => ({
-    ...toJobView(ctx, job, credits.get(job.id) ?? 'none'),
-    queuePosition: positions.get(job.id) ?? null,
-  }));
+  const [positions, credits, timings] = await Promise.all([
+    queuePositions(jobs),
+    creditOutcomes(jobs.map((j) => j.id)),
+    providerTimings(ctx.music.capabilities().providerId),
+  ]);
+  return jobs.map((job) => {
+    const position = positions.get(job.id) ?? null;
+    const waiting = job.state === 'QUEUED' && !job.dispatch_started_at;
+    return {
+      ...toJobView(ctx, job, credits.get(job.id) ?? 'none', estimateFor(ctx, job, timings, position)),
+      queuePosition: position,
+      queueDeadlineAt: waiting
+        ? new Date(job.created_at.getTime() + ctx.config.JOB_QUEUE_DEADLINE_SECONDS * 1000).toISOString()
+        : null,
+    };
+  });
 }
 
 /**
