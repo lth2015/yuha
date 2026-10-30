@@ -465,6 +465,9 @@ const envSchema = z.object({
   // --- generation tuning --------------------------------------------------
   JOB_LEASE_SECONDS: int(90),
   JOB_QUEUE_DEADLINE_SECONDS: int(3600),
+  // No longer read: "taking longer" is now 1.5× a song's own measured upper
+  // bound (docs/GENERATION_QUEUE_SPEC.md), because one fixed 180 s called
+  // every four-minute song late. Kept so a deployment that sets it still parses.
   JOB_DELAY_WARNING_SECONDS: int(180),
   JOB_VERIFY_DEADLINE_SECONDS: int(900),
   /*

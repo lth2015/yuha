@@ -3,13 +3,34 @@ import { Link } from 'react-router-dom';
 import type { JobView } from '@yuha/contracts';
 import { apiFetch } from '../lib/api';
 import { useI18n } from '../lib/i18n';
+import { LOCALES } from '../lib/money';
 import { formatJst, useSession } from '../lib/session';
 import { ErrorNotice } from './common';
+
+/**
+ * How long is left, as a sentence (docs/GENERATION_QUEUE_SPEC.md).
+ *
+ * The range is the server's, taken from the provider's own recent songs.
+ * When it had too few to measure (`basis: 'default'`) this gives no number
+ * at all rather than print the old constant as if it were known. Under a
+ * minute and a half it is seconds; above, whole minutes — the lower bound
+ * rounded, the upper rounded up, so 118–155 s reads 2–3, not 1–3.
+ */
+export function etaText(job: JobView, t: (key: string, vars?: Record<string, string | number>) => string): string {
+  const e = job.estimate;
+  if (e.delayed) return t('create.job.delayed');
+  if (e.basis === 'default') return t('eta.usual');
+  if (e.maxSeconds <= 0) return t('eta.almost');
+  if (e.maxSeconds < 90) return t('eta.seconds', { min: Math.max(e.minSeconds, 1), max: e.maxSeconds });
+  const min = Math.max(1, Math.round(e.minSeconds / 60));
+  const max = Math.max(min, Math.ceil(e.maxSeconds / 60));
+  return min === max ? t('eta.minute', { n: max }) : t('eta.minutes', { min, max });
+}
 
 export function QueueStatus({ job, onUpdate, onCancelled }: {
   job: JobView; onUpdate: (job: JobView) => void; onCancelled: () => void;
 }) {
-  const { t } = useI18n();
+  const { t, lang } = useI18n();
   const { refreshEntitlements } = useSession();
   const active = useRef(false);
   const [busy, setBusy] = useState(false);
@@ -34,6 +55,13 @@ export function QueueStatus({ job, onUpdate, onCancelled }: {
     <span className="queue-status__orbit" aria-hidden="true" />
     <div className="queue-status__body"><strong role="status">{t('create.queue.position', { position: job.queuePosition })}</strong>
       <p className="small muted">{t('create.queue.note')}</p>
+      {job.queueDeadlineAt && (
+        <p className="small muted">
+          {t('create.queue.deadline', {
+            time: new Date(job.queueDeadlineAt).toLocaleTimeString(LOCALES[lang], { hour: '2-digit', minute: '2-digit' }),
+          })}
+        </p>
+      )}
       <button type="button" className="btn btn--sm" onClick={() => void cancel()} disabled={busy} aria-busy={busy}>{t('create.queue.cancel')}</button>
       {error ? <ErrorNotice error={error} onRetry={() => void cancel()} /> : null}
     </div>

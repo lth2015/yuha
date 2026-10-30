@@ -35,6 +35,19 @@ interface Overview {
     technicalSuccessRate: Measured;
     budgetSpentTodayMinor: number;
     generationFailures: Array<{ code: string; state: string; count: number }>;
+    /** docs/GENERATION_QUEUE_SPEC.md */
+    queue?: {
+      providerId: string;
+      concurrency: number;
+      queueDeadlineSeconds: number;
+      running: number;
+      waiting: number;
+      oldestWaitSeconds: number | null;
+      timeouts7d: number;
+      generation: { samples: number; p50Seconds: number; p90Seconds: number };
+      wait: { samples: number; p50Seconds: number; p90Seconds: number };
+      byLength: Array<{ durationSeconds: number; samples: number; p50Seconds: number; p90Seconds: number }>;
+    };
   };
   cost: {
     deliveredCount: number;
@@ -114,6 +127,57 @@ function Metric({ label, m, percent = true }: { label: string; m: Measured; perc
  * change feature switches. Every mutation demands a reason, which is written to
  * the audit log with the before/after state.
  */
+/**
+ * The generation queue as it stands and as it has run (docs/GENERATION_QUEUE_SPEC.md).
+ * The concurrency shown is the one this API process was started with: the
+ * production ConfigMap is not in the repository, so this is where it is read.
+ */
+function QueueCard({ q }: { q: NonNullable<Overview['operations']['queue']> }) {
+  const { t } = useI18n();
+  const dur = (n: number | null) =>
+    n === null ? '—' : n < 120 ? t('admin.seconds', { n: Math.round(n) }) : t('admin.queue.minutes', { n: Math.round(n / 60) });
+  const pair = (p: { samples: number; p50Seconds: number; p90Seconds: number }) =>
+    p.samples ? `${dur(p.p50Seconds)} / ${dur(p.p90Seconds)}` : '—';
+  return (
+    <div className="card stack">
+      <h3>{t('admin.queue.h3')}</h3>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 'var(--s3)' }}>
+        <div><span className="small muted">{t('admin.queue.concurrency')}</span><br /><strong className="num">{q.concurrency}</strong></div>
+        <div><span className="small muted">{t('admin.queue.running')}</span><br /><strong className="num">{q.running}</strong></div>
+        <div><span className="small muted">{t('admin.queue.waiting')}</span><br /><strong className="num">{q.waiting}</strong></div>
+        <div><span className="small muted">{t('admin.queue.oldest')}</span><br /><strong className="num">{dur(q.oldestWaitSeconds)}</strong></div>
+        <div><span className="small muted">{t('admin.queue.gen')}</span><br /><strong className="num">{pair(q.generation)}</strong></div>
+        <div><span className="small muted">{t('admin.queue.wait')}</span><br /><strong className="num">{pair(q.wait)}</strong></div>
+        <div>
+          <span className="small muted">{t('admin.queue.timeouts')}</span><br />
+          <strong className="num" style={{ color: q.timeouts7d > 0 ? 'var(--warning)' : undefined }}>{q.timeouts7d}</strong>
+        </div>
+      </div>
+      {q.byLength.length > 0 && (
+        <div className="table-wrap table-wrap--stack">
+          <table>
+            <thead>
+              <tr><th>{t('admin.queue.length')}</th><th>{t('admin.queue.samples')}</th><th>{t('admin.queue.gen')}</th></tr>
+            </thead>
+            <tbody>
+              {[...q.byLength].sort((a, b) => a.durationSeconds - b.durationSeconds).map((r) => (
+                <tr key={r.durationSeconds}>
+                  <td className="num">{t('admin.seconds', { n: r.durationSeconds })}</td>
+                  <td className="num">{r.samples}</td>
+                  <td className="num">{pair(r)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+      <p className="small muted" style={{ margin: 0 }}>
+        {t('admin.queue.note', { provider: q.providerId, deadline: Math.round(q.queueDeadlineSeconds / 60) })}
+      </p>
+    </div>
+  );
+}
+
 function OverviewPanel({ part }: { part: 'ops' | 'review' }) {
   const { t } = useI18n();
   const { me } = useSession();
@@ -241,6 +305,7 @@ function OverviewPanel({ part }: { part: 'ops' | 'review' }) {
         </div>
 
         <p className="small muted">{t('admin.ops.rateBasis')}</p>
+        {ops.queue && <QueueCard q={ops.queue} />}
         <div className="card stack">
           <h3>{t('admin.ops.failures')}</h3>
           {ops.generationFailures?.length ? <div className="table-wrap table-wrap--stack"><table>

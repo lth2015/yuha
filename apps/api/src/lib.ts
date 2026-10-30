@@ -22,6 +22,7 @@ export {
   hashRequest,
   currentBalance,
 } from './services/generation.js';
+export { estimateFromTimings, resetTimingCache, type Timing } from './services/estimate.js';
 
 export {
   deliver,

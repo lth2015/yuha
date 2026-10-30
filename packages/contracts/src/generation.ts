@@ -258,6 +258,14 @@ export const jobEstimate = z.object({
   minSeconds: z.number().int().nonnegative(),
   maxSeconds: z.number().int().nonnegative(),
   delayed: z.boolean(),
+  /**
+   * `measured`: from the provider's own recent deliveries. `default`: too few
+   * of those to measure, so the old fixed range — the UI then gives no
+   * figure (docs/GENERATION_QUEUE_SPEC.md).
+   */
+  basis: z.enum(['measured', 'default']),
+  /** Finished songs the range was taken from. */
+  samples: z.number().int().nonnegative(),
 });
 
 /**
@@ -336,6 +344,8 @@ export const jobView = z.object({
   errorCode: z.string().nullable(),
   estimate: jobEstimate,
   queuePosition: z.number().int().positive().nullable().optional(),
+  /** While waiting: when it is given up on and its credit returned (JOB_QUEUE_DEADLINE_SECONDS). */
+  queueDeadlineAt: z.string().nullable().optional(),
   createdAt: z.string(),
   updatedAt: z.string(),
   /** true while the run mode is demo, so the UI can keep the banner visible. */

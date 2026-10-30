@@ -1,4 +1,4 @@
-import { JobOutcome, OpenGenerations, QueueStatus, UnfinishedGenerations } from '../components/GenerationQueue';
+import { JobOutcome, OpenGenerations, QueueStatus, UnfinishedGenerations, etaText } from '../components/GenerationQueue';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import {
@@ -792,15 +792,10 @@ export default function Create() {
             ? t(`job.failure.${job.failure ?? 'technical'}`)
             : done
               ? t('create.job.done')
-              : job.phase === 'queued'
-                ? t('create.phase.queued')
-              : job.estimate.delayed
-                ? t('create.job.delayed')
-                : t('create.job.eta', {
-                    min: job.estimate.minSeconds,
-                    max: job.estimate.maxSeconds,
-                  })}
+              : etaText(job, t)}
         </p>
+        {/* The provider cannot be stopped once it has the song; say so where the cancel button stops being offered. */}
+        {!failed && !done && job.phase !== 'queued' && <p className="small muted">{t('create.job.noCancel')}</p>}
 
         {failed && <JobOutcome job={job} />}
 
