@@ -144,7 +144,6 @@ export default function Library() {
   return (
     <div className="stack">
       <OpenGenerations onResume={(job) => navigate(`/create?job=${encodeURIComponent(job.jobId)}`)} />
-      <UnfinishedGenerations />
       <div className="section-head">
         <h1>{t('lib.title')}</h1>
         <Link to="/create" className="btn btn--primary btn--sm">
@@ -233,6 +232,9 @@ export default function Library() {
           )}
         </>
       )}
+
+      {/* After the songs: a record to look things up in, not the first thing on the page. */}
+      <UnfinishedGenerations />
     </div>
   );
 }
