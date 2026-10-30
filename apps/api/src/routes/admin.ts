@@ -22,6 +22,7 @@ import {
   markAccountDeletionVerified,
   query,
   checkInvariants,
+  qualityReport,
   queueState,
   recentGenerationTimings,
   reconcileBalances,
@@ -88,7 +89,8 @@ export default async function adminRoutes(app: FastifyInstance, opts: { ctx: App
 
   app.get('/v1/admin/overview', { preHandler: staff }, async () => {
     const providerId = ctx.music.capabilities().providerId;
-    const [ops, cost, revenue, funnel, discrepancies, queue, timings, invariants] = await Promise.all([
+    const build = process.env['BUILD_SHA'] ?? null;
+    const [ops, cost, revenue, funnel, discrepancies, queue, timings, invariants, qualityAllDay, qualityAllWeek, qualityNowDay, qualityNowWeek] = await Promise.all([
       reporting.operationsSnapshot(),
       reporting.costSummary(30),
       reporting.revenueSummary(30),
@@ -97,6 +99,11 @@ export default async function adminRoutes(app: FastifyInstance, opts: { ctx: App
       queueState(providerId),
       recentGenerationTimings(providerId, 7),
       checkInvariants(),
+      // docs/GENERATION_QUALITY_SPEC.md: all jobs, and this build's alone.
+      qualityReport({ hours: 24 }),
+      qualityReport({ hours: 24 * 7 }),
+      build ? qualityReport({ hours: 24, buildSha: build }) : Promise.resolve(null),
+      build ? qualityReport({ hours: 24 * 7, buildSha: build }) : Promise.resolve(null),
     ]);
     return {
       mode: ctx.config.mode,
@@ -128,6 +135,11 @@ export default async function adminRoutes(app: FastifyInstance, opts: { ctx: App
             }, {}),
           ).map(([seconds, xs]) => ({ durationSeconds: Number(seconds), samples: xs.length, ...pctSeconds(xs) })),
         },
+      },
+      quality: {
+        build,
+        all: { day: qualityAllDay, week: qualityAllWeek },
+        current: build ? { day: qualityNowDay, week: qualityNowWeek } : null,
       },
       cost,
       revenue,
