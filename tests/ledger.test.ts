@@ -22,6 +22,7 @@ import {
   withTx,
 } from '@yuha/db';
 import { createHarness, ledgerFor, resetData, teardown, type Harness } from './helpers/harness.js';
+import { allowInvariantBreach } from './helpers/invariant-guard.js';
 
 let h: Harness;
 
@@ -29,6 +30,9 @@ beforeAll(async () => {
   h = await createHarness();
 });
 beforeEach(async () => {
+  // These tests reserve, consume and release on bare jobs that never leave
+  // VALIDATING (`makeJob`), to test the ledger alone.
+  allowInvariantBreach('open-job-not-settled');
   await resetData();
 });
 afterAll(async () => {
@@ -373,6 +377,7 @@ describe('reconciliation', () => {
   });
 
   it('reports a discrepancy when a counter is tampered with directly', async () => {
+    allowInvariantBreach('batch-counters-match-ledger'); // the tampering is the test
     const user = await h.createUser({ credits: 5 });
     const jobId = await makeJob(user.id);
     await withTx(async (tx) => reserveUnit({ userId: user.id, jobId }, tx));

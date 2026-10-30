@@ -13,6 +13,7 @@ import { randomUUID } from 'node:crypto';
 import { execute, insertJob, insertProject, withTx } from '@yuha/db';
 import { estimateFromTimings, resetTimingCache, type Timing } from '@yuha/api';
 import { createHarness, resetData, teardown, type Harness, type TestUser } from './helpers/harness.js';
+import { allowInvariantBreach } from './helpers/invariant-guard.js';
 
 const s = (genSeconds: number, durationSeconds = 120, waitSeconds = 10): Timing => ({ genSeconds, durationSeconds, waitSeconds });
 
@@ -79,8 +80,9 @@ describe('a job’s estimate in the API', () => {
 
   const providerId = () => h.ctx.music.capabilities().providerId;
 
-  /** A song that finished `gen` seconds after it was sent, `hoursAgo` hours ago. */
+  /** A song that finished `gen` seconds after it was sent, `hoursAgo` hours ago. Timings only: no song is stored. */
   async function finished(user: TestUser, gen: number, durationSeconds = 30, hoursAgo = 2) {
+    allowInvariantBreach('delivered-job-has-a-song');
     await withTx(async (tx) => {
       const project = await insertProject({ ownerId: user.id, title: 't', scene: 'night_walk' }, tx);
       const job = await insertJob(

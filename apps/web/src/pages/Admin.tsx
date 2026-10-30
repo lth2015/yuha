@@ -35,6 +35,8 @@ interface Overview {
     technicalSuccessRate: Measured;
     budgetSpentTodayMinor: number;
     generationFailures: Array<{ code: string; state: string; count: number }>;
+    /** The logic rules (docs/agents/CODEX_COLLABORATION.md). */
+    invariants?: Array<{ name: string; rule: string; count: number; sample: string[] }>;
     /** docs/GENERATION_QUEUE_SPEC.md */
     queue?: {
       providerId: string;
@@ -127,6 +129,38 @@ function Metric({ label, m, percent = true }: { label: string; m: Measured; perc
  * change feature switches. Every mutation demands a reason, which is written to
  * the audit log with the before/after state.
  */
+/**
+ * The logic rules over this deployment's data: things that must never be true
+ * at once (docs/agents/CODEX_COLLABORATION.md). All holding is one line; a
+ * broken one names itself and the ids to look at.
+ */
+function InvariantsCard({ rules }: { rules: Array<{ name: string; rule: string; count: number; sample: string[] }> }) {
+  const { t } = useI18n();
+  const broken = rules.filter((r) => r.count > 0);
+  return (
+    <div className="card stack">
+      <h3>{t('admin.invariants.h3')}</h3>
+      {broken.length === 0 ? (
+        <p style={{ margin: 0, color: 'var(--ok)' }}>{t('admin.invariants.allHold', { n: rules.length })}</p>
+      ) : (
+        <ul className="stack" style={{ listStyle: 'none', padding: 0, margin: 0, gap: 'var(--s2)' }}>
+          {broken.map((r) => (
+            <li key={r.name}>
+              <strong style={{ color: 'var(--danger)' }}>{r.rule}</strong>{' '}
+              <span className="num">× {r.count >= 1000 ? '1000+' : r.count}</span>
+              <br />
+              <span className="small muted num" style={{ overflowWrap: 'anywhere' }}>
+                {r.name} · {r.sample.join(', ')}
+              </span>
+            </li>
+          ))}
+        </ul>
+      )}
+      <p className="small muted" style={{ margin: 0 }}>{t('admin.invariants.note')}</p>
+    </div>
+  );
+}
+
 /**
  * The generation queue as it stands and as it has run (docs/GENERATION_QUEUE_SPEC.md).
  * The concurrency shown is the one this API process was started with: the
@@ -305,6 +339,7 @@ function OverviewPanel({ part }: { part: 'ops' | 'review' }) {
         </div>
 
         <p className="small muted">{t('admin.ops.rateBasis')}</p>
+        {ops.invariants && <InvariantsCard rules={ops.invariants} />}
         {ops.queue && <QueueCard q={ops.queue} />}
         <div className="card stack">
           <h3>{t('admin.ops.failures')}</h3>

@@ -21,6 +21,7 @@ import {
   listSettings,
   markAccountDeletionVerified,
   query,
+  checkInvariants,
   queueState,
   recentGenerationTimings,
   reconcileBalances,
@@ -87,7 +88,7 @@ export default async function adminRoutes(app: FastifyInstance, opts: { ctx: App
 
   app.get('/v1/admin/overview', { preHandler: staff }, async () => {
     const providerId = ctx.music.capabilities().providerId;
-    const [ops, cost, revenue, funnel, discrepancies, queue, timings] = await Promise.all([
+    const [ops, cost, revenue, funnel, discrepancies, queue, timings, invariants] = await Promise.all([
       reporting.operationsSnapshot(),
       reporting.costSummary(30),
       reporting.revenueSummary(30),
@@ -95,6 +96,7 @@ export default async function adminRoutes(app: FastifyInstance, opts: { ctx: App
       reconcileBalances(),
       queueState(providerId),
       recentGenerationTimings(providerId, 7),
+      checkInvariants(),
     ]);
     return {
       mode: ctx.config.mode,
@@ -104,6 +106,8 @@ export default async function adminRoutes(app: FastifyInstance, opts: { ctx: App
       operations: {
         ...ops,
         ledgerDiscrepancies: discrepancies.length,
+        // The logic rules (packages/db/src/invariants.ts) over production's own data.
+        invariants: invariants.map((r) => ({ name: r.name, rule: r.rule, count: r.count, sample: r.sample })),
         /*
          * The generation queue (docs/GENERATION_QUEUE_SPEC.md): the
          * concurrency this process runs with — the ConfigMap is not in the

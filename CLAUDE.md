@@ -349,6 +349,7 @@ pnpm typecheck
 pnpm check:orphans   # exports nothing imports, baselined
 pnpm check:stewardship  # the steward/operator split, enforced
 pnpm check:ui        # every page at phone/tablet/desktop widths (needs pnpm dev + pnpm seed)
+pnpm check:invariants  # the logic rules over a database; read-only (docs/agents/CODEX_COLLABORATION.md)
 pnpm build
 ```
 

@@ -33,6 +33,7 @@ import {
 } from '@yuha/db';
 import { SimulatedPaymentsAdapter } from '@yuha/providers';
 import { balanceOf, createHarness, resetData, teardown, type Harness, type TestUser } from './helpers/harness.js';
+import { allowInvariantBreach } from './helpers/invariant-guard.js';
 
 let h: Harness;
 let sim: SimulatedPaymentsAdapter;
@@ -184,7 +185,9 @@ describe('refunding a subscription period', () => {
     const { invoiceId, chargeId } = await invoicePaid(user, subscriptionId, 'spent');
 
     // Spend one, then refund everything. The spent song was delivered; only
-    // what is left can be taken.
+    // what is left can be taken. Spent by writing the counter, without the
+    // generation whose ledger entry would normally go with it.
+    allowInvariantBreach('batch-counters-match-ledger');
     await withTx(async (tx) => {
       const b = await query<{ id: string }>(
         `SELECT id FROM entitlement_batches WHERE user_id = ? AND source = 'subscription_period'`,

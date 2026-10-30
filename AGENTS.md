@@ -15,4 +15,5 @@ The repository is **public**. Never put real users, orders, wallets, console
 screenshots or unfixed vulnerability details in a commit, PR or comment.
 
 Commands: `pnpm test`, `pnpm typecheck`, `pnpm check:stewardship`,
-`pnpm check:ui`, and `pnpm check:invariants` once it exists. Node >= 22.
+`pnpm check:ui`, `pnpm check:invariants` (the logic rules; read-only, safe
+against production). Node >= 22.

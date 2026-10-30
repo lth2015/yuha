@@ -10,6 +10,7 @@ import { randomUUID } from 'node:crypto';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { grantUnits, query, withTx } from '@yuha/db';
 import { createHarness, resetData, teardown, type Harness, type TestUser } from './helpers/harness.js';
+import { allowInvariantBreach } from './helpers/invariant-guard.js';
 
 let h: Harness;
 let admin: TestUser;
@@ -123,6 +124,8 @@ describe('the dashboard', () => {
   });
 
   it('labels a week by the Monday it starts on and fills empty buckets with zeros', async () => {
+    // Jobs written as DELIVERED rows for the counts, with no song behind them.
+    allowInvariantBreach('delivered-job-has-a-song', 'finished-at-iff-ended');
     const u = await h.createUser({ email: 'weekly@example.test' });
     // Sunday 2026-10-25 and Monday 2026-10-26 (Tokyo) fall in different ISO weeks.
     await insertJob(u.id, '2026-10-25 03:00:00', 'DELIVERED');
@@ -315,6 +318,7 @@ describe('orders, audit and the customer record', () => {
   });
 
   it('opens a customer with their recent generations and what operators did to the account', async () => {
+    allowInvariantBreach('delivered-job-has-a-song', 'finished-at-iff-ended'); // job rows written for the list
     const u = await h.createUser({ email: 'detail@example.test' });
     await insertJob(u.id, '2026-10-20 03:00:00', 'DELIVERED');
     await post(admin, `/v1/admin/users/${u.id}/role`, { role: 'support', reason: 'trial support shift' });

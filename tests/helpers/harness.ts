@@ -242,56 +242,29 @@ async function seedCatalogue(): Promise<void> {
  * Truncates business data between tests, keeping the schema and catalogue.
  * MySQL cannot CASCADE, so `truncateAll` disables foreign-key checks for the
  * duration and clears every table explicitly.
+ *
+ * Every table except the ones named here, read from the schema itself. This
+ * was a list of tables to clear, and a new table had to be remembered into it:
+ * five times that was noticed only after a leftover row from one file broke
+ * another, and `issue_reports` and `share_cards` were never added at all —
+ * found when the logic rules (packages/db/src/invariants.ts) first ran after
+ * each test and saw reports whose owners had been truncated away.
  */
-const BUSINESS_TABLES = [
-  // Not clearing this let a cursor from one file decide another file's
-  // `start_block`, so an observation that was fine became "older than the
-  // quote". The fifth explicit list this work has had to be remembered into.
-  'order_reviews',
-  'chain_cursors',
-  'chain_transfer_events',
-  'stablecoin_orphan_transfers',
-  'stablecoin_attempts',
-  'stablecoin_intents',
-  'stablecoin_quotes',
-  'verified_wallets',
-  'wallet_challenges',
-  'known_sign_in_sources',
-  'mfa_factors',
-  'track_licenses',
-  'auth_codes',
-  'ledger_entries',
-  'entitlement_batches',
-  'asset_versions',
-  'license_snapshots',
-  'provider_cost_events',
-  'generation_attempts',
-  'rights_cases',
-  'tracks',
-  'generation_jobs',
-  'projects',
-  'payments',
-  'subscriptions',
-  'orders',
-  'webhook_events',
-  'outbox',
-  'local_queue_messages',
-  'audit_logs',
-  'analytics_events',
-  'runtime_settings',
-  // Before users: it has a foreign key to them, both as the subject and as the
-  // operator who verified it.
-  'account_deletions',
-  'credit_resets',
-  'lyric_realignments',
-  'customer_notices',
-  // Counts only (no text), with a foreign key to users.
-  'lyric_drafts',
-  'users',
-];
+const KEPT_TABLES = new Set(['schema_migrations', 'product_catalog']);
+
+async function businessTables(): Promise<string[]> {
+  const rows = await query<{ name: string }>(
+    `SELECT table_name AS name FROM information_schema.tables
+      WHERE table_schema = DATABASE() AND table_type = 'BASE TABLE'`,
+  );
+  const tables = rows.map((r) => r.name).filter((t) => !KEPT_TABLES.has(t));
+  // An empty answer would clear nothing and every test would pass on stale data.
+  if (tables.length < 10) throw new Error(`resetData: found only ${tables.length} tables to clear`);
+  return tables;
+}
 
 export async function resetData(): Promise<void> {
-  await truncateAll(BUSINESS_TABLES);
+  await truncateAll(await businessTables());
   await seedCatalogue();
 }
 
