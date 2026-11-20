@@ -131,11 +131,26 @@ async function checkSecondFactor(
   if (factor.locked_until && factor.locked_until.getTime() > Date.now()) {
     throw new AppError('MFA_INVALID_CODE', 'too many incorrect codes — wait a few minutes and try again');
   }
-  const totpSecret = secretBox(ctx).decrypt(factor.secret_encrypted);
+  /*
+   * A secret that cannot be read fails the authenticator, not the request.
+   *
+   * This decrypted first and let a failure throw, so a factor sealed under a
+   * key the service no longer holds answered every attempt with a 500 —
+   * recovery codes included, though they are hashes that need no key, and are
+   * the way back for exactly that case. The owner saw 「出了点问题」 and no
+   * way in.
+   */
+  let totpSecret: string | null = null;
+  try {
+    totpSecret = secretBox(ctx).decrypt(factor.secret_encrypted);
+  } catch (err) {
+    if (err instanceof AppError) throw err;
+    console.log(JSON.stringify({ level: 'error', component: 'mfa', ts: new Date().toISOString(), msg: 'mfa_secret_unreadable', userId, error: (err as Error).message }));
+  }
   // Verified once and remembered: re-running verifyTotp at the end to decide
   // which factor was used can straddle a 30-second step boundary and report a
   // TOTP login as a spent recovery code.
-  const totpOk = verifyTotp(totpSecret, code);
+  const totpOk = totpSecret !== null && verifyTotp(totpSecret, code);
   const codeOk = totpOk || (await consumeRecoveryCode({ userId, hash: hashRecoveryCode(code) }));
   if (!codeOk) {
     const { lockedUntil } = await recordMfaFailure({

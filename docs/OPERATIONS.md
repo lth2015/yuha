@@ -295,6 +295,16 @@ It re-aligns sung songs one at a time on the DGX, rewrites a song only when
 the aligner heard it, never touches an owner's correction, and offers 继续 if
 a pod roll interrupted it. Rules: [LYRIC_ALIGNMENT.md](LYRIC_ALIGNMENT.md).
 
+## 6d. Someone cannot pass two-step sign-in
+
+Read what the page said first: 「验证码不匹配」 is a wrong or stale code (five in
+a row locks the account for 15 minutes), and 「出了点问题」 with a request id is a
+server error that never looked at the code — check the log before anything
+else. A recovery code works even when the stored authenticator secret cannot
+be decrypted. When nothing the owner holds works, `deploy/k8s/qa/mfa-reset.yaml`
+removes the factor and records why in `audit_logs`. Steps:
+[OPERATIONS_MFA_RESET.md](OPERATIONS_MFA_RESET.md).
+
 ## 7. Rights complaints
 
 1. A complaint arrives at `POST /v1/rights-cases` — no account, no payment.
