@@ -1,6 +1,8 @@
 /**
  * Migration CLI: `pnpm db:migrate` / `pnpm db:reset`, and the logic rules:
- * `pnpm check:invariants [--json] [rule …]` (packages/db/src/invariants.ts).
+ * `pnpm check:invariants [--json] [rule …]` (packages/db/src/invariants.ts),
+ * and the break-glass second-factor reset: `mfa-reset <email> --reason "…"`
+ * (docs/OPERATIONS_MFA_RESET.md).
  * Uses the mounted RDS credentials in the cluster, or DATABASE_URL for local
  * development and CI.
  */
@@ -10,6 +12,7 @@ import { join } from 'node:path';
 import { closeDb, db, initDb } from './pool.js';
 import { migrate, reset } from './migrate.js';
 import { INVARIANTS, checkInvariants } from './invariants.js';
+import { resetMfaFactor } from './mfa.js';
 
 type MysqlCredentials = {
   host?: string;
@@ -85,6 +88,29 @@ try {
       console.log(`\n${results.length} rules checked, ${broken.length} broken.`);
     }
     if (broken.length) process.exitCode = 1;
+  } else if (command === 'mfa-reset') {
+    /*
+     * The address comes from the command line, never from a file: an
+     * operator's own address is not something this repository may hold.
+     * Output names the account id only.
+     */
+    const args = process.argv.slice(3);
+    const at = args.indexOf('--reason');
+    const reason = at >= 0 ? (args[at + 1] ?? '') : '';
+    const email = args.find((a, i) => !a.startsWith('--') && !(at >= 0 && i === at + 1));
+    if (!email) throw new Error('usage: mfa-reset <email> --reason "why"');
+    const res = await resetMfaFactor({ email, reason });
+    if (!res) {
+      console.log('no live account has that address; nothing changed');
+      process.exitCode = 1;
+    } else if (!res.removed) {
+      console.log(`account ${res.userId} has no second factor; nothing changed`);
+    } else {
+      console.log(
+        `account ${res.userId}: second factor removed (was ${res.wasEnabled ? 'enabled' : 'pending'}, ${res.recoveryCodesLeft} recovery codes unused). ` +
+          'Recorded in audit_logs as mfa.reset. The owner signs in with Google alone and can enrol again.',
+      );
+    }
   } else {
     console.error(`unknown command: ${command}`);
     process.exit(1);

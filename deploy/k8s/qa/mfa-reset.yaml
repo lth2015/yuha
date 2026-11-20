@@ -1,0 +1,79 @@
+# Break glass: remove one account's second factor (docs/OPERATIONS_MFA_RESET.md).
+#
+# For an owner who cannot pass two-step sign-in and has no recovery code that
+# works. Not applied by the deploy workflow; an operator runs it by hand. It
+# uses the migration image and the migration service account because they are
+# what already holds the database credentials — nothing new is granted.
+# Deletes the account's mfa_factors row and writes an `mfa.reset` row to
+# audit_logs with the reason given. Prints the account id, never the address.
+#
+#   image=$(kubectl -n qa-music get job yuha-migrate-1 \
+#     -o jsonpath='{.spec.template.spec.containers[0].image}')
+#   read -r -p 'account email: ' email
+#   sed -e "s#__MIGRATION_IMAGE__#$image#" -e "s#__EMAIL__#$email#" \
+#       -e "s#__REASON__#owner locked out of two-step sign-in#" \
+#       deploy/k8s/qa/mfa-reset.yaml | kubectl -n qa-music apply -f -
+#   kubectl -n qa-music wait --for=condition=complete --timeout=120s job/yuha-mfa-reset \
+#     || kubectl -n qa-music wait --for=condition=failed --timeout=5s job/yuha-mfa-reset
+#   kubectl -n qa-music logs job/yuha-mfa-reset
+#   kubectl -n qa-music delete job yuha-mfa-reset
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: yuha-mfa-reset
+  labels:
+    app.kubernetes.io/name: yuha
+    app.kubernetes.io/instance: yuha
+    app.kubernetes.io/version: "0.1.0"
+    app.kubernetes.io/managed-by: Helm
+spec:
+  backoffLimit: 0
+  ttlSecondsAfterFinished: 3600
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: yuha
+        app.kubernetes.io/instance: yuha
+        app.kubernetes.io/version: "0.1.0"
+        app.kubernetes.io/managed-by: Helm
+        component: mfa-reset
+    spec:
+      restartPolicy: Never
+      serviceAccountName: migration
+      volumes:
+        - name: api-secrets
+          csi:
+            driver: secrets-store.csi.k8s.io
+            readOnly: true
+            volumeAttributes:
+              secretProviderClass: yuha-database-secrets
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+      containers:
+        - name: mfa-reset
+          image: __MIGRATION_IMAGE__
+          # The address and the reason arrive as arguments substituted at apply
+          # time, so neither is ever in this file.
+          command: ["node", "migration/dist/cli.js", "mfa-reset", "__EMAIL__", "--reason", "__REASON__"]
+          env:
+            - name: RUN_MODE
+              value: "production"
+            - name: NODE_ENV
+              value: "production"
+            - name: DATABASE_SECRET_FILE
+              value: /app/secrets/mysql-credentials.json
+          envFrom:
+            - configMapRef:
+                name: qa-music-api-config
+          volumeMounts:
+            - name: api-secrets
+              mountPath: /app/secrets
+              readOnly: true
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+
+

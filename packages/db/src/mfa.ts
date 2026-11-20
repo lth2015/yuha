@@ -1,5 +1,6 @@
 import type { PoolConnection } from 'mysql2/promise';
-import { execute, newId, query, queryOne } from './pool.js';
+import { execute, newId, query, queryOne, withTx } from './pool.js';
+import { writeAuditLog } from './misc.js';
 
 /**
  * MFA factor storage. The secret arrives already encrypted (AES-256-GCM) and
@@ -203,4 +204,62 @@ export async function consumeRecoveryCode(
     tx,
   );
   return res.affectedRows > 0;
+}
+
+export interface MfaResetResult {
+  userId: string;
+  /** False when the account had no factor: nothing was changed or recorded. */
+  removed: boolean;
+  wasEnabled: boolean;
+  recoveryCodesLeft: number;
+}
+
+/**
+ * Break glass: removes an account's second factor so its owner can sign in
+ * with the first factor alone and enrol again (`cli.js mfa-reset`).
+ *
+ * For the case the account's own ways back cannot cover — the authenticator
+ * gone and the recovery codes with it. It runs from inside the cluster, with
+ * the database credentials, so it gives the operator nothing they did not
+ * already hold; what it adds is the record. `reason` is required and lands in
+ * audit_logs next to what was removed (never the secret or the hashes).
+ *
+ * Returns null when no live account has the address.
+ */
+export async function resetMfaFactor(params: { email: string; reason: string }): Promise<MfaResetResult | null> {
+  const reason = params.reason.trim();
+  if (!reason) throw new Error('a reason is required: it is what the audit log records');
+  const email = params.email.trim().toLowerCase();
+  return withTx(async (tx) => {
+    const user = await queryOne<{ id: string }>(
+      `SELECT id FROM users WHERE email_active = ? FOR UPDATE`,
+      [email],
+      tx,
+    );
+    if (!user) return null;
+    const factor = await getMfaFactor(user.id, tx);
+    if (!factor) return { userId: user.id, removed: false, wasEnabled: false, recoveryCodesLeft: 0 };
+    const was = {
+      enabled: Boolean(factor.enabled),
+      recoveryCodesLeft: factor.recovery_codes.length,
+      failedAttempts: factor.failed_attempts,
+      lockedUntil: factor.locked_until,
+      confirmedAt: factor.confirmed_at,
+      lastUsedAt: factor.last_used_at,
+    };
+    await execute(`DELETE FROM mfa_factors WHERE user_id = ?`, [user.id], tx);
+    await writeAuditLog(
+      {
+        actorId: null,
+        actorRole: 'operator',
+        action: 'mfa.reset',
+        subjectType: 'user',
+        subjectId: user.id,
+        reason,
+        before: was,
+      },
+      tx,
+    );
+    return { userId: user.id, removed: true, wasEnabled: was.enabled, recoveryCodesLeft: was.recoveryCodesLeft };
+  });
 }
