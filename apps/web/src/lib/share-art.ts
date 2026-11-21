@@ -10,7 +10,7 @@
  * Two shapes from the same parts: the 1200×630 card that X, Facebook and LINE
  * show under a link, and the 720×1280 frames a share video is cut from.
  */
-import type { Dedication } from '@yuha/contracts';
+import { seasonOfOccasion, type Dedication, type Season } from '@yuha/contracts';
 import { scoreFromSeed } from './score';
 import { sleeveColors } from './sleeve';
 import { NO_LINE_START } from './line-break';
@@ -33,6 +33,35 @@ export interface ShareLabels {
   site: string;
   /** The reader's language: Chinese text is set in a Chinese face first (see fontFamily). */
   lang?: 'zh' | 'ja' | 'en';
+}
+
+/**
+ * A holiday song's pictures carry its season (docs/HOLIDAY_SPEC.md): a little
+ * snow for Christmas; for New Year, a nengajo's thin vermilion frame and its
+ * sun. Kept to the edges, so nothing that is read sits under it.
+ */
+function drawHolidayTrim(ctx: CanvasRenderingContext2D, season: Season, box: { x: number; y: number; w: number; h: number }): void {
+  ctx.save();
+  if (season === 'xmas') {
+    for (let i = 0; i < 26; i += 1) {
+      const x = box.x + ((i * 97) % box.w);
+      const y = box.y + ((i * 53) % Math.round(box.h * 0.22));
+      const r = 3 + (i % 4);
+      ctx.fillStyle = i % 3 === 0 ? 'rgba(185, 201, 222, 0.9)' : 'rgba(255, 255, 255, 0.92)';
+      ctx.beginPath();
+      ctx.arc(x, y, r, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  } else {
+    ctx.strokeStyle = '#c8372a';
+    ctx.lineWidth = 3;
+    ctx.strokeRect(box.x + 18, box.y + 18, box.w - 36, box.h - 36);
+    ctx.fillStyle = '#d7402b';
+    ctx.beginPath();
+    ctx.arc(box.x + box.w - 78, box.y + 78, 30, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.restore();
 }
 
 const INK = '#20221f';
@@ -198,6 +227,8 @@ async function drawShareCard(song: ShareSong, labels: ShareLabels): Promise<HTML
   ctx.fillStyle = PAPER;
   ctx.fillRect(0, 0, CARD_WIDTH, CARD_HEIGHT);
   drawSleeve(ctx, 0, 0, CARD_HEIGHT, CARD_HEIGHT, song);
+  const season = seasonOfOccasion(song.dedication?.occasion);
+  if (season) drawHolidayTrim(ctx, season, { x: CARD_HEIGHT, y: 0, w: CARD_WIDTH - CARD_HEIGHT, h: CARD_HEIGHT });
 
   const left = CARD_HEIGHT + 64;
   const width = CARD_WIDTH - left - 64;
@@ -348,6 +379,8 @@ export async function drawVideoFrame(
   scrim.addColorStop(1, 'rgba(0,0,0,0.5)');
   ctx.fillStyle = scrim;
   ctx.fillRect(0, VIDEO_WIDTH - 200, VIDEO_WIDTH, VIDEO_HEIGHT);
+  const season = seasonOfOccasion(song.dedication?.occasion);
+  if (season) drawHolidayTrim(ctx, season, { x: 0, y: 0, w: VIDEO_WIDTH, h: VIDEO_HEIGHT });
 
   const logo = await loadImage('/brand/yuha-logo-reverse.svg');
   if (logo) ctx.drawImage(logo, 40, 44, 99, 30);
