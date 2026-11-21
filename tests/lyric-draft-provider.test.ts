@@ -55,7 +55,12 @@ describe('TokenStars: writing lyrics', () => {
     await provider().writeLyrics!({ ...req, durationSeconds: 240 });
     const [short, long] = calls.map((c) => c.body['max_tokens'] as number);
     expect(short).toBeLessThan(long!);
-    expect(long).toBeLessThanOrEqual(1600);
+    // The lyric itself is capped at 1600; on top sits a fixed allowance for a
+    // reasoning model's hidden reasoning, which max_tokens also counts
+    // (docs/LYRICS_MODEL.md). A model that does not reason stops at the end of
+    // the lyric and never uses it.
+    expect(long).toBeLessThanOrEqual(1600 + 2000);
+    expect(long! - short!).toBeLessThanOrEqual(1600);
   });
 
   it('returns the lyrics, without a code fence around them', async () => {
