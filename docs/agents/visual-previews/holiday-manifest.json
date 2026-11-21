@@ -1,0 +1,147 @@
+{
+  "base": "531c8a169ff9d6cdff3a4fd7665a463440b14636",
+  "brief": "9ec1601",
+  "phase": 1,
+  "files": [
+    {
+      "file": "box.svg",
+      "bytes": 1033,
+      "width": 160,
+      "height": 150,
+      "alpha": true
+    },
+    {
+      "file": "fireworks.svg",
+      "bytes": 2361,
+      "width": 128,
+      "height": 128,
+      "alpha": true
+    },
+    {
+      "file": "lid.svg",
+      "bytes": 1334,
+      "width": 160,
+      "height": 150,
+      "alpha": true
+    },
+    {
+      "file": "nengajo-card.svg",
+      "bytes": 456,
+      "width": 130,
+      "height": 150,
+      "alpha": true
+    },
+    {
+      "file": "nengajo-sun.svg",
+      "bytes": 265,
+      "width": 130,
+      "height": 150,
+      "alpha": true
+    },
+    {
+      "file": "nengajo.svg",
+      "bytes": 615,
+      "width": 130,
+      "height": 150,
+      "alpha": true
+    },
+    {
+      "file": "newyear-source.svg",
+      "bytes": 405,
+      "width": 1200,
+      "height": 630,
+      "alpha": true
+    },
+    {
+      "file": "newyear.png",
+      "bytes": 3509,
+      "width": 1200,
+      "height": 630,
+      "alpha": true
+    },
+    {
+      "file": "snow-1.svg",
+      "bytes": 233,
+      "width": 24,
+      "height": 24,
+      "alpha": true
+    },
+    {
+      "file": "snow-2.svg",
+      "bytes": 404,
+      "width": 24,
+      "height": 24,
+      "alpha": true
+    },
+    {
+      "file": "snow-3.svg",
+      "bytes": 289,
+      "width": 24,
+      "height": 24,
+      "alpha": true
+    },
+    {
+      "file": "snow-4.svg",
+      "bytes": 305,
+      "width": 24,
+      "height": 24,
+      "alpha": true
+    },
+    {
+      "file": "tag-newyear.svg",
+      "bytes": 813,
+      "width": 240,
+      "height": 120,
+      "alpha": true
+    },
+    {
+      "file": "tag-xmas.svg",
+      "bytes": 2117,
+      "width": 240,
+      "height": 120,
+      "alpha": true
+    },
+    {
+      "file": "video-newyear-source.svg",
+      "bytes": 402,
+      "width": 720,
+      "height": 1280,
+      "alpha": true
+    },
+    {
+      "file": "video-newyear.png",
+      "bytes": 4436,
+      "width": 720,
+      "height": 1280,
+      "alpha": true
+    },
+    {
+      "file": "video-xmas-source.svg",
+      "bytes": 2524,
+      "width": 720,
+      "height": 1280,
+      "alpha": true
+    },
+    {
+      "file": "video-xmas.png",
+      "bytes": 2806,
+      "width": 720,
+      "height": 1280,
+      "alpha": true
+    },
+    {
+      "file": "xmas-source.svg",
+      "bytes": 2529,
+      "width": 1200,
+      "height": 630,
+      "alpha": true
+    },
+    {
+      "file": "xmas.png",
+      "bytes": 2711,
+      "width": 1200,
+      "height": 630,
+      "alpha": true
+    }
+  ]
+}
