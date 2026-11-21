@@ -271,3 +271,23 @@ describe('vocals without lyrics', () => {
     expect(flags).toEqual([false, false]);
   });
 });
+
+describe('a model that takes only its default temperature', () => {
+  it('is asked again without one, once, and not asked with one after that', async () => {
+    const calls: Array<Record<string, unknown>> = [];
+    const refusal = { error: { message: "Unsupported value: 'temperature' does not support 0.8 with this model.", type: 'invalid_request_error', param: 'temperature', code: 'unsupported_value' } };
+    const ok = { choices: [{ message: { content: '[verse]\n夏の終わり' }, finish_reason: 'stop' }], usage: { prompt_tokens: 1, completion_tokens: 1, total_tokens: 2 } };
+    globalThis.fetch = (async (_input: unknown, init: RequestInit) => {
+      const body = JSON.parse(String(init.body)) as Record<string, unknown>;
+      calls.push(body);
+      const rejected = 'temperature' in body;
+      return new Response(JSON.stringify(rejected ? refusal : ok), { status: rejected ? 400 : 200, headers: { 'content-type': 'application/json' } });
+    }) as typeof fetch;
+    const p = provider({ model: 'gpt-6-luna' });
+    expect(await p.writeLyrics({ prompt: '夏休み', styles: [], durationSeconds: 60 })).toMatchObject({ status: 'ok' });
+    expect(await p.writeLyrics({ prompt: '夏休み', styles: [], durationSeconds: 60 })).toMatchObject({ status: 'ok' });
+    expect(calls.map((c) => 'temperature' in c)).toEqual([true, false, false]);
+    // Room for hidden reasoning on top of the lyric's own budget.
+    expect(calls[1]!['max_tokens']).toBeGreaterThan(2000);
+  });
+});

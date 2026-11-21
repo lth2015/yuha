@@ -1,68 +1,68 @@
-# 歌词模型：Claude
+# 歌词模型
 
-> 产品负责人 2026-11-21：「接着做更好的歌词模型吧。」
+> 产品负责人 2026-11-21：「接着做更好的歌词模型吧。」随后决定：用 ChatGPT 的模型，贵一点也可以——
+> 换 TokenStars 上的模型只改一个配置，换供应商（Claude）要 SRE 配密钥、走流程。
 
-## 为什么换
+## 结论
 
-现在歌词由 TokenStars 的 `gpt-5.4-nano` 写，有两处：首页简单模式在生成参数时一起写（`extractIntent`），
-`/create` 的歌词草稿单独写（`writeLyrics`）。用固定的 9 条描述（`docs/quality/lyric-briefs.json`，中日英各三条）
-跑了一次（`pnpm lyrics:compare`，2026-11-21），自动检查结果：
+**把 `TOKENSTARS_MODEL_ID` 从 `gpt-5.4-nano` 改成 `gpt-6-luna`。** 同一个 TokenStars 账号，同一个密钥，
+同在 Azure 日本东区处理，不用 SRE。
 
-| 问题 | 出现次数 | 为什么要紧 |
+## 怎么比的
+
+9 条固定描述（`docs/quality/lyric-briefs.json`，中日英各三条），用 `pnpm lyrics:compare` 交给每个模型写歌词，
+自动检查四件事：行数和歌曲长度相称、副歌回来、没有阿拉伯数字、中日文没有拉丁字母。2026-11-21 的结果：
+
+| 模型 + 提示词 | 自动检查全部通过 | 中位耗时 |
 | --- | --- | --- |
-| 行数约为歌曲长度能容纳的两倍（52 行对约 27 行） | 3 / 9 | 歌手只能赶词或吞词，也就是漏字 |
-| 副歌只出现一次 | 3 / 9 | 没有能记住的那一句 |
-| 歌词里留着阿拉伯数字（「第1次」「2am」） | 2 / 9 | 演唱时容易念错，强制对齐也最容易在这里失准（见 `docs/quality/probe-set.json`） |
+| `gpt-5.4-nano` + 旧提示词（当时的生产设置） | 3 / 9 | 4 秒 |
+| `gpt-5.4-nano` + 新写词规则 | 6 / 9 | 4 秒 |
+| **`gpt-6-luna` + 新写词规则** | **9 / 9** | 13 秒 |
 
-这些是能自动查出来的。歌词本身写得好不好，需要人读；报告里有全文，留着读。
+旧提示词下 nano 的问题：3 首行数约为歌曲能容纳的两倍（歌手只能赶词或吞词），3 首副歌只出现一次，
+2 首留着阿拉伯数字（「第1次」「2am」，演唱容易念错，强制对齐也最容易在这里失准）。
 
-## 做了什么
+逐首读过：luna 的歌词更短、更像歌，副歌有一句能记住的话，细节来自描述本身（「七号线慢慢驶向终点」「コンビニの水はぬるく」）。
+nano 用了新规则仍然偏长、偏散。
 
-- **`packages/providers/src/text/anthropic.ts`**：Claude 文本适配器，三件事都做——
-  生成参数和歌词（`extractIntent`）、歌词草稿（`writeLyrics`）、按要求修改（`reviseSong`）。
-  一个开关（`TEXT_ADAPTER=anthropic`）就能把一首歌唱出来的每个字都交给同一个模型。
-  - 默认模型 `claude-opus-5-5`，`effort` 默认 `medium`（`ANTHROPIC_EFFORT` 可调）；
-  - 生成参数用结构化输出（JSON schema 来自合同里的同一组枚举），回来之后仍然用 `musicIntent` 校验，不再需要修复重试；
-  - 模型拒绝写（`stop_reason: refusal`）记为 `refused`，不扣额度，创作者改写描述即可；同时开了服务器端回退，误判时由另一个模型在同一次调用里接手；
-  - 回复写到上限被截断，记为失败，不把半首歌当成歌词；
-  - API 地址写死为 `https://api.anthropic.com`，不读环境里的 `ANTHROPIC_BASE_URL`，免得别的工具设置的变量把创作者的文字送到别处。
-- **写歌词的规则**（两个模型的差别主要在这里）：按歌曲长度控制行数；一分钟以上的歌必须有副歌，副歌至少再出现一次；
-  主歌写描述里的具体画面；同一段里每行长短、节奏接近（日文按音拍、中文按字数并押韵、英文按重音）；
-  数字一律写成文字；中日文歌词不用拉丁字母缩写，除非创作者自己写了。
-- **`pnpm lyrics:compare`**：同样的描述交给每个有密钥的模型，输出自动检查表和全文对照，写到 `quality-probes/`（不进 git）。
+另外，luna 用同一套提示词生成歌曲参数（`extractIntent`，首页简单模式的歌词就在这一步写）也正常返回，
+带不带 `response_format` 都可以，约 12 秒。
 
-## 还没验证的
+## 改了什么
 
-这个容器里没有 Claude 的 API 密钥，所以下面这些还没有用真实调用确认过：
-
-- Claude 写的歌词，在同样 9 条描述上的自动检查结果和读起来的质量；
-- 结构化输出和服务器端回退同时使用时，API 是否接受；
-- 每次调用的耗时。思考加写歌词预计十几到几十秒；`/create` 的歌词草稿是用户在页面上等待的，超时设为 90 秒；
-- 生产环境（EKS）能否访问 `api.anthropic.com`。
-
-在补上这些之前，生产环境继续用 TokenStars。代码已经合并，但 `TEXT_ADAPTER` 不变，就不会生效。
-
-## 费用
-
-按 `claude-opus-5-5` 的标价（输入每百万 token 4 美元、输出 20 美元，思考按输出计）：一次写歌词大约输入 1 千、
-输出 2 到 4 千 token，约 0.05 到 0.08 美元，即 7 到 13 日元。每次调用的 token 数和按 `ANTHROPIC_JPY_PER_USD`
-（默认 155）折算的日元估算，会记在生成成本里（`is_estimate = 1`）。DROP 单曲约 196 日元，歌词成本占不到 7%。
+- **写词规则**（`packages/providers/src/text/lyric-craft.ts`），所有文本适配器共用：
+  每一行都用描述的语言；按歌曲长度控制行数；一分钟以上的歌必须有副歌，副歌至少再出现一次；主歌写描述里的具体画面；
+  同一段每行长短、节奏接近；数字写成文字；中日文不用拉丁字母缩写，除非创作者自己写了。
+  - 第一版规则里有日文示例，nano 因此给三条英文描述写了日文歌词。加上「每一行都用描述的语言，示例不决定语言」之后，
+    英文描述重新得到英文歌词。这一条是读结果读出来的，自动检查只报了「语言不符」，所以检查里保留了语言一项。
+- **只接受默认温度的模型**（`gpt-6-luna` 对 temperature 0.4/0.8 返回 400）：适配器收到这种 400 后去掉 temperature 重试一次，
+  之后这个进程不再发送。换模型只改 `TOKENSTARS_MODEL_ID`，不用另配开关。400 不计费。
+- **推理模型的输出预算**：每次请求的 `max_tokens` 多留 2000，给模型看不见的推理用；只是上限，不推理的模型不多花钱。
+- **超时**：`TOKENSTARS_TIMEOUT_MS` 默认从 20 秒改为 60 秒。luna 写一首两分钟的歌要 8 到 15 秒。
+- **Claude 适配器**（`TEXT_ADAPTER=anthropic`）也在代码里，现在不用。哪天需要再比较，按本文最后一节加密钥即可。
 
 ## 切换步骤
 
-1. **对比**：在有密钥的地方运行
-   ```bash
-   YUHA_ANTHROPIC_API_KEY=… TOKENSTARS_API_KEY=… TOKENSTARS_MODEL_ID=gpt-5.4-nano pnpm lyrics:compare
-   ```
-   在 Claude Code 的云端环境里，把密钥作为环境变量 `YUHA_ANTHROPIC_API_KEY` 加进环境设置（不要用
-   `ANTHROPIC_API_KEY`，那个名字 Claude Code 自己也会读），新开的会话就能运行这一步。
-   读 `quality-probes/lyrics-<日期>.md`：自动检查通过的比例，加上逐首阅读。确认 Claude 更好再继续。
-2. **密钥**：先在 AWS Secrets Manager 的 `qa-music-api-secrets-kv` 和 `qa-music-worker-secrets-kv` 两个密钥里
-   各加一个键 `ANTHROPIC_API_KEY`；**然后**才在 `deploy/k8s/qa/resources.yaml` 的两个 SecretProviderClass 里加上它的映射
-   （与 `TOKENSTARS_API_KEY` 相同的写法）。顺序不能反：映射指向一个不存在的键，CSI 挂载会失败，Pod 起不来。
-   密钥不写进任何文件。
-3. **网络**：确认 API 和 worker 的 Pod 能访问 `api.anthropic.com:443`。
-4. **开关**：ConfigMap 设 `TEXT_ADAPTER=anthropic`，重启 API 和 worker 的 Pod。随时可以改回 `tokenstars`。
-5. **上线后**：跑一次 `docs/quality/PROBE_RUNBOOK.md` 的固定测试歌曲；观察后台「质量」卡片里的歌词对齐率。
+1. 在 API 和 worker 的 ConfigMap（`qa-music-api-config`、`qa-music-worker-config`）里：
+   - `TOKENSTARS_MODEL_ID=gpt-6-luna`；
+   - 如果设了 `TOKENSTARS_TIMEOUT_MS`，改成 `60000`（没设就用新的默认值）。
+2. 重启 API 和 worker 的 Pod（ConfigMap 只在 Pod 启动时读取）。
+3. 验证：在 `/create` 写一首有人声的歌，看歌词；第二天看后台「质量」卡片的歌词对齐率，
+   以及 TokenStars 账单里每次调用的实际费用（`TOKENSTARS_COST_MINOR_PER_REQUEST` 目前按 1 日元估算，
+   luna 更贵，看到账单后按实际调整）。
+4. 想退回：把 `TOKENSTARS_MODEL_ID` 改回 `gpt-5.4-nano`，重启。
 
+## 再比较一次
+
+```bash
+TOKENSTARS_API_KEY=… TOKENSTARS_COMPARE_MODELS=gpt-5.4-nano,gpt-6-luna pnpm lyrics:compare
+```
+
+报告写到 `quality-probes/lyrics-<日期>.md`（不进 git）：自动检查表，加上每首歌词全文，供人阅读。
+加上 `YUHA_ANTHROPIC_API_KEY=…` 也会把 Claude 一起比。在 Claude Code 的云端环境里，用这个名字而不是
+`ANTHROPIC_API_KEY`，因为后者 Claude Code 自己也会读。
+
+如果以后要在生产用 Claude：先在 AWS Secrets Manager 的 `qa-music-api-secrets-kv`、`qa-music-worker-secrets-kv`
+里加键 `ANTHROPIC_API_KEY`，**然后**才在 `deploy/k8s/qa/resources.yaml` 的两个 SecretProviderClass 里加映射
+（顺序反了 CSI 挂载会失败，Pod 起不来）；确认 Pod 能访问 `api.anthropic.com:443`；ConfigMap 设 `TEXT_ADAPTER=anthropic`。
 隐私政策第 4 节写的是「音乐和文本模型供应商」，没有点名具体供应商，所以换模型不需要改隐私政策。

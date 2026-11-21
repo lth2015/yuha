@@ -6,7 +6,8 @@
  *   node scripts/lyric-compare.mjs                 # every brief, every model with a key
  *   node scripts/lyric-compare.mjs --only ja-summer
  *
- * Models: TokenStars when TOKENSTARS_API_KEY and TOKENSTARS_MODEL_ID are set;
+ * Models: TokenStars when TOKENSTARS_API_KEY and TOKENSTARS_MODEL_ID are set
+ * (TOKENSTARS_COMPARE_MODELS=a,b for several at once);
  * Claude when YUHA_ANTHROPIC_API_KEY or ANTHROPIC_API_KEY is set
  * (ANTHROPIC_TEXT_MODEL, ANTHROPIC_EFFORT optional). The YUHA_ name is for a
  * Claude Code environment, where a plain ANTHROPIC_API_KEY would also be
@@ -33,11 +34,16 @@ if (!briefs.length) {
 }
 
 const models = [];
-if (process.env['TOKENSTARS_API_KEY'] && process.env['TOKENSTARS_MODEL_ID']) {
+// TOKENSTARS_COMPARE_MODELS=a,b runs several TokenStars models side by side.
+const tokenstarsModels = (process.env['TOKENSTARS_COMPARE_MODELS'] ?? process.env['TOKENSTARS_MODEL_ID'] ?? '')
+  .split(',')
+  .map((m) => m.trim())
+  .filter(Boolean);
+for (const model of process.env['TOKENSTARS_API_KEY'] ? tokenstarsModels : []) {
   models.push(
     new TokenStarsTextProvider({
       apiKey: process.env['TOKENSTARS_API_KEY'],
-      model: process.env['TOKENSTARS_MODEL_ID'],
+      model,
       ...(process.env['TOKENSTARS_BASE_URL'] ? { baseUrl: process.env['TOKENSTARS_BASE_URL'] } : {}),
       ...(process.env['TOKENSTARS_CHAT_PATH'] ? { chatPath: process.env['TOKENSTARS_CHAT_PATH'] } : {}),
       timeoutMs: 60_000,

@@ -262,7 +262,8 @@ const envSchema = z.object({
   TOKENSTARS_CHAT_PATH: z.string().optional(),
   TOKENSTARS_REQUEST_ID_HEADER: z.string().optional(),
   TOKENSTARS_STRUCTURED_OUTPUTS: bool(false),
-  TOKENSTARS_TIMEOUT_MS: int(20_000),
+  // gpt-6-luna takes 8-15s for a two-minute lyric (docs/LYRICS_MODEL.md); 20s left too little room.
+  TOKENSTARS_TIMEOUT_MS: int(60_000),
   TOKENSTARS_COST_MINOR_PER_REQUEST: int(1),
   /** Written lyrics: about one short line per this many seconds (2-10, default 4.5). */
   LYRIC_SECONDS_PER_LINE: z
