@@ -1,7 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { clientErrorReport, previewReport } from '@yuha/contracts';
-import { trackEvent } from '@yuha/db';
+import { recordPageView, trackEvent } from '@yuha/db';
 import type { AppContext } from '../context.js';
 
 /**
@@ -40,6 +40,13 @@ const visitReport = z.object({
  * and an analytics row is no place to keep keys. What the dashboard needs is
  * "the song page", which this still says.
  */
+/**
+ * Agents that say they are crawlers, link previewers or headless browsers.
+ * Search engines render pages, so they run the app and report visits like a
+ * person would; they are counted apart rather than as visitors.
+ */
+const CRAWLER = /bot\b|bot\/|crawl|spider|slurp|facebookexternalhit|embedly|preview|headless|lighthouse|pingdom|uptime/i;
+
 function visitPath(raw: string): string {
   const bare = raw.split('?')[0]!.split('#')[0]!;
   return bare
@@ -163,16 +170,18 @@ export default async function telemetryRoutes(app: FastifyInstance, opts: { ctx:
     async (req, reply) => {
       const body = visitReport.parse(req.body);
       const staff = req.user?.role === 'admin' || req.user?.role === 'support';
-      await trackEvent({
-        name: 'page_view',
-        userRef: body.visitorId,
+      await recordPageView({
+        visitorRef: body.visitorId,
         props: {
           path: visitPath(body.path),
           signed_in: Boolean(req.user),
           ...(body.refHost ? { ref_host: body.refHost } : {}),
+          // Whether it was a crawler, never the agent string itself.
+          ...(CRAWLER.test(req.headers['user-agent'] ?? '') ? { crawler: true } : {}),
         },
         runMode: ctx.config.mode,
-        isInternal: ctx.config.isDemo || staff,
+        staff,
+        demo: ctx.config.isDemo,
       }).catch((err) => {
         req.log.error({ err }, 'could not record a page_view event');
       });

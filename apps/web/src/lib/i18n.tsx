@@ -1,3 +1,4 @@
+import { urlLang } from './seo';
 import { Fragment, createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 
 /**
@@ -598,6 +599,19 @@ const zh: Dict = {
   'admin.dash.range': '统计区间（日本时间）：{from} 至 {to}',
   'admin.dash.pageViews': '页面浏览',
   'admin.dash.visitors': '独立访客',
+  'seo.desc.home': 'YUHA：写下一种心情，生成一首完整的歌。有人声或纯音乐，30 秒到 4 分钟，中文、日文、英文歌词都可以。作品默认私密，新账户赠送 2 次创作。',
+  'seo.desc.pricing': 'YUHA 的价格：单次购买的创作额度与月度订阅。一次创作得到一首完整的歌，生成失败不扣额度。',
+  'seo.desc.rights': '用 YUHA 创作的歌，权利归谁、可以怎么使用、商用需要什么。',
+  'seo.desc.legal': 'YUHA 的服务条款、隐私政策、运营方信息与特定商取引法表记。',
+  'seo.desc.terms': 'YUHA 服务条款。',
+  'seo.desc.privacy': 'YUHA 隐私政策：收集哪些信息、如何使用、如何删除。',
+  'seo.desc.company': 'YUHA 运营方信息。',
+  'seo.desc.tokushoho': 'YUHA 基于日本特定商取引法的表记。',
+  'admin.dash.sources.h': '访问来源',
+  'admin.dash.sources.summary': '外部访客 {visitors} 人，其中 {other} 人从其他网站点进来；另有爬虫浏览 {crawlers} 次，不计入访客。',
+  'admin.dash.sources.site': '来自',
+  'admin.dash.sources.direct': '直接访问或未知',
+  'admin.dash.sources.page': '页面',
   'admin.dash.signups': '新注册',
   'admin.dash.generations': '音乐制作',
   'admin.dash.successRate': '交付占比（全部提交） {pct}%',
@@ -619,7 +633,7 @@ const zh: Dict = {
   'admin.dash.card': '银行卡',
   'admin.dash.refunds': '退款',
   'admin.dash.col.bucket': '时间',
-  'admin.dash.note': '访问量为本站自有的匿名统计（不记录 IP，不使用第三方），员工与演示流量不计入。收入按付款时间统计，已退款订单仍计入收入，退款单独列出（本区间银行卡退款 ¥{refunds}）；稳定币退款为人工处理，不在此统计。',
+  'admin.dash.note': '访问量为本站自有的匿名统计（不记录 IP，不使用第三方），员工（包括登录过员工账号的浏览器，登录前后都算）、演示流量和爬虫不计入。收入按付款时间统计，已退款订单仍计入收入，退款单独列出（本区间银行卡退款 ¥{refunds}）；稳定币退款为人工处理，不在此统计。',
   'admin.orders.status': '状态',
   'admin.orders.allStatuses': '全部状态',
   'admin.orders.method': '支付方式',
@@ -1857,6 +1871,19 @@ const ja: Dict = {
   'admin.dash.range': '集計期間（日本時間）：{from} 〜 {to}',
   'admin.dash.pageViews': 'ページビュー',
   'admin.dash.visitors': 'ユニーク訪問者',
+  'seo.desc.home': 'YUHA：気持ちを書くと、1 曲の歌ができます。ボーカルありでもインストでも、30 秒から 4 分まで。日本語・中国語・英語の歌詞に対応。作品は初期設定で非公開、新規アカウントに 2 回分の作成クレジット。',
+  'seo.desc.pricing': 'YUHA の料金：単発のクレジットパックと月額プラン。1 回の作成で 1 曲のフルソング。生成に失敗したときはクレジットは減りません。',
+  'seo.desc.rights': 'YUHA で作った曲の権利は誰のものか、どう使えるか、商用利用に何が必要か。',
+  'seo.desc.legal': 'YUHA の利用規約、プライバシーポリシー、運営者情報、特定商取引法に基づく表記。',
+  'seo.desc.terms': 'YUHA 利用規約。',
+  'seo.desc.privacy': 'YUHA プライバシーポリシー：取得する情報、利用目的、削除の方法。',
+  'seo.desc.company': 'YUHA 運営者情報。',
+  'seo.desc.tokushoho': 'YUHA 特定商取引法に基づく表記。',
+  'admin.dash.sources.h': 'アクセス元',
+  'admin.dash.sources.summary': '外部の訪問者 {visitors} 人、うち {other} 人がほかのサイトから来ました。クローラーの閲覧 {crawlers} 回は訪問者に含みません。',
+  'admin.dash.sources.site': '参照元',
+  'admin.dash.sources.direct': '直接アクセスまたは不明',
+  'admin.dash.sources.page': 'ページ',
   'admin.dash.signups': '新規登録',
   'admin.dash.generations': '楽曲生成',
   'admin.dash.successRate': '受付総数に対する納品率 {pct}%',
@@ -1878,7 +1905,7 @@ const ja: Dict = {
   'admin.dash.card': 'カード',
   'admin.dash.refunds': '返金',
   'admin.dash.col.bucket': '期間',
-  'admin.dash.note': 'アクセス数は自社の匿名集計です（IP は記録せず、第三者サービスも使いません）。スタッフとデモのアクセスは含みません。売上は決済日で集計し、返金済みの注文も売上に含め、返金は別に表示します（この期間のカード返金 ¥{refunds}）。ステーブルコインの返金は手作業のため含みません。',
+  'admin.dash.note': 'アクセス数は自社の匿名集計です（IP は記録せず、第三者サービスも使いません）。スタッフ（スタッフとしてログインしたことのあるブラウザは、ログイン前後とも）、デモ、クローラーのアクセスは含みません。売上は決済日で集計し、返金済みの注文も売上に含め、返金は別に表示します（この期間のカード返金 ¥{refunds}）。ステーブルコインの返金は手作業のため含みません。',
   'admin.orders.status': 'ステータス',
   'admin.orders.allStatuses': 'すべてのステータス',
   'admin.orders.method': '支払方法',
@@ -3115,6 +3142,19 @@ const en: Dict = {
   'admin.dash.range': 'Range (Japan time): {from} to {to}',
   'admin.dash.pageViews': 'Page views',
   'admin.dash.visitors': 'Visitors',
+  'seo.desc.home': 'YUHA: describe a feeling, get a finished song — sung or instrumental, 30 seconds to 4 minutes, with lyrics in English, Japanese or Chinese. Songs are private by default; new accounts get 2 songs free.',
+  'seo.desc.pricing': 'YUHA pricing: one-off credit packs and monthly plans. One credit makes one full song, and a failed generation costs nothing.',
+  'seo.desc.rights': 'Who owns a song made with YUHA, how it may be used, and what commercial use needs.',
+  'seo.desc.legal': 'YUHA terms of service, privacy policy, operator information and the Japanese commercial-transactions disclosure.',
+  'seo.desc.terms': 'YUHA terms of service.',
+  'seo.desc.privacy': 'YUHA privacy policy: what is collected, how it is used, and how to delete it.',
+  'seo.desc.company': 'Who operates YUHA.',
+  'seo.desc.tokushoho': 'YUHA disclosure under the Japanese Act on Specified Commercial Transactions.',
+  'admin.dash.sources.h': 'Where visits came from',
+  'admin.dash.sources.summary': '{visitors} outside visitors, {other} of them from another site. Crawlers viewed {crawlers} pages and are not counted as visitors.',
+  'admin.dash.sources.site': 'From',
+  'admin.dash.sources.direct': 'Direct or unknown',
+  'admin.dash.sources.page': 'Page',
   'admin.dash.signups': 'Sign-ups',
   'admin.dash.generations': 'Songs made',
   'admin.dash.successRate': '{pct}% of submissions delivered',
@@ -3136,7 +3176,7 @@ const en: Dict = {
   'admin.dash.card': 'Card',
   'admin.dash.refunds': 'Refunds',
   'admin.dash.col.bucket': 'Period',
-  'admin.dash.note': 'Visits are counted anonymously on our own servers (no IP addresses, no third parties); staff and demo traffic is excluded. Revenue is by payment date and includes orders refunded later; refunds are shown separately (card refunds in this range: ¥{refunds}). Stablecoin refunds are handled by hand and are not included.',
+  'admin.dash.note': 'Visits are counted anonymously on our own servers (no IP addresses, no third parties); staff (any browser that has signed in as staff, before and after), demo traffic and crawlers are excluded. Revenue is by payment date and includes orders refunded later; refunds are shown separately (card refunds in this range: ¥{refunds}). Stablecoin refunds are handled by hand and are not included.',
   'admin.orders.status': 'Status',
   'admin.orders.allStatuses': 'All statuses',
   'admin.orders.method': 'Payment method',
@@ -3813,6 +3853,17 @@ const en: Dict = {
 const DICTS: Record<Lang, Dict> = { zh, ja, en };
 
 function detectLang(): Lang {
+  // A link that names a language wins, and is remembered: it is how each
+  // public page has an address per language (docs/SEO_SPEC.md).
+  const asked = typeof location === 'undefined' ? null : urlLang(location.search);
+  if (asked) {
+    try {
+      localStorage.setItem(LANG_KEY, asked);
+    } catch {
+      /* ignore */
+    }
+    return asked;
+  }
   try {
     const saved = localStorage.getItem(LANG_KEY) as Lang | null;
     if (saved && saved in DICTS) return saved;

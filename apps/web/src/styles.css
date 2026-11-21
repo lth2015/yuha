@@ -2623,6 +2623,17 @@ textarea.is-full { border-color: var(--danger); }
 .dash__tiledelta { color: var(--muted); }
 .dash__charts { display: grid; grid-template-columns: repeat(auto-fit, minmax(420px, 1fr)); gap: var(--s4); }
 @media (max-width: 620px) { .dash__charts { grid-template-columns: minmax(0, 1fr); } }
+.dash__sources {
+  padding: var(--s3) var(--s4); border: 1px solid var(--line);
+  border-radius: var(--r-control); background: var(--surface-solid); min-width: 0;
+}
+.dash__sources h3 { margin: 0 0 var(--s1); font-size: var(--t-body); }
+.dash__sources p { margin: 0 0 var(--s3); }
+.dash__sourcelists { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: var(--s4); }
+/* Fixed layout: a long referring host wraps instead of pushing the counts off a phone screen. */
+.dash__sourcelists table { width: 100%; table-layout: fixed; }
+.dash__sourcelists th.num, .dash__sourcelists td.num { width: 6.5em; }
+.dash__sourcename { white-space: normal; overflow-wrap: anywhere; }
 
 .chart {
   margin: 0; padding: var(--s3) var(--s4); border: 1px solid var(--line);

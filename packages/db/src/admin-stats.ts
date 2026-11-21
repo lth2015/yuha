@@ -19,9 +19,14 @@ import { query } from './pool.js';
  * What each number counts, so nobody has to guess from the label:
  *
  *   pageViews / visitors  `page_view` rows (anonymous visitor id, no IP),
- *                         internal/demo traffic excluded. Distinct visitors
- *                         are distinct within the bucket; the range total is
- *                         distinct across the whole range, not a sum.
+ *                         internal/demo traffic excluded — internal includes
+ *                         every view from a browser that has ever signed in
+ *                         as staff (staff_visitors) — and crawlers excluded.
+ *                         Distinct visitors are distinct within the bucket;
+ *                         the range total is distinct across the whole range,
+ *                         not a sum.
+ *   crawlerViews          page views from agents that announce themselves as
+ *                         crawlers or headless browsers, counted apart.
  *   signups               accounts created.
  *   generations           jobs created, then split by where they ended:
  *                         delivered, failed (FAILED/REJECTED), or still open.
@@ -104,6 +109,7 @@ export interface StatsBucket {
   key: string;
   pageViews: number;
   visitors: number;
+  crawlerViews: number;
   signups: number;
   generations: { submitted: number; delivered: number; failed: number };
   paidOrders: { count: number; card: number; jpyc: number; usdc: number; netx: number };
@@ -119,6 +125,7 @@ function emptyBucket(key: string): StatsBucket {
   return {
     key,
     pageViews: 0,
+    crawlerViews: 0,
     visitors: 0,
     signups: 0,
     generations: { submitted: 0, delivered: 0, failed: 0 },
@@ -159,6 +166,9 @@ const ORDER_METHOD_SQL = `
 
 const n = (v: unknown): number => Number(v ?? 0);
 
+/** A page view by a person: the route marks crawlers with `crawler: true` and nothing else. */
+const PEOPLE = `JSON_EXTRACT(props, '$.crawler') IS NULL`;
+
 type Keyed = { k: string | null };
 
 /**
@@ -176,11 +186,18 @@ async function collect(fromUtc: Date, toUtc: Date, granularity: Granularity | nu
     return b;
   };
 
-  const [visits, signups, jobs, orders, refunds, grants, consumed] = await Promise.all([
+  const [visits, crawlers, signups, jobs, orders, refunds, grants, consumed] = await Promise.all([
     query<Keyed & { views: number; visitors: number }>(
       `SELECT ${key('occurred_at')} AS k, COUNT(*) AS views, COUNT(DISTINCT user_ref) AS visitors
          FROM analytics_events
-        WHERE name = 'page_view' AND is_internal = 0 AND occurred_at >= ? AND occurred_at < ?
+        WHERE name = 'page_view' AND is_internal = 0 AND ${PEOPLE} AND occurred_at >= ? AND occurred_at < ?
+        GROUP BY k`,
+      range,
+    ),
+    query<Keyed & { views: number }>(
+      `SELECT ${key('occurred_at')} AS k, COUNT(*) AS views
+         FROM analytics_events
+        WHERE name = 'page_view' AND is_internal = 0 AND NOT ${PEOPLE} AND occurred_at >= ? AND occurred_at < ?
         GROUP BY k`,
       range,
     ),
@@ -223,6 +240,7 @@ async function collect(fromUtc: Date, toUtc: Date, granularity: Granularity | nu
   ]);
 
   for (const r of visits) Object.assign(at(r.k), { pageViews: n(r.views), visitors: n(r.visitors) });
+  for (const r of crawlers) at(r.k).crawlerViews = n(r.views);
   for (const r of signups) at(r.k).signups = n(r.c);
   for (const r of jobs) at(r.k).generations = { submitted: n(r.submitted), delivered: n(r.delivered), failed: n(r.failed) };
   for (const r of orders) {
@@ -264,6 +282,67 @@ export interface StatsReport {
   totals: StatsTotals;
   /** The same span immediately before `from`, for the "vs previous period" figures. */
   previous: StatsTotals;
+  sources: VisitSources;
+}
+
+/**
+ * Where the outside visits in a range came from and what they opened —
+ * people only, staff and crawlers excluded, the same rows as pageViews.
+ */
+export interface VisitSources {
+  /** Distinct visitors, and how many of them arrived from another site. */
+  arrivals: { visitors: number; fromOtherSites: number };
+  /**
+   * Visitors by the first other site they came from in the range; `host: null`
+   * is no other site (typed in, a bookmark, an app that sends no referrer).
+   * A visitor counts once: the pages they open next carry no referrer and do
+   * not make them direct.
+   */
+  referrers: { host: string | null; visitors: number }[];
+  /** Pages, ids folded into `:id` as the route stores them, most viewed first. */
+  paths: { path: string; views: number; visitors: number }[];
+}
+
+const SOURCE_ROWS = 15;
+
+async function visitSources(fromUtc: Date, toUtc: Date): Promise<VisitSources> {
+  const where = `name = 'page_view' AND is_internal = 0 AND ${PEOPLE} AND occurred_at >= ? AND occurred_at < ?`;
+  const [referrers, paths] = await Promise.all([
+    query<{ host: string | null; visitors: number }>(
+      `SELECT host, COUNT(*) AS visitors FROM (
+         SELECT user_ref,
+                (SELECT JSON_UNQUOTE(JSON_EXTRACT(e2.props, '$.ref_host'))
+                   FROM analytics_events e2
+                  WHERE e2.user_ref = e.user_ref AND e2.name = 'page_view' AND e2.occurred_at >= ? AND e2.occurred_at < ?
+                    AND JSON_EXTRACT(e2.props, '$.ref_host') IS NOT NULL
+                  ORDER BY e2.occurred_at ASC LIMIT 1) AS host
+           FROM analytics_events e
+          WHERE ${where}
+          GROUP BY user_ref
+       ) v
+       GROUP BY host
+       ORDER BY visitors DESC, host IS NOT NULL, host ASC`,
+      [fromUtc, toUtc, fromUtc, toUtc],
+    ),
+    query<{ path: string; views: number; visitors: number }>(
+      `SELECT JSON_UNQUOTE(JSON_EXTRACT(props, '$.path')) AS path, COUNT(*) AS views, COUNT(DISTINCT user_ref) AS visitors
+         FROM analytics_events
+        WHERE ${where}
+        GROUP BY path
+        ORDER BY views DESC, path ASC
+        LIMIT ${SOURCE_ROWS}`,
+      [fromUtc, toUtc],
+    ),
+  ]);
+  const all = referrers.map((r) => ({ host: r.host, visitors: n(r.visitors) }));
+  return {
+    arrivals: {
+      visitors: all.reduce((sum, r) => sum + r.visitors, 0),
+      fromOtherSites: all.filter((r) => r.host !== null).reduce((sum, r) => sum + r.visitors, 0),
+    },
+    referrers: all.slice(0, SOURCE_ROWS),
+    paths: paths.map((r) => ({ path: r.path, views: n(r.views), visitors: n(r.visitors) })),
+  };
 }
 
 /**
@@ -279,10 +358,11 @@ export async function statsReport(params: { granularity: Granularity; from: stri
   const spanMs = toUtc.getTime() - fromUtc.getTime();
   const prevFromUtc = new Date(fromUtc.getTime() - spanMs);
 
-  const [series, totals, previous] = await Promise.all([
+  const [series, totals, previous, sources] = await Promise.all([
     collect(fromUtc, toUtc, params.granularity),
     collect(fromUtc, toUtc, null),
     collect(prevFromUtc, fromUtc, null),
+    visitSources(fromUtc, toUtc),
   ]);
   const strip = (b: StatsBucket | undefined): StatsTotals => {
     const { key: _key, ...rest } = b ?? emptyBucket('all');
@@ -295,6 +375,7 @@ export async function statsReport(params: { granularity: Granularity; from: stri
     buckets: bucketKeys(params.from, params.to, params.granularity).map((k) => series.get(k) ?? emptyBucket(k)),
     totals: strip(totals.get('all')),
     previous: strip(previous.get('all')),
+    sources,
   };
 }
 

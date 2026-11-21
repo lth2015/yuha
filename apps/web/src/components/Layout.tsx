@@ -16,6 +16,7 @@ import { PlayerBar } from './PlayerBar';
 import { PageTitleContext, pageTitleKey } from '../lib/title';
 import { resolveNowPlayingLyrics } from '../lib/now-playing-lyrics';
 import { reportVisit } from '../lib/visits';
+import { applyHead, headFor } from '../lib/seo';
 import { useStackedTableLabels } from '../lib/stack-tables';
 
 /**
@@ -169,6 +170,8 @@ export function Layout({ children }: { children: ReactNode }) {
     const key = pageTitleKey(location.pathname);
     document.title =
       key === null ? `YUHA — ${t('footer.slogan')}` : `${titleOverride ?? t(key)} — YUHA`;
+    // What a crawler may index, in the same pass (lib/seo.ts).
+    applyHead(document, headFor(location.pathname, lang, window.location.origin), t);
   }, [location.pathname, lang, t, titleOverride]);
 
   /*

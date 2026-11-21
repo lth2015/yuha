@@ -282,6 +282,38 @@ export async function trackEvent(
   );
 }
 
+/**
+ * One page view (POST /v1/visits). A browser seen signed in as staff is
+ * remembered by its visitor id, its earlier page views are marked internal,
+ * and every later one is internal too, signed in or not
+ * (migration 0030_staff_visitors).
+ */
+export async function recordPageView(params: {
+  visitorRef: string;
+  props: Record<string, unknown>;
+  runMode: string;
+  staff: boolean;
+  demo: boolean;
+}): Promise<void> {
+  if (params.staff) {
+    await execute(`INSERT IGNORE INTO staff_visitors (visitor_ref) VALUES (?)`, [params.visitorRef]);
+    await execute(
+      `UPDATE analytics_events SET is_internal = 1 WHERE name = 'page_view' AND user_ref = ? AND is_internal = 0`,
+      [params.visitorRef],
+    );
+  }
+  const known =
+    params.staff ||
+    Boolean(await queryOne(`SELECT 1 AS k FROM staff_visitors WHERE visitor_ref = ?`, [params.visitorRef]));
+  await trackEvent({
+    name: 'page_view',
+    userRef: params.visitorRef,
+    props: params.props,
+    runMode: params.runMode,
+    isInternal: params.demo || known,
+  });
+}
+
 // ------------------------------------------------------------ runtime settings
 
 export async function getSetting<T>(key: string, fallback: T): Promise<T> {
