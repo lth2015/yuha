@@ -40,6 +40,7 @@ interface Report {
     arrivals: { visitors: number; fromOtherSites: number };
     referrers: { host: string | null; visitors: number }[];
     paths: { path: string; views: number; visitors: number }[];
+    campaigns: { source: string; visitors: number; signups: number; madeASong: number; paid: number; revenueJpy: number }[];
   };
 }
 
@@ -262,6 +263,41 @@ export function Dashboard() {
                         <td className="dash__sourcename">{r.path}</td>
                         <td className="num">{num(r.views)}</td>
                         <td className="num">{num(r.visitors)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+            {/*
+              Each ?src= tag followed from visit to money (docs/ATTRIBUTION_SPEC.md):
+              what a campaign brought, to hold against what it cost.
+            */}
+            <h3 className="dash__subhead">{t('admin.dash.campaigns.h')}</h3>
+            {report.sources.campaigns.length === 0 ? (
+              <p className="small muted">{t('admin.dash.campaigns.none')}</p>
+            ) : (
+              <div className="table-wrap">
+                <table className="small">
+                  <thead>
+                    <tr>
+                      <th>{t('admin.dash.campaigns.source')}</th>
+                      <th className="num">{t('admin.dash.visitors')}</th>
+                      <th className="num">{t('admin.dash.signups')}</th>
+                      <th className="num">{t('admin.dash.campaigns.madeASong')}</th>
+                      <th className="num">{t('admin.dash.campaigns.paid')}</th>
+                      <th className="num">{t('admin.dash.revenue')}</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {report.sources.campaigns.map((r) => (
+                      <tr key={r.source}>
+                        <td className="dash__sourcename">{r.source}</td>
+                        <td className="num">{num(r.visitors)}</td>
+                        <td className="num">{num(r.signups)}</td>
+                        <td className="num">{num(r.madeASong)}</td>
+                        <td className="num">{num(r.paid)}</td>
+                        <td className="num">{yen(r.revenueJpy)}</td>
                       </tr>
                     ))}
                   </tbody>

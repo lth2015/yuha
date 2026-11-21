@@ -2635,6 +2635,7 @@ textarea.is-full { border-color: var(--danger); }
 .dash__sourcelists table { width: 100%; table-layout: fixed; }
 .dash__sourcelists th.num, .dash__sourcelists td.num { width: 6.5em; }
 .dash__sourcename { white-space: normal; overflow-wrap: anywhere; }
+.dash__subhead { margin: var(--s4) 0 var(--s2); font-size: var(--t-body); }
 
 .chart {
   margin: 0; padding: var(--s3) var(--s4); border: 1px solid var(--line);

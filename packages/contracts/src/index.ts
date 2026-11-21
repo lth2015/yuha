@@ -11,3 +11,4 @@ export * from './common.js';
 export * from './air.js';
 export * from './dedication.js';
 export * from './issue-reports.js';
+export * from './attribution.js';

@@ -309,3 +309,20 @@ export async function deleteProject(
 export async function touchProject(projectId: string, tx?: PoolConnection): Promise<void> {
   await execute(`UPDATE projects SET updated_at = UTC_TIMESTAMP(3) WHERE id = ?`, [projectId], tx);
 }
+
+/**
+ * The campaign an account arrived through (docs/ATTRIBUTION_SPEC.md): set
+ * once, and only within a day of sign-up, so an existing customer who later
+ * clicks an ad is not counted as that ad's sign-up. Returns whether the
+ * account's source is this one afterwards (sending it twice is harmless).
+ */
+export async function setAcquisitionSource(userId: string, source: string): Promise<boolean> {
+  await execute(
+    `UPDATE users SET acquisition_source = ?
+      WHERE id = ? AND acquisition_source IS NULL AND created_at >= UTC_TIMESTAMP(3) - INTERVAL 1 DAY`,
+    [source, userId],
+  );
+  // Read back rather than trust affectedRows: mysql2 counts matched rows (CLAUDE.md).
+  const row = await queryOne<{ s: string | null }>(`SELECT acquisition_source AS s FROM users WHERE id = ?`, [userId]);
+  return row?.s === source;
+}
