@@ -42,6 +42,23 @@ export function HolidayOpening({ trackId, season, to, onOpen }: { trackId: strin
   const [stage, setStage] = useState<'closed' | 'opening' | 'gone'>(() => (seen(trackId) ? 'gone' : 'closed'));
   const [afterglow, setAfterglow] = useState(false);
 
+  /*
+   * While the present covers the screen, the page under it is out of reach:
+   * inert, so Tab cannot walk into links nobody can see, and hidden from
+   * screen readers, which would otherwise read the whole page under it.
+   */
+  const covering = stage !== 'gone';
+  useEffect(() => {
+    const root = document.getElementById('root');
+    if (!covering || !root) return;
+    root.setAttribute('inert', '');
+    root.setAttribute('aria-hidden', 'true');
+    return () => {
+      root.removeAttribute('inert');
+      root.removeAttribute('aria-hidden');
+    };
+  }, [covering]);
+
   useEffect(() => {
     if (stage !== 'opening') return;
     const done = window.setTimeout(() => setStage('gone'), 1200);

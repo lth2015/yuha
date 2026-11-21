@@ -2820,6 +2820,8 @@ textarea.is-full { border-color: var(--danger); }
 .holiday-open__title { margin: var(--s4) 0 0; font-size: var(--t-heading); font-weight: 700; color: var(--ink); max-width: 22em; overflow-wrap: anywhere; }
 .holiday-open__sub { margin: 0 0 var(--s4); color: var(--muted); }
 .holiday-open__title, .holiday-open__sub { text-wrap: balance; }
+/* A way to begin can be a long line; it wraps rather than running off a phone. */
+.holiday-starters .chip { white-space: normal; text-align: left; max-width: 100%; height: auto; min-height: 40px; }
 .holiday-open__object { position: relative; width: 160px; height: 150px; }
 /* The present: an ember box tied with cream ribbon, a lid that lifts off. */
 .holiday-open__box, .holiday-open__lid {
@@ -2874,4 +2876,32 @@ textarea.is-full { border-color: var(--danger); }
 @media (prefers-reduced-motion: reduce) {
   .holiday-open, .holiday-open__lid, .holiday-open__card, .holiday-open__sun { transition: none; }
   .holiday-snow, .holiday-sunrise { display: none; }
+}
+
+/* The last hour of the year, on the home page (docs/HOLIDAY_SPEC.md). */
+.newyear-countdown {
+  position: relative; overflow: hidden;
+  display: grid; justify-items: center; gap: var(--s1);
+  padding: var(--s6) var(--s4); text-align: center;
+  border: 1px solid #c8372a; outline: 4px solid #fffdf8; border-radius: var(--r-card);
+  background: #fffdf8;
+}
+.newyear-countdown__label { color: var(--muted); }
+.newyear-countdown__clock { font-size: clamp(2.5rem, 12vw, 4.5rem); font-weight: 700; color: var(--ink); letter-spacing: 0.04em; }
+.newyear-countdown__greeting { font-size: var(--t-heading); color: var(--ink); }
+.holiday-fireworks { position: absolute; inset: 0; pointer-events: none; }
+.holiday-fireworks span {
+  position: absolute; width: 8px; height: 8px; border-radius: 50%;
+  box-shadow:
+    0 -40px 0 #d7402b, 28px -28px 0 #e8a33d, 40px 0 0 #d7402b, 28px 28px 0 #e8a33d,
+    0 40px 0 #d7402b, -28px 28px 0 #e8a33d, -40px 0 0 #d7402b, -28px -28px 0 #e8a33d;
+  opacity: 0; transform: scale(0.2);
+  animation: holiday-burst 1.6s var(--ease-ui) forwards;
+}
+@keyframes holiday-burst {
+  30% { opacity: 1; }
+  100% { opacity: 0; transform: scale(1.4); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .holiday-fireworks { display: none; }
 }

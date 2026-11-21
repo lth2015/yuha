@@ -7,6 +7,7 @@ import { messageFor } from '../lib/messages';
 import { useI18n } from '../lib/i18n';
 import { useSession } from '../lib/session';
 import { Score } from '../components/Score';
+import { NewYearCountdown } from '../components/HolidayMoments';
 import { Shelf } from '../components/Shelf';
 import { SongCard } from '../components/SongCard';
 import { JOB_PHASES, fractionOfPhase, phaseKey } from '../lib/phases';
@@ -372,6 +373,7 @@ export default function Home() {
     <div className="stack">
       {me && <OpenGenerations onResume={setJob} />}
       {me && <UnfinishedGenerations withinHours={24} />}
+      <NewYearCountdown />
       {!IOS_BUILD && season && <GiftEntry season={season} />}
       <section className="hero">
         <div className="hero__copy">

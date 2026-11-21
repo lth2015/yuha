@@ -119,6 +119,11 @@ const PAGES = [
   { name: 'not-found', path: '/no-such-page', as: null },
   { name: 'song', path: '/song/:track', as: 'creator' },
   { name: 'song-public-view', path: '/song/:track', as: null },
+  // The holidays (docs/HOLIDAY_SPEC.md): seen early through the staff preview, and the gift a recipient opens.
+  { name: 'home-xmas', path: '/?preview-season=xmas', as: 'admin' },
+  { name: 'home-newyear', path: '/?preview-season=newyear', as: 'admin' },
+  { name: 'create-holiday', path: '/create?gift=1&occasion=christmas', as: 'creator' },
+  { name: 'gift-opening', path: '/song/:gift', as: null },
   { name: 'track-export', path: '/tracks/:track/export', as: 'creator' },
   { name: 'track-license', path: '/tracks/:track/license', as: 'admin' },
   { name: 'checkout-complete', path: '/checkout/complete?order_id=:order', as: 'creator' },
@@ -416,6 +421,28 @@ async function fixtures(browser, states) {
     if (res.cancelled) job = made.jobId;
   }
   if (!job) throw new Error('fixtures: could not make a job that ended without a song');
+  // A Christmas song, public, opened signed out: the present to unwrap (docs/HOLIDAY_SPEC.md).
+  const giftOf = (items) => { const t = items.find((x) => x.dedication?.occasion === 'christmas'); return t ? (t.trackId ?? t.id) : undefined; };
+  let gift = giftOf((await call('GET', '/v1/tracks')).items ?? []);
+  if (!gift) {
+    await call(
+      'POST',
+      '/v1/generations',
+      {
+        prompt: '雪の降る駅で待ち合わせ',
+        instrumental: true,
+        durationSeconds: 30,
+        visibility: 'public',
+        dedication: { to: 'ずっと隣にいてくれた人', occasion: 'christmas', note: '今年もありがとう。来年も一緒に。', lang: 'ja' },
+      },
+      { 'idempotency-key': key() },
+    );
+    for (let i = 0; i < 60 && !gift; i++) {
+      await page.waitForTimeout(1000);
+      gift = giftOf((await call('GET', '/v1/tracks')).items ?? []);
+    }
+  }
+  if (!gift) throw new Error('fixtures: the Christmas song was not delivered in 60 s — is the worker running?');
   await ctx.close();
 
   const actx = await browser.newContext({ storageState: states.admin });
@@ -434,14 +461,14 @@ async function fixtures(browser, states) {
     });
   }, [USERS.creator, `ui-check-grant-${new Date().toISOString().slice(0, 10)}`]);
   await actx.close();
-  return { track, order, job };
+  return { track, order, job, gift };
 }
 
 mkdirSync(SHOTS, { recursive: true });
 const browser = await chromium.launch();
 const states = { creator: await signIn(browser, 'creator'), admin: await signIn(browser, 'admin') };
 const data = await fixtures(browser, states);
-for (const p of PAGES) p.path = p.path.replace(':track', data.track).replace(':order', data.order).replace(':job', data.job);
+for (const p of PAGES) p.path = p.path.replace(':track', data.track).replace(':order', data.order).replace(':job', data.job).replace(':gift', data.gift);
 let failures = 0;
 let warnings = 0;
 let checked = 0;

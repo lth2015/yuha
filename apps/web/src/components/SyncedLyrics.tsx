@@ -3,6 +3,8 @@ import { lrcFileName, markCorrected, setLineStart, shiftTimings, toLrc, type Lyr
 import { useI18n } from '../lib/i18n';
 import { activeLineIndex, resolveLyricTimings, lineProgress } from '../lib/lyrics';
 import { usePlayer } from '../lib/player';
+import { useSession } from '../lib/session';
+import { Snow } from './HolidayOpening';
 
 /**
  * Karaoke lyrics: the active line lifts, brightens and fills left-to-right;
@@ -105,6 +107,21 @@ export function SyncedLyrics({
   const liveTime = live ? frameTime : currentTime;
 
   const active = activeLineIndex(lines, liveTime);
+  /*
+   * In a holiday season, a line about snow brings a little snow while it is
+   * sung (docs/HOLIDAY_SPEC.md). Once per line, and only while playing.
+   */
+  const { runtime } = useSession();
+  const snowed = useRef(new Set<number>());
+  const [snowing, setSnowing] = useState(false);
+  useEffect(() => {
+    if (!runtime?.season || !live || active < 0 || snowed.current.has(active)) return;
+    if (!/雪|snow/i.test(lines[active]?.text ?? '')) return;
+    snowed.current.add(active);
+    setSnowing(true);
+    const id = window.setTimeout(() => setSnowing(false), 6000);
+    return () => window.clearTimeout(id);
+  }, [active, live, runtime?.season, lines]);
 
   const nudge = (seconds: number) => {
     setDraft((d) => shiftTimings(d ?? timeline, seconds, duration));
@@ -146,6 +163,8 @@ export function SyncedLyrics({
   }
 
   return (
+    <>
+    {snowing && <Snow flakes={14} />}
     <div
       ref={scrollRef}
       className={`lyrics-sync${compact ? ' lyrics-sync--compact' : ''}`}
@@ -251,5 +270,6 @@ export function SyncedLyrics({
         );
       })}
     </div>
+    </>
   );
 }
