@@ -19,6 +19,7 @@ interface Bucket {
   key: string;
   pageViews: number;
   visitors: number;
+  crawlerViews: number;
   signups: number;
   generations: { submitted: number; delivered: number; failed: number };
   paidOrders: { count: number; card: number; jpyc: number; usdc: number; netx: number };
@@ -35,6 +36,11 @@ interface Report {
   buckets: Bucket[];
   totals: Totals;
   previous: Totals;
+  sources: {
+    arrivals: { visitors: number; fromOtherSites: number };
+    referrers: { host: string | null; visitors: number }[];
+    paths: { path: string; views: number; visitors: number }[];
+  };
 }
 
 /* Categorical slots 1–3 of the validated palette (blue, orange, aqua), in
@@ -105,13 +111,13 @@ export function Dashboard() {
   const exportCsv = () => {
     if (!report) return;
     const head = [
-      'bucket', 'page_views', 'visitors', 'signups', 'generations_submitted', 'generations_delivered',
+      'bucket', 'page_views', 'visitors', 'crawler_views', 'signups', 'generations_submitted', 'generations_delivered',
       'generations_failed', 'paid_orders', 'paid_orders_card', 'paid_orders_jpyc', 'paid_orders_usdc', 'paid_orders_netx',
       'revenue_jpy', 'revenue_card_jpy', 'revenue_jpyc_jpy', 'revenue_usdc_jpy', 'revenue_netx_jpy', 'refunds_jpy',
       'credits_granted', 'credits_consumed',
     ];
     const rows = report.buckets.map((b) => [
-      b.key, b.pageViews, b.visitors, b.signups, b.generations.submitted, b.generations.delivered,
+      b.key, b.pageViews, b.visitors, b.crawlerViews, b.signups, b.generations.submitted, b.generations.delivered,
       b.generations.failed, b.paidOrders.count, b.paidOrders.card, b.paidOrders.jpyc, b.paidOrders.usdc, b.paidOrders.netx,
       b.revenueJpy.total, b.revenueJpy.card, b.revenueJpy.jpyc, b.revenueJpy.usdc, b.revenueJpy.netx, b.refundsJpy,
       b.creditsGranted.total, b.creditsConsumed,
@@ -213,6 +219,56 @@ export function Dashboard() {
               </div>
             ))}
           </div>
+
+          {/* Where the outside visits came from: the question "is anyone out there" asks first. */}
+          <section className="dash__sources" aria-labelledby="dash-sources-h">
+            <h3 id="dash-sources-h">{t('admin.dash.sources.h')}</h3>
+            <p className="small muted">
+              {t('admin.dash.sources.summary', {
+                visitors: num(report.sources.arrivals.visitors),
+                other: num(report.sources.arrivals.fromOtherSites),
+                crawlers: num(report.totals.crawlerViews),
+              })}
+            </p>
+            {report.sources.arrivals.visitors > 0 && (
+              <div className="dash__sourcelists">
+                <table className="small">
+                  <thead>
+                    <tr>
+                      <th>{t('admin.dash.sources.site')}</th>
+                      <th className="num">{t('admin.dash.visitors')}</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {report.sources.referrers.map((r) => (
+                      <tr key={r.host ?? '-'}>
+                        <td className="dash__sourcename">{r.host ?? t('admin.dash.sources.direct')}</td>
+                        <td className="num">{num(r.visitors)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+                <table className="small">
+                  <thead>
+                    <tr>
+                      <th>{t('admin.dash.sources.page')}</th>
+                      <th className="num">{t('admin.dash.pageViews')}</th>
+                      <th className="num">{t('admin.dash.visitors')}</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {report.sources.paths.map((r) => (
+                      <tr key={r.path}>
+                        <td className="dash__sourcename">{r.path}</td>
+                        <td className="num">{num(r.views)}</td>
+                        <td className="num">{num(r.visitors)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </section>
 
           {view === 'charts' ? (
             <div className="dash__charts">

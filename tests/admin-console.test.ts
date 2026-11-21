@@ -7,8 +7,9 @@
  * Tokyo is still the previous day in UTC, and an ISO week starts on Monday.
  */
 import { randomUUID } from 'node:crypto';
+import { readFileSync } from 'node:fs';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
-import { grantUnits, query, withTx } from '@yuha/db';
+import { execute, grantUnits, query, withTx } from '@yuha/db';
 import { createHarness, resetData, teardown, type Harness, type TestUser } from './helpers/harness.js';
 import { allowInvariantBreach } from './helpers/invariant-guard.js';
 
@@ -174,6 +175,84 @@ describe('the dashboard', () => {
     // Nor does a song id: for a link-shared song the id is the key to it.
     expect(JSON.stringify(rows)).not.toContain(songId);
     expect(rows.map((r) => r.props.path)).toContain('/s/:id');
+  });
+
+  it('drops a browser that signs in as staff — what it did before signing in, and after signing out', async () => {
+    const owner = randomUUID();
+    const outsider = randomUUID();
+    await visit(owner, '/'); // the operator, not yet signed in
+    await visit(owner, '/auth');
+    await visit(owner, '/admin', admin); // now known: this browser is staff
+    await visit(owner, '/'); // signed out again, same browser
+    await visit(outsider, '/');
+
+    const today = new Date(Date.now() + 9 * 3600_000).toISOString().slice(0, 10);
+    const body = (await get(admin, `/v1/admin/stats?granularity=day&from=${today}&to=${today}`)).json();
+    expect(body.totals.pageViews).toBe(1);
+    expect(body.totals.visitors).toBe(1);
+  });
+
+  it('the migration reclassifies the history it can: staff browsers seen before it ran', async () => {
+    // Rows as they stood before 0030: staff signed in were internal, the same browser signed out was not.
+    const owner = randomUUID();
+    const outsider = randomUUID();
+    const row = (ref: string, internal: number, signedIn: boolean) =>
+      execute(
+        `INSERT INTO analytics_events (id, name, user_ref, props, run_mode, is_internal) VALUES (UUID(), 'page_view', ?, ?, 'production', ?)`,
+        [ref, JSON.stringify({ path: '/', signed_in: signedIn }), internal],
+      );
+    await row(owner, 0, false);
+    await row(owner, 1, true);
+    await row(outsider, 0, false);
+    await row(outsider, 0, true); // a signed-in customer: not staff
+    const sql = readFileSync(new URL('../packages/db/src/migrations/0030_staff_visitors.sql', import.meta.url), 'utf8');
+    for (const stmt of sql.split('-- ;;').slice(1)) await execute(stmt.replace(/^\s*--.*$/gm, ''));
+
+    const counted = await query<{ user_ref: string }>(`SELECT user_ref FROM analytics_events WHERE is_internal = 0`);
+    expect(counted.map((r) => r.user_ref)).toEqual([outsider, outsider]);
+  });
+
+  it('counts crawlers apart from people', async () => {
+    const send = (ua: string) =>
+      live.app.inject({ method: 'POST', url: '/v1/visits', headers: { 'user-agent': ua }, payload: { visitorId: randomUUID(), path: '/' } as never });
+    await send('Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)');
+    await send('Mozilla/5.0 (compatible; bingbot/2.0; +http://www.bing.com/bingbot.htm)');
+    await send('Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 Version/18.0 Mobile/15E148 Safari/604.1');
+    // Nothing about the agent is stored: only whether it was a crawler.
+    const rows = await query<{ props: Record<string, unknown> }>(`SELECT props FROM analytics_events WHERE name = 'page_view'`);
+    expect(JSON.stringify(rows)).not.toMatch(/Googlebot|iPhone/);
+
+    const today = new Date(Date.now() + 9 * 3600_000).toISOString().slice(0, 10);
+    const body = (await get(admin, `/v1/admin/stats?granularity=day&from=${today}&to=${today}`)).json();
+    expect(body.totals.pageViews).toBe(1);
+    expect(body.totals.crawlerViews).toBe(2);
+  });
+
+  it('says where the outside visits came from and what they opened', async () => {
+    const send = (visitorId: string, path: string, refHost?: string) =>
+      live.app.inject({ method: 'POST', url: '/v1/visits', payload: { visitorId, path, ...(refHost ? { refHost } : {}) } as never });
+    const [a, b, c] = [randomUUID(), randomUUID(), randomUUID()];
+    await send(a, '/', 'www.google.com');
+    await send(a, '/pricing');
+    await send(b, `/song/${randomUUID()}`, 'x.com');
+    await send(c, `/song/${randomUUID()}`);
+    await visit(randomUUID(), '/admin', admin); // staff: in neither list
+
+    const today = new Date(Date.now() + 9 * 3600_000).toISOString().slice(0, 10);
+    const { sources } = (await get(admin, `/v1/admin/stats?granularity=day&from=${today}&to=${today}`)).json();
+    // A visitor counts once, under the first other site they came from; the
+    // pages they open next carry no referrer and do not make them "direct".
+    expect(sources.referrers).toEqual([
+      { host: null, visitors: 1 },
+      { host: 'www.google.com', visitors: 1 },
+      { host: 'x.com', visitors: 1 },
+    ]);
+    expect(sources.arrivals).toEqual({ visitors: 3, fromOtherSites: 2 });
+    expect(sources.paths).toEqual([
+      { path: '/song/:id', views: 2, visitors: 2 },
+      { path: '/', views: 1, visitors: 1 },
+      { path: '/pricing', views: 1, visitors: 1 },
+    ]);
   });
 
   it('defaults to the last 30 days by day, and refuses a range with too many buckets', async () => {
