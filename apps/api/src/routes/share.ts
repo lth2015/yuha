@@ -45,9 +45,9 @@ const OCCASION_TITLE: Record<Dedication['lang'], (to: string) => string> = {
 };
 
 const OCCASION_LINE: Record<Dedication['lang'], Partial<Record<Dedication['occasion'], string>>> = {
-  zh: { birthday: '生日快乐', thanks: '谢谢你', sorry: '对不起', love: '喜欢你', miss: '想你了', farewell: '一路顺风', cheer: '加油' },
-  ja: { birthday: 'お誕生日おめでとう', thanks: 'ありがとう', sorry: 'ごめんね', love: '好きです', miss: '会いたいな', farewell: 'またね', cheer: 'がんばれ' },
-  en: { birthday: 'Happy birthday', thanks: 'Thank you', sorry: 'I’m sorry', love: 'I love you', miss: 'Missing you', farewell: 'Goodbye, for now', cheer: 'You’ve got this' },
+  zh: { birthday: '生日快乐', thanks: '谢谢你', sorry: '对不起', love: '喜欢你', miss: '想你了', farewell: '一路顺风', cheer: '加油', christmas: '圣诞快乐', new_year: '新年快乐' },
+  ja: { birthday: 'お誕生日おめでとう', thanks: 'ありがとう', sorry: 'ごめんね', love: '好きです', miss: '会いたいな', farewell: 'またね', cheer: 'がんばれ', christmas: 'メリークリスマス', new_year: 'あけましておめでとう' },
+  en: { birthday: 'Happy birthday', thanks: 'Thank you', sorry: 'I’m sorry', love: 'I love you', miss: 'Missing you', farewell: 'Goodbye, for now', cheer: 'You’ve got this', christmas: 'Merry Christmas', new_year: 'Happy New Year' },
 };
 
 const escapeHtml = (s: string) =>

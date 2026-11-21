@@ -133,8 +133,9 @@ export function OrdersPanel() {
             <tbody>
               {rows.map((o) => (
                 <tr key={o.orderId}>
-                  <td className="muted">{formatJst(o.createdAt, true)}</td>
-                  <td>{o.email}</td>
+                  <td className="muted" style={{ whiteSpace: 'normal', minWidth: '7em' }}>{formatJst(o.createdAt, true)}</td>
+                  {/* An address may break: on a tablet the table otherwise ran past its last column. */}
+                  <td style={{ whiteSpace: 'normal', overflowWrap: 'anywhere', minWidth: '9em' }}>{o.email}</td>
                   <td>{o.priceKey}</td>
                   <td>{o.method === 'card' ? t('admin.dash.card') : o.method.toUpperCase()}</td>
                   <td className="num">
@@ -147,11 +148,11 @@ export function OrdersPanel() {
                   </td>
                   <td>
                     {o.status}
+                    {/* Under the status, not beside it: beside it widened the column and pushed the Stripe link off a tablet. */}
                     {o.heldForReview && (
-                      <>
-                        {' '}
+                      <div>
                         <Badge tone="badge--warn">{t('admin.orders.held')}</Badge>
-                      </>
+                      </div>
                     )}
                   </td>
                   <td>{o.entitlementGranted ? '✓' : '—'}</td>

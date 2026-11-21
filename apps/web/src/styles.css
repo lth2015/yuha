@@ -2294,6 +2294,32 @@ textarea.is-full { border-color: var(--danger); }
 }
 .gift-entry__tag span { font-size: var(--t-body); color: rgb(255 255 255 / 90%); }
 .gift-entry__tag strong { font-size: var(--t-heading); font-weight: 700; }
+/* Holiday seasons (docs/HOLIDAY_SPEC.md): the tag becomes the present itself.
+   Christmas: the same ember sleeve, tied with a cream ribbon both ways. */
+.gift-entry--xmas .gift-entry__tag {
+  background:
+    /* Tied near the edge, so the ribbon never runs through the words. */
+    linear-gradient(90deg, transparent calc(100% - 30px), #f4e6c8 calc(100% - 30px), #f4e6c8 calc(100% - 20px), transparent calc(100% - 20px)),
+    linear-gradient(180deg, transparent 10px, #f4e6c8 10px, #f4e6c8 17px, transparent 17px),
+    radial-gradient(120% 120% at 20% 10%, #E8693F 0%, #C2411F 55%, #7E2A17 100%);
+  text-shadow: 0 1px 2px rgb(0 0 0 / 45%);
+  padding-right: 52px;
+}
+/* New Year: a nengajo — white card, vermilion sun, a thin vermilion frame. */
+.gift-entry--newyear .gift-entry__tag {
+  background:
+    radial-gradient(circle at calc(100% - 28px) 26px, #d7402b 0 16px, transparent 16.5px),
+    #fffdf8;
+  padding-right: 64px;
+  color: var(--ink);
+  border: 1px solid #c8372a;
+  outline: 4px solid #fffdf8;
+  transform: rotate(-3deg);
+}
+.gift-entry--newyear .gift-entry__tag span { color: var(--muted); }
+/* A greeting is one line: 「おめでと / う」 broken over two reads as a mistake. */
+.gift-entry--newyear .gift-entry__tag strong { white-space: nowrap; font-size: clamp(1.05rem, 5vw, var(--t-heading)); }
+.gift-entry--xmas, .gift-entry--newyear { margin-top: 0; }
 @media (max-width: 640px) {
   .gift-entry { flex-direction: column-reverse; align-items: flex-start; }
 }
@@ -2778,3 +2804,104 @@ textarea.is-full { border-color: var(--danger); }
    the right edge: `th, td { white-space: nowrap }` cut the contents and the
    refund rule mid-sentence at 393 px, inside a scroller nobody swipes. */
 .terms-table td { white-space: normal; overflow-wrap: anywhere; }
+
+/* ---------------------------------------------------------- holiday opening
+   docs/HOLIDAY_SPEC.md: a present to unwrap, a nengajo to turn over. Drawn
+   in CSS; nothing here is clickable but the button. */
+.holiday-open {
+  /* Above the header too: until it is opened, the present is the whole screen. */
+  position: fixed; inset: 0; z-index: 1000;
+  display: grid; place-content: center; justify-items: center; gap: var(--s3);
+  padding: var(--s6) var(--s4); text-align: center;
+  background: var(--bg);
+  transition: opacity 0.6s var(--ease-ui) 0.6s;
+}
+.holiday-open.is-opening { opacity: 0; }
+.holiday-open__title { margin: var(--s4) 0 0; font-size: var(--t-heading); font-weight: 700; color: var(--ink); max-width: 22em; overflow-wrap: anywhere; }
+.holiday-open__sub { margin: 0 0 var(--s4); color: var(--muted); }
+.holiday-open__title, .holiday-open__sub { text-wrap: balance; }
+/* A way to begin can be a long line; it wraps rather than running off a phone. */
+.holiday-starters .chip { white-space: normal; text-align: left; max-width: 100%; height: auto; min-height: 40px; }
+.holiday-open__object { position: relative; width: 160px; height: 150px; }
+/* The present: an ember box tied with cream ribbon, a lid that lifts off. */
+.holiday-open__box, .holiday-open__lid {
+  position: absolute; left: 12px; right: 12px; border-radius: 10px;
+  background:
+    linear-gradient(90deg, transparent 44%, #f4e6c8 44%, #f4e6c8 56%, transparent 56%),
+    radial-gradient(120% 120% at 20% 10%, #E8693F 0%, #C2411F 55%, #7E2A17 100%);
+  box-shadow: var(--shadow-pop);
+}
+.holiday-open__box { top: 52px; bottom: 0; }
+.holiday-open__lid { top: 30px; height: 30px; left: 4px; right: 4px; z-index: 1; transition: transform 0.7s var(--ease-ui); }
+.holiday-open__lid::before, .holiday-open__lid::after {
+  content: ''; position: absolute; top: -22px; width: 34px; height: 26px;
+  border: 6px solid #f4e6c8; border-radius: 50% 50% 0 50%;
+}
+.holiday-open__lid::before { left: calc(50% - 36px); transform: rotate(-20deg); }
+.holiday-open__lid::after { left: calc(50% + 2px); transform: scaleX(-1) rotate(-20deg); }
+.holiday-open--xmas.is-opening .holiday-open__lid { transform: translateY(-90px) rotate(-14deg); }
+/* The nengajo: white card, thin vermilion frame, a sun that rises as it turns. */
+.holiday-open__card {
+  position: absolute; inset: 0 14px; border-radius: 6px;
+  background: #fffdf8; border: 1px solid #c8372a; outline: 5px solid #fffdf8;
+  box-shadow: var(--shadow-pop); overflow: hidden;
+  transition: transform 0.8s var(--ease-ui);
+}
+.holiday-open__sun { position: absolute; left: calc(50% - 26px); bottom: 24px; width: 52px; height: 52px; border-radius: 50%; background: #d7402b; transition: transform 0.8s var(--ease-ui); }
+.holiday-open--newyear.is-opening .holiday-open__sun { transform: translateY(-40px); }
+.holiday-open--newyear.is-opening .holiday-open__card { transform: rotateY(180deg); }
+
+/* After it opens: snow over the page, or the sun coming up behind it. */
+.holiday-snow { position: fixed; inset: 0; z-index: 900; pointer-events: none; overflow: hidden; }
+.holiday-snow span {
+  position: absolute; top: -12px; border-radius: 50%;
+  /* White alone vanishes on this page's paper; a cool edge makes it snow. */
+  background: radial-gradient(circle, #fff 35%, #b9c9de 100%); box-shadow: 0 0 3px rgb(120 145 180 / 45%);
+  animation: holiday-fall linear forwards;
+}
+@keyframes holiday-fall {
+  to { transform: translate3d(30px, 105vh, 0); opacity: 0.2; }
+}
+.holiday-sunrise {
+  position: fixed; left: 50%; bottom: -60vmin; z-index: 0; pointer-events: none;
+  width: 60vmin; height: 60vmin; margin-left: -30vmin; border-radius: 50%;
+  background: radial-gradient(circle, rgb(215 64 43 / 30%) 0 60%, transparent 70%);
+  animation: holiday-rise 7s var(--ease-ui) forwards;
+}
+@keyframes holiday-rise {
+  0% { transform: translateY(0); opacity: 0; }
+  30% { opacity: 1; }
+  100% { transform: translateY(-40vmin); opacity: 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .holiday-open, .holiday-open__lid, .holiday-open__card, .holiday-open__sun { transition: none; }
+  .holiday-snow, .holiday-sunrise { display: none; }
+}
+
+/* The last hour of the year, on the home page (docs/HOLIDAY_SPEC.md). */
+.newyear-countdown {
+  position: relative; overflow: hidden;
+  display: grid; justify-items: center; gap: var(--s1);
+  padding: var(--s6) var(--s4); text-align: center;
+  border: 1px solid #c8372a; outline: 4px solid #fffdf8; border-radius: var(--r-card);
+  background: #fffdf8;
+}
+.newyear-countdown__label { color: var(--muted); }
+.newyear-countdown__clock { font-size: clamp(2.5rem, 12vw, 4.5rem); font-weight: 700; color: var(--ink); letter-spacing: 0.04em; }
+.newyear-countdown__greeting { font-size: var(--t-heading); color: var(--ink); }
+.holiday-fireworks { position: absolute; inset: 0; pointer-events: none; }
+.holiday-fireworks span {
+  position: absolute; width: 8px; height: 8px; border-radius: 50%;
+  box-shadow:
+    0 -40px 0 #d7402b, 28px -28px 0 #e8a33d, 40px 0 0 #d7402b, 28px 28px 0 #e8a33d,
+    0 40px 0 #d7402b, -28px 28px 0 #e8a33d, -40px 0 0 #d7402b, -28px -28px 0 #e8a33d;
+  opacity: 0; transform: scale(0.2);
+  animation: holiday-burst 1.6s var(--ease-ui) forwards;
+}
+@keyframes holiday-burst {
+  30% { opacity: 1; }
+  100% { opacity: 0; transform: scale(1.4); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .holiday-fireworks { display: none; }
+}

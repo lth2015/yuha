@@ -8,7 +8,7 @@ import { z } from 'zod';
  * them. The note is shown to anybody holding the link, so it is screened like
  * a description before anything is spent.
  */
-export const OCCASIONS = ['birthday', 'thanks', 'sorry', 'love', 'miss', 'farewell', 'cheer', 'other'] as const;
+export const OCCASIONS = ['birthday', 'thanks', 'sorry', 'love', 'miss', 'farewell', 'cheer', 'christmas', 'new_year', 'other'] as const;
 export const Occasion = z.enum(OCCASIONS);
 export type Occasion = z.infer<typeof Occasion>;
 
@@ -39,9 +39,9 @@ export const editDedicationRequest = dedicationSchema.omit({ lang: true });
 export type EditDedicationRequest = z.infer<typeof editDedicationRequest>;
 
 const OCCASION_WORDS: Record<Dedication['lang'], Record<Occasion, string>> = {
-  zh: { birthday: '生日', thanks: '感谢', sorry: '道歉', love: '告白', miss: '想念', farewell: '送别', cheer: '加油打气', other: '' },
-  ja: { birthday: '誕生日', thanks: '感謝', sorry: 'お詫び', love: '告白', miss: '会いたい気持ち', farewell: 'お別れ', cheer: '応援', other: '' },
-  en: { birthday: 'a birthday', thanks: 'saying thank you', sorry: 'saying sorry', love: 'saying I love you', miss: 'missing them', farewell: 'saying goodbye', cheer: 'cheering them on', other: '' },
+  zh: { birthday: '生日', thanks: '感谢', sorry: '道歉', love: '告白', miss: '想念', farewell: '送别', cheer: '加油打气', christmas: '圣诞节', new_year: '新年', other: '' },
+  ja: { birthday: '誕生日', thanks: '感謝', sorry: 'お詫び', love: '告白', miss: '会いたい気持ち', farewell: 'お別れ', cheer: '応援', christmas: 'クリスマス', new_year: '新年', other: '' },
+  en: { birthday: 'a birthday', thanks: 'saying thank you', sorry: 'saying sorry', love: 'saying I love you', miss: 'missing them', farewell: 'saying goodbye', cheer: 'cheering them on', christmas: 'Christmas', new_year: 'the New Year', other: '' },
 };
 
 /**

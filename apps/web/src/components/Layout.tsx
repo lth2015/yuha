@@ -17,6 +17,7 @@ import { PageTitleContext, pageTitleKey } from '../lib/title';
 import { resolveNowPlayingLyrics } from '../lib/now-playing-lyrics';
 import { reportVisit } from '../lib/visits';
 import { applyHead, headFor } from '../lib/seo';
+import { SiteSnow, useHolidayMoments } from './HolidayMoments';
 import { useStackedTableLabels } from '../lib/stack-tables';
 
 /**
@@ -86,6 +87,8 @@ function LangSwitch({
 }
 
 function SiteFooter() {
+  // 1-3 January: the slogan gives way to the greeting (docs/HOLIDAY_SPEC.md).
+  const { moments } = useHolidayMoments();
   const { t } = useI18n();
   const { runtime } = useSession();
   return (
@@ -120,7 +123,8 @@ function SiteFooter() {
         full (`legal.steward`).
       */}
       <span className="site-foot__fine">
-        {t('footer.made', { year: new Date().getFullYear() })} · {t('footer.slogan')} ·{' '}
+        {t('footer.made', { year: new Date().getFullYear() })} ·{' '}
+        {t(moments.includes('new-year-greeting') ? 'holiday.footer.newyear' : 'footer.slogan')} ·{' '}
         {t('footer.steward')}
         {runtime && !runtime.demo ? ` · ${runtime.mode}` : ''}
       </span>
@@ -463,6 +467,9 @@ export function Layout({ children }: { children: ReactNode }) {
 
       <ErrorBoundary key={`chrome-foot-${location.pathname}`} fallback={null}>
         <SiteFooter />
+      </ErrorBoundary>
+      <ErrorBoundary key="holiday-snow" fallback={null}>
+        <SiteSnow />
       </ErrorBoundary>
 
       {/* Was labelled with nav.skip, so the mobile navigation landmark was

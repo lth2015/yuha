@@ -1,12 +1,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
-import { TITLE_MAX_CODEPOINTS, type LyricTimings, type ProductView, type TrackView } from '@yuha/contracts';
+import { TITLE_MAX_CODEPOINTS, seasonOfOccasion, type LyricTimings, type ProductView, type TrackView } from '@yuha/contracts';
 import { API_BASE, ApiError, apiFetch, apiPostForBlob } from '../lib/api';
 import { drawVideoFrame, frameJpeg, planShareClip, shareCardPng } from '../lib/share-art';
 import { resolveLyricTimings } from '../lib/lyrics';
 import { clampToCodePoints } from '../lib/codepoints';
 import { createInFlightGuard, PENDING_AFTER_MS } from '../lib/in-flight';
 import { formatTime, usePlayer } from '../lib/player';
+import { HolidayOpening } from '../components/HolidayOpening';
 import { fetchProducts, findLicenceProduct } from '../lib/catalog';
 import { styleLabel } from '../lib/style-label';
 import { useI18n } from '../lib/i18n';
@@ -422,8 +423,14 @@ export default function SongDetail() {
     navigate(`/checkout/confirm?price=market_license&track=${encodeURIComponent(song.trackId)}`);
   };
 
+  // A holiday song opened by the person it was written for (docs/HOLIDAY_SPEC.md).
+  const giftSeason = !isOwner && song.dedication ? seasonOfOccasion(song.dedication.occasion) : null;
+
   return (
     <div className="song-page">
+      {giftSeason && song.dedication && (
+        <HolidayOpening trackId={song.trackId} season={giftSeason} to={song.dedication.to} onOpen={play} />
+      )}
       <div className="song-spread">
         <div className="song-spread__stagewrap">
           <div className="song-spread__cover">
