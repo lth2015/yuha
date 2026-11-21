@@ -1584,6 +1584,24 @@ export default function Create() {
         )}
         {outOfCreditsNote}
         <p className="composer__feedback">{t('create.guarantee')}</p>
+        {/*
+          The draft is saved as it is typed, so there was no way to be rid of
+          one: clearing every field by hand, or leaving it for the next visit.
+          Not offered while editing a song, whose fields are the song's own.
+        */}
+        {!editTrackId && hasWriting(draft) && (
+          <button
+            type="button"
+            className="btn btn--ghost btn--sm composer__discard"
+            onClick={() => {
+              if (!window.confirm(t('create.discard.confirm'))) return;
+              setDraft(DEFAULT_DRAFT);
+              setError(null);
+            }}
+          >
+            {t('create.discard')}
+          </button>
+        )}
       </form>
 
       {recent && recent.length > 0 && (

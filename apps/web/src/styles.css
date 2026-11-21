@@ -942,6 +942,7 @@ textarea.is-full { border-color: var(--danger); }
 .composer__row { display: flex; justify-content: space-between; align-items: center; gap: 16px; }
 .composer__cost { font-size: var(--t-caption); color: var(--muted); line-height: 1.6; }
 .composer__feedback { min-height: 20px; font-size: var(--t-caption); color: var(--muted); margin: 12px 0 0; }
+.composer__discard { margin-top: var(--s3); }
 
 /* art panel: the brand moment */
 .art-panel {

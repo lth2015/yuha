@@ -6,7 +6,7 @@ import {
   createGenerationRequest,
   idempotencyKeySchema,
 } from '@yuha/contracts';
-import { getBalance, getTrackForUser, listOpenJobs, listUnfinishedJobs, trackEvent } from '@yuha/db';
+import { dismissUnfinishedJob, getBalance, getTrackForUser, listOpenJobs, listUnfinishedJobs, trackEvent } from '@yuha/db';
 import type { AppContext } from '../context.js';
 import { cancelGeneration, createGeneration, getJobDraft, getJobViews, getJobView } from '../services/generation.js';
 
@@ -67,6 +67,18 @@ export default async function generationRoutes(app: FastifyInstance, opts: { ctx
   app.get('/v1/jobs/unfinished', { preHandler: app.requireAuth }, async (req) => {
     const rows = await listUnfinishedJobs(req.user!.id);
     return { items: await getJobViews(ctx, rows) };
+  });
+
+  /**
+   * 「不要了」: take a generation that ended without a song off its owner's
+   * lists. The job and its ledger stay on record (docs/TASK_RECOVERY_SPEC.md).
+   */
+  app.post('/v1/jobs/:id/dismiss', { preHandler: app.requireAuth }, async (req, reply) => {
+    const { id } = req.params as { id: string };
+    const res = await dismissUnfinishedJob(req.user!.id, id);
+    if (!res.found) throw new AppError('NOT_FOUND', 'no such generation');
+    if (!res.ended) throw new AppError('CONFLICT', 'only a generation that ended without a song can be dismissed');
+    return reply.status(204).send();
   });
 
   /** The settings a job was submitted with, for its owner to try again. */
