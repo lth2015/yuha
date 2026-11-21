@@ -7,6 +7,7 @@ import {
   ENERGY_LEVELS,
   LYRICS_MAX_CODEPOINTS,
   OCCASIONS,
+  seasonOfOccasion,
   type Occasion,
   MAX_STYLE_TAGS,
   PROMPT_MAX_CODEPOINTS,
@@ -314,9 +315,25 @@ export default function Create() {
    */
   const [draft, setDraft] = useState<Draft>(() => {
     const start = editTrackId ? DEFAULT_DRAFT : air.kind === 'fill' ? { ...DEFAULT_DRAFT, ...air.fields } : readStoredDraft();
-    // `?gift=1` is where "write one for somebody too" on a received song leads.
-    return params.get('gift') === '1' && !editTrackId ? { ...start, gift: true } : start;
+    // `?gift=1` is where "write one for somebody too" on a received song leads;
+    // the holiday banner adds `&occasion=christmas` (docs/HOLIDAY_SPEC.md).
+    if (params.get('gift') !== '1' || editTrackId) return start;
+    const asked = params.get('occasion');
+    const occasion = (OCCASIONS as readonly string[]).includes(asked ?? '') ? (asked as Occasion) : null;
+    return { ...start, gift: true, giftOccasion: start.giftOccasion ?? occasion };
   });
+  /**
+   * In season, a gift with no occasion yet starts on the season's own
+   * (docs/HOLIDAY_SPEC.md). Chosen when the season is known, not as a fixed
+   * default: a fixed 「生日」 once sent an anniversary song out with a
+   * birthday greeting on it.
+   */
+  const season = runtime?.season ?? null;
+  useEffect(() => {
+    if (!season || !draft.gift || draft.giftOccasion || editTrackId) return;
+    setDraft((d) => ({ ...d, giftOccasion: season === 'xmas' ? 'christmas' : 'new_year' }));
+  }, [season, draft.gift, draft.giftOccasion, editTrackId]);
+  const starterSeason = seasonOfOccasion(draft.gift ? draft.giftOccasion : null);
   const writesOwnLyrics = draft.lyricsBy === 'me' && !draft.instrumental;
   const [more, setMore] = useState(() => advancedTouched(readStoredDraft()) > 0);
   const [job, setJob] = useState<JobView | null>(null);
@@ -1235,6 +1252,31 @@ export default function Create() {
         )}
 
         <label htmlFor="prompt">{t(draft.gift ? 'create.prompt.gift' : 'create.prompt.simple')}</label>
+        {/*
+          A holiday gift: a few ways to begin, because what makes the lyrics is
+          a particular person and a particular memory, and a blank box rarely
+          gets one. A tap puts the opening words in the box; the rest is theirs.
+        */}
+        {starterSeason && (
+          <div className="composer__presets-row holiday-starters" role="group" aria-label={t('holiday.starters')}>
+            {(starterSeason === 'xmas'
+              ? ['holiday.xmas.starter1', 'holiday.xmas.starter2', 'holiday.xmas.starter3']
+              : ['holiday.newyear.starter1', 'holiday.newyear.starter2', 'holiday.newyear.starter3']
+            ).map((key) => {
+              const words = t(key);
+              return (
+                <button
+                  key={key}
+                  type="button"
+                  className="chip chip--btn"
+                  onClick={() => patch({ prompt: clampToCodePoints(draft.prompt.trim() ? `${draft.prompt.trimEnd()}\n${words}` : words, PROMPT_MAX_CODEPOINTS) })}
+                >
+                  {words}
+                </button>
+              );
+            })}
+          </div>
+        )}
         <textarea
           id="prompt"
           value={draft.prompt}

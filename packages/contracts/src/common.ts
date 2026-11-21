@@ -22,6 +22,10 @@ export type MeView = z.infer<typeof meView>;
  */
 export const runtimeInfo = z.object({
   mode: RunMode,
+  /** Christmas or New Year in Japan time, or null (season.ts; docs/HOLIDAY_SPEC.md). */
+  season: z.enum(['xmas', 'newyear']).nullable(),
+  /** The server's clock, so the site's holiday moments do not depend on the visitor's. */
+  serverTime: z.string(),
   demo: z.boolean(),
   /**
    * True only when songs come from the built-in synthetic generator. Demo run

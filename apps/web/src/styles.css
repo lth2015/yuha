@@ -2294,6 +2294,32 @@ textarea.is-full { border-color: var(--danger); }
 }
 .gift-entry__tag span { font-size: var(--t-body); color: rgb(255 255 255 / 90%); }
 .gift-entry__tag strong { font-size: var(--t-heading); font-weight: 700; }
+/* Holiday seasons (docs/HOLIDAY_SPEC.md): the tag becomes the present itself.
+   Christmas: the same ember sleeve, tied with a cream ribbon both ways. */
+.gift-entry--xmas .gift-entry__tag {
+  background:
+    /* Tied near the edge, so the ribbon never runs through the words. */
+    linear-gradient(90deg, transparent calc(100% - 30px), #f4e6c8 calc(100% - 30px), #f4e6c8 calc(100% - 20px), transparent calc(100% - 20px)),
+    linear-gradient(180deg, transparent 10px, #f4e6c8 10px, #f4e6c8 17px, transparent 17px),
+    radial-gradient(120% 120% at 20% 10%, #E8693F 0%, #C2411F 55%, #7E2A17 100%);
+  text-shadow: 0 1px 2px rgb(0 0 0 / 45%);
+  padding-right: 52px;
+}
+/* New Year: a nengajo — white card, vermilion sun, a thin vermilion frame. */
+.gift-entry--newyear .gift-entry__tag {
+  background:
+    radial-gradient(circle at calc(100% - 28px) 26px, #d7402b 0 16px, transparent 16.5px),
+    #fffdf8;
+  padding-right: 64px;
+  color: var(--ink);
+  border: 1px solid #c8372a;
+  outline: 4px solid #fffdf8;
+  transform: rotate(-3deg);
+}
+.gift-entry--newyear .gift-entry__tag span { color: var(--muted); }
+/* A greeting is one line: 「おめでと / う」 broken over two reads as a mistake. */
+.gift-entry--newyear .gift-entry__tag strong { white-space: nowrap; font-size: clamp(1.05rem, 5vw, var(--t-heading)); }
+.gift-entry--xmas, .gift-entry--newyear { margin-top: 0; }
 @media (max-width: 640px) {
   .gift-entry { flex-direction: column-reverse; align-items: flex-start; }
 }

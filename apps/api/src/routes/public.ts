@@ -1,6 +1,6 @@
 import { readdir } from 'node:fs/promises';
 import type { FastifyInstance } from 'fastify';
-import type { RuntimeInfo } from '@yuha/contracts';
+import { seasonAt, type RuntimeInfo } from '@yuha/contracts';
 import type { AppContext } from '../context.js';
 import { resolveFromRoot } from '../paths.js';
 import { freeTrialAvailable } from '../services/billing.js';
@@ -31,11 +31,18 @@ export default async function publicRoutes(app: FastifyInstance, opts: { ctx: Ap
    * disables unavailable features from this, so the interface can never claim a
    * capability the running configuration does not have (§3.1).
    */
-  app.get('/v1/runtime', async () => {
+  app.get('/v1/runtime', { preHandler: app.optionalAuth }, async (req) => {
     const features = await ctx.features();
+    // Staff may look at a season before it starts (?previewSeason=xmas); nobody else can move the calendar.
+    const asked = (req.query as { previewSeason?: string }).previewSeason;
+    const staff = req.user?.role === 'admin' || req.user?.role === 'support';
+    const preview = staff && (asked === 'xmas' || asked === 'newyear') ? asked : null;
+    const now = new Date();
     const trialAvailable = await freeTrialAvailable(ctx);
     const info: RuntimeInfo = {
       mode: ctx.config.mode,
+      season: preview ?? seasonAt(now),
+      serverTime: now.toISOString(),
       demo: ctx.config.isDemo,
       syntheticAudio: ctx.config.adapters.music === 'demo',
       features: {

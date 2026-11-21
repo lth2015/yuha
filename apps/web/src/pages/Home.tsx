@@ -1,7 +1,7 @@
 import { JobOutcome, OpenGenerations, QueueStatus, UnfinishedGenerations, etaText } from '../components/GenerationQueue';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import type { JobView, TrackView } from '@yuha/contracts';
+import type { JobView, Season, TrackView } from '@yuha/contracts';
 import { ApiError, apiFetch, newIdempotencyKey } from '../lib/api';
 import { messageFor } from '../lib/messages';
 import { useI18n } from '../lib/i18n';
@@ -75,7 +75,8 @@ const IOS_BUILD = import.meta.env['VITE_APP_PLATFORM'] === 'ios';
 
 export default function Home() {
   const { t } = useI18n();
-  const { me, entitlements, refreshEntitlements } = useSession();
+  const { me, entitlements, refreshEntitlements, runtime } = useSession();
+  const season = runtime?.season ?? null;
   /**
    * Published songs, so the landing page can be heard before anyone signs up.
    *
@@ -371,6 +372,7 @@ export default function Home() {
     <div className="stack">
       {me && <OpenGenerations onResume={setJob} />}
       {me && <UnfinishedGenerations withinHours={24} />}
+      {!IOS_BUILD && season && <GiftEntry season={season} />}
       <section className="hero">
         <div className="hero__copy">
           <p className="eyebrow">{t('hero.eyebrow')}</p>
@@ -485,24 +487,10 @@ export default function Home() {
         A song for somebody (docs/GIFT_AND_SHARE_SPEC.md). It lived only behind
         a switch at the top of /create, which nobody on the home page ever
         sees. /create is behind sign-in, and the guard carries ?gift=1 through
-        it. Not in the iOS build, which cannot generate.
+        it. Not in the iOS build, which cannot generate. In a holiday season
+        it moves above the hero instead (docs/HOLIDAY_SPEC.md).
       */}
-      {!IOS_BUILD && (
-        <section className="gift-entry" aria-labelledby="gift-entry-heading">
-          <div className="gift-entry__text">
-            <span className="gift-entry__kicker">{t('home.gift.kicker')}</span>
-            <h2 id="gift-entry-heading">{t('home.gift.title')}</h2>
-            <p>{t('home.gift.body')}</p>
-            <Link className="btn btn--primary" to="/create?gift=1">
-              {t('home.gift.cta')}
-            </Link>
-          </div>
-          <div className="gift-entry__tag" aria-hidden="true">
-            <span>{t('home.gift.tagTo')}</span>
-            <strong>{t('gift.line.birthday')}</strong>
-          </div>
-        </section>
-      )}
+      {!IOS_BUILD && !season && <GiftEntry season={null} />}
 
       {/* Air composition: a static page beside this app (apps/air), so a plain
           link, not a router one. Not in the iOS build, which does not carry it. */}
@@ -540,5 +528,38 @@ export default function Home() {
         </section>
       )}
     </div>
+  );
+}
+
+/**
+ * "Write one for somebody", or in a holiday season the season's own version
+ * of it: its words, its occasion carried into /create, and the tag dressed
+ * as a present or a New Year card (docs/HOLIDAY_SPEC.md).
+ */
+function GiftEntry({ season }: { season: Season | null }) {
+  const { t } = useI18n();
+  const occasion = season === 'xmas' ? 'christmas' : season === 'newyear' ? 'new_year' : null;
+  // Literal keys, so check:i18n sees each one in use.
+  const copy =
+    season === 'xmas'
+      ? { kicker: 'holiday.xmas.kicker', title: 'holiday.xmas.title', body: 'holiday.xmas.body', line: 'gift.line.christmas', cta: 'holiday.cta' }
+      : season === 'newyear'
+        ? { kicker: 'holiday.newyear.kicker', title: 'holiday.newyear.title', body: 'holiday.newyear.body', line: 'gift.line.new_year', cta: 'holiday.cta' }
+        : { kicker: 'home.gift.kicker', title: 'home.gift.title', body: 'home.gift.body', line: 'gift.line.birthday', cta: 'home.gift.cta' };
+  return (
+    <section className={`gift-entry${season ? ` gift-entry--${season}` : ''}`} aria-labelledby="gift-entry-heading">
+      <div className="gift-entry__text">
+        <span className="gift-entry__kicker">{t(copy.kicker)}</span>
+        <h2 id="gift-entry-heading">{t(copy.title)}</h2>
+        <p>{t(copy.body)}</p>
+        <Link className="btn btn--primary" to={occasion ? `/create?gift=1&occasion=${occasion}` : '/create?gift=1'}>
+          {t(copy.cta)}
+        </Link>
+      </div>
+      <div className="gift-entry__tag" aria-hidden="true">
+        <span>{t('home.gift.tagTo')}</span>
+        <strong>{t(copy.line)}</strong>
+      </div>
+    </section>
   );
 }

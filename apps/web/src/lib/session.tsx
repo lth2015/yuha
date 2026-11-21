@@ -5,6 +5,23 @@ import { SESSION_EXPIRED_EVENT, apiFetch, getToken, setToken } from './api';
 import { reportSourceOnce } from './visits';
 
 /**
+ * `?preview-season=xmas` (or newyear) lets staff see a season before it
+ * starts (docs/HOLIDAY_SPEC.md). Kept for the tab so it survives navigation;
+ * the server honours it only for a staff session, so for anyone else it is
+ * a parameter that does nothing.
+ */
+function seasonPreviewQuery(): string {
+  try {
+    const asked = new URLSearchParams(window.location.search).get('preview-season');
+    if (asked === 'xmas' || asked === 'newyear' || asked === 'off') sessionStorage.setItem('yuha.previewSeason', asked);
+    const kept = sessionStorage.getItem('yuha.previewSeason');
+    return kept === 'xmas' || kept === 'newyear' ? `?previewSeason=${kept}` : '';
+  } catch {
+    return '';
+  }
+}
+
+/**
  * Session and runtime state.
  *
  * `runtime` comes from GET /v1/runtime and decides what the interface is even
@@ -37,7 +54,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   const refreshRuntime = useCallback(async () => {
-    const fresh = await apiFetch<RuntimeInfo>('/v1/runtime');
+    const fresh = await apiFetch<RuntimeInfo>(`/v1/runtime${seasonPreviewQuery()}`);
     setRuntime(fresh);
     return fresh;
   }, []);
