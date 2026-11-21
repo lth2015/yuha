@@ -1,0 +1,30 @@
+# YUHA
+
+> YUHA (yuha.studio) is an AI song studio: describe a feeling in a sentence and get a finished song back — sung or instrumental, 30 seconds to 4 minutes long. Lyrics can be in English, Japanese or Chinese, written by YUHA or by you.
+
+What it does:
+
+- One request makes one full song. On the home page you choose vocals or instrumental and get a two-minute song; the Create page lets you set the length, style tags, your own lyrics and who can open it.
+- Songs are private to the person who made them. Making one "public" means anyone holding its link can open it. There is no public feed, no likes and no play counts on show.
+- Songs are paid for with credits: one credit, one song. New accounts get two songs free. A generation that fails uses no credit, and the page says what happened and how to try again.
+- Credits come in one-off packs or monthly plans; current prices are on the pricing page, not here.
+- The site is in Chinese, Japanese and English; add `?lang=zh`, `?lang=ja` or `?lang=en` to any public page.
+
+Public pages:
+
+- [Home](https://yuha.studio/?lang=en): what YUHA is, and the quickest way to make a song
+- [Pricing](https://yuha.studio/pricing?lang=en): credit packs and plans, and what one credit buys
+- [Rights](https://yuha.studio/help/rights?lang=en): who owns a song made with YUHA, and how it may be used
+- [Terms](https://yuha.studio/legal/terms?lang=en), [Privacy](https://yuha.studio/legal/privacy?lang=en), [Operator](https://yuha.studio/legal/company?lang=en), [特定商取引法に基づく表記](https://yuha.studio/legal/tokushoho?lang=ja)
+
+Not to be indexed: individual songs (`/song/…`) and anything behind sign-in. See robots.txt.
+
+The code is open source under Apache-2.0, stewarded by the NETX technical community: https://github.com/lth2015/yuha. The service at yuha.studio is run by its operator, named on the Operator page.
+
+## 中文
+
+YUHA 是一个 AI 歌曲工作室：写下一种心情，得到一首完整的歌——有人声或纯音乐，30 秒到 4 分钟，歌词可以是中文、日文或英文。作品默认私密，新账户赠送 2 次创作，生成失败不扣额度。价格见 https://yuha.studio/pricing?lang=zh 。
+
+## 日本語
+
+YUHA は AI の作曲スタジオです。気持ちを一文で書くと、1 曲の歌ができます。ボーカルありでもインストでも、30 秒から 4 分まで。歌詞は日本語・中国語・英語。作品は初期設定で非公開、新規アカウントに 2 曲分、生成に失敗したときはクレジットは減りません。料金は https://yuha.studio/pricing?lang=ja 。

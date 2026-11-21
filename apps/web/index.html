@@ -28,6 +28,19 @@
     <meta property="og:image:width" content="1200" />
     <meta property="og:image:height" content="630" />
     <meta name="twitter:card" content="summary_large_image" />
+    <!-- What the site is, for search engines. No operator details here: those come from the disclosure API. -->
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "WebApplication",
+        "name": "YUHA",
+        "url": "https://yuha.studio/",
+        "applicationCategory": "MultimediaApplication",
+        "operatingSystem": "Web",
+        "inLanguage": ["zh-Hans", "ja", "en"],
+        "description": "Describe a feeling and get a finished song — sung or instrumental, 30 seconds to 4 minutes, with lyrics in English, Japanese or Chinese."
+      }
+    </script>
     <link rel="icon" type="image/svg+xml" href="/brand/yuha-favicon.svg" />
     <link rel="icon" type="image/png" sizes="32x32" href="/brand/yuha-favicon-32.png" />
     <!--
@@ -44,7 +57,21 @@
     />
   </head>
   <body>
-    <div id="root"></div>
+    <!--
+      What a reader that does not run JavaScript gets: most language-model
+      crawlers fetch HTML and stop. React replaces all of it on start
+      (createRoot().render), so a person sees it only until the app draws.
+      docs/SEO_SPEC.md; the full description is /llms.txt.
+    -->
+    <div id="root">
+      <main style="max-width: 40rem; margin: 15vh auto; padding: 0 1rem; font: 16px/1.7 system-ui, sans-serif; color: #5b5d57">
+        <h1 style="font-size: 1.5rem; color: #1f201c">YUHA — 让心动，有回声。</h1>
+        <p lang="zh-CN">写下一种心情，生成一首完整的歌：有人声或纯音乐，30 秒到 4 分钟，中文、日文、英文歌词都可以。作品默认私密。</p>
+        <p lang="ja">気持ちを書くと、1 曲の歌ができます。ボーカルありでもインストでも、30 秒から 4 分まで。作品は初期設定で非公開です。</p>
+        <p lang="en">Describe a feeling and get a finished song — sung or instrumental, 30 seconds to 4 minutes. Songs are private by default.</p>
+        <p><a href="/pricing">Pricing</a> · <a href="/help/rights">Rights</a> · <a href="/legal">Legal</a> · <a href="/llms.txt">llms.txt</a></p>
+      </main>
+    </div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

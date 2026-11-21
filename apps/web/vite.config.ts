@@ -1,6 +1,7 @@
 import { defineConfig, loadEnv } from 'vite';
 import react from '@vitejs/plugin-react';
 import { fileURLToPath } from 'node:url';
+import { robotsTxt, sitemapXml } from './src/lib/seo';
 
 /**
  * Where `/v1` goes in development.
@@ -41,7 +42,17 @@ export default defineConfig(({ command, mode }) => {
   return {
     resolve: { alias: { '@app-entry': fileURLToPath(new URL(ios ? './src/ios/IosApp.tsx' : './src/App.tsx', import.meta.url)) } },
     envDir: ios ? false : undefined,
-    plugins: [react(), ...(ios ? [{
+    plugins: [react(), ...(ios ? [] : [{
+      // robots.txt and sitemap.xml, from the one list of public pages (src/lib/seo.ts).
+      name: 'seo-files',
+      apply: 'build' as const,
+      generateBundle(this: { emitFile(file: { type: 'asset'; fileName: string; source: string }): string }) {
+        // The site the build describes; a deployment elsewhere sets SITE_ORIGIN.
+        const origin = process.env['SITE_ORIGIN'] ?? 'https://yuha.studio';
+        this.emitFile({ type: 'asset', fileName: 'robots.txt', source: robotsTxt(origin) });
+        this.emitFile({ type: 'asset', fileName: 'sitemap.xml', source: sitemapXml(origin) });
+      },
+    }]), ...(ios ? [{
       name: 'ios-document',
       transformIndexHtml(html: string) {
         return html.replace(/<link[^>]*https:\/\/fonts\.[^>]*>/g, '');
