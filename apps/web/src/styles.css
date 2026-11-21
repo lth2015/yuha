@@ -2804,3 +2804,74 @@ textarea.is-full { border-color: var(--danger); }
    the right edge: `th, td { white-space: nowrap }` cut the contents and the
    refund rule mid-sentence at 393 px, inside a scroller nobody swipes. */
 .terms-table td { white-space: normal; overflow-wrap: anywhere; }
+
+/* ---------------------------------------------------------- holiday opening
+   docs/HOLIDAY_SPEC.md: a present to unwrap, a nengajo to turn over. Drawn
+   in CSS; nothing here is clickable but the button. */
+.holiday-open {
+  /* Above the header too: until it is opened, the present is the whole screen. */
+  position: fixed; inset: 0; z-index: 1000;
+  display: grid; place-content: center; justify-items: center; gap: var(--s3);
+  padding: var(--s6) var(--s4); text-align: center;
+  background: var(--bg);
+  transition: opacity 0.6s var(--ease-ui) 0.6s;
+}
+.holiday-open.is-opening { opacity: 0; }
+.holiday-open__title { margin: var(--s4) 0 0; font-size: var(--t-heading); font-weight: 700; color: var(--ink); max-width: 22em; overflow-wrap: anywhere; }
+.holiday-open__sub { margin: 0 0 var(--s4); color: var(--muted); }
+.holiday-open__title, .holiday-open__sub { text-wrap: balance; }
+.holiday-open__object { position: relative; width: 160px; height: 150px; }
+/* The present: an ember box tied with cream ribbon, a lid that lifts off. */
+.holiday-open__box, .holiday-open__lid {
+  position: absolute; left: 12px; right: 12px; border-radius: 10px;
+  background:
+    linear-gradient(90deg, transparent 44%, #f4e6c8 44%, #f4e6c8 56%, transparent 56%),
+    radial-gradient(120% 120% at 20% 10%, #E8693F 0%, #C2411F 55%, #7E2A17 100%);
+  box-shadow: var(--shadow-pop);
+}
+.holiday-open__box { top: 52px; bottom: 0; }
+.holiday-open__lid { top: 30px; height: 30px; left: 4px; right: 4px; z-index: 1; transition: transform 0.7s var(--ease-ui); }
+.holiday-open__lid::before, .holiday-open__lid::after {
+  content: ''; position: absolute; top: -22px; width: 34px; height: 26px;
+  border: 6px solid #f4e6c8; border-radius: 50% 50% 0 50%;
+}
+.holiday-open__lid::before { left: calc(50% - 36px); transform: rotate(-20deg); }
+.holiday-open__lid::after { left: calc(50% + 2px); transform: scaleX(-1) rotate(-20deg); }
+.holiday-open--xmas.is-opening .holiday-open__lid { transform: translateY(-90px) rotate(-14deg); }
+/* The nengajo: white card, thin vermilion frame, a sun that rises as it turns. */
+.holiday-open__card {
+  position: absolute; inset: 0 14px; border-radius: 6px;
+  background: #fffdf8; border: 1px solid #c8372a; outline: 5px solid #fffdf8;
+  box-shadow: var(--shadow-pop); overflow: hidden;
+  transition: transform 0.8s var(--ease-ui);
+}
+.holiday-open__sun { position: absolute; left: calc(50% - 26px); bottom: 24px; width: 52px; height: 52px; border-radius: 50%; background: #d7402b; transition: transform 0.8s var(--ease-ui); }
+.holiday-open--newyear.is-opening .holiday-open__sun { transform: translateY(-40px); }
+.holiday-open--newyear.is-opening .holiday-open__card { transform: rotateY(180deg); }
+
+/* After it opens: snow over the page, or the sun coming up behind it. */
+.holiday-snow { position: fixed; inset: 0; z-index: 900; pointer-events: none; overflow: hidden; }
+.holiday-snow span {
+  position: absolute; top: -12px; border-radius: 50%;
+  /* White alone vanishes on this page's paper; a cool edge makes it snow. */
+  background: radial-gradient(circle, #fff 35%, #b9c9de 100%); box-shadow: 0 0 3px rgb(120 145 180 / 45%);
+  animation: holiday-fall linear forwards;
+}
+@keyframes holiday-fall {
+  to { transform: translate3d(30px, 105vh, 0); opacity: 0.2; }
+}
+.holiday-sunrise {
+  position: fixed; left: 50%; bottom: -60vmin; z-index: 0; pointer-events: none;
+  width: 60vmin; height: 60vmin; margin-left: -30vmin; border-radius: 50%;
+  background: radial-gradient(circle, rgb(215 64 43 / 30%) 0 60%, transparent 70%);
+  animation: holiday-rise 7s var(--ease-ui) forwards;
+}
+@keyframes holiday-rise {
+  0% { transform: translateY(0); opacity: 0; }
+  30% { opacity: 1; }
+  100% { transform: translateY(-40vmin); opacity: 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .holiday-open, .holiday-open__lid, .holiday-open__card, .holiday-open__sun { transition: none; }
+  .holiday-snow, .holiday-sunrise { display: none; }
+}
