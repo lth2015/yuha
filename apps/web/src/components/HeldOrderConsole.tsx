@@ -142,7 +142,8 @@ export function HeldOrderConsole() {
                         aria-label={t('admin.sc.reason')}
                         disabled={!mayDecide}
                       />
-                      <div className="row">
+                      {/* Wraps: side by side, "do not deliver" ran off a phone's edge. */}
+                      <div className="row" style={{ flexWrap: 'wrap', gap: 'var(--s2)' }}>
                         <button
                           type="button"
                           className="btn btn--ghost"

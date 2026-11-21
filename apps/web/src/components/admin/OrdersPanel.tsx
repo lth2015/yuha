@@ -147,11 +147,11 @@ export function OrdersPanel() {
                   </td>
                   <td>
                     {o.status}
+                    {/* Under the status, not beside it: beside it widened the column and pushed the Stripe link off a tablet. */}
                     {o.heldForReview && (
-                      <>
-                        {' '}
+                      <div>
                         <Badge tone="badge--warn">{t('admin.orders.held')}</Badge>
-                      </>
+                      </div>
                     )}
                   </td>
                   <td>{o.entitlementGranted ? '✓' : '—'}</td>
