@@ -342,6 +342,8 @@ export const jobView = z.object({
   visibility: Visibility,
   trackId: z.string().uuid().nullable(),
   errorCode: z.string().nullable(),
+  /** The engine's exception type when the music step failed (engineReason), else null. */
+  failureReason: z.string().nullable().optional(),
   estimate: jobEstimate,
   queuePosition: z.number().int().positive().nullable().optional(),
   /** While waiting: when it is given up on and its credit returned (JOB_QUEUE_DEADLINE_SECONDS). */
@@ -506,3 +508,16 @@ export const cancelJobResponse = z.object({
 
 export const setVisibilityRequest = z.object({ visibility: Visibility });
 export type SetVisibilityRequest = z.infer<typeof setVisibilityRequest>;
+
+/**
+ * The kind of exception a music engine reported, from a job's error detail:
+ * "failed: RuntimeError('CUDA out of memory …')" → "RuntimeError". Shown on
+ * the failure page next to the error code, so a screenshot says what broke.
+ * Only the type: the message can carry paths and internals, and the person
+ * has no use for them. Null when there is no such name to show.
+ */
+export function engineReason(detail: string | null | undefined): string | null {
+  if (!detail) return null;
+  const m = /(?:^|[\s:(.])([A-Z][A-Za-z0-9_]{0,60}(?:Error|Exception|Timeout|Interrupt))\b/.exec(detail);
+  return m ? m[1]! : null;
+}

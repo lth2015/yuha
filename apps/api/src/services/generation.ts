@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto';
 import {
   AppError,
   JOB_STATE_TO_PHASE,
+  engineReason,
   failureKind,
   fitDurationToLyrics,
   type CreateGenerationRequest,
@@ -460,6 +461,7 @@ export function toJobView(ctx: AppContext, job: JobRow, credit: CreditOutcome, e
     visibility: input.visibility ?? 'private',
     trackId: job.track_id,
     errorCode: job.error_code,
+    failureReason: job.error_code?.startsWith('upstream_') ? engineReason(job.error_detail) : null,
     estimate,
     createdAt: job.created_at.toISOString(),
     updatedAt: job.updated_at.toISOString(),
