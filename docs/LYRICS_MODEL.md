@@ -52,10 +52,14 @@
 
 1. **对比**：在有密钥的地方运行
    ```bash
-   ANTHROPIC_API_KEY=… TOKENSTARS_API_KEY=… TOKENSTARS_MODEL_ID=gpt-5.4-nano pnpm lyrics:compare
+   YUHA_ANTHROPIC_API_KEY=… TOKENSTARS_API_KEY=… TOKENSTARS_MODEL_ID=gpt-5.4-nano pnpm lyrics:compare
    ```
+   在 Claude Code 的云端环境里，把密钥作为环境变量 `YUHA_ANTHROPIC_API_KEY` 加进环境设置（不要用
+   `ANTHROPIC_API_KEY`，那个名字 Claude Code 自己也会读），新开的会话就能运行这一步。
    读 `quality-probes/lyrics-<日期>.md`：自动检查通过的比例，加上逐首阅读。确认 Claude 更好再继续。
-2. **密钥**：在部署的密钥库里加 `ANTHROPIC_API_KEY`，API 和 worker 的 SecretProviderClass 都要挂上（与 `TOKENSTARS_API_KEY` 相同的方式，见 `deploy/k8s/qa/resources.yaml`）。
+2. **密钥**：先在 AWS Secrets Manager 的 `qa-music-api-secrets-kv` 和 `qa-music-worker-secrets-kv` 两个密钥里
+   各加一个键 `ANTHROPIC_API_KEY`；**然后**才在 `deploy/k8s/qa/resources.yaml` 的两个 SecretProviderClass 里加上它的映射
+   （与 `TOKENSTARS_API_KEY` 相同的写法）。顺序不能反：映射指向一个不存在的键，CSI 挂载会失败，Pod 起不来。
    密钥不写进任何文件。
 3. **网络**：确认 API 和 worker 的 Pod 能访问 `api.anthropic.com:443`。
 4. **开关**：ConfigMap 设 `TEXT_ADAPTER=anthropic`，重启 API 和 worker 的 Pod。随时可以改回 `tokenstars`。

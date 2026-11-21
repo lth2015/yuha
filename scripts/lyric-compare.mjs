@@ -7,8 +7,10 @@
  *   node scripts/lyric-compare.mjs --only ja-summer
  *
  * Models: TokenStars when TOKENSTARS_API_KEY and TOKENSTARS_MODEL_ID are set;
- * Claude when ANTHROPIC_API_KEY is set (ANTHROPIC_TEXT_MODEL, ANTHROPIC_EFFORT
- * optional). Keys are read from the environment and never printed. Each call
+ * Claude when YUHA_ANTHROPIC_API_KEY or ANTHROPIC_API_KEY is set
+ * (ANTHROPIC_TEXT_MODEL, ANTHROPIC_EFFORT optional). The YUHA_ name is for a
+ * Claude Code environment, where a plain ANTHROPIC_API_KEY would also be
+ * picked up by Claude Code itself. Keys are read from the environment and never printed. Each call
  * is a real, paid call: one per brief per model.
  *
  * The report (quality-probes/lyrics-<date>.md, gitignored) has the automatic
@@ -43,10 +45,11 @@ if (process.env['TOKENSTARS_API_KEY'] && process.env['TOKENSTARS_MODEL_ID']) {
     }),
   );
 }
-if (process.env['ANTHROPIC_API_KEY']) {
+const anthropicKey = process.env['YUHA_ANTHROPIC_API_KEY'] ?? process.env['ANTHROPIC_API_KEY'];
+if (anthropicKey) {
   models.push(
     new AnthropicTextProvider({
-      apiKey: process.env['ANTHROPIC_API_KEY'],
+      apiKey: anthropicKey,
       ...(process.env['ANTHROPIC_TEXT_MODEL'] ? { model: process.env['ANTHROPIC_TEXT_MODEL'] } : {}),
       ...(process.env['ANTHROPIC_EFFORT'] ? { effort: process.env['ANTHROPIC_EFFORT'] } : {}),
       lyricSecondsPerLine: secondsPerLine,
@@ -54,7 +57,7 @@ if (process.env['ANTHROPIC_API_KEY']) {
   );
 }
 if (!models.length) {
-  console.error('no lyric model has a key here: set TOKENSTARS_API_KEY + TOKENSTARS_MODEL_ID and/or ANTHROPIC_API_KEY');
+  console.error('no lyric model has a key here: set TOKENSTARS_API_KEY + TOKENSTARS_MODEL_ID and/or YUHA_ANTHROPIC_API_KEY');
   process.exit(1);
 }
 console.log(`${briefs.length} brief(s) × ${models.map((m) => `${m.providerId}/${m.model}`).join(', ')}`);
