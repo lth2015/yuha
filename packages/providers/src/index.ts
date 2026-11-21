@@ -16,6 +16,7 @@ export { HttpAlignmentProvider, type HttpAlignmentConfig } from './alignment/htt
 export * from './text/types.js';
 export { TokenStarsTextProvider, type TokenStarsConfig } from './text/tokenstars.js';
 export { LocalTextProvider } from './text/local.js';
+export { AnthropicTextProvider, type AnthropicTextConfig } from './text/anthropic.js';
 export {
   checkLyrics,
   checkPrompt,

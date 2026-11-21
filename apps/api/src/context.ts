@@ -9,6 +9,7 @@ import {
   createGlmMusicProvider,
   LocalQueueAdapter,
   LocalStorageAdapter,
+  AnthropicTextProvider,
   LocalTextProvider,
   LogEmailAdapter,
   S3StorageAdapter,
@@ -218,6 +219,16 @@ function buildAlignment(cfg: AppConfig): AlignmentProvider {
 
 function buildText(cfg: AppConfig): TextProvider {
   if (cfg.adapters.text === 'local') return new LocalTextProvider();
+  if (cfg.adapters.text === 'anthropic') {
+    return new AnthropicTextProvider({
+      apiKey: cfg.ANTHROPIC_API_KEY!,
+      ...(cfg.ANTHROPIC_TEXT_MODEL ? { model: cfg.ANTHROPIC_TEXT_MODEL } : {}),
+      ...(cfg.ANTHROPIC_EFFORT ? { effort: cfg.ANTHROPIC_EFFORT } : {}),
+      timeoutMs: cfg.ANTHROPIC_TIMEOUT_MS,
+      jpyPerUsd: cfg.ANTHROPIC_JPY_PER_USD,
+      lyricSecondsPerLine: cfg.LYRIC_SECONDS_PER_LINE,
+    });
+  }
   return new TokenStarsTextProvider({
     baseUrl: cfg.TOKENSTARS_BASE_URL!,
     apiKey: cfg.TOKENSTARS_API_KEY!,
