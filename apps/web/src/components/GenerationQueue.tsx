@@ -125,6 +125,17 @@ export function JobOutcome({ job }: { job: JobView }) {
       {t('job.ref')} <span className="num job-outcome__id">{job.jobId}</span>{' '}
       <button type="button" className="text-action" onClick={copy}>{copied ? t('job.copied') : t('job.copy')}</button>
     </p>
+    {/*
+      Which step failed, as the system recorded it. The page's sentence says
+      what it means for the person; this is for whoever they ask: a
+      screenshot of the page now names the step (text_*, upstream_*, ...)
+      without a trip to the console. Nothing in a code is about the person.
+    */}
+    {job.errorCode && job.failure !== 'cancelled' && (
+      <p className="small muted job-outcome__ref">
+        {t('job.errorCode')} <span className="num">{job.errorCode}</span>
+      </p>
+    )}
   </div>;
 }
 
