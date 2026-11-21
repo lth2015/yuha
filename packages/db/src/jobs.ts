@@ -436,11 +436,30 @@ export async function listUnfinishedJobs(userId: string, days = 30, limit = 20):
   return query<JobRow>(
     `SELECT ${JOB_COLUMNS} FROM generation_jobs
       WHERE user_id = ? AND state IN ('FAILED','REJECTED','CANCELLED')
+        AND dismissed_at IS NULL
         AND created_at >= UTC_TIMESTAMP(3) - INTERVAL ? DAY
       ORDER BY created_at DESC
       LIMIT ?`,
     [userId, days, limit],
   );
+}
+
+/**
+ * Takes a generation that ended without a song off its owner's lists.
+ * `ended` is false when the job exists and is the owner's but has not ended
+ * that way (still running, or delivered); `found` is false otherwise. The
+ * job and its ledger are untouched.
+ */
+export async function dismissUnfinishedJob(userId: string, jobId: string): Promise<{ found: boolean; ended: boolean }> {
+  const row = await queryOne<{ state: string }>(`SELECT state FROM generation_jobs WHERE id = ? AND user_id = ?`, [jobId, userId]);
+  if (!row) return { found: false, ended: false };
+  if (!['FAILED', 'REJECTED', 'CANCELLED'].includes(row.state)) return { found: true, ended: false };
+  await execute(
+    `UPDATE generation_jobs SET dismissed_at = UTC_TIMESTAMP(3)
+      WHERE id = ? AND user_id = ? AND dismissed_at IS NULL`,
+    [jobId, userId],
+  );
+  return { found: true, ended: true };
 }
 
 /**

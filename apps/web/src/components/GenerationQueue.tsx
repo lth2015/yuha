@@ -171,6 +171,21 @@ export function UnfinishedGenerations({ withinHours }: { withinHours?: number })
       <div className="unfinished__actions">
         <Link className="btn btn--sm" to={`/create?job=${encodeURIComponent(job.jobId)}`}>{t('job.view')}</Link>
         <Link className={archive ? 'btn btn--sm' : 'btn btn--sm btn--primary'} to={`/create?retry=${encodeURIComponent(job.jobId)}`}>{t('job.retry')}</Link>
+        {/* Off the list, not out of the record: the job page and the credit history keep it. */}
+        <button
+          type="button"
+          className="btn btn--ghost btn--sm"
+          onClick={() => {
+            setJobs((all) => all.filter((j) => j.jobId !== job.jobId));
+            // Put it back if the server did not take it off: gone here and
+            // back on the next visit would be a list that cannot be trusted.
+            void apiFetch(`/v1/jobs/${encodeURIComponent(job.jobId)}/dismiss`, { method: 'POST' }).catch(() =>
+              setJobs((all) => (all.some((j) => j.jobId === job.jobId) ? all : [...all, job])),
+            );
+          }}
+        >
+          {t('job.dismiss')}
+        </button>
       </div>
     </div>)}
   </section>;
