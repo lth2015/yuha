@@ -301,13 +301,23 @@ export interface VisitSources {
   referrers: { host: string | null; visitors: number }[];
   /** Pages, ids folded into `:id` as the route stores them, most viewed first. */
   paths: { path: string; views: number; visitors: number }[];
+  /**
+   * Each campaign tag (`?src=`, docs/ATTRIBUTION_SPEC.md) followed through:
+   * people who visited with it in the range; accounts made in the range that
+   * arrived with it; and of those accounts, how many have a delivered song,
+   * how many have paid, and what they paid (to date, refunds not deducted —
+   * the same rule as revenue above).
+   */
+  campaigns: { source: string; visitors: number; signups: number; madeASong: number; paid: number; revenueJpy: number }[];
 }
 
 const SOURCE_ROWS = 15;
+/** Orders that took money, refunded later or not: the dashboard's revenue rule. */
+const PAID_STATUSES = `('paid','refunded','partially_refunded')`;
 
 async function visitSources(fromUtc: Date, toUtc: Date): Promise<VisitSources> {
   const where = `name = 'page_view' AND is_internal = 0 AND ${PEOPLE} AND occurred_at >= ? AND occurred_at < ?`;
-  const [referrers, paths] = await Promise.all([
+  const [referrers, paths, campaignVisits, campaignSignups] = await Promise.all([
     query<{ host: string | null; visitors: number }>(
       `SELECT host, COUNT(*) AS visitors FROM (
          SELECT user_ref,
@@ -333,7 +343,34 @@ async function visitSources(fromUtc: Date, toUtc: Date): Promise<VisitSources> {
         LIMIT ${SOURCE_ROWS}`,
       [fromUtc, toUtc],
     ),
+    query<{ source: string; visitors: number }>(
+      `SELECT JSON_UNQUOTE(JSON_EXTRACT(props, '$.source')) AS source, COUNT(DISTINCT user_ref) AS visitors
+         FROM analytics_events
+        WHERE ${where} AND JSON_EXTRACT(props, '$.source') IS NOT NULL
+        GROUP BY source`,
+      [fromUtc, toUtc],
+    ),
+    query<{ source: string; signups: number; made: number; paid: number; revenue: number }>(
+      `SELECT u.acquisition_source AS source, COUNT(*) AS signups,
+              SUM(EXISTS (SELECT 1 FROM generation_jobs j WHERE j.user_id = u.id AND j.state = 'DELIVERED')) AS made,
+              SUM(EXISTS (SELECT 1 FROM orders o WHERE o.user_id = u.id AND o.status IN ${PAID_STATUSES})) AS paid,
+              COALESCE(SUM((SELECT SUM(o.amount_minor) FROM orders o WHERE o.user_id = u.id AND o.status IN ${PAID_STATUSES})), 0) AS revenue
+         FROM users u
+        WHERE u.acquisition_source IS NOT NULL AND u.created_at >= ? AND u.created_at < ?
+        GROUP BY u.acquisition_source`,
+      [fromUtc, toUtc],
+    ),
   ]);
+  const campaigns = new Map<string, VisitSources['campaigns'][number]>();
+  const row = (source: string) => {
+    let r = campaigns.get(source);
+    if (!r) campaigns.set(source, (r = { source, visitors: 0, signups: 0, madeASong: 0, paid: 0, revenueJpy: 0 }));
+    return r;
+  };
+  for (const v of campaignVisits) row(v.source).visitors = n(v.visitors);
+  for (const s of campaignSignups) {
+    Object.assign(row(s.source), { signups: n(s.signups), madeASong: n(s.made), paid: n(s.paid), revenueJpy: n(s.revenue) });
+  }
   const all = referrers.map((r) => ({ host: r.host, visitors: n(r.visitors) }));
   return {
     arrivals: {
@@ -342,6 +379,7 @@ async function visitSources(fromUtc: Date, toUtc: Date): Promise<VisitSources> {
     },
     referrers: all.slice(0, SOURCE_ROWS),
     paths: paths.map((r) => ({ path: r.path, views: n(r.views), visitors: n(r.visitors) })),
+    campaigns: [...campaigns.values()].sort((a, b) => b.visitors - a.visitors || b.signups - a.signups || a.source.localeCompare(b.source)),
   };
 }
 

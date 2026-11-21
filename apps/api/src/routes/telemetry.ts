@@ -1,6 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
-import { clientErrorReport, previewReport } from '@yuha/contracts';
+import { clientErrorReport, normalizeSource, previewReport } from '@yuha/contracts';
 import { recordPageView, trackEvent } from '@yuha/db';
 import type { AppContext } from '../context.js';
 
@@ -31,6 +31,8 @@ const visitReport = z.object({
     .max(253)
     .regex(/^[a-z0-9.-]+$/i)
     .optional(),
+  /** The campaign tag the browser kept from a `?src=` link (docs/ATTRIBUTION_SPEC.md). */
+  source: z.string().max(200).optional(),
 });
 
 /**
@@ -176,6 +178,8 @@ export default async function telemetryRoutes(app: FastifyInstance, opts: { ctx:
           path: visitPath(body.path),
           signed_in: Boolean(req.user),
           ...(body.refHost ? { ref_host: body.refHost } : {}),
+          // A malformed tag is dropped, not the page view with it.
+          ...(normalizeSource(body.source) ? { source: normalizeSource(body.source)! } : {}),
           // Whether it was a crawler, never the agent string itself.
           ...(CRAWLER.test(req.headers['user-agent'] ?? '') ? { crawler: true } : {}),
         },

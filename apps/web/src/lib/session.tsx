@@ -2,6 +2,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useState } 
 import type { ReactNode } from 'react';
 import type { EntitlementsView, MeView, RuntimeInfo } from '@yuha/contracts';
 import { SESSION_EXPIRED_EVENT, apiFetch, getToken, setToken } from './api';
+import { reportSourceOnce } from './visits';
 
 /**
  * Session and runtime state.
@@ -49,7 +50,11 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     }
     try {
       const fresh = await apiFetch<MeView>('/v1/me');
-      if (getToken() === token) setMe(fresh);
+      if (getToken() === token) {
+        setMe(fresh);
+        // The campaign that brought this browser, once (lib/visits.ts).
+        reportSourceOnce();
+      }
     } catch {
       // A temporary outage is not a sign-out. Rejected tokens are handled
       // by SESSION_EXPIRED_EVENT; retain the last confirmed profile here.

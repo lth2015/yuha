@@ -2,7 +2,7 @@ import { createHash, createHmac, randomBytes, timingSafeEqual } from 'node:crypt
 import { randomUUID } from 'node:crypto';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
-import { AppError, type MeView } from '@yuha/contracts';
+import { AppError, normalizeSource, type MeView } from '@yuha/contracts';
 import { refuseInactive } from '../plugins/auth.js';
 import {
   confirmAgeAndTerms,
@@ -11,6 +11,7 @@ import {
   getUser,
   issueAuthCode,
   openAccountDeletion,
+  setAcquisitionSource,
   setMarketingOptIn,
   trackEvent,
   upsertUser,
@@ -180,6 +181,17 @@ export default async function authRoutes(
   const { ctx, adapter } = opts;
 
   app.get('/v1/me', { preHandler: app.requireAuth }, async (req) => toMeView(req.user!));
+
+  /**
+   * The campaign this browser arrived through, sent once after sign-in
+   * (docs/ATTRIBUTION_SPEC.md). Kept only for an account made in the last
+   * day, and never replaced.
+   */
+  app.post('/v1/me/source', { preHandler: app.requireAuth, config: { rateLimit: { max: 10, timeWindow: '1 minute' } } }, async (req) => {
+    const source = normalizeSource((req.body as { source?: unknown } | null)?.source);
+    if (!source) throw new AppError('VALIDATION_FAILED', 'source must be a short tag such as x-xmas-1');
+    return { recorded: await setAcquisitionSource(req.user!.id, source) };
+  });
 
   /** UI-02: age and terms confirmation, with marketing consent kept separate. */
   app.post('/v1/me/consent', { preHandler: app.requireAuth }, async (req) => {
