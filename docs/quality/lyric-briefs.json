@@ -1,0 +1,14 @@
+{
+  "about": "Fixed descriptions for comparing lyric models (docs/LYRICS_MODEL.md, scripts/lyric-compare.mjs). Written for this purpose, in the way creators write on the home page. Change a brief only by adding a new id: results are compared by id over time.",
+  "briefs": [
+    { "id": "zh-farewell", "lang": "zh", "durationSeconds": 120, "styles": ["ballad", "piano"], "prompt": "毕业那天在宿舍楼下和室友告别，谁都没哭，回家的高铁上才突然难过" },
+    { "id": "zh-night-shift", "lang": "zh", "durationSeconds": 60, "styles": ["lofi", "chill"], "prompt": "凌晨两点下夜班，便利店的灯还亮着，买了一份关东煮" },
+    { "id": "zh-numbers", "lang": "zh", "durationSeconds": 120, "styles": ["city pop"], "prompt": "我们在一起3年零2个月，第1次约会在7号线的终点站" },
+    { "id": "ja-rain-station", "lang": "ja", "durationSeconds": 120, "styles": ["J-pop", "acoustic"], "prompt": "雨の駅で、傘を貸してくれた知らない人のこと。名前も聞けなかった" },
+    { "id": "ja-summer", "lang": "ja", "durationSeconds": 60, "styles": ["シティポップ"], "prompt": "夏休みの最後の日、自転車で海まで行った。何も話さなかったけど楽しかった" },
+    { "id": "ja-numbers", "lang": "ja", "durationSeconds": 120, "styles": ["rock"], "prompt": "25歳、上京して5年目。終電は23時47分、今日もギリギリ" },
+    { "id": "en-kitchen", "lang": "en", "durationSeconds": 120, "styles": ["folk", "warm"], "prompt": "my grandmother's kitchen on sunday mornings, the radio always on, flour everywhere" },
+    { "id": "en-road", "lang": "en", "durationSeconds": 60, "styles": ["indie rock"], "prompt": "driving all night after quitting a job I hated, windows down, no plan" },
+    { "id": "en-numbers", "lang": "en", "durationSeconds": 120, "styles": ["pop"], "prompt": "we met at 2am on the 5th of may in a 24 hour diner, table 9" }
+  ]
+}

@@ -44,7 +44,8 @@
     "ios:build": "node scripts/ios.mjs build",
     "ios:sync": "node scripts/ios.mjs sync",
     "ios:open": "node scripts/ios.mjs open",
-    "ios:config": "node scripts/ios.mjs config"
+    "ios:config": "node scripts/ios.mjs config",
+    "lyrics:compare": "pnpm --filter @yuha/providers build && node scripts/lyric-compare.mjs"
   },
   "devDependencies": {
     "@types/node": "^22.10.2",

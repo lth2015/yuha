@@ -50,6 +50,10 @@ cp .env.example .env   # 然后按需填写下表中的值
 |---|---|
 | `TOKENSTARS_API_KEY` | TokenStars 控制台的 `sk-…` |
 | `TOKENSTARS_MODEL_ID` | 文档里的模型 ID（示例用 `gpt-5.4-nano`） |
+| `TEXT_ADAPTER` | `tokenstars`（现在的生产设置）或 `anthropic`（Claude，见 [LYRICS_MODEL.md](LYRICS_MODEL.md)）；`local` 只用于演示，生产拒绝启动 |
+| `ANTHROPIC_API_KEY` | `TEXT_ADAPTER=anthropic` 时必填；放在密钥库，不写进任何文件 |
+| `ANTHROPIC_TEXT_MODEL` / `ANTHROPIC_EFFORT` | 默认 `claude-opus-5-5` / `medium` |
+| `ANTHROPIC_TIMEOUT_MS` / `ANTHROPIC_JPY_PER_USD` | 默认 90000 / 155（成本估算用的汇率） |
 | 其余 `TOKENSTARS_*` | 默认已按文档（`https://www.tokenstars.ai/v1/chat/completions`） |
 
 启用：`TEXT_ADAPTER=tokenstars`。GPT 负责「AI 再创作」改写与歌词；不填则用本地规则（demo 可用）。

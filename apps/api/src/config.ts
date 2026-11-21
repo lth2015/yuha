@@ -248,7 +248,14 @@ const envSchema = z.object({
   STABLECOIN_CONFIG_VERSION: num(1).pipe(z.number().int().positive()),
 
   // --- text model (TokenStars) -------------------------------------------
-  TEXT_ADAPTER: z.enum(['local', 'tokenstars']).optional(),
+  TEXT_ADAPTER: z.enum(['local', 'tokenstars', 'anthropic']).optional(),
+  // --- text model (Claude; docs/LYRICS_MODEL.md) ----------------------------
+  ANTHROPIC_API_KEY: secret(),
+  ANTHROPIC_TEXT_MODEL: z.string().optional(),
+  ANTHROPIC_EFFORT: z.enum(['low', 'medium', 'high']).optional(),
+  ANTHROPIC_TIMEOUT_MS: int(90_000),
+  /** Yen per US dollar for the recorded cost estimate of each Claude call. */
+  ANTHROPIC_JPY_PER_USD: int(155),
   TOKENSTARS_BASE_URL: z.string().optional(),
   TOKENSTARS_API_KEY: secret(),
   TOKENSTARS_MODEL_ID: z.string().optional(),
@@ -576,7 +583,7 @@ export interface AppConfig extends RawEnv {
   isDemo: boolean;
   adapters: {
     auth: 'dev' | 'google' | 'cognito';
-    text: 'local' | 'tokenstars';
+    text: 'local' | 'tokenstars' | 'anthropic';
     music: 'demo' | 'glm' | 'http';
     storage: 'local' | 's3';
     queue: 'local' | 'sqs';
@@ -712,8 +719,9 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
       );
     }
     if (adapters.storage !== 's3') problems.push('production mode requires S3 storage');
-    if (adapters.text !== 'tokenstars') {
-      problems.push('production mode requires the TokenStars text adapter (AI-01)');
+    // AI-01: a real language model, never the local keyword mapper.
+    if (adapters.text === 'local') {
+      problems.push('production mode requires a real text model: TEXT_ADAPTER=tokenstars or anthropic (AI-01)');
     }
     if (e.DEV_AUTH_SECRET) problems.push('DEV_AUTH_SECRET must not be set in production');
     if (e.MUSIC_ALLOW_INSECURE_SELF_HOSTED) {
@@ -869,6 +877,10 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     if (!e.SMTP_USER) problems.push('SMTP_USER is required for the smtp email adapter');
     if (!e.SMTP_PASS) problems.push('SMTP_PASS is required for the smtp email adapter');
     if (!e.EMAIL_FROM) problems.push('EMAIL_FROM is required for the smtp email adapter');
+  }
+
+  if (adapters.text === 'anthropic' && !e.ANTHROPIC_API_KEY) {
+    problems.push('ANTHROPIC_API_KEY is required for the anthropic text adapter');
   }
 
   if (adapters.text === 'tokenstars') {
