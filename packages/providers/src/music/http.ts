@@ -116,6 +116,16 @@ function briefWithVoice(intent: MusicIntent): string {
   return `${word}, ${intent.brief}`.slice(0, 400);
 }
 
+/**
+ * The engine's own account of a failure: the self-hosted service puts the
+ * exception's repr in `error`. It used to be dropped, so the job recorded
+ * only "failed" and the reason survived nowhere but the DGX's own log.
+ */
+function engineError(json: unknown): string | null {
+  const e = (json as { error?: unknown } | null)?.error;
+  return typeof e === 'string' && e.trim() ? e.slice(0, 400) : null;
+}
+
 export class HttpMusicProvider implements MusicProvider {
   private readonly cfg: HttpMusicProviderConfig;
 
@@ -288,7 +298,7 @@ export class HttpMusicProvider implements MusicProvider {
         return { status: 'rejected', providerRequestId: requestId, code: statusRaw, message: res.text };
       }
       if (kind === 'failed') {
-        return { status: 'failed', providerRequestId: requestId, code: statusRaw, message: res.text };
+        return { status: 'failed', providerRequestId: requestId, code: statusRaw, message: engineError(res.json) ?? res.text };
       }
     }
     return { status: 'submitted', providerRequestId: requestId };
@@ -328,7 +338,7 @@ export class HttpMusicProvider implements MusicProvider {
       case 'rejected':
         return { status: 'rejected', code: statusRaw, message: res.text };
       case 'failed':
-        return { status: 'failed', code: statusRaw, message: res.text };
+        return { status: 'failed', code: statusRaw, message: engineError(res.json) ?? res.text };
       default:
         return { status: 'pending' };
     }

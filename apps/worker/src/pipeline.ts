@@ -328,8 +328,8 @@ async function submitJob(deps: PipelineDeps, job: JobRow): Promise<void> {
     case 'failed': {
       await updateAttempt({ attemptId: attempt.id, status: 'failed', errorCode: result.code, finished: true });
       await recordMusicCost(ctx, { job, attemptId: attempt.id, eventType: 'failure' });
-      await failJob(ctx, { job, to: 'FAILED', errorCode: 'upstream_failed', errorDetail: result.code });
-      log('warn', 'music provider failed', { jobId: job.id, code: result.code });
+      await failJob(ctx, { job, to: 'FAILED', errorCode: 'upstream_failed', errorDetail: `${result.code}: ${result.message}`.slice(0, 500) });
+      log('warn', 'music provider failed', { jobId: job.id, code: result.code, message: result.message.slice(0, 300) });
       break;
     }
     case 'unknown': {
@@ -442,8 +442,8 @@ async function pollJob(deps: PipelineDeps, job: JobRow): Promise<void> {
     case 'failed': {
       if (attempt) await updateAttempt({ attemptId: attempt.id, status: 'failed', errorCode: result.code, finished: true });
       await recordMusicCost(ctx, { job, attemptId: attempt?.id ?? null, eventType: 'failure' });
-      await failJob(ctx, { job, to: 'FAILED', errorCode: 'upstream_failed', errorDetail: result.code });
-      log('warn', 'music provider failed', { jobId: job.id, code: result.code });
+      await failJob(ctx, { job, to: 'FAILED', errorCode: 'upstream_failed', errorDetail: `${result.code}: ${result.message}`.slice(0, 500) });
+      log('warn', 'music provider failed', { jobId: job.id, code: result.code, message: result.message.slice(0, 300) });
       return;
     }
   }

@@ -133,7 +133,7 @@ export function JobOutcome({ job }: { job: JobView }) {
     */}
     {job.errorCode && job.failure !== 'cancelled' && (
       <p className="small muted job-outcome__ref">
-        {t('job.errorCode')} <span className="num">{job.errorCode}</span>
+        {t('job.errorCode')} <span className="num">{job.errorCode}{job.failureReason ? ` · ${job.failureReason}` : ''}</span>
       </p>
     )}
   </div>;
