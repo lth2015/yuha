@@ -36,12 +36,19 @@ import Home from './pages/Home';
 import { LegalIndex } from './pages/Legal';
 import Pricing from './pages/Pricing';
 import Rights from './pages/Rights';
+import ScenePage from './pages/Scene';
 
 const COMPONENTS: Record<string, () => ReactElement> = {
   '/': () => <Home />,
   '/pricing': () => <Pricing />,
   '/help/rights': () => <Rights />,
   '/legal': () => <LegalIndex />,
+  '/birthday': () => <ScenePage slug="birthday" />,
+  '/love': () => <ScenePage slug="love" />,
+  '/thanks': () => <ScenePage slug="thanks" />,
+  '/miss': () => <ScenePage slug="miss" />,
+  '/memory': () => <ScenePage slug="memory" />,
+  '/cheer': () => <ScenePage slug="cheer" />,
 };
 
 function renderPage(path: string, lang: SeoLang): string {
