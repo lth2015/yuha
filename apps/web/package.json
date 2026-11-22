@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "build": "tsc -p tsconfig.json --noEmit && vite build",
+    "build": "tsc -p tsconfig.json --noEmit && vite build && vite build --ssr src/prerender.tsx --outDir dist-ssr --emptyOutDir && node scripts/prerender.mjs",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "dev": "vite",
     "preview": "vite preview"

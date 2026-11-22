@@ -11,19 +11,57 @@
  * link (CLAUDE.md, Scope decisions).
  */
 export type SeoLang = 'zh' | 'ja' | 'en';
-const SEO_LANGS: readonly SeoLang[] = ['zh', 'ja', 'en'];
+export const SEO_LANGS: readonly SeoLang[] = ['zh', 'ja', 'en'];
 
-/** Pages anyone may find, each with the i18n key of its description. */
-export const PUBLIC_PAGES: ReadonlyArray<{ path: string; description: string }> = [
-  { path: '/', description: 'seo.desc.home' },
-  { path: '/pricing', description: 'seo.desc.pricing' },
-  { path: '/help/rights', description: 'seo.desc.rights' },
-  { path: '/legal', description: 'seo.desc.legal' },
-  { path: '/legal/terms', description: 'seo.desc.terms' },
-  { path: '/legal/privacy', description: 'seo.desc.privacy' },
-  { path: '/legal/company', description: 'seo.desc.company' },
-  { path: '/legal/tokushoho', description: 'seo.desc.tokushoho' },
+/**
+ * Pages anyone may find, each with the i18n key of its description, and
+ * whether the build writes it out as HTML (prerender.tsx).
+ *
+ * Prerendered, because the SPA gives a crawler that runs no JavaScript the same
+ * empty shell under every address, and most language-model crawlers are that
+ * crawler. Not prerendered: the four pages that name the operator. Those
+ * values come from GET /v1/legal/business-disclosure at run time and go in no
+ * file (CLAUDE.md), and a build output is a file.
+ */
+export const PUBLIC_PAGES: ReadonlyArray<{ path: string; description: string; prerender: boolean }> = [
+  { path: '/', description: 'seo.desc.home', prerender: true },
+  { path: '/pricing', description: 'seo.desc.pricing', prerender: true },
+  { path: '/help/rights', description: 'seo.desc.rights', prerender: true },
+  { path: '/legal', description: 'seo.desc.legal', prerender: true },
+  { path: '/legal/terms', description: 'seo.desc.terms', prerender: false },
+  { path: '/legal/privacy', description: 'seo.desc.privacy', prerender: false },
+  { path: '/legal/company', description: 'seo.desc.company', prerender: false },
+  { path: '/legal/tokushoho', description: 'seo.desc.tokushoho', prerender: false },
 ];
+
+/**
+ * Where the build writes a prerendered page. It has an extension on purpose:
+ * the CDN answers every path without one with the SPA's index.html, whatever
+ * is in the bucket (`/air/` included), and serves a path with one as the
+ * object it names. So `/ja/pricing` could never reach a file; `/ja/pricing.html`
+ * does, there and behind deploy/dgx's nginx (`try_files $uri`).
+ */
+export function staticPath(path: string, lang: SeoLang): string {
+  return path === '/' ? `/${lang}/index.html` : `/${lang}${path}.html`;
+}
+
+/**
+ * The app address a prerendered file stands for, or null for any other path.
+ * main.tsx swaps it into the address bar before the router starts, so a person
+ * who lands on `/ja/pricing.html` from a search result gets the pricing page,
+ * with any `?src=` they arrived with.
+ */
+export function spaPathFor(pathname: string, search: string): string | null {
+  const m = /^\/(zh|ja|en)(\/.+)\.html$/.exec(pathname);
+  if (!m) return null;
+  const lang = m[1] as SeoLang;
+  const path = m[2] === '/index' ? '/' : m[2]!;
+  const page = PUBLIC_PAGES.find((p) => p.path === path && p.prerender);
+  if (!page) return null;
+  const params = new URLSearchParams(search);
+  params.set('lang', lang);
+  return `${page.path}?${params.toString()}`;
+}
 
 /**
  * Where crawlers are asked not to go: someone's songs, their account, the
@@ -55,9 +93,13 @@ function publicPage(path: string): (typeof PUBLIC_PAGES)[number] | undefined {
   return PUBLIC_PAGES.find((page) => page.path === p);
 }
 
-/** The address of a public page in one language: `?lang=` is what makes three of them. */
-function pageUrl(origin: string, path: string, lang: SeoLang): string {
-  const url = new URL(path, origin);
+/**
+ * The address of a public page in one language: the prerendered file where
+ * there is one, otherwise `?lang=` on the app's own address.
+ */
+function pageUrl(origin: string, page: (typeof PUBLIC_PAGES)[number], lang: SeoLang): string {
+  if (page.prerender) return new URL(staticPath(page.path, lang), origin).toString();
+  const url = new URL(page.path, origin);
   url.searchParams.set('lang', lang);
   return url.toString();
 }
@@ -78,9 +120,9 @@ export function headFor(path: string, lang: SeoLang, origin: string): PageHead {
   if (!page) return { robots: 'noindex', canonical: null, alternates: [], description: null };
   return {
     robots: null,
-    canonical: pageUrl(origin, page.path, lang),
+    canonical: pageUrl(origin, page, lang),
     alternates: [
-      ...SEO_LANGS.map((l) => ({ hreflang: HREFLANG[l], href: pageUrl(origin, page.path, l) })),
+      ...SEO_LANGS.map((l) => ({ hreflang: HREFLANG[l], href: pageUrl(origin, page, l) })),
       // No language asked for: the page picks one from the browser.
       { hreflang: 'x-default', href: new URL(page.path, origin).toString() },
     ],

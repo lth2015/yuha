@@ -3986,8 +3986,10 @@ interface I18nApi {
 
 const I18nContext = createContext<I18nApi | null>(null);
 
-export function I18nProvider({ children }: { children: ReactNode }) {
-  const [lang, setLangState] = useState<Lang>(detectLang);
+export function I18nProvider({ children, initialLang }: { children: ReactNode; initialLang?: Lang }) {
+  // `initialLang` is for the build-time render of public pages (prerender.tsx),
+  // which has no location, storage or browser to ask.
+  const [lang, setLangState] = useState<Lang>(() => initialLang ?? detectLang());
 
   const setLang = useCallback((next: Lang) => {
     setLangState(next);
