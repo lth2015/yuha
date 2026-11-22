@@ -7,6 +7,7 @@
 ## 核实结果：约束是什么
 
 - **生产环境的音乐引擎是 DGX Spark 上的 ACE-Step**（`/v1/runtime` 的 `music: ace-step-spark`）。
+  - 2026-11-22 起是 **ACE-Step 1.5**（`ENGINE=v15`，xl-turbo + 4B 规划模型），见 `deploy/dgx/music/README.md` 开头。
   - 只有一张 GPU，服务内部一次只生成一首，其余的在它自己的队列里等，最多 8 首。
 - **YUHA 这边由 `MUSIC_MAX_CONCURRENCY` 决定同时送几首给引擎。**
   - DGX 的接线脚本（`deploy/dgx/music/03_wire_yuha.sh`）设为 1：同时只送一首，其余在 YUHA 的数据库里按提交顺序排队。
