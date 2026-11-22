@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
-import { TITLE_MAX_CODEPOINTS, seasonOfOccasion, type LyricTimings, type ProductView, type TrackView } from '@yuha/contracts';
+import { TITLE_MAX_CODEPOINTS, seasonOfOccasion, type LyricTimings, type Occasion, type ProductView, type TrackView } from '@yuha/contracts';
 import { API_BASE, ApiError, apiFetch, apiPostForBlob } from '../lib/api';
 import { drawVideoFrame, frameJpeg, planShareClip, shareCardPng } from '../lib/share-art';
 import { resolveLyricTimings } from '../lib/lyrics';
@@ -23,6 +23,7 @@ import { ShareMenu } from '../components/ShareMenu';
 import { SyncedLyrics } from '../components/SyncedLyrics';
 import { scoreFromSeed } from '../lib/score';
 import { usePageTitle } from '../lib/title';
+import { shareCreateHref } from '../lib/create-link';
 
 interface SongDetailResponse extends TrackView {
   lyrics: string | null;
@@ -425,6 +426,7 @@ export default function SongDetail() {
 
   // A holiday song opened by the person it was written for (docs/HOLIDAY_SPEC.md).
   const giftSeason = !isOwner && song.dedication ? seasonOfOccasion(song.dedication.occasion) : null;
+  const trialUnits = runtime?.features.freeTrialEnabled ? runtime.features.freeTrialUnits : 0;
 
   return (
     <div className="song-page">
@@ -655,7 +657,9 @@ export default function SongDetail() {
                 licence needs an account, so say that instead of showing a
                 dead, disabled button. */}
             {!me && song.visibility === 'public' && song.state === 'deliverable' && (
-              <Link className="text-action is-strong" to={`/auth?next=${encodeURIComponent(`/song/${song.trackId}`)}`}>
+              /* Quiet: on a song somebody was sent, the way in is "write one too",
+                 not a licence (docs/GROWTH_SPEC.md, part two). */
+              <Link className="text-action" to={`/auth?next=${encodeURIComponent(`/song/${song.trackId}`)}`}>
                 {t('song.signInToLicense')}
               </Link>
             )}
@@ -743,7 +747,9 @@ export default function SongDetail() {
             </button>
           )}
 
-          {song.licenseCount > 0 && (
+          {/* The owner's to know, nobody else's: shown to a visitor it was a public
+              counter (CLAUDE.md, Scope decisions; docs/GROWTH_SPEC.md). */}
+          {isOwner && song.licenseCount > 0 && (
             <p className="song-spread__note">{t('song.licensesSold', { n: song.licenseCount })}</p>
           )}
           {runtime?.syntheticAudio && <p className="song-spread__note">{t('song.demo')}</p>}
@@ -754,12 +760,7 @@ export default function SongDetail() {
           */}
           {!isOwner && song.visibility === 'public' && (
             <p className="song-gift__again">
-              <Link
-                className="text-action is-strong"
-                to={me ? '/create?gift=1' : `/auth?next=${encodeURIComponent('/create?gift=1')}`}
-              >
-                {t(song.dedication ? 'song.gift.again' : 'song.gift.again.plain')}
-              </Link>
+              <WriteOneToo occasion={song.dedication?.occasion} />
             </p>
           )}
 
@@ -819,6 +820,16 @@ export default function SongDetail() {
         </section>
       )}
 
+      {/* After the lyrics, where a listener ends up: the same way in again.
+          Only after lyrics: with none, it sat right under the first button. */}
+      {!isOwner && song.visibility === 'public' && song.lyrics && (
+        <section className="song-again" aria-labelledby="song-again-heading">
+          <h2 id="song-again-heading">{t(song.dedication ? 'song.again.lead' : 'song.again.lead.plain')}</h2>
+          <WriteOneToo occasion={song.dedication?.occasion} />
+          {trialUnits > 0 && !me && <p className="song-again__note">{t('scene.free', { n: trialUnits })}</p>}
+        </section>
+      )}
+
       {/* The terms record stays one click away for the owner, but as a quiet
           footnote: a full panel for it read as a warning stuck to every song. */}
       {isOwner && (
@@ -829,5 +840,20 @@ export default function SongDetail() {
         </p>
       )}
     </div>
+  );
+}
+
+/**
+ * "Write one too", for a person who was sent a song (docs/GROWTH_SPEC.md, part
+ * two): a button, not a line of text, onto /create on the same occasion. A
+ * signed-out reader is sent through sign-in by /create's own guard, with the
+ * whole address kept.
+ */
+function WriteOneToo({ occasion }: { occasion: Occasion | null | undefined }) {
+  const { t } = useI18n();
+  return (
+    <Link className="btn btn--primary" to={shareCreateHref(occasion)}>
+      {t(occasion ? 'song.gift.again' : 'song.gift.again.plain')}
+    </Link>
   );
 }

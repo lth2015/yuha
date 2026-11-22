@@ -2924,3 +2924,8 @@ textarea.is-full { border-color: var(--danger); }
 .scene__examples span { font-size: var(--t-body); color: var(--muted); }
 .scene__more ul { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 0 var(--s4); }
 .scene__more a { display: inline-flex; align-items: center; min-height: 44px; color: var(--link); }
+
+/* "Write one too" after a shared song's lyrics (docs/GROWTH_SPEC.md, part two). */
+.song-again { margin: var(--s12) auto 0; max-width: 760px; text-align: center; display: grid; justify-items: center; gap: var(--s4); }
+.song-again h2 { margin: 0; font-size: var(--t-title); font-weight: 600; text-wrap: balance; word-break: auto-phrase; }
+.song-again__note { margin: 0; font-size: var(--t-caption); color: var(--muted); }
