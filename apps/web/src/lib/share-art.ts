@@ -40,7 +40,26 @@ export interface ShareLabels {
  * snow for Christmas; for New Year, a nengajo's thin vermilion frame and its
  * sun. Kept to the edges, so nothing that is read sits under it.
  */
-function drawHolidayTrim(ctx: CanvasRenderingContext2D, season: Season, box: { x: number; y: number; w: number; h: number }): void {
+async function drawHolidayTrim(
+  ctx: CanvasRenderingContext2D,
+  season: Season,
+  shape: 'card' | 'video',
+  box: { x: number; y: number; w: number; h: number },
+): Promise<void> {
+  /*
+   * Codex's trims (apps/web/public/holiday, PR #90) are drawn for the whole
+   * picture — 1200×630 or 720×1280 — and are transparent wherever this file
+   * puts words. So they go over the full canvas at their own size: squeezed
+   * into the card's right-hand panel, as the drawn trim below is, they would
+   * be half as wide and out of place. The drawn trim stays as the fallback
+   * when the image cannot be loaded.
+   */
+  const file = `/holiday/${shape === 'video' ? 'video-' : ''}${season === 'xmas' ? 'xmas' : 'newyear'}.png`;
+  const art = await loadImage(file);
+  if (art) {
+    ctx.drawImage(art, 0, 0, ctx.canvas.width, ctx.canvas.height);
+    return;
+  }
   ctx.save();
   if (season === 'xmas') {
     for (let i = 0; i < 26; i += 1) {
@@ -228,7 +247,7 @@ async function drawShareCard(song: ShareSong, labels: ShareLabels): Promise<HTML
   ctx.fillRect(0, 0, CARD_WIDTH, CARD_HEIGHT);
   drawSleeve(ctx, 0, 0, CARD_HEIGHT, CARD_HEIGHT, song);
   const season = seasonOfOccasion(song.dedication?.occasion);
-  if (season) drawHolidayTrim(ctx, season, { x: CARD_HEIGHT, y: 0, w: CARD_WIDTH - CARD_HEIGHT, h: CARD_HEIGHT });
+  if (season) await drawHolidayTrim(ctx, season, 'card', { x: CARD_HEIGHT, y: 0, w: CARD_WIDTH - CARD_HEIGHT, h: CARD_HEIGHT });
 
   const left = CARD_HEIGHT + 64;
   const width = CARD_WIDTH - left - 64;
@@ -380,7 +399,7 @@ export async function drawVideoFrame(
   ctx.fillStyle = scrim;
   ctx.fillRect(0, VIDEO_WIDTH - 200, VIDEO_WIDTH, VIDEO_HEIGHT);
   const season = seasonOfOccasion(song.dedication?.occasion);
-  if (season) drawHolidayTrim(ctx, season, { x: 0, y: 0, w: VIDEO_WIDTH, h: VIDEO_HEIGHT });
+  if (season) await drawHolidayTrim(ctx, season, 'video', { x: 0, y: 0, w: VIDEO_WIDTH, h: VIDEO_HEIGHT });
 
   const logo = await loadImage('/brand/yuha-logo-reverse.svg');
   if (logo) ctx.drawImage(logo, 40, 44, 99, 30);

@@ -558,10 +558,25 @@ function GiftEntry({ season }: { season: Season | null }) {
           {t(copy.cta)}
         </Link>
       </div>
-      <div className="gift-entry__tag" aria-hidden="true">
-        <span>{t('home.gift.tagTo')}</span>
-        <strong>{t(copy.line)}</strong>
-      </div>
+      {season ? (
+        /*
+         * In season: Codex's illustration (a present, a nengajo) beside a plate
+         * the page draws, which grows with the words. A fixed plate inside the
+         * picture held 96 px, and 「あけましておめでとう」 needs 246.
+         */
+        <div className="gift-entry__tag gift-entry__tag--art" aria-hidden="true">
+          <img className="gift-entry__art" src={`/holiday/tag-${season}-art.svg`} width={110} height={120} alt="" />
+          <div className="gift-entry__plate">
+            <span>{t('home.gift.tagTo')}</span>
+            <strong>{t(copy.line)}</strong>
+          </div>
+        </div>
+      ) : (
+        <div className="gift-entry__tag" aria-hidden="true">
+          <span>{t('home.gift.tagTo')}</span>
+          <strong>{t(copy.line)}</strong>
+        </div>
+      )}
     </section>
   );
 }
