@@ -98,14 +98,20 @@ export function HolidayOpening({ trackId, season, to, onOpen }: { trackId: strin
       {stage !== 'gone' && (
         <div className={`holiday-open holiday-open--${season}${stage === 'opening' ? ' is-opening' : ''}`} role="region" aria-label={t(copy.title, { to })}>
           <div className="holiday-open__object" aria-hidden="true">
+            {/*
+              Artwork by Codex (apps/web/public/holiday, PR #90). Each pair
+              shares one full-size canvas, so the layers sit at 0,0 and only
+              the lid or the sun moves.
+            */}
             {season === 'xmas' ? (
               <>
-                <span className="holiday-open__lid" />
-                <span className="holiday-open__box" />
+                <img className="holiday-open__box" src="/holiday/box.svg" width={160} height={150} alt="" />
+                <img className="holiday-open__lid" src="/holiday/lid.svg" width={160} height={150} alt="" />
               </>
             ) : (
               <span className="holiday-open__card">
-                <span className="holiday-open__sun" />
+                <img src="/holiday/nengajo-card.svg" width={130} height={150} alt="" />
+                <img className="holiday-open__sun" src="/holiday/nengajo-sun.svg" width={130} height={150} alt="" />
               </span>
             )}
           </div>
@@ -134,8 +140,11 @@ export function Snow({ flakes = 28 }: { flakes?: number }) {
             left: `${(i * 37) % 100}%`,
             animationDelay: `${((i * 0.29) % 3).toFixed(2)}s`,
             animationDuration: `${(4 + ((i * 0.53) % 3)).toFixed(2)}s`,
-            width: `${4 + (i % 4)}px`,
-            height: `${4 + (i % 4)}px`,
+            // 6-12 px. Below 10 px only the round flake reads as a flake; the
+            // six-pointed ones keep their shape from 10 px up.
+            width: `${6 + (i % 4) * 2}px`,
+            height: `${6 + (i % 4) * 2}px`,
+            backgroundImage: `url(/holiday/snow-${6 + (i % 4) * 2 >= 10 ? 2 + (i % 3) : 1}.svg)`,
           }}
         />
       ))}
