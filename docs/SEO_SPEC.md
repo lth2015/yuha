@@ -37,11 +37,28 @@
    - `llms.txt`：YUHA 是什么、能做什么、不做什么、公开页面在哪里。价格以价格页为准，不抄进这个文件。
 6. **结构化数据**：`index.html` 里一段 `WebApplication` 的 JSON-LD（名称、地址、描述、类别），不含运营方。
 
-## 第二阶段（需要 SRE 改 CDN）
+## 第二阶段：公开页面预渲染（2026-11-22，不改 CDN）
 
-让不执行 JS 的抓取器也能读到每个页面、每种语言的完整内容：构建时为每个公开页面、每种语言生成静态 HTML，
-CDN 按路径和 `lang` 参数返回对应文件，找不到再回 `index.html`。需要一个 CloudFront Function，
-在本仓库之外，单独提给 SRE。第一阶段上线、Search Console 里看到收录之后再决定是否需要。
+> 产品负责人：「做吧，做完自己检查直接上线。」起因是大模型的抓取器（GPTBot、ClaudeBot、PerplexityBot）不执行 JS。
+
+**实测问题**：每个地址返回的都是同一个空壳：同样的中文标题、同样的首页描述、`#root` 里只有一段简介。`?lang=` 对它们无效。
+
+**为什么不用 `/ja/pricing` 这种地址**：线上 CDN 把**所有不带扩展名的路径**都回成 `index.html`，桶里有没有同名文件都一样（实测 `/air/` 也回空壳，`/air/index.html` 才是真文件）。
+带扩展名的路径按原样取 S3 对象。所以不改 CDN 的唯一做法是让预渲染页的地址带 `.html`。
+
+**做法**
+- 构建时用真实的页面组件（`renderToString`）把公开页面按三种语言各渲染一份。写到 `/{zh,ja,en}/index.html`、`/{lang}/pricing.html`、`/{lang}/help/rights.html`、`/{lang}/legal.html`。
+  入口是 `apps/web/src/prerender.tsx`，执行脚本是 `apps/web/scripts/prerender.mjs`，由 `pnpm build` 调用。
+- 每份文件都有自己的 `<html lang>`、标题、描述、`canonical` 和三种语言的 `alternate`。站内链接改指对应语言的预渲染页，带上构建好的 CSS。
+- **这些 `.html` 地址就是规范地址**：sitemap、`canonical`、`alternate`、`llms.txt` 都指向它们。
+  原因：大模型搜索返回的是它收录的规范地址，规范地址若是空壳，预渲染就白做了。
+- 真人打开 `/ja/pricing.html` 时，`main.tsx` 在路由启动前把地址换回 `/pricing?lang=ja`，`?src=` 之类的参数保留。然后 React 重画整页（不做 hydration，所以两次渲染的差异不会出错）。
+- **不预渲染**：条款、隐私、公司信息、特商法。它们写着运营方，运营方只能在运行时从 `GET /v1/legal/business-disclosure` 取，不能进任何文件，构建产物也是文件。这四页仍用 `?lang=`。
+- 价格页预渲染的是「一次一首」、税和退订等条款；具体价格来自商品目录，运行时才加载，不抄进文件（与 `llms.txt` 一致）。
+- 渲染时没有登录、没有 API、不跑 effect：渲染出来的就是页面加载数据之前的样子。
+
+**测试**：`tests/prerender.test.ts`（每页每种语言一份；正文、标题、描述、地址正确；链接改写；模板不认识就报错）。
+`tests/seo.test.ts`（规范地址、`.html` 与应用地址互转、`llms.txt` 和空壳页的链接都是规范地址）。
 
 ## 验证
 

@@ -11,7 +11,7 @@ import { robotsTxt, sitemapXml } from './src/lib/seo';
  */
 const API_TARGET = process.env['VITE_DEV_API_PROXY'] ?? 'http://localhost:4000';
 
-export default defineConfig(({ command, mode }) => {
+export default defineConfig(({ command, mode, isSsrBuild }) => {
   const ios = process.env['VITE_APP_PLATFORM'] === 'ios';
   /*
    * `VITE_API_URL` unset means the client calls `/v1` on its own origin
@@ -26,7 +26,7 @@ export default defineConfig(({ command, mode }) => {
    * more likely to be an oversight, and a warning at build time is cheaper to
    * read than that failure is to diagnose.
    */
-  if (command === 'build' && !ios) {
+  if (command === 'build' && !ios && !isSsrBuild) {
     // The config file's own directory, not `process.cwd()`: Vite's env files
     // sit next to this file, and the cwd depends on where the build was run
     // from.
@@ -42,7 +42,7 @@ export default defineConfig(({ command, mode }) => {
   return {
     resolve: { alias: { '@app-entry': fileURLToPath(new URL(ios ? './src/ios/IosApp.tsx' : './src/App.tsx', import.meta.url)) } },
     envDir: ios ? false : undefined,
-    plugins: [react(), ...(ios ? [] : [{
+    plugins: [react(), ...(ios || isSsrBuild ? [] : [{
       // robots.txt and sitemap.xml, from the one list of public pages (src/lib/seo.ts).
       name: 'seo-files',
       apply: 'build' as const,

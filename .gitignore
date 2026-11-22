@@ -17,6 +17,7 @@ coverage/
 /storage/
 assets/fixtures/audio/
 apps/web/dist/
+apps/web/dist-ssr/
 .vite/
 .DS_Store
 *.log

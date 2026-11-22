@@ -12,10 +12,13 @@ What it does:
 
 Public pages:
 
-- [Home](https://yuha.studio/?lang=en): what YUHA is, and the quickest way to make a song
-- [Pricing](https://yuha.studio/pricing?lang=en): credit packs and plans, and what one credit buys
-- [Rights](https://yuha.studio/help/rights?lang=en): who owns a song made with YUHA, and how it may be used
+- [Home](https://yuha.studio/en/index.html): what YUHA is, and the quickest way to make a song
+- [Pricing](https://yuha.studio/en/pricing.html): what one credit buys, and the terms of packs and plans (the prices themselves load in the page)
+- [Report content](https://yuha.studio/en/help/rights.html): how a rights holder reports a song, and what happens next
+- [Legal](https://yuha.studio/en/legal.html): the index of the documents below
 - [Terms](https://yuha.studio/legal/terms?lang=en), [Privacy](https://yuha.studio/legal/privacy?lang=en), [Operator](https://yuha.studio/legal/company?lang=en), [特定商取引法に基づく表記](https://yuha.studio/legal/tokushoho?lang=ja)
+
+Each page above is also at `/zh/…` and `/ja/…` (for example https://yuha.studio/ja/pricing.html), as plain HTML that needs no JavaScript.
 
 Not to be indexed: individual songs (`/song/…`) and anything behind sign-in. See robots.txt.
 
@@ -23,8 +26,8 @@ The code is open source under Apache-2.0, stewarded by the NETX technical commun
 
 ## 中文
 
-YUHA 是一个 AI 歌曲工作室：写下一种心情，得到一首完整的歌——有人声或纯音乐，30 秒到 4 分钟，歌词可以是中文、日文或英文。作品默认私密，新账户赠送 2 次创作，生成失败不扣额度。价格见 https://yuha.studio/pricing?lang=zh 。
+YUHA 是一个 AI 歌曲工作室：写下一种心情，得到一首完整的歌——有人声或纯音乐，30 秒到 4 分钟，歌词可以是中文、日文或英文。作品默认私密，新账户赠送 2 次创作，生成失败不扣额度。价格见 https://yuha.studio/zh/pricing.html 。
 
 ## 日本語
 
-YUHA は AI の作曲スタジオです。気持ちを一文で書くと、1 曲の歌ができます。ボーカルありでもインストでも、30 秒から 4 分まで。歌詞は日本語・中国語・英語。作品は初期設定で非公開、新規アカウントに 2 曲分、生成に失敗したときはクレジットは減りません。料金は https://yuha.studio/pricing?lang=ja 。
+YUHA は AI の作曲スタジオです。気持ちを一文で書くと、1 曲の歌ができます。ボーカルありでもインストでも、30 秒から 4 分まで。歌詞は日本語・中国語・英語。作品は初期設定で非公開、新規アカウントに 2 曲分、生成に失敗したときはクレジットは減りません。料金は https://yuha.studio/ja/pricing.html 。
