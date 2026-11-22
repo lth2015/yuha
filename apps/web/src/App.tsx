@@ -22,6 +22,7 @@ import NotFound from './pages/NotFound';
 import Pricing from './pages/Pricing';
 import Rights from './pages/Rights';
 import SongDetail from './pages/SongDetail';
+import ScenePage from './pages/Scene';
 
 const Account = lazy(() => import('./pages/Account'));
 const Admin = lazy(() => import('./pages/Admin'));
@@ -186,6 +187,13 @@ export default function App() {
               />
 
               {/* Public on purpose: a rights holder must not need an account. */}
+              {/* Scene landing pages (docs/GROWTH_SPEC.md). Written out, one per path, so tests/seo.test.ts and check:ui see each. */}
+              <Route path="/birthday" element={<ScenePage slug="birthday" />} />
+              <Route path="/love" element={<ScenePage slug="love" />} />
+              <Route path="/thanks" element={<ScenePage slug="thanks" />} />
+              <Route path="/miss" element={<ScenePage slug="miss" />} />
+              <Route path="/memory" element={<ScenePage slug="memory" />} />
+              <Route path="/cheer" element={<ScenePage slug="cheer" />} />
               <Route path="/help/rights" element={<Rights />} />
               <Route path="/legal" element={<LegalIndex />} />
               <Route path="/legal/terms" element={<Terms />} />

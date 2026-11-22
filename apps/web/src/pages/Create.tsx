@@ -7,7 +7,6 @@ import {
   ENERGY_LEVELS,
   LYRICS_MAX_CODEPOINTS,
   OCCASIONS,
-  seasonOfOccasion,
   type Occasion,
   MAX_STYLE_TAGS,
   PROMPT_MAX_CODEPOINTS,
@@ -24,6 +23,8 @@ import type { LyricDraftResponse } from '@yuha/contracts';
 import { clampToCodePoints, codePointLength } from '../lib/codepoints';
 import { FIELDS_IN_MORE_PANEL, focusFieldFor } from '../lib/messages';
 import { useI18n } from '../lib/i18n';
+import { startersFor } from '../lib/scenes';
+import { applyCreateLink } from '../lib/create-link';
 import { STYLE_PRESETS, styleLabel } from '../lib/style-label';
 import { airPrefillPlan, withDraftedLyrics } from '../lib/air-prefill';
 import { JOB_PHASES as PHASE_STEPS, fractionOfPhase } from '../lib/phases';
@@ -317,10 +318,8 @@ export default function Create() {
     const start = editTrackId ? DEFAULT_DRAFT : air.kind === 'fill' ? { ...DEFAULT_DRAFT, ...air.fields } : readStoredDraft();
     // `?gift=1` is where "write one for somebody too" on a received song leads;
     // the holiday banner adds `&occasion=christmas` (docs/HOLIDAY_SPEC.md).
-    if (params.get('gift') !== '1' || editTrackId) return start;
-    const asked = params.get('occasion');
-    const occasion = (OCCASIONS as readonly string[]).includes(asked ?? '') ? (asked as Occasion) : null;
-    return { ...start, gift: true, giftOccasion: start.giftOccasion ?? occasion };
+    // `?gift=1&occasion=` and `?starter=` (lib/create-link.ts).
+    return editTrackId ? start : applyCreateLink(start, params, t);
   });
   /**
    * In season, a gift with no occasion yet starts on the season's own
@@ -333,7 +332,7 @@ export default function Create() {
     if (!season || !draft.gift || draft.giftOccasion || editTrackId) return;
     setDraft((d) => ({ ...d, giftOccasion: season === 'xmas' ? 'christmas' : 'new_year' }));
   }, [season, draft.gift, draft.giftOccasion, editTrackId]);
-  const starterSeason = seasonOfOccasion(draft.gift ? draft.giftOccasion : null);
+  const starterKeys = startersFor(draft.gift ? draft.giftOccasion : null);
   const writesOwnLyrics = draft.lyricsBy === 'me' && !draft.instrumental;
   const [more, setMore] = useState(() => advancedTouched(readStoredDraft()) > 0);
   const [job, setJob] = useState<JobView | null>(null);
@@ -1257,12 +1256,9 @@ export default function Create() {
           a particular person and a particular memory, and a blank box rarely
           gets one. A tap puts the opening words in the box; the rest is theirs.
         */}
-        {starterSeason && (
+        {starterKeys.length > 0 && (
           <div className="composer__presets-row holiday-starters" role="group" aria-label={t('holiday.starters')}>
-            {(starterSeason === 'xmas'
-              ? ['holiday.xmas.starter1', 'holiday.xmas.starter2', 'holiday.xmas.starter3']
-              : ['holiday.newyear.starter1', 'holiday.newyear.starter2', 'holiday.newyear.starter3']
-            ).map((key) => {
+            {starterKeys.map((key) => {
               const words = t(key);
               return (
                 <button

@@ -15,6 +15,7 @@ Public pages:
 - [Home](https://yuha.studio/en/index.html): what YUHA is, and the quickest way to make a song
 - [Pricing](https://yuha.studio/en/pricing.html): what one credit buys, and the terms of packs and plans (the prices themselves load in the page)
 - [Report content](https://yuha.studio/en/help/rights.html): how a rights holder reports a song, and what happens next
+- Songs for a moment, each with a way to begin: [birthday](https://yuha.studio/en/birthday.html), [love and anniversaries](https://yuha.studio/en/love.html), [thank you](https://yuha.studio/en/thanks.html), [missing someone](https://yuha.studio/en/miss.html), [a memory, for yourself](https://yuha.studio/en/memory.html), [cheering someone on](https://yuha.studio/en/cheer.html)
 - [Legal](https://yuha.studio/en/legal.html): the index of the documents below
 - [Terms](https://yuha.studio/legal/terms?lang=en), [Privacy](https://yuha.studio/legal/privacy?lang=en), [Operator](https://yuha.studio/legal/company?lang=en), [特定商取引法に基づく表記](https://yuha.studio/legal/tokushoho?lang=ja)
 
