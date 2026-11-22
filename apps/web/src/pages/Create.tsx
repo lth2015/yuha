@@ -827,6 +827,13 @@ export default function Create() {
                 {t('create.job.open', { title: result.title })}
               </Link>
             )}
+            {/* Straight to sharing (docs/GROWTH_SPEC.md, part two): the song page's
+                own `?share=1` asks before making a private song public. */}
+            {result && result.previewUrl && (
+              <Link to={`/song/${result.trackId}?share=1`} className="btn">
+                {t('create.job.share')}
+              </Link>
+            )}
             <Link to="/library" className="btn">
               {t('wait.goLibrary')}
             </Link>

@@ -33,3 +33,19 @@ export function applyCreateLink<D extends LinkFields>(start: D, params: URLSearc
   const occasion = (OCCASIONS as readonly string[]).includes(asked ?? '') ? (asked as Occasion) : null;
   return { ...next, gift: true, giftOccasion: occasion ?? next.giftOccasion };
 }
+
+/**
+ * Where "write one too" on a shared song leads (docs/GROWTH_SPEC.md, part
+ * two): a birthday song to /create on a birthday gift, a song with no
+ * dedication to a plain /create. The source names the occasion, so the
+ * console can tell how many people a shared song brought.
+ */
+export function shareCreateHref(occasion: Occasion | null | undefined): string {
+  const q = new URLSearchParams();
+  if (occasion) {
+    q.set('gift', '1');
+    q.set('occasion', occasion);
+  }
+  q.set('src', `share-${occasion ? occasion.replace(/_/g, '-') : 'song'}`);
+  return `/create?${q.toString()}`;
+}

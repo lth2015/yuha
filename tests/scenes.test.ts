@@ -85,3 +85,13 @@ describe('a link into /create', () => {
     expect(startersFor(null)).toEqual([]);
   });
 });
+
+describe('"write one too" on a shared song', () => {
+  it('opens /create on the same occasion, tagged as a share', async () => {
+    const { shareCreateHref } = await import('../apps/web/src/lib/create-link.js');
+    expect(shareCreateHref('birthday')).toBe('/create?gift=1&occasion=birthday&src=share-birthday');
+    expect(shareCreateHref('new_year')).toBe('/create?gift=1&occasion=new_year&src=share-new-year');
+    expect(shareCreateHref(null)).toBe('/create?src=share-song');
+    expect(shareCreateHref(undefined)).toBe('/create?src=share-song');
+  });
+});

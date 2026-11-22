@@ -1,5 +1,30 @@
 # YUHA music service on DGX Spark (ACE-Step)
 
+## What production runs (checked on the Spark, 2026-11-22)
+
+**ACE-Step 1.5**, not v1. The Spark's `.env` and the running `yuha-music`
+container both say `ENGINE=v15`, and `GET /healthz` reports `"engine":"v15"`.
+The `music` service here still takes YUHA's jobs, does the lyric alignment and
+the mastering; the render itself goes to the `acestep15` service beside it
+(`acestep-v15-xl-turbo`, with the `acestep-5Hz-lm-4B` planner, `pt` backend).
+
+`ENGINE` defaults to `v1` in `server/app.py`, so this repository on its own
+reads as v1. It is not. Check the machine, not the default:
+
+```bash
+cd ~/yuha-spark && grep '^ENGINE=' .env
+docker compose exec -T music curl -s localhost:8000/healthz   # "engine"
+```
+
+Back to v1: `ENGINE=v1` in `.env`, then `docker compose up -d music`.
+
+Memory: the GB10's 128 GB is shared by CPU and GPU. On 2026-11-22 a vLLM
+process unrelated to YUHA held about 94 GB of it, and the music log had a
+`CUBLAS_STATUS_INTERNAL_ERROR` job failure (2026-11-21 13:19 UTC) and a
+`cudaErrorNotPermitted` alignment failure. Memory pressure is the likely cause
+and is not confirmed. 1.5 keeps more resident than v1, so look at
+`nvidia-smi` first when renders start failing.
+
 ## Run order (on the Spark)
 
 ```bash
