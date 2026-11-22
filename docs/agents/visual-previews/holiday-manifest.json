@@ -88,9 +88,23 @@
       "alpha": true
     },
     {
+      "file": "tag-newyear-art.svg",
+      "bytes": 663,
+      "width": 110,
+      "height": 120,
+      "alpha": true
+    },
+    {
       "file": "tag-newyear.svg",
       "bytes": 813,
       "width": 240,
+      "height": 120,
+      "alpha": true
+    },
+    {
+      "file": "tag-xmas-art.svg",
+      "bytes": 1866,
+      "width": 110,
       "height": 120,
       "alpha": true
     },
