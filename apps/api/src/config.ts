@@ -414,6 +414,18 @@ const envSchema = z.object({
   FEATURE_SUBSCRIPTIONS_ENABLED: bool(true),
   FEATURE_FREE_TRIAL_ENABLED: bool(true),
   FEATURE_WAV_EXPORT_ENABLED: bool(false),
+  // The photo MV (docs/PHOTO_MV_SPEC.md). Off until the privacy text that
+  // describes it is reviewed (docs/legal/PRIVACY_CHANGES_2026-11.md).
+  FEATURE_PHOTO_VIDEO_ENABLED: bool(false),
+  // Trying YUHA without an account (docs/GROWTH_SPEC.md, part three). Off
+  // until the privacy text that describes it is reviewed.
+  FEATURE_GUEST_TRIAL_ENABLED: bool(false),
+  /** Trials opened per day (Japan time), across the whole site: the cost ceiling. */
+  GUEST_TRIAL_DAILY_LIMIT: int(50),
+  /** Trials opened per day from one network (a keyed hash of the address). */
+  GUEST_TRIAL_PER_NETWORK: int(3),
+  /** Trial songs waiting for or on the engine at once. */
+  GUEST_TRIAL_QUEUE_LIMIT: int(3),
   FREE_TRIAL_UNITS: int(2),
   MAX_CONCURRENT_JOBS_PER_USER: int(2),
   DAILY_BUDGET_MINOR: int(50_000),
@@ -1169,6 +1181,10 @@ export interface FeatureFlags {
   subscriptionsEnabled: boolean;
   freeTrialEnabled: boolean;
   wavExportEnabled: boolean;
+  /** The photo MV (docs/PHOTO_MV_SPEC.md). */
+  photoVideoEnabled: boolean;
+  /** A song without an account (docs/GROWTH_SPEC.md, part three). */
+  guestTrialEnabled: boolean;
   commercialDeliveryEnabled: boolean;
   realPaymentsEnabled: boolean;
   /**
@@ -1195,6 +1211,8 @@ export function baseFeatures(cfg: AppConfig): FeatureFlags {
     subscriptionsEnabled: cfg.FEATURE_SUBSCRIPTIONS_ENABLED,
     freeTrialEnabled: cfg.FEATURE_FREE_TRIAL_ENABLED,
     wavExportEnabled: cfg.FEATURE_WAV_EXPORT_ENABLED,
+    photoVideoEnabled: cfg.FEATURE_PHOTO_VIDEO_ENABLED,
+    guestTrialEnabled: cfg.FEATURE_GUEST_TRIAL_ENABLED,
     // SEC-09: no signed agreement means no commercial delivery, regardless of
     // what anyone sets in the environment.
     commercialDeliveryEnabled: cfg.MUSIC_COMMERCIAL_DELIVERY && cfg.adapters.music !== 'demo',

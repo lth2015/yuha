@@ -34,7 +34,9 @@ function RequireAuth({ children, roles }: { children: ReactNode; roles?: string[
   const location = useLocation();
 
   if (loading) return <Loading />;
-  if (!me) {
+  // A trial without an account (docs/GROWTH_SPEC.md) has one song and its
+  // page; everything behind sign-in is behind signing up.
+  if (!me || me.role === 'guest') {
     const next = encodeURIComponent(location.pathname + location.search);
     return <Navigate to={`/auth?next=${next}`} replace />;
   }

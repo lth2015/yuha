@@ -1,5 +1,5 @@
 import type { PoolConnection } from 'mysql2/promise';
-import type { UserRole } from '@yuha/contracts';
+import type { AccountRole, UserRole } from '@yuha/contracts';
 import { execute, newId, query, queryOne } from './pool.js';
 
 export interface UserRow {
@@ -9,7 +9,7 @@ export interface UserRow {
   email: string;
   display_name: string | null;
   avatar_url: string | null;
-  role: UserRole;
+  role: AccountRole;
   status: 'active' | 'suspended' | 'deleted';
   age_confirmed_at: Date | null;
   terms_accepted_at: Date | null;

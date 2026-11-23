@@ -1,10 +1,20 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import fp from 'fastify-plugin';
 import { AppError, type UserRole } from '@yuha/contracts';
-import { getEnabledMfaFactor, type UserRow } from '@yuha/db';
+import { findByExternalId, getEnabledMfaFactor, type UserRow } from '@yuha/db';
 import type { AuthAdapter } from '../auth/index.js';
+import { GUEST_PROVIDER } from '../auth/guest.js';
+import type { SessionTokenIssuer } from '../auth/tokens.js';
 
 declare module 'fastify' {
+  interface FastifyContextConfig {
+    /**
+     * A trial without an account may use this route (docs/GROWTH_SPEC.md,
+     * part three). Absent means no: every route refuses a guest unless it says
+     * otherwise, so a new route is closed to guests until somebody decides.
+     */
+    guestAllowed?: boolean;
+  }
   interface FastifyRequest {
     /** Populated by `requireAuth`; absent on public routes. */
     user?: UserRow;
@@ -20,9 +30,30 @@ declare module 'fastify' {
 
 export default fp(async function authPlugin(
   app: FastifyInstance,
-  opts: { adapter: AuthAdapter; adminMfaRequired: boolean },
+  opts: { adapter: AuthAdapter; adminMfaRequired: boolean; guests?: SessionTokenIssuer | null },
 ) {
   const { adapter } = opts;
+
+  /** A guest's session, or null when the token is not one (it may be an account's). */
+  async function guestFor(token: string): Promise<UserRow | null> {
+    const claims = opts.guests?.verify(token, GUEST_PROVIDER);
+    if (!claims) return null;
+    const user = await findByExternalId(GUEST_PROVIDER, claims.sub);
+    if (!user || user.role !== 'guest' || user.status !== 'active' || user.deleted_at) {
+      throw new AppError('UNAUTHENTICATED', 'this trial has ended');
+    }
+    return user;
+  }
+
+  async function verify(token: string): Promise<UserRow> {
+    return (await guestFor(token)) ?? adapter.verify(token);
+  }
+
+  function refuseGuestHere(req: FastifyRequest, user: UserRow): void {
+    if (user.role === 'guest' && req.routeOptions.config.guestAllowed !== true) {
+      throw new AppError('FORBIDDEN', 'sign up to use this');
+    }
+  }
 
   app.decorateRequest('user', undefined);
 
@@ -31,8 +62,9 @@ export default fp(async function authPlugin(
     if (!header?.startsWith('Bearer ')) {
       throw new AppError('UNAUTHENTICATED', 'a bearer token is required');
     }
-    const user = await adapter.verify(header.slice('Bearer '.length).trim());
+    const user = await verify(header.slice('Bearer '.length).trim());
     refuseInactive(user);
+    refuseGuestHere(req, user);
     req.user = user;
   });
 
@@ -46,7 +78,8 @@ export default fp(async function authPlugin(
     const header = req.headers.authorization;
     if (!header?.startsWith('Bearer ')) return;
     try {
-      const user = await adapter.verify(header.slice('Bearer '.length).trim());
+      const user = await verify(header.slice('Bearer '.length).trim());
+      // A guest reads a public page as anyone does, and its own song as its owner.
       if (user.status === 'active' && !user.deleted_at) req.user = user;
     } catch {
       /* treated as anonymous */
@@ -59,7 +92,7 @@ export default fp(async function authPlugin(
    */
   app.decorate('requireRole', (roles: UserRole[]) => async (req: FastifyRequest, reply: FastifyReply) => {
     await app.requireAuth(req, reply);
-    if (!roles.includes(req.user!.role)) {
+    if (!(roles as readonly string[]).includes(req.user!.role)) {
       throw new AppError('FORBIDDEN', 'insufficient privileges');
     }
     /*

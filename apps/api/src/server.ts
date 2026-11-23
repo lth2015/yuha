@@ -2,6 +2,7 @@ import cors from '@fastify/cors';
 import rateLimit from '@fastify/rate-limit';
 import Fastify, { type FastifyInstance } from 'fastify';
 import { createAuthAdapter } from './auth/index.js';
+import { guestSessionIssuer } from './auth/guest.js';
 import type { AppContext } from './context.js';
 import authPlugin from './plugins/auth.js';
 import errorPlugin from './plugins/errors.js';
@@ -21,6 +22,7 @@ import issueRoutes from './routes/issues.js';
 import shareRoutes from './routes/share.js';
 import telemetryRoutes from './routes/telemetry.js';
 import trackRoutes from './routes/tracks.js';
+import trialRoutes from './routes/trial.js';
 
 import { redactUrlSecrets } from './log-redaction.js';
 import { keepsRawBody } from './webhook-paths.js';
@@ -151,7 +153,7 @@ export async function buildServer(ctx: AppContext): Promise<FastifyInstance> {
   );
 
   const adapter = createAuthAdapter(ctx.config);
-  await app.register(authPlugin, { adapter, adminMfaRequired: ctx.config.ADMIN_MFA_REQUIRED });
+  await app.register(authPlugin, { adapter, adminMfaRequired: ctx.config.ADMIN_MFA_REQUIRED, guests: guestSessionIssuer(ctx.config) });
 
   await app.register(publicRoutes, { ctx });
   await app.register(authRoutes, { ctx, adapter });
@@ -161,6 +163,7 @@ export async function buildServer(ctx: AppContext): Promise<FastifyInstance> {
   await app.register(exploreRoutes, { ctx });
   await app.register(marketRoutes, { ctx });
   await app.register(trackRoutes, { ctx });
+  await app.register(trialRoutes, { ctx });
   await app.register(shareRoutes, { ctx });
   await app.register(fileRoutes, { ctx });
   await app.register(billingRoutes, { ctx });

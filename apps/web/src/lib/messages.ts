@@ -67,6 +67,8 @@ export const ERROR_MESSAGES: Record<ErrorCode, UserMessage> = {
   BUDGET_EXCEEDED: msg('BUDGET_EXCEEDED', 'warn'),
   PURCHASE_CAP_REACHED: msg('PURCHASE_CAP_REACHED', 'warn'),
   SERVICE_DISABLED: msg('SERVICE_DISABLED', 'warn'),
+  TRIAL_LIMIT_REACHED: msg('TRIAL_LIMIT_REACHED', 'warn'),
+  TRIAL_BUSY: msg('TRIAL_BUSY', 'warn'),
   INTERNAL_ERROR: msg('INTERNAL_ERROR', 'error'),
 };
 

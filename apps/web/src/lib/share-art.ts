@@ -349,12 +349,17 @@ const CLIP_SECONDS = 20;
  * is the part people remember — else from just before the first sung line,
  * else (an instrumental) from a quarter of the way in, past the intro.
  */
-export function planShareClip(lines: TimedLine[], songSeconds: number, maxFrames = 24): ClipPlan {
+function clipWindow(lines: TimedLine[], songSeconds: number, seconds: number): { start: number; duration: number } {
   const chorus = lines.find((l) => CHORUS.test(l.section));
   const anchor = chorus ?? lines[0];
   let start = anchor ? Math.max(0, anchor.start - 1.5) : songSeconds * 0.25;
-  const duration = Math.max(3, Math.min(CLIP_SECONDS, songSeconds - start));
+  const duration = Math.max(3, Math.min(seconds, songSeconds - start));
   if (start + duration > songSeconds) start = Math.max(0, songSeconds - duration);
+  return { start, duration };
+}
+
+export function planShareClip(lines: TimedLine[], songSeconds: number, maxFrames = 24): ClipPlan {
+  const { start, duration } = clipWindow(lines, songSeconds, CLIP_SECONDS);
   const end = start + duration;
 
   const frames: ClipPlan['frames'] = [];
@@ -367,6 +372,51 @@ export function planShareClip(lines: TimedLine[], songSeconds: number, maxFrames
     }
   }
   return { start: Number(start.toFixed(2)), duration: Number(duration.toFixed(2)), frames };
+}
+
+const PHOTO_CLIP_SECONDS = 30;
+/** What the server takes (apps/api/src/routes/share.ts, photo-video). */
+const PHOTO_MAX_FRAMES = 40;
+
+export interface PhotoClipPlan {
+  start: number;
+  duration: number;
+  /** From each moment: which photo (by the order chosen) and which line, if one is being sung. */
+  frames: Array<{ at: number; photo: number; line: string | null }>;
+}
+
+/**
+ * The photo video's timeline (docs/PHOTO_MV_SPEC.md): the same thirty seconds
+ * the share video would choose, the photos sharing it out evenly in the order
+ * picked, and a new frame wherever the photo or the sung line changes. A line
+ * leaves the screen when it ends rather than hanging over the next photo.
+ */
+export function planPhotoClip(lines: TimedLine[], songSeconds: number, photos: number): PhotoClipPlan {
+  const { start, duration } = clipWindow(lines, songSeconds, PHOTO_CLIP_SECONDS);
+  const end = start + duration;
+  const count = Math.max(1, photos);
+  const slot = duration / count;
+  const round = (n: number) => Number(n.toFixed(2));
+  const cuts = new Set<number>([0]);
+  for (let i = 1; i < count; i += 1) cuts.add(round(i * slot));
+  for (const l of lines) {
+    if (l.end <= start || l.start >= end) continue;
+    if (l.start > start) cuts.add(round(l.start - start));
+    if (l.end < end) cuts.add(round(l.end - start));
+  }
+  const times = [...cuts].filter((t) => t < duration - 0.25).sort((a, b) => a - b);
+  const frames = times.map((at) => {
+    const t = start + at;
+    const sung = lines.find((l) => l.start <= t + 0.001 && l.end > t + 0.001);
+    return { at, photo: Math.min(count - 1, Math.floor((at + 0.001) / slot)), line: sung?.text ?? null };
+  });
+  // Every photo keeps its cut; lyric cuts give way first when there are too many.
+  while (frames.length > PHOTO_MAX_FRAMES) {
+    const i = frames.findIndex((f, k) => k > 0 && f.photo === frames[k - 1]!.photo);
+    if (i < 0) break;
+    frames.splice(i, 1);
+  }
+  return { start: round(start), duration: round(duration), frames };
 }
 
 /** One frame of the share video: the sleeve above, who and what below, the line being sung. */
@@ -436,9 +486,94 @@ export async function drawVideoFrame(
   return canvas;
 }
 
+/**
+ * One frame of the photo video (docs/PHOTO_MV_SPEC.md): the photo filling the
+ * frame, cropped to the middle, darkened toward the foot so white type holds
+ * on any picture; the song's title and the line being sung below, the
+ * waveform band left clear for the server.
+ */
+export async function drawPhotoFrame(
+  song: ShareSong,
+  labels: ShareLabels,
+  photo: HTMLCanvasElement,
+  line: string | null,
+): Promise<HTMLCanvasElement> {
+  await fontsReady(`${song.title}${line ?? ''}`, labels.lang);
+  const canvas = document.createElement('canvas');
+  canvas.width = VIDEO_WIDTH;
+  canvas.height = VIDEO_HEIGHT;
+  const ctx = canvas.getContext('2d')!;
+  const family = fontFamily(labels.lang);
+
+  ctx.fillStyle = '#111';
+  ctx.fillRect(0, 0, VIDEO_WIDTH, VIDEO_HEIGHT);
+  const scale = Math.max(VIDEO_WIDTH / photo.width, VIDEO_HEIGHT / photo.height);
+  const w = photo.width * scale;
+  const h = photo.height * scale;
+  ctx.drawImage(photo, (VIDEO_WIDTH - w) / 2, (VIDEO_HEIGHT - h) / 2, w, h);
+
+  const top = ctx.createLinearGradient(0, 0, 0, 180);
+  top.addColorStop(0, 'rgba(0,0,0,0.38)');
+  top.addColorStop(1, 'rgba(0,0,0,0)');
+  ctx.fillStyle = top;
+  ctx.fillRect(0, 0, VIDEO_WIDTH, 180);
+  const foot = ctx.createLinearGradient(0, VIDEO_HEIGHT * 0.5, 0, VIDEO_HEIGHT);
+  foot.addColorStop(0, 'rgba(0,0,0,0)');
+  foot.addColorStop(0.45, 'rgba(0,0,0,0.42)');
+  foot.addColorStop(1, 'rgba(0,0,0,0.72)');
+  ctx.fillStyle = foot;
+  ctx.fillRect(0, VIDEO_HEIGHT * 0.5, VIDEO_WIDTH, VIDEO_HEIGHT * 0.5);
+
+  const logo = await loadImage('/brand/yuha-logo-reverse.svg');
+  if (logo) ctx.drawImage(logo, 40, 44, 99, 30);
+
+  const left = 56;
+  const width = VIDEO_WIDTH - left * 2;
+  ctx.textBaseline = 'alphabetic';
+  if (line) {
+    ctx.font = `700 40px ${family}`;
+    ctx.fillStyle = '#ffffff';
+    const lines = wrapText(ctx, line, width, 2);
+    let ly = WAVE_TOP - 40 - (lines.length - 1) * 52;
+    for (const l of lines) {
+      ctx.fillText(l, left, ly);
+      ly += 52;
+    }
+  }
+  ctx.fillStyle = 'rgba(255,255,255,0.86)';
+  ctx.font = `500 26px ${family}`;
+  const title = labels.to ? `${labels.to} · ${song.title}` : song.title;
+  ctx.fillText(wrapText(ctx, title, width, 1)[0] ?? '', left, WAVE_TOP + WAVE_HEIGHT + 46);
+  ctx.fillStyle = 'rgba(255,255,255,0.62)';
+  ctx.font = `400 22px ${family}`;
+  ctx.fillText(labels.site, left, WAVE_TOP + WAVE_HEIGHT + 84);
+  return canvas;
+}
+
+/**
+ * A chosen photo, decoded once, turned upright by its own orientation tag and
+ * scaled to at most 1440 px on its long side: ten full-size phone photos held
+ * as bitmaps would be most of a phone's memory. Null when the browser cannot
+ * read it (HEIC outside Safari, a broken file).
+ */
+export async function loadPhoto(file: Blob): Promise<HTMLCanvasElement | null> {
+  try {
+    const bitmap = await createImageBitmap(file, { imageOrientation: 'from-image' });
+    const scale = Math.min(1, 1440 / Math.max(bitmap.width, bitmap.height));
+    const canvas = document.createElement('canvas');
+    canvas.width = Math.max(1, Math.round(bitmap.width * scale));
+    canvas.height = Math.max(1, Math.round(bitmap.height * scale));
+    canvas.getContext('2d')!.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+    bitmap.close();
+    return canvas;
+  } catch {
+    return null;
+  }
+}
+
 /** JPEG base64 of a frame, for POST /v1/tracks/:id/share-video. */
-export async function frameJpeg(canvas: HTMLCanvasElement): Promise<string> {
-  const blob = await toBlob(canvas, 'image/jpeg', 0.86);
+export async function frameJpeg(canvas: HTMLCanvasElement, quality = 0.86): Promise<string> {
+  const blob = await toBlob(canvas, 'image/jpeg', quality);
   const bytes = new Uint8Array(await blob.arrayBuffer());
   let bin = '';
   for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode(...bytes.subarray(i, i + 0x8000));

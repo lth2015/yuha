@@ -41,6 +41,29 @@ export function quarantineKey(jobId: string, attemptNo: number): string {
   return `${jobId}/attempt-${attemptNo}.audio`;
 }
 
+/** The usage-terms record of one song, as it is frozen (SEC-08). */
+export function licenseSnapshotFor(
+  ctx: AppContext,
+  features: { commercialDeliveryEnabled: boolean },
+  params: { trackId: string; userId: string; sha256: string; generatedAt: Date },
+) {
+  const caps = ctx.music.capabilities();
+  return {
+    trackId: params.trackId,
+    userId: params.userId,
+    providerId: caps.providerId,
+    providerModel: caps.model,
+    contractVersion: caps.contractVersion,
+    licenseVersion: caps.licenseVersion,
+    territory: caps.territory,
+    allowedUses: features.commercialDeliveryEnabled ? caps.allowedUses : ['動作確認・プレビューのみ（商用配信の許諾は未取得）'],
+    prohibitedUses: caps.prohibitedUses,
+    sourceSha256: params.sha256,
+    generatedAt: params.generatedAt,
+    commercialDelivery: features.commercialDeliveryEnabled,
+  };
+}
+
 export interface DeliverParams {
   job: JobRow;
   intent: MusicIntent;
@@ -135,25 +158,16 @@ export async function deliver(ctx: AppContext, params: DeliverParams): Promise<{
 
     // SEC-08: the terms in force at generation time, frozen. A later agreement
     // cannot rewrite them — the table trigger enforces that.
-    await insertLicenseSnapshot(
-      {
-        trackId: track.id,
-        userId: job.user_id,
-        providerId: caps.providerId,
-        providerModel: caps.model,
-        contractVersion: caps.contractVersion,
-        licenseVersion: caps.licenseVersion,
-        territory: caps.territory,
-        allowedUses: features.commercialDeliveryEnabled
-          ? caps.allowedUses
-          : ['動作確認・プレビューのみ（商用配信の許諾は未取得）'],
-        prohibitedUses: caps.prohibitedUses,
-        sourceSha256: sha256,
-        generatedAt: new Date(),
-        commercialDelivery: features.commercialDeliveryEnabled,
-      },
-      tx,
-    );
+    //
+    // Not for a trial's song (docs/GROWTH_SPEC.md, part three): the record says
+    // who authored it, and a guest is nobody yet. It is written when the guest
+    // signs up and claims the song (services/guest-trial.ts, claimGuestTrial).
+    if (job.priority !== 1) {
+      await insertLicenseSnapshot(
+        licenseSnapshotFor(ctx, features, { trackId: track.id, userId: job.user_id, sha256, generatedAt: new Date() }),
+        tx,
+      );
+    }
 
     await setJobTrack(job.id, track.id, tx);
 

@@ -348,9 +348,15 @@ export function Layout({ children }: { children: ReactNode }) {
             ))}
           </nav>
 
-          <div className={`topnav__account${me ? ' is-signed-in' : ''}`}>
+          <div className={`topnav__account${me && me.role !== 'guest' ? ' is-signed-in' : ''}`}>
             <LangSwitch lang={lang} setLang={setLang} label={t('a11y.lang')} />
-            {me ? (
+            {me?.role === 'guest' ? (
+              /* A trial (docs/GROWTH_SPEC.md, part three): no account to show,
+                 no credits to buy; the one thing to do is keep the song. */
+              <Link className="btn btn--primary btn--sm" to="/auth">
+                {t('trial.header')}
+              </Link>
+            ) : me ? (
               <>
                 {/*
                   The way to buy credits, and it has to read as one. This pill

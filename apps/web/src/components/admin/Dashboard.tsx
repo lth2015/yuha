@@ -42,6 +42,8 @@ interface Report {
     paths: { path: string; views: number; visitors: number }[];
     campaigns: { source: string; visitors: number; signups: number; madeASong: number; paid: number; revenueJpy: number }[];
   };
+  /** Songs without an account (docs/GROWTH_SPEC.md, part three). */
+  trials: { opened: number; made: number; claimed: number };
 }
 
 /* Categorical slots 1–3 of the validated palette (blue, orange, aqua), in
@@ -304,6 +306,11 @@ export function Dashboard() {
                 </table>
               </div>
             )}
+
+            <h3 className="dash__subhead">{t('admin.dash.trials.h')}</h3>
+            <p className="small">
+              {t('admin.dash.trials.line', { opened: num(report.trials.opened), made: num(report.trials.made), claimed: num(report.trials.claimed) })}
+            </p>
           </section>
 
           {view === 'charts' ? (

@@ -20,6 +20,7 @@ import { IssueReport } from '../components/IssueReport';
 import { ErrorNotice } from '../components/common';
 import { Score } from '../components/Score';
 import { ShareMenu } from '../components/ShareMenu';
+import { PhotoVideo } from '../components/PhotoVideo';
 import { SyncedLyrics } from '../components/SyncedLyrics';
 import { scoreFromSeed } from '../lib/score';
 import { usePageTitle } from '../lib/title';
@@ -203,6 +204,12 @@ export default function SongDetail() {
   }
 
   const isOwner = me?.userId === song.artistId;
+  /*
+   * The owner, with an account. A trial's owner (docs/GROWTH_SPEC.md, part
+   * three) can play, publish and share its song; renaming, editing,
+   * downloading, deleting and the rest wait for signing up.
+   */
+  const manages = isOwner && me?.role !== 'guest';
   const active = player.activeId === song.trackId;
   const playing = active && player.status === 'playing';
 
@@ -483,7 +490,7 @@ export default function SongDetail() {
                   <strong className="song-gift__line">{t(`gift.line.${song.dedication.occasion}`)}</strong>
                 )}
                 {song.dedication.note && <p className="song-gift__note">{song.dedication.note}</p>}
-                {isOwner && (
+                {manages && (
                   <button
                     type="button"
                     ref={giftEditButton}
@@ -613,7 +620,7 @@ export default function SongDetail() {
                   this page is read on phones, where there is no hover at all,
                   and the row beside it already speaks in plain verbs.
                 */}
-                {!renaming && (
+                {manages && !renaming && (
                   <button
                     type="button"
                     ref={renameButton}
@@ -624,9 +631,12 @@ export default function SongDetail() {
                     {t('song.rename')}
                   </button>
                 )}
-                <Link className="text-action" to={`/create?edit=${song.trackId}`}>
-                  {t('song.edit')}
-                </Link>
+                {manages && (
+                  <Link className="text-action" to={`/create?edit=${song.trackId}`}>
+                    {t('song.edit')}
+                  </Link>
+                )}
+                {manages && (
                 <button
                   type="button"
                   className="text-action"
@@ -636,6 +646,7 @@ export default function SongDetail() {
                 >
                   {downloading ? t('song.downloading') : t('song.download')}
                 </button>
+                )}
                 {/*
                   The one filled action, and only while the song is private:
                   a finished song nobody can open is a song that is not
@@ -707,7 +718,7 @@ export default function SongDetail() {
             </div>
             {/* Its own group: separated at every width, never pushed to the
                 right-hand end of whatever line a wrap happened to put it on. */}
-            {isOwner && (
+            {manages && (
               <div className="song-spread__actions-end">
                 <button
                   type="button"
@@ -721,10 +732,31 @@ export default function SongDetail() {
             )}
           </div>
 
+          {/* A trial's song: kept only by signing up (docs/GROWTH_SPEC.md, part three). */}
+          {isOwner && !manages && (
+            <div className="trial-keep">
+              <h2>{t('trial.keep.title')}</h2>
+              <p>{t('trial.keep.body')}</p>
+              {/* Only what the welcome grant will really give: none when it is off (lib: freeTrialAvailable). */}
+              {runtime?.features.freeTrialEnabled && runtime.features.freeTrialUnits > 1 && (
+                <p>{t('trial.keep.more', { n: runtime.features.freeTrialUnits - 1 })}</p>
+              )}
+              <Link className="btn btn--primary" to={`/auth?next=${encodeURIComponent(`/song/${song.trackId}`)}`}>
+                {t('trial.keep.cta')}
+              </Link>
+            </div>
+          )}
+
+          {/* The photo MV (docs/PHOTO_MV_SPEC.md): the owner's, once the song plays,
+              and only where the switch is on. */}
+          {manages && song.state === 'deliverable' && runtime?.features.photoVideoEnabled && (
+            <PhotoVideo song={song} labels={shareLabels()} lyrics={song.lyrics} lyricTimings={song.lyricTimings} />
+          )}
+
           {/* Beside the buttons that caused it, not in place of the page. */}
           <ErrorNotice error={actionError} />
           {/* A failure the owner cannot fix is one they report, with its request id attached. */}
-          {isOwner && actionError instanceof ApiError && actionError.requestId && !reporting && (
+          {manages && actionError instanceof ApiError && actionError.requestId && !reporting && (
             <button
               type="button"
               className="text-action"
@@ -733,7 +765,7 @@ export default function SongDetail() {
               {t('issue.reportThis')}
             </button>
           )}
-          {isOwner && reporting && (
+          {manages && reporting && (
             <IssueReport
               trackId={song.trackId}
               currentSeconds={active ? player.currentTime : null}
@@ -741,7 +773,7 @@ export default function SongDetail() {
               onClose={() => setReporting(null)}
             />
           )}
-          {isOwner && !reporting && song.state === 'deliverable' && (
+          {manages && !reporting && song.state === 'deliverable' && (
             <button type="button" className="text-action song-spread__report" onClick={() => setReporting({})}>
               {t('issue.open')}
             </button>
@@ -806,7 +838,7 @@ export default function SongDetail() {
             artist={song.artistName}
             onSeek={active ? player.seek : undefined}
             onSaveTimings={
-              isOwner
+              manages
                 ? async (timings) => {
                     const saved = await apiFetch<{ lyricTimings: LyricTimings }>(
                       `/v1/tracks/${song.trackId}/lyric-timings`,
@@ -832,7 +864,7 @@ export default function SongDetail() {
 
       {/* The terms record stays one click away for the owner, but as a quiet
           footnote: a full panel for it read as a warning stuck to every song. */}
-      {isOwner && (
+      {manages && (
         <p className="song-page__terms">
           <Link to={`/tracks/${song.trackId}/license`} className="quiet-link">
             {t('song.usage')} ↗

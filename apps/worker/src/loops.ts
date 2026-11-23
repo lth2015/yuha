@@ -7,6 +7,7 @@ import {
   reconcilePendingCheckouts,
   reconcileUngrantedSubscriptions,
   sweepExpiredTrackAudio,
+  purgeExpiredGuestTrials,
 } from '@yuha/api';
 import {
   claimJob,
@@ -479,6 +480,14 @@ export async function maintenanceLoop(deps: LoopDeps, intervalMs = 60_000): Prom
       if (purged.removed || purged.failed) {
         log('info', 'removed audio past the retention window', purged as unknown as Record<string, unknown>);
       }
+    });
+
+    // Trials nobody claimed within seven days go, audio and all (docs/GROWTH_SPEC.md, part three).
+    await step('guest-trial-purge', async () => {
+      const purged = await purgeExpiredGuestTrials(ctx, {
+        log: { error: (obj, msg) => log('error', msg, obj as Record<string, unknown>) },
+      });
+      if (purged) log('info', 'purged expired guest trials', { count: purged });
     });
 
     await step('reconcile-balances', async () => {
