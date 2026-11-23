@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="320" height="240" viewBox="0 0 320 240" fill="none">
+<ellipse cx="160" cy="210" rx="78" ry="6" fill="#20221f" opacity=".045"/>
+<defs>
+  <linearGradient id="evening" x1="118" y1="53" x2="203" y2="179" gradientUnits="userSpaceOnUse"><stop stop-color="#20221f"/><stop offset="1" stop-color="#6b6d66"/></linearGradient>
+  <radialGradient id="light"><stop stop-color="#f4e6c8" stop-opacity=".5"/><stop offset="1" stop-color="#f4e6c8" stop-opacity="0"/></radialGradient>
+  <clipPath id="glass"><rect x="109" y="49" width="102" height="139" rx="44"/></clipPath>
+</defs>
+<path d="M99 93a61 61 0 0 1 122 0v107H99Z" fill="#fffdf8" stroke="#f4e6c8" stroke-width="2"/>
+<path d="M109 93a51 51 0 0 1 102 0v95H109Z" fill="url(#evening)"/>
+<g clip-path="url(#glass)">
+  <path d="M109 164c22-18 34-11 51-17 19-6 31-4 51-13v54H109Z" fill="#20221f" opacity=".5"/>
+  <ellipse cx="190" cy="148" rx="21" ry="25" fill="url(#light)"/>
+  <rect x="186" y="143" width="7" height="9" rx="1" fill="#f4e6c8"/>
+  <path d="m113 93 23-26m-23 41 34-38" stroke="#fffdf8" stroke-opacity=".1" stroke-width="3" stroke-linecap="round"/>
+</g>
+<path d="M160 44v149M104 118h112" stroke="#f4e6c8" stroke-width="5"/>
+<path d="M160 45v148M105 118h110" stroke="#fffdf8" stroke-width="2"/>
+<rect x="90" y="195" width="140" height="12" rx="3" fill="#f4e6c8"/>
+<path d="M93 197h134" stroke="#fffdf8" stroke-width="2" stroke-linecap="round"/>
+</svg>
