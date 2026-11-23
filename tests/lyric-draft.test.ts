@@ -139,3 +139,50 @@ describe('POST /v1/lyrics/draft', () => {
     );
   });
 });
+
+describe('three versions at once (docs/LYRIC_COWRITE_SPEC.md)', () => {
+  const three = (user: TestUser) => draft(user, { ...body, variants: 3 });
+
+  it('writes one of each way, labelled, and counts as three drafts', async () => {
+    const user = await h.createUser();
+    const res = await three(user);
+    expect(res.statusCode).toBe(200);
+    const json = res.json() as { lyrics: string; remaining: number; variants: Array<{ angle: string; lyrics: string }> };
+    expect(json.variants.map((v) => v.angle)).toEqual(['plain', 'images', 'story']);
+    for (const v of json.variants) expect(v.lyrics).toMatch(/\[verse\]/);
+    expect(json.lyrics).toBe(json.variants[0]!.lyrics);
+    expect(json.remaining).toBe(0);
+  });
+
+  it('asks nothing of the model when fewer than three drafts are left', async () => {
+    const user = await h.createUser();
+    expect((await draft(user)).statusCode).toBe(200);
+    let called = 0;
+    const res = await withText({ writeLyrics: async () => ((called += 1), { status: 'ok', lyrics: '[verse]\nx', requestId: null, usage: { costMinor: 0, costIsEstimate: true } }) }, () => three(user));
+    expect(res.statusCode).toBe(429);
+    expect(called).toBe(0);
+  });
+
+  it('hands over the versions that came back, and fails only when none did', async () => {
+    const user = await h.createUser();
+    const partly = await withText(
+      {
+        writeLyrics: async (req) =>
+          req.angle === 'story'
+            ? { status: 'failed', reason: 'upstream_5xx', requestId: null, usage: { costMinor: 0, costIsEstimate: true } }
+            : { status: 'ok', lyrics: `[verse]\n${req.angle}`, requestId: null, usage: { costMinor: 0, costIsEstimate: true } },
+      },
+      () => three(user),
+    );
+    expect(partly.statusCode).toBe(200);
+    expect((partly.json() as { variants: Array<{ angle: string }> }).variants.map((v) => v.angle)).toEqual(['plain', 'images']);
+
+    const other = await h.createUser();
+    const none = await withText(
+      { writeLyrics: async () => ({ status: 'failed', reason: 'upstream_5xx', requestId: null, usage: { costMinor: 0, costIsEstimate: true } }) },
+      () => three(other),
+    );
+    expect(none.statusCode).toBe(503);
+  });
+});
+

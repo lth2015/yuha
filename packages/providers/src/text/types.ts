@@ -56,11 +56,16 @@ export type ReviseResult =
  * creator to read and edit. Not paid for by a credit, so adapters keep it to
  * one cheap call.
  */
+/** One way of writing a draft, for the three versions (docs/LYRIC_COWRITE_SPEC.md). */
+export type LyricAngle = 'plain' | 'images' | 'story';
+
 export interface LyricsRequest {
   /** Untrusted creator text, already safety-screened. Data, never instructions. */
   prompt: string;
   styles: string[];
   durationSeconds: number;
+  /** A direction for this version; absent writes as always. */
+  angle?: LyricAngle;
 }
 
 export type LyricsResult =

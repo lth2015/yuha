@@ -49,6 +49,18 @@ describe('TokenStars: writing lyrics', () => {
     expect(JSON.parse(messages[1]!.content)).toMatchObject({ user_text: req.prompt, durationSeconds: 120 });
   });
 
+  it('gives the model one direction when a draft asks for a way of writing it (docs/LYRIC_COWRITE_SPEC.md)', async () => {
+    const calls = stub(completion(LYRICS));
+    await provider().writeLyrics!({ ...req, angle: 'images' });
+    await provider().writeLyrics!({ ...req, angle: 'story' });
+    await provider().writeLyrics!(req);
+    const system = (i: number) => (calls[i]!.body['messages'] as Array<{ content: string }>)[0]!.content;
+    expect(system(0)).toMatch(/concrete pictures/);
+    expect(system(1)).toMatch(/small story/);
+    // Without an angle, the prompt is what it was.
+    expect(system(2)).not.toMatch(/This version:/);
+  });
+
   it('sizes the reply budget to the song: a longer song may say more, a short one costs less', async () => {
     const calls = stub(completion(LYRICS));
     await provider().writeLyrics!({ ...req, durationSeconds: 30 });

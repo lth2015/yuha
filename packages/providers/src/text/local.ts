@@ -147,7 +147,9 @@ export class LocalTextProvider implements TextProvider {
       .split(/[，。、,.!?！？；;\n]+/)
       .map((p) => p.trim())
       .filter(Boolean);
-    const line = (i: number) => phrases[(LocalTextProvider.hashInt(req.prompt) + i) % Math.max(1, phrases.length)] ?? req.prompt;
+    // Each way of writing starts somewhere else, so three versions are three (docs/LYRIC_COWRITE_SPEC.md).
+    const shift = req.angle === 'images' ? 1 : req.angle === 'story' ? 2 : 0;
+    const line = (i: number) => phrases[(LocalTextProvider.hashInt(req.prompt) + i + shift) % Math.max(1, phrases.length)] ?? req.prompt;
     const verse = [line(0), line(1), line(2), line(3)];
     const chorus = [line(1), line(1), line(4), line(0)];
     const lyrics = ['[verse]', ...verse, '', '[chorus]', ...chorus].join('\n');
