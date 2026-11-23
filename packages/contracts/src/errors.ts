@@ -49,6 +49,9 @@ export const ERROR_CODES = [
   'BUDGET_EXCEEDED',
   'PURCHASE_CAP_REACHED',
   'SERVICE_DISABLED',
+  // the guest trial (docs/GROWTH_SPEC.md, part three)
+  'TRIAL_LIMIT_REACHED',
+  'TRIAL_BUSY',
   'INTERNAL_ERROR',
 ] as const;
 
@@ -109,6 +112,10 @@ const STATUS_BY_CODE: Record<ErrorCode, number> = {
   // 429: the request is fine and the account has bought too much too quickly.
   PURCHASE_CAP_REACHED: 429,
   SERVICE_DISABLED: 503,
+  // 429: this device, this network or today has had its trial.
+  TRIAL_LIMIT_REACHED: 429,
+  // 503: enough trial songs are already waiting; accounts' songs come first.
+  TRIAL_BUSY: 503,
   INTERNAL_ERROR: 500,
 };
 

@@ -171,6 +171,13 @@ export type SubscriptionStatus = z.infer<typeof SubscriptionStatus>;
 
 export const UserRole = z.enum(['user', 'support', 'admin']);
 export type UserRole = z.infer<typeof UserRole>;
+/**
+ * Every role an account row can hold. `guest` is a trial without an account
+ * (docs/GROWTH_SPEC.md, part three) and is deliberately not a UserRole: the
+ * console assigns UserRoles, and nobody should be able to make an account a guest.
+ */
+export const AccountRole = z.enum(['user', 'support', 'admin', 'guest']);
+export type AccountRole = z.infer<typeof AccountRole>;
 
 export const RightsCaseStatus = z.enum([
   'received',

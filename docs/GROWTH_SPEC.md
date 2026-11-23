@@ -155,6 +155,37 @@
 
 ---
 
+### 技术设计（2026-11-23，产品负责人：方案 A、不用 Cloudflare）
+
+**人机验证**：第一版不做。成本的硬上限是全站每天 50 首 + 永远排在注册用户后面；被刷的最坏情况是当天名额用完。
+真被刷时请 SRE 在 API 前加 AWS WAF Challenge（价格未核实），代码不变。
+
+**试做账户**：匿名访客是 `users` 里一行 `role = 'guest'`（迁移 0033 放宽 `users_role_chk`），
+`auth_provider = 'guest'`，邮箱是 `guest+<id>@guest.invalid`。这样生成、扣额度、交付、任务页、歌曲页全部走现有代码。
+- 会话：同一个 HMAC 会话令牌，`provider = 'guest'`，存在浏览器里，和登录令牌分开放。
+- **白名单**：`requireAuth` 默认拒绝 guest；只有生成、看任务、看自己的歌、设为公开、`/v1/me` 用 `requireAuthOrGuest`。
+  购买、下载、作品库、账户、后台对 guest 一律 403——新接口默认不对 guest 开放。
+- 18 岁和条款：开始试做时必须勾选，写进这一行的 `age_confirmed_at` / `terms_accepted_at`。
+
+**限次**（`POST /v1/trial/start`，迁移 0033 的 `guest_trials` 表）：
+- 浏览器随机编号的 HMAC：同一编号只能开始 1 次；
+- IP 的 HMAC：同一网络每天（日本时间）3 次；
+- 全站每天 50 次（`GUEST_TRIAL_DAILY_LIMIT`），用完返回 `TRIAL_LIMIT_REACHED`，页面说「今天的名额已满，注册可得 2 首」；
+- 总开关 `FEATURE_GUEST_TRIAL_ENABLED`，默认关闭，后台运行时也能关。
+- 开始成功：给这个 guest 发 1 个额度（`source = 'guest_trial'`），歌长固定 60 秒，有人声。
+
+**排队**：`generation_jobs.priority`（0 普通，1 试做）。`startMusicDispatch` 计算「前面有几首」时，
+试做任务把所有排队中的普通任务都算在自己前面；普通任务不把试做任务算在前面。排队位置的显示同样算。
+同时排队的试做任务最多 3 首，满了 `TRIAL_BUSY`。
+
+**交付和授权记录**：guest 的歌交付时**不写**使用条款快照（`license_snapshots`）。
+注册时认领：歌、任务、项目、音频的所有者改成新账户，然后按正常交付的写法给每首歌写快照，作者是新账户。
+
+**额度**：认领后，新账户的注册赠送是 `FREE_TRIAL_UNITS − 试做用掉的 1` = 1。账本上一笔 `promo_trial` 1 个，加上试做那一笔，总共 2 个。
+
+**删除**：维护循环每小时一次，7 天前开始且没被认领的试做：**音频对象当场删除**（不走普通删除的 90 天保留——
+隐私政策修改稿写的是 7 天连同音频删除），歌、任务、输入文字删除，guest 行匿名化，`guest_trials` 里的两个 HMAC 清掉。
+
 ## 怎么验收
 
 - **场景页**：6 页 × 三种语言都有预渲染的静态页，sitemap 里有；点主按钮进创作页时场合正确；`check:ui` 全过。

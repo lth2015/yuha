@@ -53,6 +53,7 @@ export default async function publicRoutes(app: FastifyInstance, opts: { ctx: Ap
         freeTrialUnits: trialAvailable ? ctx.config.FREE_TRIAL_UNITS : 0,
         wavExportEnabled: features.wavExportEnabled,
         photoVideoEnabled: features.photoVideoEnabled,
+        guestTrialEnabled: features.guestTrialEnabled,
         commercialDeliveryEnabled: features.commercialDeliveryEnabled,
         realPaymentsEnabled: features.realPaymentsEnabled,
         cardPaymentsEnabled: features.cardPaymentsEnabled,

@@ -154,7 +154,7 @@ export default async function exploreRoutes(app: FastifyInstance, opts: { ctx: A
    *
    * Unpublishing revokes the shared link immediately.
    */
-  app.post('/v1/tracks/:id/visibility', { preHandler: app.requireAuth }, async (req) => {
+  app.post('/v1/tracks/:id/visibility', { preHandler: app.requireAuth, config: { guestAllowed: true } }, async (req) => {
     const { id } = req.params as { id: string };
     const body = setVisibilityRequest.parse(req.body);
     const moved = await setTrackVisibility({

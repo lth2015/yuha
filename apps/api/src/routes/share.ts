@@ -91,7 +91,7 @@ export default async function shareRoutes(app: FastifyInstance, opts: { ctx: App
    */
   app.put(
     '/v1/tracks/:id/share-card',
-    { preHandler: app.requireAuth, bodyLimit: 2_200_000 },
+    { preHandler: app.requireAuth, bodyLimit: 2_200_000, config: { guestAllowed: true } },
     async (req) => {
       const { id } = idParam.parse(req.params);
       const body = z.object({ png: z.string().min(1).max(2_100_000) }).parse(req.body);

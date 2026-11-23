@@ -9,6 +9,8 @@ export interface JobRow {
   idempotency_key: string;
   request_hash: string;
   state: JobState;
+  /** 0 for an account's song, 1 for a trial's (docs/GROWTH_SPEC.md, part three). */
+  priority: number;
   input: Record<string, unknown>;
   resolved_params: Record<string, unknown> | null;
   provider_id: string | null;
@@ -35,7 +37,7 @@ export interface JobRow {
 }
 
 const JOB_COLUMNS = `
-  id, user_id, project_id, idempotency_key, request_hash, state, input, resolved_params,
+  id, user_id, project_id, idempotency_key, request_hash, state, priority, input, resolved_params,
   provider_id, provider_model, provider_contract_version, provider_request_key,
   attempt_count, version, next_run_at, dispatch_started_at, lease_owner, lease_expires_at, cancel_requested_at,
   track_id, error_code, error_detail, queued_at, submitted_at, delivered_at,
@@ -81,14 +83,16 @@ export interface InsertJobInput {
   state?: JobState;
   /** Defaults to this process's BUILD_SHA; tests pass one to stand for another build. */
   buildSha?: string | null;
+  /** 1 for a trial's song; defaults to 0. */
+  priority?: 0 | 1;
 }
 
 export async function insertJob(input: InsertJobInput, tx: PoolConnection): Promise<JobRow> {
   const id = newId();
   await execute(
     `INSERT INTO generation_jobs
-       (id, user_id, project_id, idempotency_key, request_hash, provider_request_key, input, state, build_sha)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+       (id, user_id, project_id, idempotency_key, request_hash, provider_request_key, input, state, build_sha, priority)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       id,
       input.userId,
@@ -100,6 +104,8 @@ export async function insertJob(input: InsertJobInput, tx: PoolConnection): Prom
       input.state ?? 'VALIDATING',
       // The build that created it (docs/GENERATION_QUALITY_SPEC.md).
       input.buildSha ?? process.env['BUILD_SHA'] ?? null,
+      // 1 for a trial's song: it waits for every account's (docs/GROWTH_SPEC.md).
+      input.priority ?? 0,
     ],
     tx,
   );
@@ -562,11 +568,17 @@ export async function startMusicDispatch(
            (state = 'QUEUED' AND dispatch_started_at IS NOT NULL AND lease_expires_at > UTC_TIMESTAMP(3)))`,
     [params.providerId], tx,
   );
+  /*
+   * Who is ahead: every waiting song of a higher priority, whenever it came,
+   * and the earlier ones of the same priority. An account's song (0) never
+   * waits for a trial's (1); a trial's waits for every account's
+   * (docs/GROWTH_SPEC.md, part three).
+   */
   const earlier = await queryOne<{ n: number }>(
     `SELECT COUNT(*) AS n FROM generation_jobs WHERE provider_id = ? AND state = 'QUEUED'
-      AND (created_at < ? OR (created_at = ? AND id < ?))
+      AND (priority < ? OR (priority = ? AND (created_at < ? OR (created_at = ? AND id < ?))))
       AND (dispatch_started_at IS NULL OR lease_expires_at IS NULL OR lease_expires_at <= UTC_TIMESTAMP(3))`,
-    [params.providerId, job.created_at, job.created_at, job.id], tx,
+    [params.providerId, job.priority, job.priority, job.created_at, job.created_at, job.id], tx,
   );
   if (Number(active?.n ?? 0) + Number(earlier?.n ?? 0) >= params.limit) {
     await execute(`UPDATE generation_jobs SET next_run_at = DATE_ADD(UTC_TIMESTAMP(3), INTERVAL 5 SECOND),
@@ -651,7 +663,8 @@ export async function queuePositions(jobs: readonly JobRow[]): Promise<Map<strin
       FROM generation_jobs q LEFT JOIN generation_jobs a
         ON a.provider_id = q.provider_id AND a.id <> q.id
         AND (a.state IN ('SUBMITTED','UNKNOWN','PROCESSING') OR
-          (a.state = 'QUEUED' AND (a.created_at < q.created_at OR (a.created_at = q.created_at AND a.id < q.id))))
+          (a.state = 'QUEUED' AND (a.priority < q.priority OR (a.priority = q.priority AND
+            (a.created_at < q.created_at OR (a.created_at = q.created_at AND a.id < q.id))))))
       WHERE q.id IN (${queued.map(() => '?').join(',')}) AND q.state = 'QUEUED' AND q.dispatch_started_at IS NULL
       GROUP BY q.id`, queued.map((j) => j.id),
   );

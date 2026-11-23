@@ -1,12 +1,12 @@
 import { z } from 'zod';
-import { RunMode, UserRole } from './enums.js';
+import { AccountRole, RunMode } from './enums.js';
 
 export const meView = z.object({
   userId: z.string().uuid(),
   email: z.string(),
   displayName: z.string().nullable(),
   avatarUrl: z.string().nullable(),
-  role: UserRole,
+  role: AccountRole,
   ageConfirmed: z.boolean(),
   marketingOptIn: z.boolean(),
   /** Credit balance snapshot so every screen can show it without a second call. */
@@ -46,6 +46,8 @@ export const runtimeInfo = z.object({
     wavExportEnabled: z.boolean(),
     /** The photo MV (docs/PHOTO_MV_SPEC.md): the song page offers it only when true. */
     photoVideoEnabled: z.boolean(),
+    /** A song without an account (docs/GROWTH_SPEC.md, part three). */
+    guestTrialEnabled: z.boolean(),
     commercialDeliveryEnabled: z.boolean(),
     realPaymentsEnabled: z.boolean(),
     /** A card purchase started here can finish: Stripe, or the demo's simulation. */

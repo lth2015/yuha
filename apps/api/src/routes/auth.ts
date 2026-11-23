@@ -180,7 +180,7 @@ export default async function authRoutes(
 ) {
   const { ctx, adapter } = opts;
 
-  app.get('/v1/me', { preHandler: app.requireAuth }, async (req) => toMeView(req.user!));
+  app.get('/v1/me', { preHandler: app.requireAuth, config: { guestAllowed: true } }, async (req) => toMeView(req.user!));
 
   /**
    * The campaign this browser arrived through, sent once after sign-in

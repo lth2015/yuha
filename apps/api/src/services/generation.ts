@@ -34,6 +34,7 @@ import {
   withTx,
   withTxRetry,
   type JobRow,
+  openGuestJobs,
 } from '@yuha/db';
 import { checkLyrics, checkPrompt, checkTitle } from '@yuha/providers';
 import type { AppContext } from '../context.js';
@@ -114,6 +115,8 @@ export async function createGeneration(
     userId: string;
     idempotencyKey: string;
     request: CreateGenerationRequest;
+    /** A trial without an account (docs/GROWTH_SPEC.md, part three). */
+    guest?: boolean;
   },
 ): Promise<CreateGenerationResult> {
   const features = await ctx.features();
@@ -121,7 +124,11 @@ export async function createGeneration(
     throw new AppError('SERVICE_DISABLED', 'generation is temporarily paused by an operator');
   }
 
-  const req = params.request;
+  // A trial's song is a minute long, whatever was asked: half the engine time
+  // of the simple path's two minutes, and still a whole song.
+  const req: CreateGenerationRequest = params.guest
+    ? { ...params.request, durationSeconds: 60, projectId: undefined }
+    : params.request;
   const caps = ctx.music.capabilities();
 
   /*
@@ -219,6 +226,10 @@ export async function createGeneration(
 
   await assertConcurrencyLimit(ctx, params.userId);
   await assertWithinDailyBudget(ctx);
+  // Trial songs share a small slice of the queue; accounts' songs are not counted against it.
+  if (params.guest && (await openGuestJobs()) >= ctx.config.GUEST_TRIAL_QUEUE_LIMIT) {
+    throw new AppError('TRIAL_BUSY', 'enough trial songs are already waiting');
+  }
 
   return withTxRetry(async (tx) => {
     // Take the per-user entitlement lock FIRST, before anything that touches
@@ -263,6 +274,7 @@ export async function createGeneration(
         {
           userId: params.userId,
           projectId: project,
+          priority: params.guest ? 1 : 0,
           idempotencyKey: params.idempotencyKey,
           requestHash,
           providerRequestKey: 'pending',

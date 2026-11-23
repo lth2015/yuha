@@ -23,6 +23,8 @@ export default async function generationRoutes(app: FastifyInstance, opts: { ctx
     {
       preHandler: app.requireAgeConfirmed,
       config: {
+        // A trial's one song (docs/GROWTH_SPEC.md, part three).
+        guestAllowed: true,
         rateLimit: {
           max: ctx.config.GENERATION_RATE_LIMIT_PER_HOUR,
           timeWindow: '1 hour',
@@ -47,6 +49,7 @@ export default async function generationRoutes(app: FastifyInstance, opts: { ctx
         userId: req.user!.id,
         idempotencyKey: parsedKey.data,
         request: body,
+        guest: req.user!.role === 'guest',
       });
 
       // The full job view, so the client can render the progress screen without
@@ -64,7 +67,7 @@ export default async function generationRoutes(app: FastifyInstance, opts: { ctx
    * Registered before `/v1/jobs/:id` only for readability: find-my-way
    * prefers the static segment either way.
    */
-  app.get('/v1/jobs/unfinished', { preHandler: app.requireAuth }, async (req) => {
+  app.get('/v1/jobs/unfinished', { preHandler: app.requireAuth, config: { guestAllowed: true } }, async (req) => {
     const rows = await listUnfinishedJobs(req.user!.id);
     return { items: await getJobViews(ctx, rows) };
   });
@@ -73,7 +76,7 @@ export default async function generationRoutes(app: FastifyInstance, opts: { ctx
    * 「不要了」: take a generation that ended without a song off its owner's
    * lists. The job and its ledger stay on record (docs/TASK_RECOVERY_SPEC.md).
    */
-  app.post('/v1/jobs/:id/dismiss', { preHandler: app.requireAuth }, async (req, reply) => {
+  app.post('/v1/jobs/:id/dismiss', { preHandler: app.requireAuth, config: { guestAllowed: true } }, async (req, reply) => {
     const { id } = req.params as { id: string };
     const res = await dismissUnfinishedJob(req.user!.id, id);
     if (!res.found) throw new AppError('NOT_FOUND', 'no such generation');
@@ -82,18 +85,18 @@ export default async function generationRoutes(app: FastifyInstance, opts: { ctx
   });
 
   /** The settings a job was submitted with, for its owner to try again. */
-  app.get('/v1/jobs/:id/draft', { preHandler: app.requireAuth }, async (req) => {
+  app.get('/v1/jobs/:id/draft', { preHandler: app.requireAuth, config: { guestAllowed: true } }, async (req) => {
     const { id } = req.params as { id: string };
     return getJobDraft(id, req.user!.id);
   });
 
   /** GET /v1/jobs/:id — owner-scoped status polling with backoff hints. */
-  app.get('/v1/jobs/:id', { preHandler: app.requireAuth }, async (req) => {
+  app.get('/v1/jobs/:id', { preHandler: app.requireAuth, config: { guestAllowed: true } }, async (req) => {
     const { id } = req.params as { id: string };
     return getJobView(ctx, id, req.user!.id);
   });
 
-  app.post('/v1/jobs/:id/cancel', { preHandler: app.requireAuth }, async (req) => {
+  app.post('/v1/jobs/:id/cancel', { preHandler: app.requireAuth, config: { guestAllowed: true } }, async (req) => {
     const { id } = req.params as { id: string };
     return cancelGeneration(ctx, { jobId: id, userId: req.user!.id });
   });
