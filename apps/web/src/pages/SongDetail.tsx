@@ -20,6 +20,7 @@ import { IssueReport } from '../components/IssueReport';
 import { ErrorNotice } from '../components/common';
 import { Score } from '../components/Score';
 import { ShareMenu } from '../components/ShareMenu';
+import { PhotoVideo } from '../components/PhotoVideo';
 import { SyncedLyrics } from '../components/SyncedLyrics';
 import { scoreFromSeed } from '../lib/score';
 import { usePageTitle } from '../lib/title';
@@ -720,6 +721,12 @@ export default function SongDetail() {
               </div>
             )}
           </div>
+
+          {/* The photo MV (docs/PHOTO_MV_SPEC.md): the owner's, once the song plays,
+              and only where the switch is on. */}
+          {isOwner && song.state === 'deliverable' && runtime?.features.photoVideoEnabled && (
+            <PhotoVideo song={song} labels={shareLabels()} lyrics={song.lyrics} lyricTimings={song.lyricTimings} />
+          )}
 
           {/* Beside the buttons that caused it, not in place of the page. */}
           <ErrorNotice error={actionError} />

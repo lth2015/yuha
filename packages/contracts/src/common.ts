@@ -44,6 +44,8 @@ export const runtimeInfo = z.object({
      */
     freeTrialUnits: z.number().int().nonnegative(),
     wavExportEnabled: z.boolean(),
+    /** The photo MV (docs/PHOTO_MV_SPEC.md): the song page offers it only when true. */
+    photoVideoEnabled: z.boolean(),
     commercialDeliveryEnabled: z.boolean(),
     realPaymentsEnabled: z.boolean(),
     /** A card purchase started here can finish: Stripe, or the demo's simulation. */

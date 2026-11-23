@@ -414,6 +414,9 @@ const envSchema = z.object({
   FEATURE_SUBSCRIPTIONS_ENABLED: bool(true),
   FEATURE_FREE_TRIAL_ENABLED: bool(true),
   FEATURE_WAV_EXPORT_ENABLED: bool(false),
+  // The photo MV (docs/PHOTO_MV_SPEC.md). Off until the privacy text that
+  // describes it is reviewed (docs/legal/PRIVACY_CHANGES_2026-11.md).
+  FEATURE_PHOTO_VIDEO_ENABLED: bool(false),
   FREE_TRIAL_UNITS: int(2),
   MAX_CONCURRENT_JOBS_PER_USER: int(2),
   DAILY_BUDGET_MINOR: int(50_000),
@@ -1169,6 +1172,8 @@ export interface FeatureFlags {
   subscriptionsEnabled: boolean;
   freeTrialEnabled: boolean;
   wavExportEnabled: boolean;
+  /** The photo MV (docs/PHOTO_MV_SPEC.md). */
+  photoVideoEnabled: boolean;
   commercialDeliveryEnabled: boolean;
   realPaymentsEnabled: boolean;
   /**
@@ -1195,6 +1200,7 @@ export function baseFeatures(cfg: AppConfig): FeatureFlags {
     subscriptionsEnabled: cfg.FEATURE_SUBSCRIPTIONS_ENABLED,
     freeTrialEnabled: cfg.FEATURE_FREE_TRIAL_ENABLED,
     wavExportEnabled: cfg.FEATURE_WAV_EXPORT_ENABLED,
+    photoVideoEnabled: cfg.FEATURE_PHOTO_VIDEO_ENABLED,
     // SEC-09: no signed agreement means no commercial delivery, regardless of
     // what anyone sets in the environment.
     commercialDeliveryEnabled: cfg.MUSIC_COMMERCIAL_DELIVERY && cfg.adapters.music !== 'demo',

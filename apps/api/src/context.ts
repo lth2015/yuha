@@ -392,6 +392,7 @@ export function createContext(config: AppConfig): AppContext {
         subscriptionsEnabled: statics.subscriptionsEnabled && overrides.subscriptionsEnabled !== false,
         freeTrialEnabled: statics.freeTrialEnabled && overrides.freeTrialEnabled !== false,
         wavExportEnabled: statics.wavExportEnabled && overrides.wavExportEnabled !== false,
+        photoVideoEnabled: statics.photoVideoEnabled && overrides.photoVideoEnabled !== false,
         commercialDeliveryEnabled:
           statics.commercialDeliveryEnabled && overrides.commercialDeliveryEnabled !== false,
         realPaymentsEnabled: statics.realPaymentsEnabled,

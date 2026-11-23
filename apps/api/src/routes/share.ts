@@ -114,6 +114,41 @@ export default async function shareRoutes(app: FastifyInstance, opts: { ctx: App
   );
 
   /**
+   * The encode both videos share: the owner's song, the clip inside it, JPEG
+   * frames only, the song's own audio, nothing kept.
+   */
+  async function encodeForOwner(
+    reply: FastifyReply,
+    id: string,
+    userId: string,
+    body: { start: number; duration: number; frames: Array<{ at: number; jpeg: string }> },
+  ) {
+    const track = await getTrack(id);
+    if (!track || track.deleted_at || track.owner_id !== userId) throw new AppError('NOT_FOUND', 'no such song');
+    if (track.state !== 'deliverable') throw new AppError('TRACK_NOT_DELIVERABLE', 'the song is not playable');
+    if (body.start + body.duration > track.duration_ms / 1000 + 0.5) {
+      throw new AppError('VALIDATION_FAILED', 'the clip runs past the end of the song');
+    }
+    const frames = body.frames.map((f) => ({ at: Math.min(f.at, body.duration), jpeg: Buffer.from(f.jpeg, 'base64') }));
+    if (frames.some((f) => !isJpeg(f.jpeg))) throw new AppError('VALIDATION_FAILED', 'frames must be JPEG');
+    // The first frame is on screen from the first moment, whatever it claimed.
+    frames.sort((a, b) => a.at - b.at)[0]!.at = 0;
+
+    const master = await getMasterAsset(track.id);
+    if (!master) throw new AppError('TRACK_NOT_DELIVERABLE', 'the song has no audio');
+    const audio = await ctx.storage.get('delivery', master.storage_key);
+    try {
+      const mp4 = await renderShareVideo({ audio, start: body.start, duration: body.duration, frames });
+      return reply.header('content-type', 'video/mp4').header('cache-control', 'no-store').send(mp4);
+    } catch (err) {
+      if (err instanceof VideoBusyError) {
+        throw new AppError('RATE_LIMITED', 'another video is being made; try again in a moment', { retryAfterSeconds: 15 });
+      }
+      throw err;
+    }
+  }
+
+  /**
    * POST /v1/tracks/:id/share-video — the owner's frames on the song's audio,
    * returned as an MP4 to share as a file. Nothing is stored.
    */
@@ -132,29 +167,36 @@ export default async function shareRoutes(app: FastifyInstance, opts: { ctx: App
             .max(24),
         })
         .parse(req.body);
-      const track = await getTrack(id);
-      if (!track || track.deleted_at || track.owner_id !== req.user!.id) throw new AppError('NOT_FOUND', 'no such song');
-      if (track.state !== 'deliverable') throw new AppError('TRACK_NOT_DELIVERABLE', 'the song is not playable');
-      if (body.start + body.duration > track.duration_ms / 1000 + 0.5) {
-        throw new AppError('VALIDATION_FAILED', 'the clip runs past the end of the song');
-      }
-      const frames = body.frames.map((f) => ({ at: Math.min(f.at, body.duration), jpeg: Buffer.from(f.jpeg, 'base64') }));
-      if (frames.some((f) => !isJpeg(f.jpeg))) throw new AppError('VALIDATION_FAILED', 'frames must be JPEG');
-      // The first frame is on screen from the first moment, whatever it claimed.
-      frames.sort((a, b) => a.at - b.at)[0]!.at = 0;
+      return encodeForOwner(reply, id, req.user!.id, body);
+    },
+  );
 
-      const master = await getMasterAsset(track.id);
-      if (!master) throw new AppError('TRACK_NOT_DELIVERABLE', 'the song has no audio');
-      const audio = await ctx.storage.get('delivery', master.storage_key);
-      try {
-        const mp4 = await renderShareVideo({ audio, start: body.start, duration: body.duration, frames });
-        return reply.header('content-type', 'video/mp4').header('cache-control', 'no-store').send(mp4);
-      } catch (err) {
-        if (err instanceof VideoBusyError) {
-          throw new AppError('RATE_LIMITED', 'another video is being made; try again in a moment', { retryAfterSeconds: 15 });
-        }
-        throw err;
+  /**
+   * POST /v1/tracks/:id/photo-video — the photo MV (docs/PHOTO_MV_SPEC.md).
+   * The same encode as the share video; the frames carry the owner's photos,
+   * so the limits are its own and the switch is checked first. Nothing is
+   * stored: the frames live in a temporary directory for the length of the
+   * encode, which `renderShareVideo` removes whatever happens.
+   */
+  app.post(
+    '/v1/tracks/:id/photo-video',
+    { preHandler: app.requireAuth, bodyLimit: 16_000_000 },
+    async (req, reply) => {
+      if (!(await ctx.features()).photoVideoEnabled) {
+        throw new AppError('SERVICE_DISABLED', 'photo videos are not available yet');
       }
+      const { id } = idParam.parse(req.params);
+      const body = z
+        .object({
+          start: z.number().min(0),
+          duration: z.number().min(3).max(30),
+          frames: z
+            .array(z.object({ at: z.number().min(0), jpeg: z.string().min(4).max(600_000) }))
+            .min(1)
+            .max(40),
+        })
+        .parse(req.body);
+      return encodeForOwner(reply, id, req.user!.id, body);
     },
   );
 
