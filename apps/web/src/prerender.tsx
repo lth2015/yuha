@@ -30,6 +30,7 @@ import { I18nProvider, textIn } from './lib/i18n';
 import { PlayerProvider } from './lib/player';
 import { PUBLIC_PAGES, SEO_LANGS, headFor, staticPath, type SeoLang } from './lib/seo';
 import { pageDocument } from './lib/static-page';
+import { sceneBySlug } from './lib/scenes';
 import { SessionProvider } from './lib/session';
 import { pageTitleKey } from './lib/title';
 import Home from './pages/Home';
@@ -81,6 +82,8 @@ export function prerenderPages(template: string, origin: string): Array<{ file: 
         title: key === null ? `YUHA — ${t('footer.slogan')}` : `${t(key)} — YUHA`,
         description: t(head.description ?? 'seo.desc.home'),
         rendered: renderPage(page.path, lang),
+        // A scene page's own card (Codex, PR #96): text-free, so one image serves all three languages.
+        ...(sceneBySlug(page.path.slice(1)) ? { ogImage: new URL(`/scene/og-scene-${page.path.slice(1)}.png`, origin).toString() } : {}),
       });
       return { file: staticPath(page.path, lang), html };
     }),

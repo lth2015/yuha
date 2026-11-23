@@ -22,6 +22,9 @@ export default function ScenePage({ slug }: { slug: SceneSlug }) {
   return (
     <div className={`scene scene--${slug}`}>
       <section className="scene__hero" aria-labelledby="scene-title">
+        {/* Codex's illustration (PR #96): one object, decorative; the words carry the page. */}
+        <img className="scene__art" src={`/scene/${slug}.svg`} width={320} height={240} alt="" aria-hidden="true" />
+        <div className="scene__intro">
         <span className="scene__kicker">{t(scene.kicker)}</span>
         <h1 id="scene-title">{t(scene.title)}</h1>
         <p className="scene__body">{t(scene.body)}</p>
@@ -29,6 +32,7 @@ export default function ScenePage({ slug }: { slug: SceneSlug }) {
           {t(scene.cta)}
         </Link>
         {trialUnits > 0 && <p className="scene__note">{t('scene.free', { n: trialUnits })}</p>}
+        </div>
       </section>
 
       <section className="scene__section" aria-labelledby="scene-starters">

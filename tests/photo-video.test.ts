@@ -152,6 +152,15 @@ describe('the plan of a photo video', () => {
     expect(plan.frames.find((f) => f.at === 9.5)).toMatchObject({ line: null });
   });
 
+  it('ends on two seconds of the last photo, with the closing frame and nothing sung', () => {
+    const plan = planPhotoClip(lines, 90, 3);
+    const last = plan.frames.at(-1)!;
+    expect(last).toEqual({ at: 28, photo: 2, line: null, ending: true });
+    expect(plan.frames.filter((f) => f.ending)).toHaveLength(1);
+    // Nothing after the ending begins.
+    expect(plan.frames.every((f) => f.at <= 28)).toBe(true);
+  });
+
   it('works for a short instrumental and keeps every frame inside the clip', () => {
     const plan = planPhotoClip([], 20, 5);
     expect(plan.duration).toBe(15);

@@ -77,7 +77,7 @@ export function PhotoVideo({
       const plan = planPhotoClip(lines, song.durationSeconds, photos.length);
       const frames = [];
       for (const f of plan.frames) {
-        const canvas = await drawPhotoFrame(song, labels, photos[f.photo]!.canvas, f.line);
+        const canvas = await drawPhotoFrame(song, labels, photos[f.photo]!.canvas, f.line, f.ending === true);
         frames.push({ at: f.at, jpeg: await frameJpeg(canvas, 0.8) });
       }
       const blob = await apiPostForBlob(`/v1/tracks/${song.trackId}/photo-video`, { start: plan.start, duration: plan.duration, frames });

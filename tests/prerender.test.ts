@@ -20,6 +20,12 @@ const TEMPLATE = `<!doctype html>
       name="description"
       content="写下一段心情。"
     />
+    <meta property="og:title" content="YUHA — 让心动，有回声。" />
+    <meta
+      property="og:description"
+      content="描述一种心情。"
+    />
+    <meta property="og:image" content="https://yuha.studio/brand/og-card.png" />
     <script type="module" crossorigin src="/assets/index-abc.js"></script>
   </head>
   <body>
@@ -66,6 +72,10 @@ describe('prerendered public pages', () => {
     expect(en).toContain('hreflang="ja" href="https://example.test/ja/pricing.html"');
     expect(en).toContain('<script type="module" crossorigin src="/assets/index-abc.js"></script>');
     expect(file('/', 'ja')).toContain(`<title>YUHA — ${textIn('ja', 'footer.slogan')}</title>`);
+    // A link to the page previews as the page, not as the home page.
+    expect(en).toContain(`<meta property="og:title" content="${textIn('en', 'title.pricing')} — YUHA"`);
+    expect(en).toContain(`<meta property="og:description" content="${textIn('en', 'seo.desc.pricing')}"`);
+    expect(en).toContain('content="https://yuha.studio/brand/og-card.png"');
   });
 
   it('links to the other prerendered pages, so a crawler that follows links stays on readable ones', () => {

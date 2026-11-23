@@ -2907,7 +2907,14 @@ textarea.is-full { border-color: var(--danger); }
 /* Scene landing pages (pages/Scene.tsx, docs/GROWTH_SPEC.md). Phone first:
    most of the people who land here came from a short video. */
 .scene { max-width: 760px; margin: 0 auto; display: flex; flex-direction: column; gap: var(--s12); }
-.scene__hero { padding-top: var(--s8); }
+.scene__hero { padding-top: var(--s8); display: grid; gap: var(--s4); }
+/* Above the title on a phone, beside it from tablet width. */
+.scene__art { display: block; width: min(60vw, 240px); height: auto; }
+@media (min-width: 720px) {
+  .scene__hero { grid-template-columns: 1fr 260px; align-items: center; column-gap: var(--s8); }
+  .scene__art { grid-column: 2; grid-row: 1; width: 260px; }
+  .scene__intro { grid-column: 1; grid-row: 1; }
+}
 .scene__kicker { display: block; margin-bottom: var(--s2); font-size: var(--t-caption); color: var(--link); letter-spacing: 0.04em; }
 .scene__hero h1 { margin: 0 0 var(--s4); font-size: clamp(1.6rem, 6.4vw, 2.4rem); line-height: 1.3; font-weight: 700; text-wrap: balance; word-break: auto-phrase; }
 .scene__body { margin: 0 0 var(--s6); max-width: 34rem; color: var(--muted); font-size: var(--t-lead); line-height: 1.75; }
