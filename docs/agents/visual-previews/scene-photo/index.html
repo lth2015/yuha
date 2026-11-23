@@ -1,0 +1,241 @@
+<!doctype html>
+<html lang="zh">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>YUHA · 场景与照片 MV 素材预览</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=M+PLUS+2:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; background: #f6f5f0; color: #20221f; font: 400 15px/1.7 "M PLUS 2", system-ui, sans-serif; }
+  header, main { max-width: 1120px; margin: auto; padding: 24px; }
+  header { border-bottom: 1px solid #20221f18; }
+  header img { width: 99px; height: 30px; }
+  h1 { font-size: 25px; line-height: 1.4; margin: 12px 0; }
+  h2 { line-height: 1.4; }
+  p { margin: 8px 0; }
+  .muted { color: #5b6057; font-size: 13px; }
+  nav { display: flex; flex-wrap: wrap; gap: 8px 16px; }
+  a { color: #9e3f24; text-underline-offset: 4px; }
+  .gallery { display: grid; gap: 20px; }
+  .scene-proof { padding: 24px; border: 1px solid #20221f14; border-radius: 22px; background: #fffdf880; }
+  .scene-art { width: min(100%, 320px); aspect-ratio: 4/3; display: block; margin: auto; }
+  .kicker { color: #9e3f24; font-size: 13px; }
+  .scene-copy h2 { font-size: clamp(24px, 3vw, 30px); margin: 12px 0; font-weight: 700; text-wrap: balance; }
+  .scene-copy p { color: #5b6057; }
+  .cta { display: inline-block; margin-top: 16px; padding: 12px 20px; background: #20221f; color: #fffdf8; border-radius: 12px; font-size: 14px; max-width: 100%; overflow-wrap: anywhere; }
+  .og-grid { display: grid; gap: 20px; }
+  .og-grid figure { margin: 0; }
+  .og-grid canvas { width: 100%; display: block; border: 1px solid #20221f20; border-radius: 12px; }
+  figcaption { font-size: 13px; color: #5b6057; margin-top: 8px; }
+  .photos { display: grid; gap: 24px; grid-template-columns: repeat(2, minmax(0,1fr)); max-width: 800px; margin: auto; }
+  .photos figure { margin: 0; }
+  .photo { position: relative; aspect-ratio: 9/16; overflow: hidden; border-radius: 14px; background: #20221f; }
+  .photo > .background, .photo > .trim { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+  .photo > .logo { position: absolute; top: 47%; left: 30%; width: 40%; height: auto; }
+  section { margin: 0 0 48px; }
+  body[data-view="scenes"] .og-section, body[data-view="scenes"] .photo-section { display: none; }
+  body[data-view="og"] .scene-section, body[data-view="og"] .photo-section { display: none; }
+  body[data-view="photo"] .scene-section, body[data-view="photo"] .og-section { display: none; }
+  @media (min-width: 760px) {
+    .gallery { grid-template-columns: repeat(2, minmax(0,1fr)); }
+    .og-grid { grid-template-columns: repeat(2, minmax(0,1fr)); }
+  }
+  @media (max-width: 420px) {
+    header, main { padding: 20px; }
+    .scene-proof { padding: 20px; }
+    .photos { grid-template-columns: 1fr; }
+  }
+</style>
+<header>
+  <img src="../../../../apps/web/public/brand/yuha-logo.svg" alt="YUHA">
+  <h1>场景与照片 MV · 素材预览</h1>
+  <p class="muted">第三批静态组合示意。文字来自当前产品；按钮为排版样本。真实页面接入、功能和视频导出由 Claude 另行验证。</p>
+  <nav aria-label="预览语言"><a href="?lang=zh">中文</a><a href="?lang=ja">日本語</a><a href="?lang=en">English</a></nav>
+  <nav aria-label="预览分组"><a href="?view=scenes">场景插画</a><a href="?view=og">链接卡片</a><a href="?view=photo">照片片尾</a><a href="?">全部</a></nav>
+</header>
+<main>
+  <section class="scene-section"><h2>六个写歌的理由</h2><div class="gallery" id="scenes"></div></section>
+  <section class="og-section"><h2>分享预览 · 页面另行排字</h2><p class="muted">交付 PNG 内没有文字。以下示意把当前标题画在左侧，右侧插画来自原图。</p><div class="og-grid" id="og"></div></section>
+  <section class="photo-section"><h2>照片 MV · 明暗背景</h2><p class="muted">两张背景由内置 imagegen 生成，非真实用户照片。中央标志使用现有品牌文件，由预览页面独立叠加；透明 PNG 只提供边缘暖光和细颗粒。</p>
+    <div class="photos">
+      <figure><div class="photo"><img class="background" src="sample-bright.jpg" alt="AI 生成的明亮窗边静物测试照片"><img class="trim" src="../../../../apps/web/public/photo/photo-mv-end.png" alt=""><img class="logo" src="../../../../apps/web/public/brand/yuha-logo.svg" alt="YUHA"></div><figcaption>明亮背景 · 墨色标志示意</figcaption></figure>
+      <figure><div class="photo"><img class="background" src="sample-dark.jpg" alt="AI 生成的暗色湖畔测试照片"><img class="trim" src="../../../../apps/web/public/photo/photo-mv-end.png" alt=""><img class="logo" src="../../../../apps/web/public/brand/yuha-logo-reverse.svg" alt="YUHA"></div><figcaption>暗色背景 · 反白标志示意</figcaption></figure>
+    </div>
+  </section>
+</main>
+<script>
+  // This file is a static review harness, outside the shipped application.
+  const copy = {
+  "zh": {
+    "birthday": {
+      "kicker": "生日",
+      "title": "今年的生日礼物，是一首只属于 TA 的歌",
+      "body": "写下 TA 的名字和一件你们之间的小事，YUHA 会把它写进歌词、唱出来。做好后把链接发给 TA，对方打开就能听。",
+      "cta": "为 TA 写一首生日歌"
+    },
+    "love": {
+      "kicker": "喜欢你",
+      "title": "说不出口的话，让歌替你说",
+      "body": "告白、纪念日，或者只是想让 TA 知道。写下你们的一个瞬间，YUHA 把它变成一首有人声的歌。",
+      "cta": "为 TA 写一首情歌"
+    },
+    "thanks": {
+      "kicker": "谢谢你",
+      "title": "一句谢谢，写成一首歌",
+      "body": "给老师、父母、照顾过你的同事或朋友。写下 TA 为你做过的一件事，比一张卡片更让人记得住。",
+      "cta": "为 TA 写一首感谢的歌"
+    },
+    "miss": {
+      "kicker": "想你",
+      "title": "隔着距离，也能送一首歌",
+      "body": "异地的恋人、远方的家人、很久没见的老朋友。写下你最想念的那个画面，让歌带过去。",
+      "cta": "为 TA 写一首想念的歌"
+    },
+    "memory": {
+      "kicker": "写给自己",
+      "title": "把一段时光，留成一首歌",
+      "body": "毕业、旅行、搬家、一个回不去的夏天。写下那时的样子，YUHA 把它变成一首只属于你的歌。作品默认私密。",
+      "cta": "写一首回忆的歌"
+    },
+    "cheer": {
+      "kicker": "加油",
+      "title": "在 TA 最需要的时候，送一首歌",
+      "body": "考试、比赛、新工作、一段难熬的日子。写下你相信 TA 的理由，变成 TA 可以反复听的一首歌。",
+      "cta": "为 TA 写一首加油的歌"
+    }
+  },
+  "ja": {
+    "birthday": {
+      "kicker": "誕生日",
+      "title": "今年の誕生日は、その人だけの一曲を",
+      "body": "名前と、ふたりの小さな思い出をひとつ書くだけ。YUHA が歌詞にして、歌にします。できたらリンクを送れば、相手はすぐに聴けます。",
+      "cta": "その人に誕生日の歌をつくる"
+    },
+    "love": {
+      "kicker": "好きだよ",
+      "title": "言えない気持ちは、歌にして",
+      "body": "告白、記念日、ただ伝えたいとき。ふたりのひとコマを書けば、YUHA が歌声のある一曲にします。",
+      "cta": "その人にラブソングをつくる"
+    },
+    "thanks": {
+      "kicker": "ありがとう",
+      "title": "ありがとうを、一曲に",
+      "body": "先生、両親、支えてくれた同僚や友だちへ。その人がしてくれたことをひとつ書けば、カードよりずっと心に残ります。",
+      "cta": "その人に感謝の歌をつくる"
+    },
+    "miss": {
+      "kicker": "会いたい",
+      "title": "離れていても、歌なら届く",
+      "body": "遠距離の恋人、遠くの家族、しばらく会えていない友だち。いちばん恋しい場面を書けば、歌がそこまで運びます。",
+      "cta": "その人に会いたい歌をつくる"
+    },
+    "memory": {
+      "kicker": "自分のために",
+      "title": "あのころを、一曲に残す",
+      "body": "卒業、旅、引っ越し、もう戻らない夏。そのころのことを書けば、YUHA が自分だけの一曲にします。作品は初期設定で非公開です。",
+      "cta": "思い出の歌をつくる"
+    },
+    "cheer": {
+      "kicker": "がんばれ",
+      "title": "いちばん必要なときに、一曲を",
+      "body": "試験、試合、新しい仕事、つらい時期。その人を信じている理由を書けば、何度でも聴ける応援歌になります。",
+      "cta": "その人に応援の歌をつくる"
+    }
+  },
+  "en": {
+    "birthday": {
+      "kicker": "Birthday",
+      "title": "This year, give them a song that's only theirs",
+      "body": "Write their name and one small thing you share. YUHA writes it into the lyrics and sings it. When it's done, send the link — they just open it and listen.",
+      "cta": "Write a birthday song for them"
+    },
+    "love": {
+      "kicker": "Love",
+      "title": "When the words won't come, let a song say it",
+      "body": "A confession, an anniversary, or just wanting them to know. Write one moment of yours, and YUHA turns it into a sung song.",
+      "cta": "Write a love song for them"
+    },
+    "thanks": {
+      "kicker": "Thank you",
+      "title": "Turn a thank-you into a song",
+      "body": "For a teacher, a parent, a colleague or a friend who looked out for you. Write one thing they did — it stays with them longer than a card.",
+      "cta": "Write a thank-you song"
+    },
+    "miss": {
+      "kicker": "Miss you",
+      "title": "Far apart, a song still gets there",
+      "body": "A partner far away, family in another city, an old friend you haven't seen in years. Write the picture you miss most, and let the song carry it.",
+      "cta": "Write a song for someone you miss"
+    },
+    "memory": {
+      "kicker": "For yourself",
+      "title": "Keep a stretch of time as a song",
+      "body": "Graduation, a trip, a move, a summer you can't go back to. Write how it was, and YUHA makes it a song of your own. Songs are private by default.",
+      "cta": "Write a song about a memory"
+    },
+    "cheer": {
+      "kicker": "You've got this",
+      "title": "A song for when they need it most",
+      "body": "An exam, a match, a new job, a hard stretch. Write why you believe in them, and it becomes a song they can play again and again.",
+      "cta": "Write a song to cheer them on"
+    }
+  }
+};
+  const query = new URLSearchParams(location.search);
+  const lang = ['zh', 'ja', 'en'].includes(query.get('lang')) ? query.get('lang') : 'zh';
+  document.documentElement.lang = lang;
+  document.body.dataset.view = ['scenes', 'og', 'photo'].includes(query.get('view')) ? query.get('view') : 'all';
+  for (const link of document.querySelectorAll('nav a')) {
+    const target = new URL(link.href);
+    if (target.searchParams.has('lang')) {
+      if (query.has('view')) target.searchParams.set('view', document.body.dataset.view);
+    } else if (target.searchParams.has('view')) target.searchParams.set('lang', lang);
+    link.href = target.href;
+  }
+  const slugs = Object.keys(copy[lang]);
+  const root = '../../../../apps/web/public/scene/';
+  const loading = [];
+  const ogLayouts = [];
+  for (const slug of slugs) {
+    const scene = copy[lang][slug];
+    const article = document.createElement('article');
+    article.className = 'scene-proof';
+    article.dataset.scene = slug;
+    article.innerHTML = `<img class="scene-art" src="${root}${slug}.svg" alt=""><div class="scene-copy"><span class="kicker"></span><h2></h2><p></p><span class="cta"></span></div>`;
+    article.querySelector('.kicker').textContent = scene.kicker;
+    article.querySelector('h2').textContent = scene.title;
+    article.querySelector('p').textContent = scene.body;
+    article.querySelector('.cta').textContent = scene.cta;
+    document.querySelector('#scenes').append(article);
+    const figure = document.createElement('figure');
+    const canvas = document.createElement('canvas');
+    canvas.width = 1200; canvas.height = 630;
+    canvas.setAttribute('aria-label', scene.title);
+    const caption = document.createElement('figcaption');
+    caption.textContent = `${slug} · ${lang} · 1200 × 630`;
+    figure.append(canvas, caption); document.querySelector('#og').append(figure);
+    loading.push((async () => {
+      const image = new Image(); image.src = `${root}og-scene-${slug}.png`; await image.decode();
+      await document.fonts.load('700 44px "M PLUS 2"', scene.title);
+      const ctx = canvas.getContext('2d'); ctx.drawImage(image, 0, 0);
+      ctx.fillStyle = '#9e3f24'; ctx.font = '500 23px "M PLUS 2", sans-serif'; ctx.fillText(scene.kicker, 76, 160);
+      ctx.fillStyle = '#20221f'; ctx.font = '700 44px "M PLUS 2", sans-serif';
+      const words = lang === 'en' ? scene.title.split(' ') : Array.from(scene.title);
+      const targetLines = Math.ceil(ctx.measureText(scene.title).width / 508);
+      const balancedChars = Math.ceil(words.length / targetLines);
+      const lines = []; let line = ''; let charCount = 0;
+      for (const word of words) {
+        const test = line + (lang === 'en' && line ? ' ' : '') + word;
+        const balancedBreak = lang !== 'en' && charCount >= balancedChars && !/[、。，！？」』]/.test(word);
+        if (line && (ctx.measureText(test).width > 508 || balancedBreak)) { lines.push(line); line = word; charCount = 1; } else { line = test; charCount++; }
+      }
+      if (line) lines.push(line);
+      lines.forEach((text, i) => ctx.fillText(text, 76, 244 + i * 63));
+      ogLayouts.push({ slug, lang, lines: lines.length, right: Math.max(...lines.map(text => 76 + ctx.measureText(text).width)), bottom: 244 + (lines.length - 1) * 63 });
+    })());
+  }
+  Promise.all(loading).then(() => { document.body.dataset.ready = 'true'; document.body.dataset.ogLayouts = JSON.stringify(ogLayouts); }).catch(error => { document.body.dataset.error = error.message; });
+</script>
+</html>

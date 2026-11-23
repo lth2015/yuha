@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="320" height="240" viewBox="0 0 320 240" fill="none">
+<ellipse cx="160" cy="210" rx="78" ry="6" fill="#20221f" opacity=".045"/>
+<defs>
+  <linearGradient id="print" x1="111" y1="84" x2="201" y2="160" gradientUnits="userSpaceOnUse"><stop stop-color="#f4e6c8"/><stop offset="1" stop-color="#fffdf8"/></linearGradient>
+  <clipPath id="photo"><rect x="105" y="74" width="113" height="99" rx="1"/></clipPath>
+</defs>
+<g transform="rotate(-9 160 133)">
+  <rect x="93" y="60" width="137" height="144" rx="3" fill="#fffdf8" stroke="#f4e6c8" stroke-width="1.5"/>
+  <rect x="105" y="74" width="113" height="99" rx="1" fill="url(#print)"/>
+  <g clip-path="url(#photo)">
+    <circle cx="188" cy="98" r="15" fill="#F46B45" opacity=".65"/>
+    <path d="M100 148c29-35 44-23 61-12 19 13 35-5 62-13v54H100Z" fill="#6b6d66" opacity=".45"/>
+    <path d="M100 162c36-27 63 9 94-9 14-8 21-6 29-4v30H100Z" fill="#fffdf8" opacity=".7"/>
+    <path d="M113 87v38" stroke="#fffdf8" stroke-opacity=".38" stroke-width="2" stroke-linecap="round"/>
+  </g>
+  <path d="M108 191h18" stroke="#f4e6c8" stroke-width="2" stroke-linecap="round"/>
+</g>
+</svg>

@@ -40,11 +40,19 @@ describe('scene pages', () => {
   });
 
   it('are written out with their copy, and their button pointing into /create', () => {
-    const pages = prerenderPages('<html lang="zh-CN"><title>x</title><meta name="description" content="x"/><div id="root"><main></main></div></html>', 'https://example.test');
+    const pages = prerenderPages(
+      '<html lang="zh-CN"><title>x</title><meta name="description" content="x"/><meta property="og:title" content="x" />' +
+        '<meta property="og:description" content="x" /><meta property="og:image" content="https://example.test/brand/og-card.png" />' +
+        '<div id="root"><main></main></div></html>',
+      'https://example.test',
+    );
     const ja = pages.find((p) => p.file === staticPath('/birthday', 'ja'))!.html;
     expect(ja).toContain(`<title>${textIn('ja', 'scene.birthday.name')} — YUHA</title>`);
     expect(ja).toContain(textIn('ja', 'scene.birthday.title'));
     expect(ja).toContain('href="/create?gift=1&amp;occasion=birthday&amp;src=scene-birthday"');
+    // Its own card: Codex's illustration, the same in every language.
+    expect(ja).toContain('<meta property="og:image" content="https://example.test/scene/og-scene-birthday.png"');
+    expect(ja).toContain(`<meta property="og:title" content="${textIn('ja', 'scene.birthday.name')} — YUHA"`);
     // The other scenes are linked as files a crawler can read.
     expect(ja).toContain('href="/ja/love.html"');
   });

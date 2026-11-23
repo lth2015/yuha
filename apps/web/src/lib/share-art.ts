@@ -377,12 +377,17 @@ export function planShareClip(lines: TimedLine[], songSeconds: number, maxFrames
 const PHOTO_CLIP_SECONDS = 30;
 /** What the server takes (apps/api/src/routes/share.ts, photo-video). */
 const PHOTO_MAX_FRAMES = 40;
+const ENDING_SECONDS = 2;
 
 export interface PhotoClipPlan {
   start: number;
   duration: number;
-  /** From each moment: which photo (by the order chosen) and which line, if one is being sung. */
-  frames: Array<{ at: number; photo: number; line: string | null }>;
+  /**
+   * From each moment: which photo (by the order chosen) and which line, if one
+   * is being sung. The last frame of a clip long enough has `ending`: the
+   * closing two seconds (Codex's end frame, PR #96).
+   */
+  frames: Array<{ at: number; photo: number; line: string | null; ending?: true }>;
 }
 
 /**
@@ -405,7 +410,7 @@ export function planPhotoClip(lines: TimedLine[], songSeconds: number, photos: n
     if (l.end < end) cuts.add(round(l.end - start));
   }
   const times = [...cuts].filter((t) => t < duration - 0.25).sort((a, b) => a - b);
-  const frames = times.map((at) => {
+  const frames: PhotoClipPlan['frames'] = times.map((at) => {
     const t = start + at;
     const sung = lines.find((l) => l.start <= t + 0.001 && l.end > t + 0.001);
     return { at, photo: Math.min(count - 1, Math.floor((at + 0.001) / slot)), line: sung?.text ?? null };
@@ -415,6 +420,13 @@ export function planPhotoClip(lines: TimedLine[], songSeconds: number, photos: n
     const i = frames.findIndex((f, k) => k > 0 && f.photo === frames[k - 1]!.photo);
     if (i < 0) break;
     frames.splice(i, 1);
+  }
+  // The closing two seconds: the last photo, the end frame and the logo, nothing sung.
+  if (duration >= 8) {
+    const endAt = round(duration - ENDING_SECONDS);
+    const kept = frames.filter((f) => f.at < endAt);
+    kept.push({ at: endAt, photo: count - 1, line: null, ending: true });
+    return { start: round(start), duration: round(duration), frames: kept };
   }
   return { start: round(start), duration: round(duration), frames };
 }
@@ -497,6 +509,7 @@ export async function drawPhotoFrame(
   labels: ShareLabels,
   photo: HTMLCanvasElement,
   line: string | null,
+  ending = false,
 ): Promise<HTMLCanvasElement> {
   await fontsReady(`${song.title}${line ?? ''}`, labels.lang);
   const canvas = document.createElement('canvas');
@@ -525,12 +538,25 @@ export async function drawPhotoFrame(
   ctx.fillRect(0, VIDEO_HEIGHT * 0.5, VIDEO_WIDTH, VIDEO_HEIGHT * 0.5);
 
   const logo = await loadImage('/brand/yuha-logo-reverse.svg');
-  if (logo) ctx.drawImage(logo, 40, 44, 99, 30);
+  if (ending) {
+    /*
+     * The closing frame: the photo dimmed so the white logo holds on any
+     * picture (the end frame itself is only a faint border and grain, and
+     * says so), Codex's frame over it, the logo in the middle.
+     */
+    ctx.fillStyle = 'rgba(0,0,0,0.42)';
+    ctx.fillRect(0, 0, VIDEO_WIDTH, VIDEO_HEIGHT);
+    const border = await loadImage('/photo/photo-mv-end.png');
+    if (border) ctx.drawImage(border, 0, 0, VIDEO_WIDTH, VIDEO_HEIGHT);
+    if (logo) ctx.drawImage(logo, (VIDEO_WIDTH - 264) / 2, (VIDEO_HEIGHT - 80) / 2 - 40, 264, 80);
+  } else if (logo) {
+    ctx.drawImage(logo, 40, 44, 99, 30);
+  }
 
   const left = 56;
   const width = VIDEO_WIDTH - left * 2;
   ctx.textBaseline = 'alphabetic';
-  if (line) {
+  if (line && !ending) {
     ctx.font = `700 40px ${family}`;
     ctx.fillStyle = '#ffffff';
     const lines = wrapText(ctx, line, width, 2);

@@ -31,7 +31,14 @@ function replaceOne(html: string, re: RegExp, what: string, by: string): string 
  */
 export function pageDocument(
   template: string,
-  { lang, title, description, head, rendered }: { lang: SeoLang; title: string; description: string; head: PageHead; rendered: string },
+  {
+    lang,
+    title,
+    description,
+    head,
+    rendered,
+    ogImage,
+  }: { lang: SeoLang; title: string; description: string; head: PageHead; rendered: string; ogImage?: string },
 ): string {
   // The same tags applyHead writes in the browser, marked the same way so it
   // replaces them rather than adding a second set.
@@ -43,6 +50,10 @@ export function pageDocument(
   html = replaceOne(html, /<html lang="[^"]*">/, '<html lang>', `<html lang="${HTML_LANG[lang]}">`);
   html = replaceOne(html, /<title>[^<]*<\/title>/, '<title>', `<title>${textNode(title)}</title>\n    ${links}`);
   html = replaceOne(html, /<meta\s+name="description"\s+content="[^"]*"/, 'description meta', `<meta name="description" content="${attr(description)}"`);
+  // What a link preview shows: this page, not the home page's card.
+  html = replaceOne(html, /<meta\s+property="og:title"\s+content="[^"]*"/, 'og:title', `<meta property="og:title" content="${attr(title)}"`);
+  html = replaceOne(html, /<meta\s+property="og:description"\s+content="[^"]*"/, 'og:description', `<meta property="og:description" content="${attr(description)}"`);
+  if (ogImage) html = replaceOne(html, /<meta\s+property="og:image"\s+content="[^"]*"/, 'og:image', `<meta property="og:image" content="${attr(ogImage)}"`);
   // The no-JavaScript block is index.html's <main> inside #root.
   const root = '<div id="root">';
   const fallback = new RegExp(`${root}[\\s\\S]*?</main>\\s*</div>`);

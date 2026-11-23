@@ -1,0 +1,324 @@
+{
+  "base": "2e3e48ae7242553ce17c1f3e8a84f03821f785c2",
+  "request": "https://github.com/lth2015/yuha/issues/88#issuecomment-7090623568",
+  "batch": 3,
+  "ogTextSafeRegion": {
+    "x": 0,
+    "y": 0,
+    "width": 660,
+    "height": 630,
+    "rgb": [
+      246,
+      245,
+      240
+    ]
+  },
+  "photoTransparentRegion": {
+    "x": 24,
+    "y": 24,
+    "width": 672,
+    "height": 1232
+  },
+  "files": [
+    {
+      "file": "apps/web/public/scene/birthday.svg",
+      "bytes": 1641,
+      "width": 320,
+      "height": 240,
+      "alpha": true,
+      "visibleBounds": [
+        82,
+        42,
+        237,
+        215
+      ],
+      "maxAlpha": 255,
+      "sha256": "89aa58333826b3f2cce5be9fa111b6ca33b521caecafddf18e15825347430b2e"
+    },
+    {
+      "file": "apps/web/public/scene/cheer.svg",
+      "bytes": 1062,
+      "width": 320,
+      "height": 240,
+      "alpha": true,
+      "visibleBounds": [
+        82,
+        48,
+        237,
+        215
+      ],
+      "maxAlpha": 255,
+      "sha256": "af348249463fb90de47d38517563d7fe6abd30c8c06ff9b3435c23f6ac3b17b6"
+    },
+    {
+      "file": "apps/web/public/scene/love.svg",
+      "bytes": 1215,
+      "width": 320,
+      "height": 240,
+      "alpha": true,
+      "visibleBounds": [
+        74,
+        48,
+        246,
+        215
+      ],
+      "maxAlpha": 255,
+      "sha256": "fc75f0b35d21ff77ff847cb7105475454f244ed313deffccf82497c593836f5d"
+    },
+    {
+      "file": "apps/web/public/scene/memory.svg",
+      "bytes": 1167,
+      "width": 320,
+      "height": 240,
+      "alpha": true,
+      "visibleBounds": [
+        82,
+        49,
+        240,
+        215
+      ],
+      "maxAlpha": 255,
+      "sha256": "a51a221475161455ed4ebfa6168c140afc3a0b0ffaecca980d1d91031f928be1"
+    },
+    {
+      "file": "apps/web/public/scene/miss.svg",
+      "bytes": 1447,
+      "width": 320,
+      "height": 240,
+      "alpha": true,
+      "visibleBounds": [
+        82,
+        31,
+        237,
+        215
+      ],
+      "maxAlpha": 255,
+      "sha256": "2dde472cd65a86d43ee88a969b35f9cb7efc16f0923ca6604bc9816dce93a036"
+    },
+    {
+      "file": "apps/web/public/scene/og-scene-birthday.png",
+      "bytes": 7676,
+      "width": 1200,
+      "height": 630,
+      "alpha": false,
+      "visibleBounds": [
+        0,
+        0,
+        1199,
+        629
+      ],
+      "maxAlpha": 255,
+      "sha256": "82c82a625f9fa0b54faad8cf73b60c8d34b199e073c15a380d99d45aa7d0b22d"
+    },
+    {
+      "file": "apps/web/public/scene/og-scene-cheer.png",
+      "bytes": 5866,
+      "width": 1200,
+      "height": 630,
+      "alpha": false,
+      "visibleBounds": [
+        0,
+        0,
+        1199,
+        629
+      ],
+      "maxAlpha": 255,
+      "sha256": "acfbd530b4684ddb10316beb87144a258b72212e466e2ba05dad1f23ecd86d66"
+    },
+    {
+      "file": "apps/web/public/scene/og-scene-love.png",
+      "bytes": 9908,
+      "width": 1200,
+      "height": 630,
+      "alpha": false,
+      "visibleBounds": [
+        0,
+        0,
+        1199,
+        629
+      ],
+      "maxAlpha": 255,
+      "sha256": "85b3f1b80717c7c417c14a36e63c80ababb473d71eec594f94d1e5b3506ca8b4"
+    },
+    {
+      "file": "apps/web/public/scene/og-scene-memory.png",
+      "bytes": 9559,
+      "width": 1200,
+      "height": 630,
+      "alpha": false,
+      "visibleBounds": [
+        0,
+        0,
+        1199,
+        629
+      ],
+      "maxAlpha": 255,
+      "sha256": "daf84641daf5ce13c75fe05bdd97921627ce6a1a3ad4d485b2799e411602d0b6"
+    },
+    {
+      "file": "apps/web/public/scene/og-scene-miss.png",
+      "bytes": 11696,
+      "width": 1200,
+      "height": 630,
+      "alpha": false,
+      "visibleBounds": [
+        0,
+        0,
+        1199,
+        629
+      ],
+      "maxAlpha": 255,
+      "sha256": "7238c405e57d1eab6015b4c1ad19c623b17f4bf60331f04d8ea42b00d15bcb28"
+    },
+    {
+      "file": "apps/web/public/scene/og-scene-thanks.png",
+      "bytes": 8569,
+      "width": 1200,
+      "height": 630,
+      "alpha": false,
+      "visibleBounds": [
+        0,
+        0,
+        1199,
+        629
+      ],
+      "maxAlpha": 255,
+      "sha256": "2e13a69b4d96b58feed6485d639f4bdfb21cb2336db0056096428793c0fdd632"
+    },
+    {
+      "file": "apps/web/public/scene/thanks.svg",
+      "bytes": 1422,
+      "width": 320,
+      "height": 240,
+      "alpha": true,
+      "visibleBounds": [
+        82,
+        59,
+        237,
+        215
+      ],
+      "maxAlpha": 255,
+      "sha256": "ff80a995ecbb3131a854c6aeb794a0e8432e06f761108e77f807b228cdfeecda"
+    },
+    {
+      "file": "apps/web/public/photo/photo-mv-end.png",
+      "bytes": 4301,
+      "width": 720,
+      "height": 1280,
+      "alpha": true,
+      "visibleBounds": [
+        0,
+        0,
+        719,
+        1279
+      ],
+      "maxAlpha": 50,
+      "sha256": "4f2fc08c380659ac9fa042f6a3c141d1d7a7f00429285b21680f1df9e031a877"
+    },
+    {
+      "file": "docs/agents/visual-previews/scene-photo/sources/og-scene-birthday.svg",
+      "bytes": 1743,
+      "width": 1200,
+      "height": 630,
+      "alpha": true,
+      "visibleBounds": [
+        0,
+        0,
+        1199,
+        629
+      ],
+      "maxAlpha": 255,
+      "sha256": "0770a08b0eb29e3c7c4191e74533816bfb73785fce78a70beb29fdeff72f5ae0"
+    },
+    {
+      "file": "docs/agents/visual-previews/scene-photo/sources/og-scene-cheer.svg",
+      "bytes": 1164,
+      "width": 1200,
+      "height": 630,
+      "alpha": true,
+      "visibleBounds": [
+        0,
+        0,
+        1199,
+        629
+      ],
+      "maxAlpha": 255,
+      "sha256": "945126a8ccd2aa232d679d4b88fc069ee5e6d6ae9379e82e2f7e16ca16fcc2c7"
+    },
+    {
+      "file": "docs/agents/visual-previews/scene-photo/sources/og-scene-love.svg",
+      "bytes": 1317,
+      "width": 1200,
+      "height": 630,
+      "alpha": true,
+      "visibleBounds": [
+        0,
+        0,
+        1199,
+        629
+      ],
+      "maxAlpha": 255,
+      "sha256": "54df14d0f7637e210fbbd7ec64961d74fee9c46f1efdaac12d8ba796f13206e0"
+    },
+    {
+      "file": "docs/agents/visual-previews/scene-photo/sources/og-scene-memory.svg",
+      "bytes": 1269,
+      "width": 1200,
+      "height": 630,
+      "alpha": true,
+      "visibleBounds": [
+        0,
+        0,
+        1199,
+        629
+      ],
+      "maxAlpha": 255,
+      "sha256": "97a96962c8af379386d398d884cc6cdf4ec88e8dfbe9848f6ad56c39688a9c13"
+    },
+    {
+      "file": "docs/agents/visual-previews/scene-photo/sources/og-scene-miss.svg",
+      "bytes": 1549,
+      "width": 1200,
+      "height": 630,
+      "alpha": true,
+      "visibleBounds": [
+        0,
+        0,
+        1199,
+        629
+      ],
+      "maxAlpha": 255,
+      "sha256": "d0cc6d17a28421675a42c131ae3ba3db42c5e1acbcadbcc5ab06afde7f8328bb"
+    },
+    {
+      "file": "docs/agents/visual-previews/scene-photo/sources/og-scene-thanks.svg",
+      "bytes": 1524,
+      "width": 1200,
+      "height": 630,
+      "alpha": true,
+      "visibleBounds": [
+        0,
+        0,
+        1199,
+        629
+      ],
+      "maxAlpha": 255,
+      "sha256": "0435ca44f0e374c380e6247eccde856aa0f102ea6aff1d3100347cacd049b9c5"
+    },
+    {
+      "file": "docs/agents/visual-previews/scene-photo/sources/photo-mv-end.svg",
+      "bytes": 7618,
+      "width": 720,
+      "height": 1280,
+      "alpha": true,
+      "visibleBounds": [
+        0,
+        0,
+        719,
+        1279
+      ],
+      "maxAlpha": 50,
+      "sha256": "c0ce925223ff73e33ced982707f0a189ee690a1b7a1cdff26fac149a0ebd514e"
+    }
+  ]
+}
