@@ -16,11 +16,6 @@ export type LyricDraftStatus = 'pending' | 'ok' | 'refused' | 'failed';
  * Claims one draft for `userId`. Returns its id and how many remain after it,
  * or null when the account has used its `limit` in the last 24 hours.
  */
-export async function claimLyricDraft(userId: string, limit: number): Promise<{ id: string; remaining: number } | null> {
-  const claimed = await claimLyricDrafts(userId, limit, 1);
-  return claimed ? { id: claimed.ids[0]!, remaining: claimed.remaining } : null;
-}
-
 /**
  * `count` drafts at once, or none: three versions are three model calls and
  * count as three (docs/LYRIC_COWRITE_SPEC.md). Refused, with nothing written,
