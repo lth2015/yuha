@@ -2949,3 +2949,10 @@ textarea.is-full { border-color: var(--danger); }
 .photo-video__actions label.btn { cursor: pointer; }
 .photo-video__preview { width: min(100%, 320px); aspect-ratio: 9 / 16; border-radius: var(--r-control); background: #000; }
 .photo-video__result { display: grid; gap: var(--s3); justify-items: start; }
+
+/* Trying without an account (components/TrialAsk.tsx; the keep panel on the song page). */
+.trial-ask, .trial-keep { margin-top: var(--s4); padding: var(--s6); border: 1px solid var(--line); border-radius: var(--r-card); background: var(--surface); display: grid; gap: var(--s3); }
+.trial-ask h2, .trial-keep h2 { margin: 0; font-size: var(--t-title); font-weight: 600; }
+.trial-ask p, .trial-keep p { margin: 0; color: var(--muted); }
+.trial-ask__actions { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s2) var(--s4); }
+.trial-keep { justify-items: start; }

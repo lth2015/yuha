@@ -105,7 +105,7 @@ export default async function generationRoutes(app: FastifyInstance, opts: { ctx
    * Open jobs for the current user, so the studio can restore in-flight work
    * after a refresh or a re-login (GEN-10).
    */
-  app.get('/v1/jobs', { preHandler: app.requireAuth }, async (req) => {
+  app.get('/v1/jobs', { preHandler: app.requireAuth, config: { guestAllowed: true } }, async (req) => {
     const rows = await listOpenJobs(req.user!.id);
     return { items: await getJobViews(ctx, rows) };
   });

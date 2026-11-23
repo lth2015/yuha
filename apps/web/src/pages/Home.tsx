@@ -6,6 +6,8 @@ import { ApiError, apiFetch, newIdempotencyKey } from '../lib/api';
 import { messageFor } from '../lib/messages';
 import { useI18n } from '../lib/i18n';
 import { useSession } from '../lib/session';
+import { startGuestTrial } from '../lib/guest';
+import { TrialAsk } from '../components/TrialAsk';
 import { Score } from '../components/Score';
 import { NewYearCountdown } from '../components/HolidayMoments';
 import { Shelf } from '../components/Shelf';
@@ -76,7 +78,7 @@ const IOS_BUILD = import.meta.env['VITE_APP_PLATFORM'] === 'ios';
 
 export default function Home() {
   const { t } = useI18n();
-  const { me, entitlements, refreshEntitlements, runtime } = useSession();
+  const { me, entitlements, refreshEntitlements, refreshMe, runtime } = useSession();
   const season = runtime?.season ?? null;
   /**
    * Published songs, so the landing page can be heard before anyone signs up.
@@ -194,16 +196,46 @@ export default function Home() {
     setFeedbackKey({ key: 'composer.moodSeeded' });
   };
 
-  const submit = async () => {
-    if (!canSubmit) return;
+  /*
+   * Signed out, with trials open (docs/GROWTH_SPEC.md, part three): the two
+   * affirmations an account gives, then a trial session, then the song — on
+   * one press of the button below them. Otherwise, as before, sign in first.
+   */
+  const [askTrial, setAskTrial] = useState(false);
+  const trialOpen = !me && runtime?.features.guestTrialEnabled === true;
+  const isGuest = me?.role === 'guest';
+
+  const startTrial = async () => {
     setSubmitting(true);
     setError(null);
     try {
-      if (!me) {
-        const next = encodeURIComponent('/');
-        navigate(`/auth?next=${next}`);
+      await startGuestTrial();
+      await refreshMe();
+      setAskTrial(false);
+      await generate();
+    } catch (err) {
+      setError(t(messageFor(err).titleKey));
+      setSubmitting(false);
+    }
+  };
+
+  const submit = async () => {
+    if (!canSubmit) return;
+    if (!me) {
+      if (trialOpen) {
+        setAskTrial(true);
         return;
       }
+      navigate(`/auth?next=${encodeURIComponent('/')}`);
+      return;
+    }
+    await generate();
+  };
+
+  const generate = async () => {
+    setSubmitting(true);
+    setError(null);
+    try {
       const res = await apiFetch<JobView & { deduplicated: boolean }>('/v1/generations', {
         method: 'POST',
         idempotencyKey: idemKey.current,
@@ -218,7 +250,8 @@ export default function Home() {
         },
       });
       setJob(res);
-      void refreshEntitlements();
+      // A guest has no entitlements to read; its one credit is on /v1/me.
+      void (isGuest || !me ? refreshMe() : refreshEntitlements());
     } catch (err) {
       /*
        * The server's own English, printed to a Japanese or Chinese visitor.
@@ -282,7 +315,8 @@ export default function Home() {
         // A failed generation is refunded server-side. Without this the
         // composer still shows the pre-failure balance, and a user who was
         // down to their last credit is told to buy the one just returned.
-        void refreshEntitlements();
+        // A guest's balance is on /v1/me.
+        void (me?.role === 'guest' ? refreshMe() : refreshEntitlements());
       }
       return;
     }
@@ -315,7 +349,7 @@ export default function Home() {
       cancelled = true;
       if (pollTimer.current) clearTimeout(pollTimer.current);
     };
-  }, [job, navigate, refreshEntitlements]);
+  }, [job, navigate, refreshEntitlements, refreshMe, me?.role]);
 
 
   // ---- generation state (real stages only, no fake progress) ----
@@ -361,9 +395,11 @@ export default function Home() {
               {t('wait.tryAgain')}
             </button>
           )}
-          <Link to="/library" className="btn">
-            {t('wait.goLibrary')}
-          </Link>
+          {!isGuest && (
+            <Link to="/library" className="btn">
+              {t('wait.goLibrary')}
+            </Link>
+          )}
         </div>
       </div>
     );
@@ -449,9 +485,14 @@ export default function Home() {
               <span className="composer__cost">
                 {outOfCredits ? t('composer.outOfCredits') : t('composer.cost')}
                 <br />
-                {me ? t('composer.credits', { n: credits }) : t('composer.creditsLogin')}
+                {me ? t('composer.credits', { n: credits }) : trialOpen ? t('trial.hint') : t('composer.creditsLogin')}
               </span>
-              {outOfCredits ? (
+              {outOfCredits && isGuest ? (
+                // A trial's one song is made; the next is an account's.
+                <Link to="/auth?next=%2F" className="btn btn--primary">
+                  {t('trial.keep.cta')}
+                </Link>
+              ) : outOfCredits ? (
                 // The draft is already in localStorage, so it survives the
                 // trip to checkout and back; say so, or nobody risks leaving.
                 <Link to="/pricing?from=/" className="btn btn--primary">
@@ -465,6 +506,7 @@ export default function Home() {
                 </button>
               )}
             </div>
+            {askTrial && !me && <TrialAsk busy={submitting} onStart={() => void startTrial()} onCancel={() => setAskTrial(false)} />}
             <p className="composer__feedback" aria-live="polite">
               {error ??
                 (outOfCredits

@@ -1,4 +1,4 @@
-import { query } from './pool.js';
+import { query, queryOne } from './pool.js';
 
 /**
  * Time-bucketed numbers for the operator dashboard.
@@ -283,6 +283,29 @@ export interface StatsReport {
   /** The same span immediately before `from`, for the "vs previous period" figures. */
   previous: StatsTotals;
   sources: VisitSources;
+  /** Songs without an account in the range (docs/GROWTH_SPEC.md, part three). */
+  trials: TrialStats;
+}
+
+export interface TrialStats {
+  /** Trials opened: the door let somebody in. */
+  opened: number;
+  /** Of those, how many made their song. */
+  made: number;
+  /** Of those, how many signed up and kept it. */
+  claimed: number;
+}
+
+async function trialStats(fromUtc: Date, toUtc: Date): Promise<TrialStats> {
+  const row = await queryOne<{ opened: number; made: number; claimed: number }>(
+    `SELECT COUNT(*) AS opened,
+            COALESCE(SUM(EXISTS (SELECT 1 FROM entitlement_batches b WHERE b.user_id = g.user_id AND b.consumed_units > 0)), 0) AS made,
+            COALESCE(SUM(g.claimed_by IS NOT NULL), 0) AS claimed
+       FROM guest_trials g
+      WHERE g.created_at >= ? AND g.created_at < ?`,
+    [fromUtc, toUtc],
+  );
+  return { opened: Number(row?.opened ?? 0), made: Number(row?.made ?? 0), claimed: Number(row?.claimed ?? 0) };
 }
 
 /**
@@ -396,11 +419,12 @@ export async function statsReport(params: { granularity: Granularity; from: stri
   const spanMs = toUtc.getTime() - fromUtc.getTime();
   const prevFromUtc = new Date(fromUtc.getTime() - spanMs);
 
-  const [series, totals, previous, sources] = await Promise.all([
+  const [series, totals, previous, sources, trials] = await Promise.all([
     collect(fromUtc, toUtc, params.granularity),
     collect(fromUtc, toUtc, null),
     collect(prevFromUtc, fromUtc, null),
     visitSources(fromUtc, toUtc),
+    trialStats(fromUtc, toUtc),
   ]);
   const strip = (b: StatsBucket | undefined): StatsTotals => {
     const { key: _key, ...rest } = b ?? emptyBucket('all');
@@ -414,6 +438,7 @@ export async function statsReport(params: { granularity: Granularity; from: stri
     totals: strip(totals.get('all')),
     previous: strip(previous.get('all')),
     sources,
+    trials,
   };
 }
 

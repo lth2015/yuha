@@ -2,6 +2,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useState } 
 import type { ReactNode } from 'react';
 import type { EntitlementsView, MeView, RuntimeInfo } from '@yuha/contracts';
 import { SESSION_EXPIRED_EVENT, apiFetch, getToken, setToken } from './api';
+import { claimPendingTrial } from './guest';
 import { reportSourceOnce } from './visits';
 
 /**
@@ -69,8 +70,15 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       const fresh = await apiFetch<MeView>('/v1/me');
       if (getToken() === token) {
         setMe(fresh);
-        // The campaign that brought this browser, once (lib/visits.ts).
-        reportSourceOnce();
+        if (fresh.role !== 'guest') {
+          // The campaign that brought this browser, once (lib/visits.ts).
+          reportSourceOnce();
+          // A song made before signing up comes into the account (lib/guest.ts).
+          if (await claimPendingTrial()) {
+            const after = await apiFetch<MeView>('/v1/me');
+            if (getToken() === token) setMe(after);
+          }
+        }
       }
     } catch {
       // A temporary outage is not a sign-out. Rejected tokens are handled
@@ -159,7 +167,8 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       // Cached credits/subscriptions belong to the previous session until
       // this session's own entitlement request confirms them.
       setEntitlements(null);
-      void refreshEntitlements();
+      // The trial's song first, so the balance read next already counts it.
+      void claimPendingTrial().finally(() => void refreshEntitlements());
     },
     [refreshEntitlements],
   );

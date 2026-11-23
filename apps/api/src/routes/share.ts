@@ -154,7 +154,7 @@ export default async function shareRoutes(app: FastifyInstance, opts: { ctx: App
    */
   app.post(
     '/v1/tracks/:id/share-video',
-    { preHandler: app.requireAuth, bodyLimit: 12_000_000 },
+    { preHandler: app.requireAuth, bodyLimit: 12_000_000, config: { guestAllowed: true } },
     async (req, reply) => {
       const { id } = idParam.parse(req.params);
       const body = z

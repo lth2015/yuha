@@ -120,7 +120,6 @@ describe('what a guest may do', () => {
       ['GET', '/v1/tracks'],
       ['GET', '/v1/entitlements'],
       ['POST', '/v1/checkout'],
-      ['GET', '/v1/jobs'],
       ['POST', '/v1/me/source'],
     ] as const) {
       const res = await on.app.inject({ method, url, headers: bearer(g.token), payload: {} as never });
