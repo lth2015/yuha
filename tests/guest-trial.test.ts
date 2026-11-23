@@ -264,3 +264,12 @@ describe('keeping the song, or losing it after seven days', () => {
     expect((await on.app.inject({ method: 'GET', url: '/v1/me', headers: bearer(g.token) })).statusCode).toBe(401);
   }, 60_000);
 });
+
+describe('"today" for the daily limits', () => {
+  it('is the day in Japan, turning at 15:00 UTC', async () => {
+    const { japanDayStart } = await import('../apps/api/src/services/guest-trial.js');
+    expect(japanDayStart(new Date('2026-11-23T14:59:59Z')).toISOString()).toBe('2026-11-22T15:00:00.000Z');
+    expect(japanDayStart(new Date('2026-11-23T15:00:00Z')).toISOString()).toBe('2026-11-23T15:00:00.000Z');
+    expect(japanDayStart(new Date('2026-11-23T00:30:00Z')).toISOString()).toBe('2026-11-22T15:00:00.000Z');
+  });
+});
