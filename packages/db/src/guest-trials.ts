@@ -76,3 +76,50 @@ export async function getGuestTrial(userId: string, tx?: PoolConnection): Promis
     tx,
   );
 }
+
+/**
+ * A guest's songs become an account's: everything that names an owner moves
+ * in one transaction. Returns the tracks that moved, for the authorship
+ * records the claim writes next.
+ */
+export async function moveGuestOwnership(
+  params: { guestId: string; userId: string },
+  tx: PoolConnection,
+): Promise<Array<{ id: string; created_at: Date; state: string }>> {
+  const tracks = await query<{ id: string; created_at: Date; state: string }>(
+    `SELECT id, created_at, state FROM tracks WHERE owner_id = ? AND deleted_at IS NULL FOR UPDATE`,
+    [params.guestId],
+    tx,
+  );
+  const move = [params.userId, params.guestId];
+  await execute(`UPDATE projects SET owner_id = ? WHERE owner_id = ?`, move, tx);
+  await execute(`UPDATE generation_jobs SET user_id = ? WHERE user_id = ?`, move, tx);
+  await execute(`UPDATE tracks SET owner_id = ? WHERE owner_id = ?`, move, tx);
+  await execute(`UPDATE asset_versions SET owner_id = ? WHERE owner_id = ?`, move, tx);
+  await execute(`UPDATE share_cards SET owner_id = ? WHERE owner_id = ?`, move, tx);
+  return tracks;
+}
+
+export async function markGuestClaimed(params: { guestId: string; userId: string }, tx: PoolConnection): Promise<void> {
+  await execute(`UPDATE guest_trials SET claimed_by = ?, claimed_at = UTC_TIMESTAMP(3) WHERE user_id = ?`, [params.userId, params.guestId], tx);
+  // The guest session ends here: the songs have a real owner now.
+  await execute(
+    `UPDATE users SET status = 'deleted', deleted_at = UTC_TIMESTAMP(3), updated_at = UTC_TIMESTAMP(3) WHERE id = ? AND role = 'guest'`,
+    [params.guestId],
+    tx,
+  );
+}
+
+/** Trials older than `cutoff` that nobody claimed and that are not purged yet. */
+export async function listExpiredGuestTrials(cutoff: Date, limit = 50): Promise<GuestTrialRow[]> {
+  return query<GuestTrialRow>(
+    `SELECT user_id, device_ref, ip_ref, created_at, claimed_by, claimed_at, purged_at FROM guest_trials
+      WHERE created_at < ? AND claimed_by IS NULL AND purged_at IS NULL
+      ORDER BY created_at LIMIT ${Math.max(1, Math.min(500, Math.floor(limit)))}`,
+    [cutoff],
+  );
+}
+
+export async function markGuestPurged(guestId: string, tx?: PoolConnection): Promise<void> {
+  await execute(`UPDATE guest_trials SET device_ref = NULL, ip_ref = NULL, purged_at = UTC_TIMESTAMP(3) WHERE user_id = ?`, [guestId], tx);
+}

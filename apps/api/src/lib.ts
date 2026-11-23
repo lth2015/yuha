@@ -62,6 +62,7 @@ export {
 } from './services/operator-grant.js';
 
 export { sweepExpiredTrackAudio, type RetentionSweepResult } from './services/retention.js';
+export { purgeExpiredGuestTrials } from './services/guest-trial.js';
 export { executeAccountDeletion, type DeletionOutcome } from './services/deletion.js';
 
 export {

@@ -1,7 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import type { AppContext } from '../context.js';
-import { openGuestTrial } from '../services/guest-trial.js';
+import { claimGuestTrial, openGuestTrial } from '../services/guest-trial.js';
 
 /**
  * POST /v1/trial/start — a session for one song without an account
@@ -26,4 +26,14 @@ export default async function trialRoutes(app: FastifyInstance, opts: { ctx: App
       return reply.status(201).send({ token: opened.token, expiresAt: opened.expiresAt.toISOString(), userId: opened.userId });
     },
   );
+
+  /**
+   * POST /v1/trial/claim — a guest who has just signed up keeps their song.
+   * Called by the web app right after sign-in, with the guest session it kept.
+   * An account only: a guest cannot claim into another guest.
+   */
+  app.post('/v1/trial/claim', { preHandler: app.requireAuth }, async (req) => {
+    const body = z.object({ guestToken: z.string().min(10).max(2000) }).parse(req.body);
+    return claimGuestTrial(ctx, { guestToken: body.guestToken, userId: req.user!.id });
+  });
 }

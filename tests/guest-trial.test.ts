@@ -171,3 +171,97 @@ describe('the queue', () => {
     expect((await dispatch(accountJob))?.id).toBe(accountJob);
   });
 });
+
+describe('keeping the song, or losing it after seven days', () => {
+  async function guestSong() {
+    const { claimOutboxBatch, withTx } = await import('@yuha/db');
+    const { runJobStep } = await import('@yuha/worker/pipeline');
+    const g = (await start(on, {}, `10.77.${Math.floor(Math.random() * 250)}.${Math.floor(Math.random() * 250)}`)).json() as { token: string; userId: string };
+    const res = await on.app.inject({
+      method: 'POST',
+      url: '/v1/generations',
+      headers: { ...bearer(g.token), 'idempotency-key': `keep-${randomUUID()}` },
+      payload: { mode: 'simple', prompt: '夏の終わり', instrumental: false, durationSeconds: 60 } as never,
+    });
+    expect(res.statusCode).toBe(202);
+    const jobId = res.json().jobId as string;
+    const rows = await withTx((tx) => claimOutboxBatch(50, tx));
+    for (const row of rows) await on.ctx.queue.send({ body: { ...row.payload, outboxId: row.id, eventType: row.event_type } });
+    for (let i = 0; i < 6; i += 1) {
+      await runJobStep({ ctx: on.ctx, owner: `k-${i}`, log: () => undefined }, jobId);
+      const t = await queryOne<{ id: string }>(`SELECT id FROM tracks WHERE job_id = ?`, [jobId]);
+      if (t) return { ...g, trackId: t.id, jobId };
+    }
+    throw new Error('not delivered');
+  }
+  const snapshotOwner = async (trackId: string) =>
+    (await queryOne<{ user_id: string }>('SELECT user_id FROM license_snapshots WHERE track_id = ?', [trackId]))?.user_id ?? null;
+  const consentOf = (user: { authHeader: Record<string, string> }) =>
+    on.app.inject({ method: 'POST', url: '/v1/me/consent', headers: user.authHeader, payload: { ageConfirmed: true, termsAccepted: true } as never });
+  const claim = (user: { authHeader: Record<string, string> }, guestToken: string) =>
+    on.app.inject({ method: 'POST', url: '/v1/trial/claim', headers: user.authHeader, payload: { guestToken } as never });
+
+  it('writes no authorship record while the song is a guest’s, and the account’s when it is claimed', async () => {
+    const g = await guestSong();
+    expect(await snapshotOwner(g.trackId)).toBeNull();
+
+    const user = await on.createUser();
+    await consentOf(user);
+    expect((await getBalance(user.id)).available).toBe(2);
+    const res = await claim(user, g.token);
+    expect(res.statusCode).toBe(200);
+    expect(res.json().claimed).toBe(1);
+
+    expect((await queryOne<{ owner_id: string }>('SELECT owner_id FROM tracks WHERE id = ?', [g.trackId]))!.owner_id).toBe(user.id);
+    expect(await snapshotOwner(g.trackId)).toBe(user.id);
+    // Two songs free in all: the trial's, and one more.
+    expect((await getBalance(user.id)).available).toBe(1);
+    // The guest session has ended; the song is the account's now.
+    expect((await on.app.inject({ method: 'GET', url: '/v1/me', headers: bearer(g.token) })).statusCode).toBe(401);
+    expect((await on.app.inject({ method: 'GET', url: `/v1/tracks/${g.trackId}/license`, headers: user.authHeader })).statusCode).toBe(200);
+  }, 60_000);
+
+  it('counts the trial whichever comes first, the claim or the welcome grant', async () => {
+    const g = await guestSong();
+    const user = await on.createUser();
+    expect((await claim(user, g.token)).statusCode).toBe(200);
+    await consentOf(user);
+    expect((await getBalance(user.id)).available).toBe(1);
+  }, 60_000);
+
+  it('belongs to one account only', async () => {
+    const g = await guestSong();
+    const first = await on.createUser();
+    const second = await on.createUser();
+    expect((await claim(first, g.token)).statusCode).toBe(200);
+    expect((await claim(first, g.token)).json().claimed).toBe(0);
+    expect((await claim(second, g.token)).statusCode).toBe(409);
+  }, 60_000);
+
+  it('is deleted with its audio, what was written and both hashes, after seven days unclaimed', async () => {
+    const { purgeExpiredGuestTrials } = await import('@yuha/api');
+    const { execute } = await import('@yuha/db');
+    const g = await guestSong();
+    const key = (await queryOne<{ storage_key: string }>('SELECT storage_key FROM asset_versions WHERE track_id = ?', [g.trackId]))!.storage_key;
+    await on.ctx.storage.get('delivery', key); // there before
+
+    // Six days on, nothing happens.
+    expect(await purgeExpiredGuestTrials(on.ctx, { now: new Date(Date.now() + 6 * 86_400_000) })).toBe(0);
+    await execute('UPDATE guest_trials SET created_at = UTC_TIMESTAMP(3) - INTERVAL 8 DAY WHERE user_id = ?', [g.userId]);
+    expect(await purgeExpiredGuestTrials(on.ctx)).toBe(1);
+
+    await expect(on.ctx.storage.get('delivery', key)).rejects.toThrow();
+    expect(await queryOne('SELECT id FROM asset_versions WHERE track_id = ?', [g.trackId])).toBeUndefined();
+    const track = await queryOne<{ state: string; lyrics: string | null }>('SELECT state, lyrics FROM tracks WHERE id = ?', [g.trackId]);
+    expect(track).toMatchObject({ state: 'deleted', lyrics: null });
+    const job = await queryOne<{ input: unknown }>('SELECT input FROM generation_jobs WHERE id = ?', [g.jobId]);
+    expect(JSON.stringify(job!.input)).not.toContain('夏の終わり');
+    const trial = await queryOne<{ device_ref: string | null; ip_ref: string | null; purged_at: Date | null }>(
+      'SELECT device_ref, ip_ref, purged_at FROM guest_trials WHERE user_id = ?',
+      [g.userId],
+    );
+    expect(trial).toMatchObject({ device_ref: null, ip_ref: null });
+    expect(trial!.purged_at).not.toBeNull();
+    expect((await on.app.inject({ method: 'GET', url: '/v1/me', headers: bearer(g.token) })).statusCode).toBe(401);
+  }, 60_000);
+});

@@ -14,6 +14,7 @@ import {
   setCancelAtPeriodEnd,
   getSubscriptionForUser,
   trackEvent,
+  queryOne,
   withTx,
   type ProductRow,
   openOrderReview,
@@ -414,13 +415,27 @@ export async function grantTrialIfEligible(ctx: AppContext, userId: string): Pro
   if (!(await freeTrialAvailable(ctx))) return false;
 
   return withTx(async (tx) => {
+    /*
+     * A song already made as a guest and claimed by this account counts
+     * against the welcome (docs/GROWTH_SPEC.md, part three). The claim takes
+     * one back when the grant came first; this covers the other order.
+     */
+    const spentAsGuest = await queryOne<{ n: number }>(
+      `SELECT COALESCE(SUM(b.consumed_units), 0) AS n
+         FROM guest_trials g JOIN entitlement_batches b ON b.user_id = g.user_id AND b.source = 'promo_trial'
+        WHERE g.claimed_by = ?`,
+      [userId],
+      tx,
+    );
+    const units = ctx.config.FREE_TRIAL_UNITS - Math.min(1, Number(spentAsGuest?.n ?? 0));
+    if (units <= 0) return false;
     const res = await grantUnits(
       {
         userId,
         source: 'promo_trial',
         // One trial per account, enforced by the unique batch reference.
         sourceRef: `trial:${userId}`,
-        units: ctx.config.FREE_TRIAL_UNITS,
+        units,
         expiresAt: new Date(Date.now() + 30 * 86400_000),
         reason: 'free_trial_grant',
       },
