@@ -374,9 +374,9 @@ export function planShareClip(lines: TimedLine[], songSeconds: number, maxFrames
   return { start: Number(start.toFixed(2)), duration: Number(duration.toFixed(2)), frames };
 }
 
-export const PHOTO_CLIP_SECONDS = 30;
+const PHOTO_CLIP_SECONDS = 30;
 /** What the server takes (apps/api/src/routes/share.ts, photo-video). */
-export const PHOTO_MAX_FRAMES = 40;
+const PHOTO_MAX_FRAMES = 40;
 
 export interface PhotoClipPlan {
   start: number;
