@@ -15,6 +15,8 @@ it('iOS login and library navigation never expose Web checkout, Google OAuth or 
   localStorage.setItem('yuha.lang', 'en');
   window.history.replaceState({}, '', '/auth');
   const { default: IosApp } = await import('../apps/web/src/ios/IosApp');
+  // As main.tsx does before the first render: the dictionaries load on demand (lib/i18n.tsx).
+  await (await import('../apps/web/src/lib/i18n')).loadAllLangs();
   const container = document.createElement('div'); document.body.append(container);
   const root = createRoot(container);
   cleanup = () => { act(() => root.unmount()); container.remove(); };

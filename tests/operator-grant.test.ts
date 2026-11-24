@@ -592,7 +592,7 @@ describe('the gift source is one list, in three places', () => {
   it('every source the enum names has a label in all three languages', async () => {
     // A source with no translation renders as its own key — `operator_gift` —
     // on the screen an operator reads to decide whether somebody needs a gift.
-    const dict = read('apps/web/src/lib/i18n.tsx');
+    const dict = ['zh', 'ja', 'en'].map((l) => read(`apps/web/src/lib/i18n-${l}.ts`)).join('\n');
     for (const source of EntitlementSource.options) {
       const uses = [...dict.matchAll(new RegExp(`'admin\\.cust\\.source\\.${source}':`, 'g'))];
       expect(uses, `admin.cust.source.${source} is missing from a dictionary`).toHaveLength(3);

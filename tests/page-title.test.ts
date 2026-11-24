@@ -14,7 +14,10 @@ import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { pageTitleKey } from '../apps/web/src/lib/title.js';
 
-const dictionarySource = readFileSync(new URL('../apps/web/src/lib/i18n.tsx', import.meta.url), 'utf8');
+// The three dictionaries, one file each (apps/web/src/lib/i18n-{zh,ja,en}.ts).
+const dictionarySource = ['zh', 'ja', 'en']
+  .map((l) => readFileSync(new URL(`../apps/web/src/lib/i18n-${l}.ts`, import.meta.url), 'utf8'))
+  .join('\n');
 const definedIn = (key: string) => dictionarySource.split(`'${key}':`).length - 1;
 
 const ROUTES: Array<[string, string | null]> = [

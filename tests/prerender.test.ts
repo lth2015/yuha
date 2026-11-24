@@ -7,7 +7,10 @@
 import { describe, expect, it } from 'vitest';
 import { prerenderPages } from '../apps/web/src/prerender.js';
 import { PUBLIC_PAGES, staticPath } from '../apps/web/src/lib/seo.js';
-import { textIn } from '../apps/web/src/lib/i18n.js';
+import { textIn, loadAllLangs } from '../apps/web/src/lib/i18n.js';
+
+// The dictionaries load on demand in the browser (lib/i18n.tsx); here, all of them first.
+await loadAllLangs();
 
 const ORIGIN = 'https://example.test';
 // The shape of the built index.html that matters: head tags to rewrite, the
@@ -39,7 +42,7 @@ const TEMPLATE = `<!doctype html>
 </html>
 `;
 
-const pages = prerenderPages(TEMPLATE, ORIGIN);
+const pages = await prerenderPages(TEMPLATE, ORIGIN);
 const file = (path: string, lang: 'zh' | 'ja' | 'en') => {
   const found = pages.find((p) => p.file === staticPath(path, lang));
   if (!found) throw new Error(`no file for ${path} ${lang}`);
@@ -86,7 +89,7 @@ describe('prerendered public pages', () => {
     expect(file('/legal', 'ja')).toContain('href="/legal/terms"');
   });
 
-  it('refuses a template it does not recognise rather than write the shell under a new name', () => {
-    expect(() => prerenderPages(TEMPLATE.replace('<div id="root">', '<div id="app">'), ORIGIN)).toThrow(/root/);
+  it('refuses a template it does not recognise rather than write the shell under a new name', async () => {
+    await expect(prerenderPages(TEMPLATE.replace('<div id="root">', '<div id="app">'), ORIGIN)).rejects.toThrow(/root/);
   });
 });

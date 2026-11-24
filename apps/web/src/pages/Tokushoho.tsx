@@ -9,7 +9,14 @@ import type { ProductView } from '@yuha/contracts';
 import { fetchProducts } from '../lib/catalog';
 import { LOCALES, formatMoney } from '../lib/money';
 import { unconfiguredDisclosureField } from '../lib/disclosure';
-import { textIn } from '../lib/i18n';
+/*
+ * The Japanese dictionary itself, not the reader's: this page stays Japanese
+ * whatever language is chosen, and these lines must say exactly what the
+ * confirmation screen says in Japanese — the same entries, so the two
+ * statutory surfaces cannot drift apart. The page loads on demand, so the
+ * dictionary comes with it rather than with everyone's first download.
+ */
+import ja from '../lib/i18n-ja';
 import { cardPaymentsEnabled } from '../lib/purchase';
 import { useSession } from '../lib/session';
 import { DraftBanner, LegalPage, useDisclosure } from './Legal';
@@ -200,9 +207,9 @@ export function Tokushoho() {
           <dt>返品・キャンセル</dt>
           <dd>
             <ul className="tokushoho__prices">
-              <li>単発パック・ライセンス：{textIn('ja', 'checkout.cancel.oneTime')}</li>
-              <li>月額プラン：{textIn('ja', 'checkout.cancel.sub')}</li>
-              <li>返金：{textIn('ja', 'checkout.refund')}</li>
+              <li>単発パック・ライセンス：{ja['checkout.cancel.oneTime']}</li>
+              <li>月額プラン：{ja['checkout.cancel.sub']}</li>
+              <li>返金：{ja['checkout.refund']}</li>
             </ul>
           </dd>
         </div>
