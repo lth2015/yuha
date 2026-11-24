@@ -1970,9 +1970,22 @@ textarea.is-full { border-color: var(--danger); }
 }
 @media (max-width: 767px) {
   .content { padding: var(--s6) 20px var(--s12); }
-  .hero { display: block; padding: 28px 0 40px; }
-  .hero__title { font-size: 40px; line-height: 1.2; margin-bottom: 16px; }
-  .hero__intro { font-size: var(--t-body); margin-bottom: var(--s6); max-width: 320px; }
+  /*
+   * The make button belongs on the first screen. Measured on an iPhone 13
+   * (664 px visible, tab bar from 590): it sat at 780, under two rows of
+   * example prompts, and on a Pixel 7 under the tab bar itself. So on a
+   * phone: no decorative eyebrow, a smaller title, a shorter empty box, and
+   * the examples after the button — the one decision here (vocals or not)
+   * stays above it.
+   */
+  .hero { display: block; padding: 8px 0 32px; }
+  .hero .eyebrow { display: none; }
+  .hero__title { font-size: 34px; line-height: 1.15; margin-bottom: 8px; }
+  .hero__intro { font-size: var(--t-body); margin-bottom: var(--s4); max-width: 320px; }
+  .composer { display: flex; flex-direction: column; }
+  .composer textarea { min-height: 84px; }
+  .composer > .composer__row, .composer > .trial-ask, .composer > .composer__feedback { order: 1; }
+  .composer > .chips { order: 2; margin-top: var(--s4); margin-bottom: 0; }
   .composer { padding: 20px; border-radius: 20px; }
   .composer__row { flex-direction: column-reverse; align-items: stretch; gap: 12px; }
   .composer__cost { text-align: center; }
@@ -2124,9 +2137,14 @@ textarea.is-full { border-color: var(--danger); }
 @media (max-width: 767px) {
   /* Below 768 these are thumb targets, not pointer targets. */
   .seg__btn { min-height: var(--tap); }
-  .composer__vocal { flex-direction: column; align-items: stretch; }
-  .composer__vocal .seg { display: flex; }
-  .composer__advanced { justify-content: center; }
+  /*
+   * The toggle stays above the make button; the link to the studio goes
+   * below it, with the examples (the composer is a flex column on a phone,
+   * and `display: contents` lets its two children be ordered separately).
+   */
+  .composer__vocal { display: contents; }
+  .composer__vocal .seg { display: flex; margin: var(--s3) 0 var(--s4); }
+  .composer > .composer__vocal > .composer__advanced { order: 2; justify-content: center; }
 }
 
 /* ---------------------------------------------------------------- the score */
@@ -3009,3 +3027,5 @@ textarea.is-full { border-color: var(--danger); }
 .table-wrap td > a, .legal-index > a, .company-facts dd > a, .standalone-link { display: inline-flex; align-items: center; min-height: var(--tap); }
 /* The photo MV seen by staff before the public switch is on (PhotoVideo.tsx). */
 .photo-video__preview-note { margin: 0; padding: var(--s2) var(--s3); border-radius: var(--r-control); background: var(--surface-soft); color: var(--ink); font-size: var(--t-caption); }
+/* A guest's trial song, offered again on the home page (Home.tsx). */
+.trial-song { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--s2) var(--s3); margin-bottom: var(--s4); padding: var(--s4) var(--s6); }
