@@ -60,6 +60,13 @@ describe('opening a trial', () => {
     expect(row!.device_ref).toMatch(/^[0-9a-f]{64}$/);
   });
 
+  it('records which wording the visitor confirmed', async () => {
+    const { CONSENT_VERSION } = await import('@yuha/contracts');
+    const g = (await start(on, {})).json() as { userId: string };
+    const row = await queryOne<{ consent_version: string | null }>('SELECT consent_version FROM users WHERE id = ?', [g.userId]);
+    expect(row!.consent_version).toBe(CONSENT_VERSION);
+  });
+
   it('opens once per device', async () => {
     const deviceId = randomUUID();
     expect((await start(on, { deviceId })).statusCode).toBe(201);
