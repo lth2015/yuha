@@ -258,6 +258,14 @@ jobs:
       # admin API answers 403 and the console pages show the MFA prompt
       # instead of the console this job exists to look at.
       ADMIN_MFA_REQUIRED: 'false'
+      # Screens behind switches that stay off in production until counsel
+      # signs off: on here, so check:ui measures them before that day. Limits
+      # raised because each state is visited once per width and language.
+      FEATURE_GUEST_TRIAL_ENABLED: 'true'
+      FEATURE_PHOTO_VIDEO_ENABLED: 'true'
+      GUEST_TRIAL_PER_NETWORK: '1000'
+      GUEST_TRIAL_DAILY_LIMIT: '1000'
+      LYRIC_DRAFTS_PER_DAY: '1000'
       UI_SHOTS: ui-shots
     steps:
       - uses: actions/checkout@v5

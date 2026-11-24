@@ -125,6 +125,17 @@ const PAGES = [
   { name: 'scene-cheer', path: '/cheer', as: null },
   { name: 'create-scene', path: '/create?gift=1&occasion=birthday&starter=scene.birthday.starter1&src=scene-birthday', as: 'creator' },
   { name: 'not-found', path: '/no-such-page', as: null },
+  /*
+   * States behind a switch that is off in production until counsel signs off
+   * (docs/legal/PRIVACY_CHANGES_2026-11.md). CI turns the switches on in its
+   * demo stack so the screens are measured before the day they are opened;
+   * with a switch off, the state is reported as skipped, not failed.
+   */
+  { name: 'home-trial-ask', path: '/', as: null, needs: 'guestTrialEnabled', prepare: openTrialAsk },
+  { name: 'song-guest-owner', path: '/song/:guestTrack', as: 'guest', needs: 'guestTrialEnabled' },
+  { name: 'song-photo-video', path: '/song/:track', as: 'creator', needs: 'photoVideoEnabled', prepare: openPhotoVideo },
+  // Three versions of the lyrics (docs/LYRIC_COWRITE_SPEC.md).
+  { name: 'create-cowrite', path: '/create', as: 'creator', prepare: writeThreeVersions },
   { name: 'song', path: '/song/:track', as: 'creator' },
   { name: 'song-public-view', path: '/song/:track', as: null },
   // The holidays (docs/HOLIDAY_SPEC.md): seen early through the staff preview, and the gift a recipient opens.
@@ -154,6 +165,23 @@ const NOT_VISITED = {
 };
 
 const USERS = { creator: 'creator@example.jp', admin: 'admin@example.jp' };
+
+async function openTrialAsk(page) {
+  await page.fill('.composer textarea', '海辺で過ごした夏の終わり、夕方の風');
+  await page.click('.composer__row .btn--primary');
+  await page.waitForSelector('.trial-ask', { timeout: 10_000 });
+}
+
+async function openPhotoVideo(page) {
+  await page.click('.photo-video__open');
+  await page.waitForSelector('.photo-video', { timeout: 10_000 });
+}
+
+async function writeThreeVersions(page) {
+  await page.fill('textarea#prompt', '駅のホームで君を待った冬の夜、白い息、終電のアナウンス');
+  await page.click('.lyric-versions__ask button');
+  await page.waitForSelector('.lyric-versions__card', { timeout: 30_000 });
+}
 
 async function openCustomer(page) {
   const search = page.locator('main input[type=email], main input[type=search]').first();
@@ -476,7 +504,59 @@ mkdirSync(SHOTS, { recursive: true });
 const browser = await chromium.launch();
 const states = { creator: await signIn(browser, 'creator'), admin: await signIn(browser, 'admin') };
 const data = await fixtures(browser, states);
-for (const p of PAGES) p.path = p.path.replace(':track', data.track).replace(':order', data.order).replace(':job', data.job).replace(':gift', data.gift);
+
+/*
+ * Which switches this stack has on. A state that needs one that is off is
+ * skipped and said so — never failed, never silently dropped.
+ */
+const features = (await (await fetch(`${BASE}/v1/runtime`)).json()).features ?? {};
+const skipped = PAGES.filter((p) => p.needs && !features[p.needs]);
+for (const p of skipped) console.log(`- ${p.name}: skipped, ${p.needs} is off in this stack`);
+PAGES.splice(0, PAGES.length, ...PAGES.filter((p) => !p.needs || features[p.needs]));
+
+/*
+ * A guest with one delivered song (docs/GROWTH_SPEC.md, part three): opened
+ * through the same door a visitor uses, so the session is a real guest's.
+ */
+if (features.guestTrialEnabled) {
+  const gctx = await browser.newContext();
+  const gpage = await gctx.newPage();
+  await gpage.goto(`${BASE}/`, { waitUntil: 'networkidle' });
+  data.guestTrack = await gpage.evaluate(async () => {
+    const json = (r) => r.json();
+    const started = await fetch('/v1/trial/start', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ deviceId: crypto.randomUUID(), ageConfirmed: true, termsAccepted: true }),
+    }).then(json);
+    if (!started.token) throw new Error(`fixtures: no trial (${JSON.stringify(started).slice(0, 200)})`);
+    localStorage.setItem('loopscene.token', started.token);
+    localStorage.setItem('yuha.guest', started.token);
+    const auth = { authorization: `Bearer ${started.token}`, 'content-type': 'application/json' };
+    const made = await fetch('/v1/generations', {
+      method: 'POST',
+      headers: { ...auth, 'idempotency-key': `ui-guest-${crypto.randomUUID()}` },
+      body: JSON.stringify({ mode: 'simple', prompt: '雨上がりの坂道、二人で歩いた帰り道', instrumental: false, durationSeconds: 60 }),
+    }).then(json);
+    for (let i = 0; i < 60; i++) {
+      const job = await fetch(`/v1/jobs/${made.jobId}`, { headers: auth }).then(json);
+      if (job.trackId) return job.trackId;
+      await new Promise((r) => setTimeout(r, 1000));
+    }
+    throw new Error('fixtures: the trial song was not delivered in 60 s — is the worker running?');
+  });
+  states.guest = await gctx.storageState();
+  await gctx.close();
+}
+
+for (const p of PAGES) {
+  p.path = p.path
+    .replace(':track', data.track)
+    .replace(':order', data.order)
+    .replace(':job', data.job)
+    .replace(':gift', data.gift)
+    .replace(':guestTrack', data.guestTrack ?? '');
+}
 let failures = 0;
 let warnings = 0;
 let checked = 0;
@@ -496,7 +576,7 @@ for (const vp of VIEWPORTS) {
   // Every language at phone widths, where length decides the layout;
   // Chinese alone above that.
   for (const lang of vp.width < 600 ? LANGS : ['zh']) {
-    for (const as of [null, 'creator', 'admin']) {
+    for (const as of [null, 'creator', 'admin', 'guest']) {
       const pages = PAGES.filter((p) => p.as === as && (!only || p.name.includes(only)));
       if (pages.length) lanes.push({ vp, lang, as, pages, lines: [] });
     }
