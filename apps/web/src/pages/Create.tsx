@@ -364,6 +364,14 @@ export default function Create() {
    */
   const [recent, setRecent] = useState<TrackView[] | null>(null);
   const [instructions, setInstructions] = useState('');
+  /**
+   * The song's lyrics in the re-create editor (/create?edit=): shown, editable,
+   * with the studio's lyric tools. They used to be invisible here — the only
+   * way to change a word was to describe the change and let the model guess.
+   */
+  const [editLyrics, setEditLyrics] = useState('');
+  const editLyricsRef = useRef<HTMLTextAreaElement>(null);
+  const [editCaretLine, setEditCaretLine] = useState<number | null>(null);
   const [styleInput, setStyleInput] = useState('');
   const lyricsRef = useRef<HTMLTextAreaElement>(null);
   /** The job this draft was sent as, so finishing it clears the draft and nothing else does. */
@@ -403,7 +411,10 @@ export default function Create() {
     // the rewrite will keep. Nothing is submitted until the creator writes
     // instructions and confirms the credit.
     apiFetch<TrackView & { lyrics: string | null }>(`/v1/tracks/${editTrackId}`)
-      .then(setEditSource)
+      .then((src) => {
+        setEditSource(src);
+        setEditLyrics(src.lyrics ?? '');
+      })
       .catch((err) => setError(err));
   }, [editTrackId]);
 
@@ -646,15 +657,18 @@ export default function Create() {
     [draft.prompt, t],
   );
 
+  const editSung = !!editSource && editSource.vocalMode !== 'instrumental';
+  const editLyricsChanged = editSung && editLyrics.trim() !== (editSource?.lyrics ?? '').trim() && editLyrics.trim().length > 0;
+
   const canSubmit = useMemo(() => {
     if (submitting || credits < 1) return false;
-    if (editTrackId) return instructions.trim().length > 0;
+    if (editTrackId) return instructions.trim().length > 0 || editLyricsChanged;
     // Mirrors createGenerationRequest: simple mode requires a description,
     // custom mode is satisfied by the lyrics that made it custom, and a song
     // for somebody is described by who and why — but needs the who.
     if (draft.gift && (!draft.giftTo.trim() || !draft.giftOccasion)) return false;
     return mode === 'custom' || draft.prompt.trim().length > 0 || draft.gift;
-  }, [submitting, credits, editTrackId, instructions, mode, draft.prompt, draft.gift, draft.giftTo, draft.giftOccasion]);
+  }, [submitting, credits, editTrackId, instructions, editLyricsChanged, mode, draft.prompt, draft.gift, draft.giftTo, draft.giftOccasion]);
 
   /*
    * Why the button is off, when it is off for something the writer can fix.
@@ -670,13 +684,13 @@ export default function Create() {
    */
   const blockedReason = useMemo(() => {
     if (submitting || credits < 1 || canSubmit) return null;
-    if (editTrackId) return 'create.needInstructions';
+    if (editTrackId) return editSung ? 'create.needChangeOrLyrics' : 'create.needInstructions';
     // A gift with nobody named said "describe the song" — about a field that
     // was not what was missing.
     if (draft.gift && !draft.giftTo.trim()) return 'create.needGiftTo';
     if (draft.gift && !draft.giftOccasion) return 'create.needOccasion';
     return 'create.needPrompt';
-  }, [submitting, credits, canSubmit, editTrackId, draft.gift, draft.giftTo, draft.giftOccasion]);
+  }, [submitting, credits, canSubmit, editTrackId, editSung, draft.gift, draft.giftTo, draft.giftOccasion]);
 
   const promptAtLimit = promptLength >= PROMPT_MAX_CODEPOINTS;
   const lyricsAtLimit = lyricsLength >= LYRICS_MAX_CODEPOINTS;
@@ -746,7 +760,7 @@ export default function Create() {
     try {
       const endpoint = editTrackId ? `/v1/tracks/${editTrackId}/edit` : '/v1/generations';
       const body = editTrackId
-        ? { instructions: instructions.trim() }
+        ? { instructions: instructions.trim(), ...(editLyricsChanged ? { lyrics: editLyrics.trim() } : {}) }
         : {
             mode,
             ...(draft.title.trim() ? { title: draft.title.trim() } : {}),
@@ -1064,6 +1078,63 @@ export default function Create() {
               {codePointLength(instructions)} / {PROMPT_MAX_CODEPOINTS}
             </span>
           </div>
+
+          {/*
+            The lyrics themselves, as the song has them: edit a word, put the
+            cursor on a line for other ways to say it, or have three new
+            versions written from the description above (or the title). What
+            is here is sung as written; the description changes the rest.
+          */}
+          {editSung && (
+            <div className="studio__edit-lyrics">
+              <label htmlFor="edit-lyrics">{t('create.edit.lyrics')}</label>
+              <p className="small muted" id="edit-lyrics-hint">{t('create.edit.lyricsHint')}</p>
+              <textarea
+                id="edit-lyrics"
+                ref={editLyricsRef}
+                rows={9}
+                value={editLyrics}
+                onChange={(e) => setEditLyrics([...e.target.value].slice(0, LYRICS_MAX_CODEPOINTS).join(''))}
+                onSelect={(e) => setEditCaretLine(e.currentTarget.value.slice(0, e.currentTarget.selectionStart).split('\n').length - 1)}
+                onClick={(e) => setEditCaretLine(e.currentTarget.value.slice(0, e.currentTarget.selectionStart).split('\n').length - 1)}
+                onKeyUp={(e) => setEditCaretLine(e.currentTarget.value.slice(0, e.currentTarget.selectionStart).split('\n').length - 1)}
+                aria-describedby="edit-lyrics-hint"
+              />
+              <div className="composer__meta">
+                <span>{editLyricsChanged ? t('create.edit.lyricsChanged') : t('create.edit.lyricsSame')}</span>
+                <span className="composer__meta-end">
+                  <span className="num">{codePointLength(editLyrics)} / {LYRICS_MAX_CODEPOINTS}</span>
+                  {editLyricsChanged && (
+                    <button type="button" className="composer__clear" onClick={() => setEditLyrics(editSource.lyrics ?? '')}>
+                      {t('create.edit.lyricsReset')}
+                    </button>
+                  )}
+                </span>
+              </div>
+              {editLyrics.trim() && (
+                <LineRewrite
+                  lyrics={editLyrics}
+                  line={editCaretLine}
+                  prompt={instructions.trim() || editSource.title}
+                  styles={editSource.styles ?? []}
+                  onReplace={(line, text) => {
+                    const lines = editLyrics.split('\n');
+                    lines[line] = `${(lines[line] ?? '').match(/^\s*/u)?.[0] ?? ''}${text}`;
+                    setEditLyrics([...lines.join('\n')].slice(0, LYRICS_MAX_CODEPOINTS).join(''));
+                  }}
+                />
+              )}
+              <LyricVersions
+                prompt={instructions.trim() || editSource.title}
+                styles={editSource.styles ?? []}
+                durationSeconds={Math.round(editSource.durationSeconds) as 30 | 60 | 120 | 180 | 240}
+                onPick={(lyrics) => {
+                  setEditLyrics([...lyrics].slice(0, LYRICS_MAX_CODEPOINTS).join(''));
+                  requestAnimationFrame(() => editLyricsRef.current?.focus());
+                }}
+              />
+            </div>
+          )}
 
           <SubmitError error={error} />
 

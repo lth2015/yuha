@@ -3039,3 +3039,7 @@ textarea.is-full { border-color: var(--danger); }
 .composer__clear { border: 0; background: none; padding: 0 var(--s1); min-height: var(--tap); color: var(--link); font: inherit; font-size: var(--t-caption); cursor: pointer; }
 .composer__clear:hover { text-decoration: underline; }
 .composer__cleared { margin: 0; font-size: var(--t-caption); color: var(--muted); }
+/* The lyrics in the re-create editor (Create.tsx, ?edit=). */
+.studio__edit-lyrics { display: grid; gap: var(--s2); margin-top: var(--s6); }
+.studio__edit-lyrics textarea { width: 100%; min-height: 12rem; line-height: 1.8; }
+.studio__edit-lyrics > p { margin: 0; }
