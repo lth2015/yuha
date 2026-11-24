@@ -163,15 +163,18 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       // this session's own entitlement request confirms them.
       setEntitlements(null);
       void refreshEntitlements();
+      // What the runtime offers can depend on who asks (a staff preview).
+      void refreshRuntime().catch(() => undefined);
     },
-    [refreshEntitlements],
+    [refreshEntitlements, refreshRuntime],
   );
 
   const signOut = useCallback(() => {
     setToken(null);
     setMe(null);
     setEntitlements(null);
-  }, []);
+    void refreshRuntime().catch(() => undefined);
+  }, [refreshRuntime]);
 
   const value = useMemo<SessionState>(
     () => ({

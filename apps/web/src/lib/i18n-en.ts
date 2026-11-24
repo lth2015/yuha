@@ -1144,6 +1144,7 @@ const en: Dict = {
   // The photo MV (docs/PHOTO_MV_SPEC.md).
   'photo.open': "Make a photo video",
   'photo.title': "Photo video",
+  'photo.staffPreview': "Internal staff test (not open to users): voluntary adult staff only. Use only photos of yourself that you have the right to use, with no children or other people in them, and do not publish the videos. Afterwards, make sure no video is left on a shared device.",
   'photo.lead': "Pick 3–10 photos. They play over 30 seconds of this song, with each line shown as it's sung.",
   'photo.notice': "Your photos are resized and drawn into video frames on this device. Our server only processes those frames temporarily and does not store them: they are deleted as soon as the video is made, and within 24 hours at most if something goes wrong. Photos are never sent to any AI model.",
   'photo.rights': "I confirm I have the right to use the photos I choose and the images of the people in them; where children appear, I have the permission of their legal guardian where the law requires it.",

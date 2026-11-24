@@ -3007,3 +3007,5 @@ textarea.is-full { border-color: var(--danger); }
  * and a link given a line of its own.
  */
 .table-wrap td > a, .legal-index > a, .company-facts dd > a, .standalone-link { display: inline-flex; align-items: center; min-height: var(--tap); }
+/* The photo MV seen by staff before the public switch is on (PhotoVideo.tsx). */
+.photo-video__preview-note { margin: 0; padding: var(--s2) var(--s3); border-radius: var(--r-control); background: var(--surface-soft); color: var(--ink); font-size: var(--t-caption); }

@@ -52,7 +52,9 @@ export default async function publicRoutes(app: FastifyInstance, opts: { ctx: Ap
         freeTrialEnabled: trialAvailable,
         freeTrialUnits: trialAvailable ? ctx.config.FREE_TRIAL_UNITS : 0,
         wavExportEnabled: features.wavExportEnabled,
-        photoVideoEnabled: features.photoVideoEnabled,
+        // Staff try it on production before the public switch is on (docs/PHOTO_MV_SPEC.md).
+        photoVideoEnabled: features.photoVideoEnabled || staff,
+        photoVideoPreview: !features.photoVideoEnabled && staff,
         guestTrialEnabled: features.guestTrialEnabled,
         commercialDeliveryEnabled: features.commercialDeliveryEnabled,
         realPaymentsEnabled: features.realPaymentsEnabled,

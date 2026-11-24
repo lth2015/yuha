@@ -134,6 +134,34 @@ describe('the photo video', () => {
     expect((await off.app.inject({ method: 'GET', url: '/v1/runtime' })).json().features.photoVideoEnabled).toBe(false);
     expect((await on.app.inject({ method: 'GET', url: '/v1/runtime' })).json().features.photoVideoEnabled).toBe(true);
   });
+
+  it('is open to staff while the switch is off, as a preview, and to nobody else', async () => {
+    const runtime = async (who?: TestUser) =>
+      (await off.app.inject({ method: 'GET', url: '/v1/runtime', headers: who?.authHeader ?? {} })).json().features as {
+        photoVideoEnabled: boolean;
+        photoVideoPreview?: boolean;
+      };
+    const admin = await off.createUser({ credits: 3, role: 'admin' });
+    const support = await off.createUser({ role: 'support' });
+    const user = await off.createUser({ credits: 3 });
+
+    expect(await runtime()).toMatchObject({ photoVideoEnabled: false, photoVideoPreview: false });
+    expect(await runtime(user)).toMatchObject({ photoVideoEnabled: false, photoVideoPreview: false });
+    expect(await runtime(admin)).toMatchObject({ photoVideoEnabled: true, photoVideoPreview: true });
+    expect(await runtime(support)).toMatchObject({ photoVideoEnabled: true, photoVideoPreview: true });
+
+    // Staff make one from their own song; a user is still refused.
+    const staffSong = await song(off, admin);
+    const made = await post(off, admin, staffSong, { start: 0, duration: 5, frames: [{ at: 0, jpeg: jpeg('black') }] });
+    expect(made.statusCode).toBe(200);
+    expect(made.headers['content-type']).toContain('video/mp4');
+    const userSong = await song(off, user);
+    expect((await post(off, user, userSong, { start: 0, duration: 5, frames: [{ at: 0, jpeg: jpeg('black') }] })).statusCode).toBe(503);
+    // Staff still only on their own songs: a preview, not an admin tool.
+    expect((await post(off, admin, userSong, { start: 0, duration: 5, frames: [{ at: 0, jpeg: jpeg('black') }] })).statusCode).toBe(404);
+    // With the public switch on, nobody is told it is a preview.
+    expect((await on.app.inject({ method: 'GET', url: '/v1/runtime', headers: admin.authHeader })).json().features.photoVideoPreview).toBe(false);
+  }, 90_000);
 });
 
 describe('the plan of a photo video', () => {

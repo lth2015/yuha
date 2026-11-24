@@ -46,6 +46,11 @@ export const runtimeInfo = z.object({
     wavExportEnabled: z.boolean(),
     /** The photo MV (docs/PHOTO_MV_SPEC.md): the song page offers it only when true. */
     photoVideoEnabled: z.boolean(),
+    /**
+     * True when photoVideoEnabled is true only because the viewer is staff:
+     * the public switch is still off (docs/PHOTO_MV_SPEC.md, staff preview).
+     */
+    photoVideoPreview: z.boolean().optional(),
     /** A song without an account (docs/GROWTH_SPEC.md, part three). */
     guestTrialEnabled: z.boolean(),
     commercialDeliveryEnabled: z.boolean(),

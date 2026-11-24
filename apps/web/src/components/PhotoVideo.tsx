@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { apiPostForBlob } from '../lib/api';
 import { useI18n } from '../lib/i18n';
+import { useSession } from '../lib/session';
 import { resolveLyricTimings } from '../lib/lyrics';
 import { drawPhotoFrame, frameJpeg, loadPhoto, planPhotoClip, type ShareLabels, type ShareSong } from '../lib/share-art';
 import { ErrorNotice } from './common';
@@ -38,6 +39,8 @@ export function PhotoVideo({
   lyricTimings: Parameters<typeof resolveLyricTimings>[2];
 }) {
   const { t } = useI18n();
+  const { runtime } = useSession();
+  const preview = runtime?.features.photoVideoPreview === true;
   const [open, setOpen] = useState(false);
   const [photos, setPhotos] = useState<Picked[]>([]);
   const [skipped, setSkipped] = useState(0);
@@ -126,6 +129,7 @@ export function PhotoVideo({
           {t('photo.close')}
         </button>
       </div>
+      {preview && <p className="photo-video__preview-note">{t('photo.staffPreview')}</p>}
       <p className="photo-video__lead">{t('photo.lead')}</p>
       <p className="photo-video__notice">{t('photo.notice')}</p>
       <div className="checkbox-row photo-video__rights">
