@@ -1,0 +1,109 @@
+{
+  "baseline": "31b1aee48cf437f639e78e0a419f7d8696ed847c",
+  "environment": "isolated local demo; synthetic data only",
+  "screenshots": "JPEG encodings of original full-page screenshots, dimensions preserved; originals remain local outside git",
+  "files": [
+    {
+      "file": "checkout-cancel-390.jpg",
+      "bytes": 22673,
+      "width": 390,
+      "height": 844
+    },
+    {
+      "file": "claim-success-stale-error-390.jpg",
+      "bytes": 19118,
+      "width": 390,
+      "height": 844
+    },
+    {
+      "file": "draft-after-success-390.jpg",
+      "bytes": 137726,
+      "width": 390,
+      "height": 3781
+    },
+    {
+      "file": "guest-finished-away-360.jpg",
+      "bytes": 85384,
+      "width": 360,
+      "height": 2753
+    },
+    {
+      "file": "guest-finished-home-390.jpg",
+      "bytes": 91331,
+      "width": 390,
+      "height": 2800
+    },
+    {
+      "file": "home-to-studio-390.jpg",
+      "bytes": 70394,
+      "width": 390,
+      "height": 3058
+    },
+    {
+      "file": "library-search-no-results-390.jpg",
+      "bytes": 45534,
+      "width": 390,
+      "height": 1243
+    },
+    {
+      "file": "lyric-versions-stale-390.jpg",
+      "bytes": 160729,
+      "width": 390,
+      "height": 4013
+    },
+    {
+      "file": "photo-ending-720.jpg",
+      "bytes": 24077,
+      "width": 720,
+      "height": 1280
+    },
+    {
+      "file": "recreate-390.jpg",
+      "bytes": 33137,
+      "width": 390,
+      "height": 1029
+    },
+    {
+      "file": "song-card.png",
+      "bytes": 447938,
+      "width": 1200,
+      "height": 630
+    }
+  ],
+  "verifiedOutputs": {
+    "mp3Download": true,
+    "lrcDownload": true,
+    "shareVideo": {
+      "width": 720,
+      "height": 1280,
+      "durationSeconds": 20,
+      "videoCodec": "h264",
+      "audioCodec": "aac",
+      "bytes": 2939224
+    },
+    "photoMv": {
+      "width": 720,
+      "height": 1280,
+      "durationSeconds": 30,
+      "videoCodec": "h264",
+      "audioCodec": "aac",
+      "bytes": 4509642
+    },
+    "ui": {
+      "pageViews": 376,
+      "problems": 0,
+      "warnings": 0
+    },
+    "myTrialNormalTabReturnsSameSong": true,
+    "recreateSubmission": {
+      "acceptedStatus": 202,
+      "newTrackIdDiffers": true,
+      "originalReadable": true,
+      "originalTitleAndLyricsUnchanged": true,
+      "creditDelta": 1,
+      "provider": "local demo, not music-quality verification"
+    }
+  },
+  "productionAcceptance": false,
+  "audiblePlaybackAcceptance": false
+}
