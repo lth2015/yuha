@@ -343,7 +343,7 @@ not the key, are deleted at 7 days; the key's lifetime is managed separately.
 | Hash | Table | Key, first one set wins | Record kept |
 | --- | --- | --- | --- |
 | Guest-trial device and network (`apps/api/src/services/guest-trial.ts`) | `guest_trials.device_ref`, `ip_ref` | `STORAGE_SIGNING_SECRET`, then `GOOGLE_SESSION_SECRET`, then `DEV_AUTH_SECRET`; **none: no trial** (no public fallback) | 7 days, claimed or not |
-| Sign-in source (`apps/api/src/services/notices.ts`) | `known_sign_in_sources.source_hash` | `STORAGE_SIGNING_SECRET`, then `DEV_AUTH_SECRET`, then a constant (still to be removed: see the privacy draft) | while the account exists |
+| Sign-in source (`apps/api/src/services/notices.ts`) | `known_sign_in_sources.source_hash` | `STORAGE_SIGNING_SECRET`, then `DEV_AUTH_SECRET`; **none: nothing recorded, no notice** (no public fallback) | while the account exists |
 
 **Access.** The keys live only in the `qa-music-api-secrets-kv` secret in AWS
 Secrets Manager. Nobody reads them for routine work; reading or changing that
