@@ -888,6 +888,13 @@ export default function Create() {
             <Link to="/library" className="btn">
               {t('wait.goLibrary')}
             </Link>
+            {/* Once it is made: the studio again, with a clean page (the draft
+                that made this song was emptied when it finished). */}
+            {done && (
+              <button type="button" className="btn" onClick={startAnother}>
+                {t('create.job.startAnother')}
+              </button>
+            )}
           </>
         )}
       </div>
@@ -970,8 +977,11 @@ export default function Create() {
 
         {!failed && !done && actions}
 
+        {/* What the song is, in a person's terms. A job id prefix used to lead
+            this line; it means nothing to the reader and support has the full
+            id from the report form. */}
         <p className="small muted" style={{ marginTop: 'var(--s6)' }}>
-          {job.jobId.slice(0, 8)} · {job.durationSeconds}s ·{' '}
+          {job.durationSeconds}s ·{' '}
           {job.instrumental ? t('create.vocals.instrumental') : t('composer.vocals')}
           {runtime?.syntheticAudio ? ` · ${t('create.job.demoAudio')}` : ''}
         </p>

@@ -3044,3 +3044,12 @@ textarea.is-full { border-color: var(--danger); }
 .studio__edit-lyrics textarea { width: 100%; min-height: 12rem; line-height: 1.8; }
 .studio__edit-lyrics > p { margin: 0; }
 .trial-claim__warn { flex-basis: 100%; font-size: var(--t-caption); color: var(--ink); }
+/* Lyric timing tools, folded away for the owner (SyncedLyrics.tsx). */
+.lyrics-sync__toolbar { display: flex; justify-content: flex-end; }
+.lyrics-sync__tune { border: 0; background: none; color: var(--muted); font: inherit; font-size: var(--t-caption); min-height: var(--tap); padding: 0 var(--s1); cursor: pointer; }
+.lyrics-sync__tune:hover { color: var(--link); text-decoration: underline; }
+.scene__try { margin-left: var(--s3); }
+@media (max-width: 560px) { .scene__try { margin: var(--s3) 0 0; } }
+
+/* The account menu sits over page content; glass let the page's text read through it. */
+.account__menu { background-color: var(--bg); }

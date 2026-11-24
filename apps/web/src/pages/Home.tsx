@@ -480,7 +480,8 @@ export default function Home() {
             />
             <div className="composer__meta">
               <span id="home-prompt-format">
-                {t('composer.format', {
+                {/* A trial song is a minute long (docs/GROWTH_SPEC.md): say so, not 2:00. */}
+                {t(trialOpen || isGuest ? 'composer.formatTrial' : 'composer.format', {
                   mode: instrumental ? t('composer.instrumental') : t('composer.vocals'),
                 })}
               </span>
@@ -543,14 +544,23 @@ export default function Home() {
 
             <div className="composer__row">
               <span className="composer__cost">
-                {outOfCredits ? t('composer.outOfCredits') : t('composer.cost')}
-                <br />
-                {me ? t('composer.credits', { n: credits }) : trialOpen ? t('trial.hint') : t('composer.creditsLogin')}
+                {outOfCredits ? (
+                  t(isGuest ? 'trial.used' : 'composer.outOfCredits')
+                ) : isGuest || (!me && trialOpen) ? (
+                  // A trial is free and is one song: "costs 1 credit" describes an account.
+                  t('trial.hint')
+                ) : (
+                  <>
+                    {t('composer.cost')}
+                    <br />
+                    {me ? t('composer.credits', { n: credits }) : t('composer.creditsLogin')}
+                  </>
+                )}
               </span>
               {outOfCredits && isGuest ? (
                 // A trial's one song is made; the next is an account's.
                 <Link to="/auth?next=%2F" className="btn btn--primary">
-                  {t('trial.keep.cta')}
+                  {t('trial.next')}
                 </Link>
               ) : outOfCredits ? (
                 // The draft is already in localStorage, so it survives the
@@ -570,7 +580,7 @@ export default function Home() {
             <p className="composer__feedback" aria-live="polite">
               {error ??
                 (outOfCredits
-                  ? t('composer.draftKept')
+                  ? t(isGuest ? 'trial.draftKept' : 'composer.draftKept')
                   : feedbackKey
                   ? t(feedbackKey.key, feedbackKey.params)
                   : instrumental

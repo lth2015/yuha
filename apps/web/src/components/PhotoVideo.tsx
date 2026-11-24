@@ -210,6 +210,7 @@ export function PhotoVideo({
               {t('photo.download')}
             </a>
           </div>
+          <p className="small muted">{t('photo.notKept')}</p>
         </div>
       )}
     </section>

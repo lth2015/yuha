@@ -192,6 +192,23 @@ export default function Library() {
             <div key={i} className="skeleton skeleton--card" />
           ))}
         </div>
+      ) : songs.length === 0 && (q.trim() || filter !== 'all') ? (
+        /* Nothing matched — not "you have no songs". The first-run state used
+           to answer every empty search, telling someone with 25 songs to make
+           their first. */
+        <div className="empty">
+          <h2>{t('lib.noMatch')}</h2>
+          <button
+            type="button"
+            className="btn"
+            onClick={() => {
+              setQ('');
+              setFilter('all');
+            }}
+          >
+            {t('lib.showAll')}
+          </button>
+        </div>
       ) : songs.length === 0 ? (
         <div className="empty">
           <h2>{t('lib.empty')}</h2>

@@ -31,7 +31,10 @@ export function etaText(
       : e.maxSeconds <= 0
         ? t('eta.almost')
         : e.maxSeconds < 90
-          ? t('eta.seconds', { min: Math.max(e.minSeconds, 1), max: e.maxSeconds })
+          ? Math.max(e.minSeconds, 1) >= e.maxSeconds
+            // "5–5 秒" is a range of one: say the one number.
+            ? t('eta.secondsOne', { n: e.maxSeconds })
+            : t('eta.seconds', { min: Math.max(e.minSeconds, 1), max: e.maxSeconds })
           : min === max
             ? t('eta.minute', { n: max })
             : t('eta.minutes', { min, max });

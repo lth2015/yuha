@@ -15,6 +15,25 @@ import { Snow } from './HolidayOpening';
  * the song carries them, our deterministic estimate otherwise — and the pill
  * says which, because "estimated" and "word-synced" are different promises.
  */
+/**
+ * The music model's section tags (`[verse]`, `[chorus]`…) in the reader's
+ * language. They were printed as written, so a Chinese page read VERSE /
+ * CHORUS between lines while the studio's own section buttons say 主歌 / 副歌.
+ * A tag the creator wrote in their own language is already readable.
+ */
+const SECTION_KEYS: Record<string, string> = {
+  intro: 'create.section.intro',
+  verse: 'create.section.verse',
+  chorus: 'create.section.chorus',
+  bridge: 'create.section.bridge',
+  rap: 'create.section.rap',
+  interlude: 'create.section.interlude',
+  'pre-chorus': 'lyrics.section.prechorus',
+  outro: 'lyrics.section.outro',
+  solo: 'lyrics.section.solo',
+  instrumental: 'lyrics.section.instrumental',
+};
+
 export function SyncedLyrics({
   lyrics,
   duration,
@@ -65,6 +84,8 @@ export function SyncedLyrics({
   const [draft, setDraft] = useState<LyricTimings | null>(null);
   const [saving, setSaving] = useState(false);
   const [offset, setOffset] = useState(0);
+  /** The owner opened the timing tools (folded away by default). */
+  const [tuning, setTuning] = useState(false);
   const shown = draft ?? timeline;
   const lines = shown.lines;
   const source = shown.source;
@@ -172,31 +193,42 @@ export function SyncedLyrics({
       aria-label={t('song.lyrics')}
       data-source={source}
     >
+      {/*
+        Timing tools are the owner's, and folded away until asked for. A
+        listener — the owner most of the time, a friend who was sent the link
+        the rest — came to read the words; "估算同步", ±0.5 s buttons and an
+        explanation of forced alignment were in the way for both.
+      */}
+      {onSaveTimings && !compact && (
+        <div className="lyrics-sync__toolbar">
+          <button type="button" className="lyrics-sync__tune" aria-expanded={tuning} onClick={() => setTuning((v) => !v)}>
+            {t(tuning ? 'lyrics.tune.close' : 'lyrics.tune.open')}
+          </button>
+        </div>
+      )}
+      {tuning && onSaveTimings && (
       <div className="lyrics-sync__head">
         <span className={`lyrics-sync__pill${source === 'estimated' ? '' : ' is-aligned'}`}>
           {t(source === 'corrected' ? 'lyrics.corrected' : source === 'aligned' ? 'lyrics.aligned' : 'lyrics.estimated')}
         </span>
         {!compact && lines.length > 0 && (
           <span className="lyrics-sync__actions">
-            {onSaveTimings && (
-              <>
-                <button type="button" className="btn btn--ghost btn--sm" onClick={() => nudge(-0.5)}>
-                  {t('lyrics.earlier')}
-                </button>
-                <span className="lyrics-sync__offset num" aria-live="polite">
-                  {offset > 0 ? `+${offset.toFixed(1)}` : offset.toFixed(1)}s
-                </span>
-                <button type="button" className="btn btn--ghost btn--sm" onClick={() => nudge(0.5)}>
-                  {t('lyrics.later')}
-                </button>
-              </>
-            )}
+            <button type="button" className="btn btn--ghost btn--sm" onClick={() => nudge(-0.5)}>
+              {t('lyrics.earlier')}
+            </button>
+            <span className="lyrics-sync__offset num" aria-live="polite">
+              {offset > 0 ? `+${offset.toFixed(1)}` : offset.toFixed(1)}s
+            </span>
+            <button type="button" className="btn btn--ghost btn--sm" onClick={() => nudge(0.5)}>
+              {t('lyrics.later')}
+            </button>
             <button type="button" className="btn btn--ghost btn--sm" onClick={downloadLrc}>
               {t('lyrics.download')}
             </button>
           </span>
         )}
       </div>
+      )}
       {draft && onSaveTimings && (
         <div className="lyrics-sync__bar">
           <span>{t('lyrics.unsaved')}</span>
@@ -222,7 +254,7 @@ export function SyncedLyrics({
         words run ahead of the voice, and nobody reads a pill — this has been
         reported three times against songs that were never aligned at all.
       */}
-      {!compact && source === 'estimated' && (
+      {tuning && !compact && source === 'estimated' && (
         <p className="lyrics-sync__note">{t('lyrics.estimated.why')}</p>
       )}
       {lines.map((line, i) => {
@@ -231,7 +263,9 @@ export function SyncedLyrics({
         return (
           <div key={i} role="listitem" className="lyrics-sync__section">
             {line.section && (i === 0 || lines[i - 1]!.section !== line.section) && (
-              <span className="lyrics-sync__marker">{line.section}</span>
+              <span className="lyrics-sync__marker">
+                {SECTION_KEYS[line.section.trim().toLowerCase()] ? t(SECTION_KEYS[line.section.trim().toLowerCase()]!) : line.section}
+              </span>
             )}
             <button
               type="button"
@@ -256,7 +290,7 @@ export function SyncedLyrics({
               a line to a stopped playhead is not a correction, it is a way to
               lose one.
             */}
-            {onSaveTimings && live && player.status === 'playing' && (
+            {onSaveTimings && tuning && live && player.status === 'playing' && (
               <button
                 type="button"
                 className="btn btn--ghost btn--sm lyrics-sync__stamp"

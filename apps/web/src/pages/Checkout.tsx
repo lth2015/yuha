@@ -331,6 +331,11 @@ export function CheckoutConfirm() {
             ? t('checkout.payStablecoin', { token: (payWith ?? '').toUpperCase() })
             : t('checkout.pay', { amount: formatMoney(product.amountMinor, product.currency, LOCALES[lang]) })}
       </button>
+      {!agreed && product.available && payWith && (
+        <p className="small muted" style={{ margin: 0, textAlign: 'center' }}>
+          {t('checkout.agreeFirst')}
+        </p>
+      )}
 
       {/* About the method that will be used; nothing to say when none can be. */}
       {payWith && (
