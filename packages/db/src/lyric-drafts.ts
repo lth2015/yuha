@@ -16,7 +16,12 @@ export type LyricDraftStatus = 'pending' | 'ok' | 'refused' | 'failed';
  * Claims one draft for `userId`. Returns its id and how many remain after it,
  * or null when the account has used its `limit` in the last 24 hours.
  */
-export async function claimLyricDraft(userId: string, limit: number): Promise<{ id: string; remaining: number } | null> {
+/**
+ * `count` drafts at once, or none: three versions are three model calls and
+ * count as three (docs/LYRIC_COWRITE_SPEC.md). Refused, with nothing written,
+ * when fewer than `count` are left.
+ */
+export async function claimLyricDrafts(userId: string, limit: number, count: number): Promise<{ ids: string[]; remaining: number } | null> {
   return withTx(async (tx) => {
     await query(`SELECT id FROM users WHERE id = ? FOR UPDATE`, [userId], tx);
     const row = await queryOne<{ n: number }>(
@@ -25,10 +30,14 @@ export async function claimLyricDraft(userId: string, limit: number): Promise<{ 
       tx,
     );
     const used = Number(row?.n ?? 0);
-    if (used >= limit) return null;
-    const id = newId();
-    await execute(`INSERT INTO lyric_drafts (id, user_id, status) VALUES (?, ?, 'pending')`, [id, userId], tx);
-    return { id, remaining: limit - used - 1 };
+    if (used + count > limit) return null;
+    const ids: string[] = [];
+    for (let i = 0; i < count; i += 1) {
+      const id = newId();
+      await execute(`INSERT INTO lyric_drafts (id, user_id, status) VALUES (?, ?, 'pending')`, [id, userId], tx);
+      ids.push(id);
+    }
+    return { ids, remaining: limit - used - count };
   });
 }
 

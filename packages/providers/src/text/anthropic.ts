@@ -9,7 +9,7 @@ import {
   VocalMode,
   musicIntent,
 } from '@yuha/contracts';
-import { LYRIC_CRAFT } from './lyric-craft.js';
+import { LYRIC_CRAFT, angleDirection } from './lyric-craft.js';
 import type { IntentRequest, IntentResult, LyricsRequest, LyricsResult, ReviseRequest, ReviseResult, TextProvider, TextUsage } from './types.js';
 
 /**
@@ -227,7 +227,7 @@ export class AnthropicTextProvider implements TextProvider {
 
   async writeLyrics(req: LyricsRequest): Promise<LyricsResult> {
     const reply = await this.ask({
-      system: lyricsSystem(this.secondsPerLine),
+      system: [lyricsSystem(this.secondsPerLine), ...angleDirection(req.angle)].join('\n'),
       user: JSON.stringify({ user_text: req.prompt, styles: req.styles, durationSeconds: req.durationSeconds }),
     });
     if (reply.kind === 'refused') return { status: 'refused', reason: reply.reason, requestId: reply.requestId, usage: reply.usage };

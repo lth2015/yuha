@@ -23,6 +23,7 @@ import type { LyricDraftResponse } from '@yuha/contracts';
 import { clampToCodePoints, codePointLength } from '../lib/codepoints';
 import { FIELDS_IN_MORE_PANEL, focusFieldFor } from '../lib/messages';
 import { useI18n } from '../lib/i18n';
+import { LyricVersions } from '../components/LyricVersions';
 import { startersFor } from '../lib/scenes';
 import { applyCreateLink } from '../lib/create-link';
 import { STYLE_PRESETS, styleLabel } from '../lib/style-label';
@@ -1487,6 +1488,19 @@ export default function Create() {
                   ? t('create.lyricsBy.aiHint')
                   : t('create.lyrics.hint')}
             </span>
+            {/* Three versions to choose from before a credit is spent (docs/LYRIC_COWRITE_SPEC.md). */}
+            {draft.lyricsBy === 'ai' && (
+              <LyricVersions
+                prompt={draft.prompt}
+                styles={draft.styles}
+                durationSeconds={draft.durationSeconds}
+                onPick={(lyrics) => {
+                  patch({ lyricsBy: 'me', lyrics: clampToCodePoints(lyrics, LYRICS_MAX_CODEPOINTS) });
+                  // Into the box it was put in, to be edited.
+                  requestAnimationFrame(() => lyricsRef.current?.focus());
+                }}
+              />
+            )}
 
         {writesOwnLyrics && (
           <div className="studio__fork-body">

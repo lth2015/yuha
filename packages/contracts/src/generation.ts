@@ -157,13 +157,21 @@ export const lyricDraftRequest = z.object({
   styles: z.array(styleTagSchema).max(MAX_STYLE_TAGS).default([]),
   /** `auto` writes for the default length; the song is then fitted to the lyrics. */
   durationSeconds: z.union([songDurationSchema, z.literal('auto')]).default(120),
+  /** 3: one version for each way of writing, counted as three drafts (docs/LYRIC_COWRITE_SPEC.md). */
+  variants: z.union([z.literal(1), z.literal(3)]).default(1),
 });
 export type LyricDraftRequest = z.infer<typeof lyricDraftRequest>;
 
+export const LYRIC_ANGLES = ['plain', 'images', 'story'] as const;
+export type LyricAngle = (typeof LYRIC_ANGLES)[number];
+
 export interface LyricDraftResponse {
+  /** The first version that came back. */
   lyrics: string;
   /** Drafts this account may still ask for in the current 24 hours. */
   remaining: number;
+  /** With `variants: 3`: the versions that came back, in the order of LYRIC_ANGLES. */
+  variants?: Array<{ angle: LyricAngle; lyrics: string }>;
 }
 
 export const createGenerationRequest = z

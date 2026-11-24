@@ -45,3 +45,18 @@ export const LYRIC_CRAFT = (secondsPerLine: number): string[] => [
   '  song, no romaji, no rare readings that a singer could get wrong.',
   '- Original words only: never quote or imitate existing songs, artists or titles.',
 ];
+
+/**
+ * One sentence of direction per version of a three-version draft
+ * (docs/LYRIC_COWRITE_SPEC.md). Added after the rules, never instead of them:
+ * every version keeps the language, the sizing and the sections.
+ */
+const ANGLE_DIRECTION: Record<'plain' | 'images' | 'story', string> = {
+  plain: 'This version: say it simply and directly, as if speaking to the person face to face.',
+  images: 'This version: speak in concrete pictures (a place, the light, an object) and let the feeling come through them.',
+  story: 'This version: tell it as a small story, with what happened and the moment something changed.',
+};
+
+export function angleDirection(angle: 'plain' | 'images' | 'story' | undefined): string[] {
+  return angle ? ['', ANGLE_DIRECTION[angle]] : [];
+}

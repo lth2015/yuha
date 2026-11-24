@@ -1,5 +1,5 @@
 import { musicIntent, type MusicIntent } from '@yuha/contracts';
-import { LYRIC_CRAFT } from './lyric-craft.js';
+import { LYRIC_CRAFT, angleDirection } from './lyric-craft.js';
 import type { IntentRequest, IntentResult, LyricsRequest, LyricsResult, ReviseRequest, ReviseResult, TextProvider, TextUsage } from './types.js';
 
 /**
@@ -315,6 +315,7 @@ export class TokenStarsTextProvider implements TextProvider {
       '  perform and listeners will read line by line as it plays.',
       '',
       ...LYRIC_CRAFT(this.cfg.lyricSecondsPerLine),
+      ...angleDirection(req.angle),
       '',
       'Reply with the lyrics only: no title, no notes, no quotation marks, no code fence.',
     ].join('\n');
