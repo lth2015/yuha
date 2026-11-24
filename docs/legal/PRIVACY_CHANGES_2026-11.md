@@ -73,3 +73,65 @@
 2. 同一个提交里：改 `Legal.tsx` 的 `Privacy()`，`LEGAL_TEXT_REVIEWED` 保持 `true`，
    注释里写明审阅日期和范围（与 2026-10-19 那次的写法一致）。
 3. 然后才打开免注册试做和照片 MV 的开关。
+
+---
+
+# 附录：年龄要求（方案 A）— 待律师审阅
+
+> 2026-11-24 起草。产品负责人：「我小侄女儿看到 18 岁她都不敢点进，毕竟她才 15 岁。」
+> 选定方案 A：**免费做歌放宽年龄，付费仍要成年**。改动涉及使用条款第 2、3 条和隐私政策第 8 条，
+> 与上面的隐私政策修改一并请律师审阅。审定前，代码和页面一个字都不改。
+
+## 给产品负责人的中文摘要
+
+| | 现在 | 方案 A |
+| --- | --- | --- |
+| 做歌（用注册赠送的免费额度、免注册试做） | 18 岁以上 | **13 岁以上**（具体年龄请律师定，见问题 1） |
+| 购买额度、订阅、购买授权 | 18 岁以上 | 18 岁以上（是否允许「监护人同意」见问题 2） |
+| 页面上怎么问 | 一进来就问「我已年满 18 岁」 | 做歌前问「我已年满 13 岁」；**付款时**再问一次「我已年满 18 岁」 |
+
+为什么购买仍要 18 岁：日本民法规定，未成年人（未满 18 岁）没有监护人同意签订的合同，事后可以撤销，
+已付的钱要退还（民法第 5 条）。免费做歌不涉及付钱，风险主要在个人信息和内容上；付款的风险在于可以被撤销。
+
+## 现行条文（供对照）
+
+- 使用条款第 2 条：*You must be at least 18 years old to generate or purchase songs.*
+- 隐私政策第 8 条：*The Service is not directed to children; generation and purchase require being 18 or older.*
+- 服务器：生成、写歌词草稿、购买额度、购买授权、稳定币付款，都要求账户已确认 18 岁（`requireAgeConfirmed`）。
+
+## 提议的英文条文
+
+### 使用条款第 2 条（Accounts）— 第一句替换为：
+
+> You must be at least **13** years old to use the Service. If you are under 18, you may make songs
+> with the free credits included with your account, but you may not buy credits, a subscription or a
+> licence: purchases require being 18 or older.
+
+### 使用条款第 3 条（Credits, plans and payment）— 末尾增加一句：
+
+> Before each purchase you confirm that you are 18 or older.
+
+### 隐私政策第 8 条（Children）— 整段替换：
+
+> The Service is not directed to children under 13, and we do not knowingly collect personal data from
+> them. Users from 13 to 17 may make songs with free credits; purchases require being 18 or older. If you
+> believe a child under 13 has given us personal data, contact us and we will delete it.
+
+## 产品上要改的（审定后才做）
+
+1. 做歌前的确认改成「我已年满 13 岁」+ 同意条款；免注册试做同样。
+2. 付款前（价格页按钮、确认付款页）增加一项「我已年满 18 岁」，记录确认时间；不勾选不能付款。
+3. 服务器分开两个确认：做歌查「13 岁确认」，购买查「18 岁确认」。已经确认过 18 岁的现有账户两项都算已确认。
+
+## 请律师确认的问题
+
+1. **最低年龄定几岁。** 13 岁（海外服务常见）、15 岁，还是 16 岁？面向日本用户，有没有更合适的年龄。
+2. **购买：只限 18 岁以上，还是允许监护人同意？** 如果允许，用什么方式证明同意才够
+   （例如监护人邮件确认）。
+3. **自我申报的效力。** 付款前勾选「我已年满 18 岁」，如果未成年人如实没勾选就无法付款；
+   如果谎报年龄，是否构成民法第 21 条的「诈术」（从而不能撤销）？只勾一个框是否足够，还是需要更强的确认。
+4. **未成年人的个人信息。** 13–17 岁用户注册（邮箱或 Google 账号）、做歌，是否需要监护人同意；
+   个人信息保护委员会的指引对多大年龄需要监护人同意的判断，是否适用于本服务。
+5. **使用条款对未成年人的效力。** 每首歌附带的使用条件（可商用范围等）对 13–17 岁用户是否有效，
+   条款里是否需要补充「未成年人需在监护人同意下使用」之类的表述。
+6. **营销邮件。** 是否应对 18 岁以下的账户一律不发送营销邮件（即使勾选了同意）。
