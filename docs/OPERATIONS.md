@@ -332,6 +332,54 @@ A track under an open case cannot be deleted by its owner, so evidence survives.
 
 ---
 
+## 7b. Keys that hash people's data
+
+Two hashes are kept about people, both HMAC-SHA256 with a server-side key
+(docs/legal/PRIVACY_CHANGES_2026-11.md; second round of advice, 7: no fixed
+rotation period is promised in the policy, but rotation, revocation, access
+and incident response are kept here). The privacy text promises the records,
+not the key, are deleted at 7 days; the key's lifetime is managed separately.
+
+| Hash | Table | Key, first one set wins | Record kept |
+| --- | --- | --- | --- |
+| Guest-trial device and network (`apps/api/src/services/guest-trial.ts`) | `guest_trials.device_ref`, `ip_ref` | `STORAGE_SIGNING_SECRET`, then `GOOGLE_SESSION_SECRET`, then `DEV_AUTH_SECRET`; **none: no trial** (no public fallback) | 7 days, claimed or not |
+| Sign-in source (`apps/api/src/services/notices.ts`) | `known_sign_in_sources.source_hash` | `STORAGE_SIGNING_SECRET`, then `DEV_AUTH_SECRET`, then a constant (still to be removed: see the privacy draft) | while the account exists |
+
+**Access.** The keys live only in the `qa-music-api-secrets-kv` secret in AWS
+Secrets Manager. Nobody reads them for routine work; reading or changing that
+secret is an operator action with a reason in the change log.
+
+**Rotation.** Rotate when someone with access to the secret leaves, when the
+secret may have been exposed, and otherwise once a year. What a rotation of
+each key also changes:
+
+- `STORAGE_SIGNING_SECRET` also signs audio links (`routes/files.ts`, the
+  local storage adapter). Links already handed out stop working at once;
+  they are short-lived and re-issued on the next page load. Every account's
+  known sign-in sources stop matching, so **each user gets one "new sign-in"
+  email** on their next sign-in. Rotate in a quiet hour and expect it.
+- `GOOGLE_SESSION_SECRET` (only when `STORAGE_SIGNING_SECRET` is unset):
+  signs every session, so **everyone is signed out**.
+- For guest trials, a rotation only means that, for at most 7 days, a device
+  or network that already had a trial may get another. Nothing else.
+
+Steps: put the new value in the secret, roll the API and worker pods
+(`kubectl -n qa-music rollout restart deploy/yuha-api deploy/yuha-worker`),
+check `/health`, sign in once, open one song (audio plays), and note the date
+and reason here.
+
+**Revocation / suspected exposure.** Rotate immediately as above. Then: the
+guest-trial hashes still in the table were made with the exposed key, so
+delete them early (`UPDATE guest_trials SET device_ref = NULL, ip_ref = NULL
+WHERE device_ref IS NOT NULL OR ip_ref IS NOT NULL`); the only cost is that
+the trial limits restart. Record what was exposed, when, and to whom, and
+treat it as a personal-data incident: an IPv4 address hashed under a known key
+can be recovered by trying them all.
+
+| Date | Key | Reason |
+| --- | --- | --- |
+| | | |
+
 ## 7a. Browser security headers on the web app
 
 The web app's HTML is served by S3 behind CloudFront, so its response headers
