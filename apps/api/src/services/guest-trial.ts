@@ -1,5 +1,5 @@
 import { createHmac } from 'node:crypto';
-import { AppError } from '@yuha/contracts';
+import { AppError, CONSENT_VERSION } from '@yuha/contracts';
 import {
   anonymiseUser,
   execute,
@@ -86,7 +86,7 @@ export async function openGuestTrial(
     if (counts.day >= ctx.config.GUEST_TRIAL_DAILY_LIMIT) refuse('day');
     if (counts.network >= ctx.config.GUEST_TRIAL_PER_NETWORK) refuse('network');
 
-    const user = await insertGuest({ deviceRef, ipRef }, tx);
+    const user = await insertGuest({ deviceRef, ipRef, consentVersion: CONSENT_VERSION }, tx);
     await grantUnits(
       {
         userId: user.id,

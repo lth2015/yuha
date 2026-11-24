@@ -38,9 +38,20 @@ export interface SignInContext {
   at: Date;
 }
 
-/** Keyed on a server secret so the table is useless to a reader without it. */
-function sourceHash(ctx: AppContext, params: { ip: string; userAgent: string | null }): string {
-  const secret = ctx.config.STORAGE_SIGNING_SECRET ?? ctx.config.DEV_AUTH_SECRET ?? 'yuha-sign-in-source';
+/**
+ * Keyed on a server secret so the table is useless to a reader without it.
+ *
+ * There used to be a third fallback, a string written in this file. A key
+ * anyone can read is no key: an IPv4 address and a browser string hashed
+ * under it can be recovered by trying them. Without a server secret there is
+ * no hash, so no source is remembered and no notice is sent; production always
+ * has STORAGE_SIGNING_SECRET (mounted from the secret store), and the order is
+ * unchanged, so no hash already stored stops matching
+ * (docs/OPERATIONS.md, 7b).
+ */
+function sourceHash(ctx: AppContext, params: { ip: string; userAgent: string | null }): string | null {
+  const secret = ctx.config.STORAGE_SIGNING_SECRET ?? ctx.config.DEV_AUTH_SECRET ?? null;
+  if (!secret) return null;
   return createHmac('sha256', secret).update(`${params.ip}|${params.userAgent ?? ''}`).digest('hex');
 }
 
@@ -54,6 +65,7 @@ function sourceHash(ctx: AppContext, params: { ip: string; userAgent: string | n
  */
 async function rememberSource(ctx: AppContext, params: SignInContext): Promise<{ firstEver: boolean; isNew: boolean }> {
   const hash = sourceHash(ctx, params);
+  if (!hash) return { firstEver: false, isNew: false };
   const seen = await query<{ n: number }>(
     `SELECT COUNT(*) AS n FROM known_sign_in_sources WHERE user_id = ?`,
     [params.userId],

@@ -20,6 +20,7 @@ import {
   newId,
   withTx,
 } from '@yuha/db';
+import { CONSENT_VERSION } from '@yuha/contracts';
 import { loadConfig } from './config.js';
 import { resolveFromRoot } from './paths.js';
 import { createContext } from './context.js';
@@ -87,7 +88,7 @@ async function seedShowcase() {
       const email = `${song.artist.toLowerCase()}@showcase.sonare.demo`;
       const externalId = `dev-${Buffer.from(email).toString('hex').slice(0, 24)}`;
       const user = await upsertUser({ authProvider: 'dev', externalId, email, displayName: song.artist });
-      await confirmAgeAndTerms({ userId: user.id, marketingOptIn: false });
+      await confirmAgeAndTerms({ userId: user.id, marketingOptIn: false, consentVersion: CONSENT_VERSION });
       artistIds.set(song.artist, user.id);
     }
     const ownerId = artistIds.get(song.artist)!;
@@ -172,7 +173,7 @@ if (config.mode !== 'production') {
   for (const acct of accounts) {
     const externalId = `dev-${Buffer.from(acct.email).toString('hex').slice(0, 24)}`;
     const user = await upsertUser({ authProvider: 'dev', externalId, email: acct.email, displayName: acct.name });
-    await confirmAgeAndTerms({ userId: user.id, marketingOptIn: false });
+    await confirmAgeAndTerms({ userId: user.id, marketingOptIn: false, consentVersion: CONSENT_VERSION });
     if (acct.role !== 'user') await setRole({ userId: user.id, role: acct.role });
     if (acct.credits > 0) {
       await withTx(async (tx) => {

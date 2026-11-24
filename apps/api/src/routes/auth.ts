@@ -2,7 +2,7 @@ import { createHash, createHmac, randomBytes, timingSafeEqual } from 'node:crypt
 import { randomUUID } from 'node:crypto';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
-import { AppError, normalizeSource, type MeView } from '@yuha/contracts';
+import { AppError, CONSENT_VERSION, normalizeSource, type MeView } from '@yuha/contracts';
 import { refuseInactive } from '../plugins/auth.js';
 import {
   confirmAgeAndTerms,
@@ -203,6 +203,7 @@ export default async function authRoutes(
       })
       .parse(req.body);
     const updated = await confirmAgeAndTerms({
+      consentVersion: CONSENT_VERSION,
       userId: req.user!.id,
       marketingOptIn: body.marketingOptIn,
     });
@@ -258,6 +259,7 @@ export default async function authRoutes(
       // neither, and no session.
       refuseInactive(user);
       const confirmed = await confirmAgeAndTerms({
+        consentVersion: CONSENT_VERSION,
         userId: user.id,
         marketingOptIn: body.marketingOptIn,
       });

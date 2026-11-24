@@ -106,7 +106,7 @@ export async function createHarness(overrides: Record<string, string> = {}): Pro
       const email = params.email ?? `user-${randomUUID().slice(0, 8)}@example.test`;
       const externalId = `dev-${Buffer.from(email).toString('hex').slice(0, 24)}`;
       const user = await upsertUser({ authProvider: 'dev', externalId, email });
-      await confirmAgeAndTerms({ userId: user.id, marketingOptIn: false });
+      await confirmAgeAndTerms({ userId: user.id, marketingOptIn: false, consentVersion: 'test' });
       if (params.role && params.role !== 'user') await setRole({ userId: user.id, role: params.role });
       if (params.credits) {
         await withTx(async (tx) => {

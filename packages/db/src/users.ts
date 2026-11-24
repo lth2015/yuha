@@ -13,6 +13,8 @@ export interface UserRow {
   status: 'active' | 'suspended' | 'deleted';
   age_confirmed_at: Date | null;
   terms_accepted_at: Date | null;
+  /** The wording confirmed (CONSENT_VERSION at the time); null before it was recorded. */
+  consent_version: string | null;
   marketing_opt_in: boolean;
   created_at: Date;
   updated_at: Date;
@@ -21,7 +23,7 @@ export interface UserRow {
 
 const USER_COLUMNS = `
   id, external_id, auth_provider, email, display_name, avatar_url, role, status,
-  age_confirmed_at, terms_accepted_at, marketing_opt_in, created_at, updated_at, deleted_at
+  age_confirmed_at, terms_accepted_at, consent_version, marketing_opt_in, created_at, updated_at, deleted_at
 `;
 
 export async function getUser(id: string, tx?: PoolConnection): Promise<UserRow | undefined> {
@@ -160,17 +162,21 @@ export async function upsertUser(
  * settings. A caller with no answer should now say so by not passing one.
  */
 export async function confirmAgeAndTerms(
-  params: { userId: string; marketingOptIn?: boolean },
+  params: { userId: string; marketingOptIn?: boolean; consentVersion: string },
   tx?: PoolConnection,
 ): Promise<UserRow | undefined> {
+  // consent_version first: MySQL applies SET left to right, so this still sees
+  // the age_confirmed_at from before this statement. The wording is recorded
+  // with the confirmation it belongs to, and a later call changes neither.
   await execute(
     `UPDATE users SET
+       consent_version = IF(age_confirmed_at IS NULL, ?, consent_version),
        age_confirmed_at = COALESCE(age_confirmed_at, UTC_TIMESTAMP(3)),
        terms_accepted_at = COALESCE(terms_accepted_at, UTC_TIMESTAMP(3)),
        marketing_opt_in = COALESCE(?, marketing_opt_in),
        updated_at = UTC_TIMESTAMP(3)
      WHERE id = ?`,
-    [params.marketingOptIn === undefined ? null : params.marketingOptIn ? 1 : 0, params.userId],
+    [params.consentVersion, params.marketingOptIn === undefined ? null : params.marketingOptIn ? 1 : 0, params.userId],
     tx,
   );
   return getUser(params.userId, tx);

@@ -1037,6 +1037,30 @@ describe('SEC-11: cancellation, deletion and marketing are separate actions', ()
    * The parameter is optional now: a caller with no answer from the user does
    * not get to invent one.
    */
+  it('records which wording was confirmed, once, with the confirmation it belongs to', async () => {
+    const { execute, queryOne } = await import('@yuha/db');
+    const { CONSENT_VERSION } = await import('@yuha/contracts');
+    const version = async (id: string) => (await queryOne<{ v: string | null }>('SELECT consent_version AS v FROM users WHERE id = ?', [id]))!.v;
+    const consent = (who: { authHeader: Record<string, string> }) =>
+      h.app.inject({ method: 'POST', url: '/v1/me/consent', headers: who.authHeader, payload: { ageConfirmed: true, termsAccepted: true } as never });
+
+    // Not yet confirmed: the gate records the wording in force.
+    const fresh = await h.createUser();
+    await execute('UPDATE users SET age_confirmed_at = NULL, terms_accepted_at = NULL, consent_version = NULL WHERE id = ?', [fresh.id]);
+    expect((await consent(fresh)).statusCode).toBe(200);
+    expect(await version(fresh.id)).toBe(CONSENT_VERSION);
+    // Confirming again changes nothing: the record is of the first confirmation.
+    await execute("UPDATE users SET consent_version = 'earlier' WHERE id = ?", [fresh.id]);
+    await consent(fresh);
+    expect(await version(fresh.id)).toBe('earlier');
+
+    // Confirmed before versions were recorded: stays unknown, never back-filled with a wording they did not see.
+    const older = await h.createUser();
+    await execute('UPDATE users SET consent_version = NULL WHERE id = ?', [older.id]);
+    await consent(older);
+    expect(await version(older.id)).toBeNull();
+  });
+
   it('opting in to marketing needs a confirmed age; opting out never does (counsel, 2026-11-24)', async () => {
     const { execute } = await import('@yuha/db');
     const user = await h.createUser();
@@ -1061,7 +1085,7 @@ describe('SEC-11: cancellation, deletion and marketing are separate actions', ()
     });
     expect(opted.json().marketingOptIn).toBe(true);
 
-    await confirmAgeAndTerms({ userId: user.id });
+    await confirmAgeAndTerms({ userId: user.id, consentVersion: 'test' });
 
     const after = await h.app.inject({ method: 'GET', url: '/v1/me', headers: user.authHeader });
     expect(after.json().marketingOptIn, 'a consent write cleared the marketing choice').toBe(true);

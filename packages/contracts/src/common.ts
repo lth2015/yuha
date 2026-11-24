@@ -189,3 +189,16 @@ export const previewReport = z.object({
   trackId: z.string().uuid(),
 });
 export type PreviewReport = z.infer<typeof previewReport>;
+
+/**
+ * The wording a person confirms when they say they are 18 or older and accept
+ * the terms: the checkboxes (auth.age, auth.terms and its links, consent.body)
+ * in every language, and the terms and privacy text in force
+ * (apps/web/src/pages/Legal.tsx). Recorded with each confirmation
+ * (users.consent_version; docs/legal/COUNSEL_RESPONSE_2026-11.md, second
+ * round, 8).
+ *
+ * Change any of that wording and this must change too: tests/consent-version
+ * fails until it does, so a record can never point at a wording it was not.
+ */
+export const CONSENT_VERSION = '2026-11-24';

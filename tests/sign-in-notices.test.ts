@@ -231,3 +231,34 @@ describe('account changes always say so', () => {
     expect(notices[0]!.text).toContain('削除');
   });
 });
+
+describe('the key the sign-in sources are hashed with (docs/OPERATIONS.md, 7b)', () => {
+  it('is the server secret, as before, so no source already stored stops matching', async () => {
+    const { createHmac } = await import('node:crypto');
+    await signIn('same-key@example.jp', { ip: '203.0.113.20', agent: 'UA-1' });
+    await settle();
+    const secret = h.ctx.config.STORAGE_SIGNING_SECRET ?? h.ctx.config.DEV_AUTH_SECRET;
+    const expected = createHmac('sha256', secret!).update('203.0.113.20|UA-1').digest('hex');
+    const rows = await query<{ source_hash: string }>(`SELECT source_hash FROM known_sign_in_sources`);
+    expect(rows.map((r) => r.source_hash)).toContain(expected);
+  });
+
+  it('has no public fallback: with no server secret nothing is recorded and nothing is sent', async () => {
+    const { noticeSignIn } = await import('../apps/api/src/services/notices.js');
+    const cfg = h.ctx.config as Record<string, unknown>;
+    const saved = { s: cfg.STORAGE_SIGNING_SECRET, d: cfg.DEV_AUTH_SECRET };
+    cfg.STORAGE_SIGNING_SECRET = undefined;
+    cfg.DEV_AUTH_SECRET = undefined;
+    try {
+      const user = await h.createUser();
+      for (const ip of ['203.0.113.30', '198.51.100.30']) {
+        await noticeSignIn(h.ctx, { userId: user.id, email: user.email, ip, userAgent: 'UA', at: new Date() });
+      }
+    } finally {
+      cfg.STORAGE_SIGNING_SECRET = saved.s;
+      cfg.DEV_AUTH_SECRET = saved.d;
+    }
+    expect(await query(`SELECT source_hash FROM known_sign_in_sources`)).toHaveLength(0);
+    expect(mail.sent).toHaveLength(0);
+  });
+});

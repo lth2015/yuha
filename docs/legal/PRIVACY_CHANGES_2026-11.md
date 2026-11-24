@@ -33,7 +33,7 @@
 | 4b 每小时清扫不当然保证 24 小时 | 核实：清扫删除的是**超过 1 小时**的临时目录（不是 24 小时），每小时一次，API 启动时也执行一次。只要 API 在运行，崩溃残留最长约 2 小时；Pod 被替换时临时盘随之删除。条文仍写「最长 24 小时」作为上限 | 已核实（代码和测试见 `sweepStaleVideoDirs`） |
 | 4c 最终输出视频的保存方式缺失 | 核实：成品 MP4 在服务器临时目录生成，直接返回给用户的设备（`cache-control: no-store`），随临时目录一起删除，服务器不保留。条文第 2 条照片一段补一句 | 条文已补 |
 | 4d Google、Stripe 不宜一律称为受托方 | 第 4 条改为「我们使用的外部服务」，分别写各自的角色；Google、Stripe 写明按其自己的政策处理 | 条文已改 |
-| 5 访问数据 90 天 + 月度汇总 | **待产品负责人决定**：后台访问统计现在直接读原始记录、可选任意日期范围；改为 90 天需要同时做月度汇总表和后台改读汇总 | 待决定 |
+| 5 访问数据 90 天 + 月度汇总 | **产品负责人 2026-11-24 决定：先保留 13 个月**（后台访问统计按任意日期范围读原始记录，跨年度比较推广效果需要它）。审阅建议优先 90 天 + 月度汇总，作为以后的改进项；条文写 13 个月及理由 | 已决定：13 个月 |
 | 6 语言条款 | 只有日文版实际提供时才发布第 10 条；在那之前不写「本政策以日文和英文提供」。补「不限制适用法律赋予的权利」 | 条文已改 |
 | 7 HMAC 密钥 | 条文不承诺固定周期；内部另定轮换、吊销、访问控制和事件响应（运维文档） | 待运维文档 |
 | 8 年龄确认记录 | 记录确认事实、时间和提示版本；不收集身份证或生日。**现在只记时间，没有记提示版本**，需要补 | 待开发 |
@@ -128,8 +128,8 @@
 > - **Trial records** (the device identifier and the hash of your IP address): deleted 7 days after the
 >   trial, whether or not you then create an account. The key used to make the hash is kept in our
 >   production secret store while free trials are offered, and replaced if it may have been exposed.
-> - **Visit data:** individual page views are deleted after [13 months / a shorter period]; we keep them
->   that long only to compare how the same campaigns perform from one year to the next. Totals that no
+> - **Visit data:** individual page views are deleted after 13 months; we keep them that long only to
+>   compare how the same campaigns perform from one year to the next. Totals that no
 >   longer relate to any browser may be kept longer. The random identifier in your browser stays until you
 >   clear your browser's storage; the campaign tag there is kept for 30 days.
 > - **The campaign tag recorded on an account:** while the account exists.

@@ -21,14 +21,14 @@ export interface GuestTrialRow {
 }
 
 export async function insertGuest(
-  params: { deviceRef: string; ipRef: string },
+  params: { deviceRef: string; ipRef: string; consentVersion: string },
   tx: PoolConnection,
 ): Promise<UserRow> {
   const id = newId();
   await execute(
-    `INSERT INTO users (id, auth_provider, external_id, email, role, age_confirmed_at, terms_accepted_at)
-     VALUES (?, 'guest', ?, ?, 'guest', UTC_TIMESTAMP(3), UTC_TIMESTAMP(3))`,
-    [id, id, `guest+${id}@guest.invalid`],
+    `INSERT INTO users (id, auth_provider, external_id, email, role, age_confirmed_at, terms_accepted_at, consent_version)
+     VALUES (?, 'guest', ?, ?, 'guest', UTC_TIMESTAMP(3), UTC_TIMESTAMP(3), ?)`,
+    [id, id, `guest+${id}@guest.invalid`, params.consentVersion],
     tx,
   );
   await execute(`INSERT INTO guest_trials (user_id, device_ref, ip_ref) VALUES (?, ?, ?)`, [id, params.deviceRef, params.ipRef], tx);
