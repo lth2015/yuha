@@ -331,6 +331,8 @@ const en: Dict = {
   'wait.tryAgain': 'Try again',
   'wait.failedTitle': 'This take did not make it',
   'wait.scoreAria': 'Your description being written into music.',
+  'wait.lyrics.title': "The lyrics are written",
+  'wait.lyrics.note': "These are being sung now; when the song is ready they light up line by line.",
   // ---- scene / mood / track state ----
   'track.processing': 'Processing',
   'track.deliverable': 'Ready to download',

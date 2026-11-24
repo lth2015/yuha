@@ -1,4 +1,4 @@
-import { JobOutcome, OpenGenerations, QueueStatus, UnfinishedGenerations, etaText } from '../components/GenerationQueue';
+import { JobOutcome, OpenGenerations, QueueStatus, UnfinishedGenerations, WaitLyrics, etaText } from '../components/GenerationQueue';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import {
@@ -919,6 +919,8 @@ export default function Create() {
             </li>
           ))}
         </ol>}
+
+        {!failed && !done && <WaitLyrics job={job} />}
 
         {!failed && !done && actions}
 

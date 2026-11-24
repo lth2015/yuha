@@ -201,3 +201,26 @@ export function UnfinishedGenerations({ withinHours }: { withinHours?: number })
     </div>)}
   </section>;
 }
+
+/**
+ * The words being sung, while they are being sung for the first time
+ * (docs/WAIT_LYRICS_SPEC.md). The server sends them only while the engine has
+ * the song; the minute or two of waiting becomes a minute or two of reading
+ * what is coming. Section markers are the music model's, not the reader's,
+ * so they become the gap between sections.
+ */
+export function WaitLyrics({ job }: { job: JobView }) {
+  const { t } = useI18n();
+  if (!job.lyrics) return null;
+  const lines = job.lyrics.split('\n').map((l) => (/^\s*\[[^\]]*\]\s*$/.test(l) ? '' : l));
+  // Runs of blank lines (two markers in a row, a marker after a gap) are one gap.
+  const shown = lines.filter((l, i) => l.trim() || (i > 0 && lines[i - 1]!.trim())).join('\n').trim();
+  if (!shown) return null;
+  return (
+    <section className="wait-lyrics" aria-labelledby="wait-lyrics-title">
+      <h2 id="wait-lyrics-title">{t('wait.lyrics.title')}</h2>
+      <p className="small muted">{t('wait.lyrics.note')}</p>
+      <pre className="wait-lyrics__text">{shown}</pre>
+    </section>
+  );
+}
