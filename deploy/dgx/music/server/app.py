@@ -92,6 +92,12 @@ V15_MODEL = os.environ.get("V15_MODEL", "")          # DiT slot name, e.g. acest
 V15_STEPS = int(os.environ.get("V15_STEPS", "8"))     # turbo: 8, sft/base: ~50
 V15_THINKING = os.environ.get("V15_THINKING", "true").lower() == "true"  # let the 5Hz LM plan the song
 
+# What YUHA sent (brief, lyrics) and what came back are kept this many days,
+# then deleted (docs/legal/PRIVACY_CHANGES_2026-11.md). YUHA copies a finished
+# song into its own storage within minutes, and a signed audio URL lives a day,
+# so nothing here is needed for long. 0 keeps everything (benchmarks only).
+RETENTION_DAYS = float(os.environ.get("RETENTION_DAYS", "30"))
+
 JOBS_DIR = DATA_DIR / "jobs"
 AUDIO_DIR = DATA_DIR / "audio"
 for d in (JOBS_DIR, AUDIO_DIR):
@@ -168,6 +174,50 @@ def recover_jobs() -> None:
         _q.put(job["id"])
     if items:
         log.info("recovered %d unfinished jobs", len(items))
+
+
+def purge_old(now: Optional[float] = None) -> int:
+    """Delete finished jobs and audio older than RETENTION_DAYS; returns jobs removed.
+
+    Only jobs that are over: a queued or running job is never touched, however
+    old. Audio files are judged by their own age, so an upload or a take that
+    no job record names still goes.
+    """
+    if RETENTION_DAYS <= 0:
+        return 0
+    cutoff = (now if now is not None else time.time()) - RETENTION_DAYS * 86400
+    removed = 0
+    for p in JOBS_DIR.glob("*.json"):
+        try:
+            job = json.loads(p.read_text())
+        except Exception:
+            continue
+        if job.get("status") in ("queued", "running") or float(job.get("created_at", cutoff)) >= cutoff:
+            continue
+        with _lock:
+            if job.get("idempotency_key"):
+                _idem.pop(job["idempotency_key"], None)
+            (AUDIO_DIR / f"{job['id']}.mp3").unlink(missing_ok=True)
+            p.unlink(missing_ok=True)
+        removed += 1
+    for a in AUDIO_DIR.iterdir():
+        try:
+            if a.is_file() and a.stat().st_mtime < cutoff:
+                a.unlink()
+        except FileNotFoundError:
+            pass
+    if removed:
+        log.info("retention: removed %d jobs older than %g days", removed, RETENTION_DAYS)
+    return removed
+
+
+def _retention_loop() -> None:
+    while True:
+        try:
+            purge_old()
+        except Exception:  # a failed sweep is retried next hour, never fatal
+            log.exception("retention sweep failed")
+        time.sleep(3600)
 
 
 # ---------------------------------------------------------------- model
@@ -858,3 +908,4 @@ def audio(name: str, exp: int, sig: str):
 def _startup():
     recover_jobs()
     threading.Thread(target=worker, daemon=True, name="gen-worker").start()
+    threading.Thread(target=_retention_loop, daemon=True, name="retention").start()

@@ -14,6 +14,7 @@ import {
   insertLicenseSnapshot,
   listExpiredGuestTrials,
   markGuestClaimed,
+  clearClaimedTrialRefs,
   markGuestPurged,
   moveGuestOwnership,
   query,
@@ -43,8 +44,20 @@ export function japanDayStart(now: Date): Date {
   return new Date(shifted - (shifted % 86_400_000) - JST_OFFSET_MS);
 }
 
-function keyed(ctx: AppContext, kind: 'device' | 'ip', value: string): string {
-  const secret = ctx.config.STORAGE_SIGNING_SECRET ?? ctx.config.DEV_AUTH_SECRET ?? 'yuha-guest-trial';
+/**
+ * The key the two hashes are made with, or null when the server has none.
+ *
+ * There used to be a third fallback, a string written in this file. A key
+ * anyone can read is no key: every IPv4 address hashed under it can be
+ * recovered by trying them all. So without a server secret there is no trial,
+ * rather than a hash that only looks like one. Production always has the
+ * session secret (Google sign-in cannot work without it).
+ */
+function hashKey(ctx: AppContext): string | null {
+  return ctx.config.STORAGE_SIGNING_SECRET ?? ctx.config.GOOGLE_SESSION_SECRET ?? ctx.config.DEV_AUTH_SECRET ?? null;
+}
+
+function keyed(secret: string, kind: 'device' | 'ip', value: string): string {
   return createHmac('sha256', `${secret}:guest-${kind}`).update(value).digest('hex');
 }
 
@@ -58,8 +71,10 @@ export async function openGuestTrial(
   const issuer = guestSessionIssuer(ctx.config);
   if (!issuer) throw new AppError('SERVICE_DISABLED', 'no session secret is configured');
 
-  const deviceRef = keyed(ctx, 'device', params.deviceId);
-  const ipRef = keyed(ctx, 'ip', params.ip);
+  const secret = hashKey(ctx);
+  if (!secret) throw new AppError('SERVICE_DISABLED', 'no secret to key the trial limits with');
+  const deviceRef = keyed(secret, 'device', params.deviceId);
+  const ipRef = keyed(secret, 'ip', params.ip);
   const dayStart = japanDayStart(params.now ?? new Date());
 
   const guest = await withTx(async (tx) => {
@@ -221,5 +236,8 @@ export async function purgeExpiredGuestTrials(
     });
     purged += 1;
   }
+  // A claimed trial's song is the account's now, but the two hashes were only
+  // ever for counting trials, and the promise is seven days whatever happened next.
+  await clearClaimedTrialRefs(cutoff);
   return purged;
 }

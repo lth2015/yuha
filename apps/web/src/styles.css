@@ -2958,9 +2958,9 @@ textarea.is-full { border-color: var(--danger); }
 .photo-video__result { display: grid; gap: var(--s3); justify-items: start; }
 
 /* Trying without an account (components/TrialAsk.tsx; the keep panel on the song page). */
-.trial-ask, .trial-keep { margin-top: var(--s4); padding: var(--s6); border: 1px solid var(--line); border-radius: var(--r-card); background: var(--surface); display: grid; gap: var(--s3); }
-.trial-ask h2, .trial-keep h2 { margin: 0; font-size: var(--t-title); font-weight: 600; }
-.trial-ask p, .trial-keep p { margin: 0; color: var(--muted); }
+.trial-ask, .trial-keep, .trial-claim { margin-top: var(--s4); padding: var(--s6); border: 1px solid var(--line); border-radius: var(--r-card); background: var(--surface); display: grid; gap: var(--s3); }
+.trial-ask h2, .trial-keep h2, .trial-claim h2 { margin: 0; font-size: var(--t-title); font-weight: 600; }
+.trial-ask p, .trial-keep p, .trial-claim p { margin: 0; color: var(--muted); }
 .trial-ask__actions { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s2) var(--s4); }
 /* "Try one song without signing up (1 min)" is wider than a 360 px phone's
    card: buttons do not wrap by default (.btn), and this one pushed the panel
@@ -2986,3 +2986,7 @@ textarea.is-full { border-color: var(--danger); }
 .line-rewrite__alt { width: 100%; text-align: start; padding: var(--s2) var(--s3); border: 1px solid var(--line); border-radius: var(--r-control); background: var(--surface); color: var(--ink); font: inherit; line-height: 1.6; overflow-wrap: anywhere; cursor: pointer; }
 .line-rewrite__alt:hover { border-color: var(--ink); }
 .line-rewrite__alt:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+/* The trial song offered to the account now signed in (components/TrialClaimAsk.tsx). */
+.trial-claim { margin: var(--s4) auto 0; max-width: 64rem; }
+.trial-claim__actions { display: flex; flex-wrap: wrap; gap: var(--s2) var(--s3); }
+.trial-claim .btn { white-space: normal; }

@@ -40,6 +40,20 @@ export async function startGuestTrial(): Promise<void> {
   }
 }
 
+/** Whether this browser holds a trial that no account has taken yet. */
+export function hasPendingTrial(): boolean {
+  return pendingGuest() !== null;
+}
+
+/**
+ * "Not now": the trial stays the guest's, and is deleted with its song seven
+ * days after it was made (docs/legal/PRIVACY_CHANGES_2026-11.md). Only this
+ * browser forgets it; nothing on the server is asked to change.
+ */
+export function declinePendingTrial(): void {
+  forgetGuest();
+}
+
 function pendingGuest(): string | null {
   try {
     return localStorage.getItem(GUEST_KEY);
@@ -57,7 +71,9 @@ function forgetGuest(): void {
 }
 
 /**
- * After sign-in: bring the trial's song into the account, once. Whatever the
+ * When the person says yes (components/TrialClaimAsk.tsx), never on its own:
+ * a browser can be shared, and whoever signs in next is not necessarily
+ * whoever made the song. Brings the trial's song into the account, once. Whatever the
  * answer, the kept token is spent: claimed, claimed already, ended or never
  * valid, there is nothing more it can do. Only a failure to reach the server
  * keeps it for the next sign-in.

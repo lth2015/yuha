@@ -4,6 +4,11 @@ import App from '@app-entry';
 import { airRedirect } from './lib/air-redirect';
 import { spaPathFor } from './lib/seo';
 import { initialLang, loadLang } from './lib/i18n';
+// The type, served from this site rather than from Google (index.html says why).
+import '@fontsource/m-plus-2/300.css';
+import '@fontsource/m-plus-2/400.css';
+import '@fontsource/m-plus-2/500.css';
+import '@fontsource/m-plus-2/700.css';
 import './styles.css';
 
 // A prerendered public page (`/ja/pricing.html`, src/prerender.tsx) stands for

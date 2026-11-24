@@ -314,6 +314,20 @@ export async function recordPageView(params: {
   });
 }
 
+/**
+ * Page views older than `cutoff`, deleted, at most `batch` rows a call
+ * (docs/legal/PRIVACY_CHANGES_2026-11.md: visit data is kept 13 months).
+ * Only `page_view`: the other events are what the service did, not where a
+ * browser went, and have their own reasons to be kept.
+ */
+export async function deleteOldPageViews(cutoff: Date, batch = 5000): Promise<number> {
+  const res = await execute(
+    `DELETE FROM analytics_events WHERE name = 'page_view' AND occurred_at < ? LIMIT ${Math.max(1, Math.floor(batch))}`,
+    [cutoff],
+  );
+  return res.affectedRows;
+}
+
 // ------------------------------------------------------------ runtime settings
 
 export async function getSetting<T>(key: string, fallback: T): Promise<T> {

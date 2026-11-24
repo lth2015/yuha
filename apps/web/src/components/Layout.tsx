@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
+import { TrialClaimAsk } from './TrialClaimAsk';
 import { Link, NavLink, useLocation, useNavigate } from 'react-router-dom';
 import type { TrackView } from '@yuha/contracts';
 import { apiFetch } from '../lib/api';
@@ -466,6 +467,7 @@ export function Layout({ children }: { children: ReactNode }) {
         {/* Keyed on the path so navigating away clears a crashed route. A
             boundary that stays broken until a full reload turns one bad page
             into a bad session. */}
+        <TrialClaimAsk />
         <PageTitleContext.Provider value={setTitleOverride}>
           <ErrorBoundary key={location.pathname}>{children}</ErrorBoundary>
         </PageTitleContext.Provider>
