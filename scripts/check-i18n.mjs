@@ -22,8 +22,10 @@
 import { existsSync, readFileSync, readdirSync, statSync, writeFileSync } from 'node:fs';
 import { join, relative } from 'node:path';
 
-const FILE = new URL('../apps/web/src/lib/i18n.tsx', import.meta.url);
-const src = readFileSync(FILE, 'utf8');
+// One file per language since the dictionaries load on demand (apps/web/src/lib/i18n.tsx).
+const src = ['zh', 'ja', 'en']
+  .map((l) => readFileSync(new URL(`../apps/web/src/lib/i18n-${l}.ts`, import.meta.url), 'utf8'))
+  .join('\n');
 const LANGS = ['zh', 'ja', 'en'];
 
 /** The object literal after `const <lang>: Dict = {`, by brace matching. */
@@ -276,7 +278,7 @@ if (problems.length) {
   for (const p of problems) console.log(`  ${p}`);
   if (freshHardcoded.length) {
     console.log('\nA hardcoded string is one language in a product that has three.');
-    console.log('Move it into i18n.tsx, or --write-baseline if it is genuinely not user-facing.');
+    console.log('Move it into the dictionaries (apps/web/src/lib/i18n-{zh,ja,en}.ts), or --write-baseline if it is genuinely not user-facing.');
   }
   process.exit(1);
 }

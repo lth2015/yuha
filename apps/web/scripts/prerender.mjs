@@ -10,7 +10,7 @@ const { prerenderPages } = await import(join(web, 'dist-ssr', 'prerender.js'));
 const origin = process.env['SITE_ORIGIN'] ?? 'https://yuha.studio';
 const template = readFileSync(join(web, 'dist', 'index.html'), 'utf8');
 
-const pages = prerenderPages(template, origin);
+const pages = await prerenderPages(template, origin);
 if (pages.length === 0) throw new Error('prerender: no pages written');
 for (const { file, html } of pages) {
   const out = join(web, 'dist', file);

@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client';
 import App from '@app-entry';
 import { airRedirect } from './lib/air-redirect';
 import { spaPathFor } from './lib/seo';
+import { initialLang, loadLang } from './lib/i18n';
 import './styles.css';
 
 // A prerendered public page (`/ja/pricing.html`, src/prerender.tsx) stands for
@@ -20,9 +21,13 @@ if (air) {
   const root = document.getElementById('root');
   if (!root) throw new Error('#root is missing from index.html');
 
-  createRoot(root).render(
-    <StrictMode>
-      <App />
-    </StrictMode>,
-  );
+  // The visitor's own dictionary first (lib/i18n.tsx). Until it arrives, what
+  // is in #root stays: the prerendered page, or index.html's short intro.
+  const render = () =>
+    createRoot(root).render(
+      <StrictMode>
+        <App />
+      </StrictMode>,
+    );
+  loadLang(initialLang()).then(render, render);
 }

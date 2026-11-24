@@ -13,7 +13,10 @@
  */
 import { describe, expect, it } from 'vitest';
 import { STYLE_PRESETS, styleLabel } from '../apps/web/src/lib/style-label.js';
-import { textIn } from '../apps/web/src/lib/i18n.js';
+import { textIn, loadAllLangs } from '../apps/web/src/lib/i18n.js';
+
+// The dictionaries load on demand in the browser (lib/i18n.tsx); here, all of them first.
+await loadAllLangs();
 
 const say = (lang: 'zh' | 'ja' | 'en') => (key: string) => textIn(lang, key);
 const CJK = /[一-鿿぀-ヿ]/;

@@ -10,7 +10,10 @@ import { applyCreateLink } from '../apps/web/src/lib/create-link.js';
 import { PUBLIC_PAGES, staticPath } from '../apps/web/src/lib/seo.js';
 import { pageTitleKey } from '../apps/web/src/lib/title.js';
 import { prerenderPages } from '../apps/web/src/prerender.js';
-import { textIn } from '../apps/web/src/lib/i18n.js';
+import { textIn, loadAllLangs } from '../apps/web/src/lib/i18n.js';
+
+// The dictionaries load on demand in the browser (lib/i18n.tsx); here, all of them first.
+await loadAllLangs();
 
 const app = readFileSync(new URL('../apps/web/src/App.tsx', import.meta.url), 'utf8');
 const checkUi = readFileSync(new URL('../scripts/check-ui.mjs', import.meta.url), 'utf8');
@@ -39,8 +42,8 @@ describe('scene pages', () => {
     expect(sceneCreateHref(SCENES.find((s) => s.slug === 'memory')!)).toBe('/create?src=scene-memory');
   });
 
-  it('are written out with their copy, and their button pointing into /create', () => {
-    const pages = prerenderPages(
+  it('are written out with their copy, and their button pointing into /create', async () => {
+    const pages = await prerenderPages(
       '<html lang="zh-CN"><title>x</title><meta name="description" content="x"/><meta property="og:title" content="x" />' +
         '<meta property="og:description" content="x" /><meta property="og:image" content="https://example.test/brand/og-card.png" />' +
         '<div id="root"><main></main></div></html>',

@@ -95,8 +95,10 @@ describe('the rows counsel reviewed are filled, not marked', () => {
     const dd = cell('返品・キャンセル');
     expect(dd).not.toContain('<Pending');
     for (const key of ['checkout.cancel.oneTime', 'checkout.cancel.sub', 'checkout.refund']) {
-      expect(dd).toContain(`textIn('ja', '${key}')`);
+      expect(dd).toContain(`ja['${key}']`);
     }
+    // And `ja` is the Japanese dictionary itself, whatever language the reader chose.
+    expect(page).toMatch(/^import ja from '\.\.\/lib\/i18n-ja';$/m);
   });
 
   it('支払方法 lists what this deployment can actually take', () => {

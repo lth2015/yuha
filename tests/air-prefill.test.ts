@@ -25,7 +25,10 @@ import { songUrl } from '../apps/air/src/engine/prefill.js';
 import type { Card } from '../apps/air/src/engine/describe.js';
 import { AIR_ENERGY_LEVELS } from '../apps/air/src/engine/describe.js';
 import { airPrefillPlan, withDraftedLyrics } from '../apps/web/src/lib/air-prefill.js';
-import { textIn } from '../apps/web/src/lib/i18n.js';
+import { textIn, loadAllLangs } from '../apps/web/src/lib/i18n.js';
+
+// The dictionaries load on demand in the browser (lib/i18n.tsx); here, all of them first.
+await loadAllLangs();
 
 const blank = { zh: '', ja: '', en: '' };
 

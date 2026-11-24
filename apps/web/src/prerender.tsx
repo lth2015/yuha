@@ -26,7 +26,7 @@ import type { ReactElement } from 'react';
 import { renderToString } from 'react-dom/server';
 import { StaticRouter } from 'react-router-dom/server';
 import { Layout } from './components/Layout';
-import { I18nProvider, textIn } from './lib/i18n';
+import { I18nProvider, loadAllLangs, textIn } from './lib/i18n';
 import { PlayerProvider } from './lib/player';
 import { PUBLIC_PAGES, SEO_LANGS, headFor, staticPath, type SeoLang } from './lib/seo';
 import { pageDocument } from './lib/static-page';
@@ -70,7 +70,9 @@ function renderPage(path: string, lang: SeoLang): string {
   );
 }
 
-export function prerenderPages(template: string, origin: string): Array<{ file: string; html: string }> {
+export async function prerenderPages(template: string, origin: string): Promise<Array<{ file: string; html: string }>> {
+  // Every language's dictionary, before any page is written in it.
+  await loadAllLangs();
   return PUBLIC_PAGES.filter((p) => p.prerender).flatMap((page) =>
     SEO_LANGS.map((lang) => {
       const head = headFor(page.path, lang, origin);
