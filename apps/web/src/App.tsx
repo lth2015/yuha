@@ -7,22 +7,36 @@ import { PlayerProvider } from './lib/player';
 import { I18nProvider } from './lib/i18n';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { SessionProvider, useSession } from './lib/session';
-import Auth from './pages/Auth';
-import Billing from './pages/Billing';
-import { CheckoutComplete, CheckoutConfirm, CheckoutSimulate } from './pages/Checkout';
-import Create from './pages/Create';
-import Export from './pages/Export';
-import GoogleCallback from './pages/GoogleCallback';
-import MfaChallenge from './pages/MfaChallenge';
 import Home from './pages/Home';
-import { Company, LegalIndex, Privacy, Terms } from './pages/Legal';
-import { Tokushoho } from './pages/Tokushoho';
-import Library from './pages/Library';
 import NotFound from './pages/NotFound';
 import Pricing from './pages/Pricing';
 import Rights from './pages/Rights';
 import SongDetail from './pages/SongDetail';
 import ScenePage from './pages/Scene';
+
+/*
+ * In the first download: the pages people arrive on from outside — the home
+ * page, a scene page, a song someone sent, pricing, the report form. The rest
+ * load when someone goes to them, so a visitor from a short video on a phone
+ * is not made to fetch the studio, checkout and the statutory pages before
+ * seeing anything. The prerender (prerender.tsx) imports pages directly and
+ * is unaffected.
+ */
+const Auth = lazy(() => import('./pages/Auth'));
+const Billing = lazy(() => import('./pages/Billing'));
+const CheckoutComplete = lazy(() => import('./pages/Checkout').then((m) => ({ default: m.CheckoutComplete })));
+const CheckoutConfirm = lazy(() => import('./pages/Checkout').then((m) => ({ default: m.CheckoutConfirm })));
+const CheckoutSimulate = lazy(() => import('./pages/Checkout').then((m) => ({ default: m.CheckoutSimulate })));
+const Create = lazy(() => import('./pages/Create'));
+const Export = lazy(() => import('./pages/Export'));
+const GoogleCallback = lazy(() => import('./pages/GoogleCallback'));
+const MfaChallenge = lazy(() => import('./pages/MfaChallenge'));
+const Library = lazy(() => import('./pages/Library'));
+const LegalIndex = lazy(() => import('./pages/Legal').then((m) => ({ default: m.LegalIndex })));
+const Terms = lazy(() => import('./pages/Legal').then((m) => ({ default: m.Terms })));
+const Privacy = lazy(() => import('./pages/Legal').then((m) => ({ default: m.Privacy })));
+const Company = lazy(() => import('./pages/Legal').then((m) => ({ default: m.Company })));
+const Tokushoho = lazy(() => import('./pages/Tokushoho').then((m) => ({ default: m.Tokushoho })));
 
 const Account = lazy(() => import('./pages/Account'));
 const Admin = lazy(() => import('./pages/Admin'));

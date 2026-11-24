@@ -8,7 +8,7 @@ import { useSession } from '../lib/session';
 import { safeInternalPath } from '../lib/paths';
 import { canBePaid, methodsOpenAnywhere, unavailableReason } from '../lib/purchase';
 import { ErrorNotice } from '../components/common';
-import { CHECKOUT_RETURN_KEY } from './Checkout';
+import { CHECKOUT_RETURN_KEY } from '../lib/checkout-return';
 
 /** Copy keys per catalogue entry; the amounts always come from the server. */
 const PLAN_COPY: Record<string, { tag: string; bullets: string[]; highlight?: boolean }> = {

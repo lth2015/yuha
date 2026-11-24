@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { CHECKOUT_RETURN_KEY } from '../lib/checkout-return';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import type { OrderView, ProductView } from '@yuha/contracts';
 import { ApiError, apiFetch, newIdempotencyKey } from '../lib/api';
@@ -349,13 +350,7 @@ export function CheckoutConfirm() {
  * granted is read from the server, so a hand-crafted "?success=true" cannot
  * make the interface claim a payment happened.
  */
-/**
- * Where a buyer is sent back to after paying.
- *
- * Checkout can leave the site entirely (Stripe's hosted page), so the origin
- * is parked in localStorage rather than in router state or a query string.
- */
-export const CHECKOUT_RETURN_KEY = 'yuha.checkout-return';
+// Where a buyer is sent back to after paying (lib/checkout-return.ts).
 
 function readReturnPath(): string | null {
   try {
