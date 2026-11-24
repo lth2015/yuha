@@ -73,6 +73,9 @@ function forgetGuest(): void {
   }
 }
 
+/** Fired when a trial song has been added to the signed-in account. */
+export const TRIAL_CLAIMED_EVENT = 'yuha:trial-claimed';
+
 /** Remembers the trial's song when it is ready. */
 export function rememberGuestSong(trackId: string): void {
   try {

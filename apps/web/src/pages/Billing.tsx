@@ -310,7 +310,11 @@ export default function Billing() {
               </thead>
               <tbody>
                 {orders.map((o) => {
-                  const st = ORDER_STATUS[o.status];
+                  // A checkout left at the payment page stays pending until Stripe
+                  // expires it (a day later). After an hour nobody is confirming
+                  // anything: it is a purchase that was not completed.
+                  const abandoned = o.status === 'pending' && !o.entitlementGranted && Date.now() - Date.parse(o.createdAt) > 3_600_000;
+                  const st = abandoned ? { key: 'bill.st.unfinished', tone: '' } : ORDER_STATUS[o.status];
                   return (
                     <tr key={o.orderId}>
                       <td className="small">{o.createdAtJst}</td>

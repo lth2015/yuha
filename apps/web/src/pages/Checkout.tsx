@@ -420,6 +420,11 @@ export function CheckoutComplete() {
           setWaiting(false);
           return;
         }
+        // A payment that did not go through is an answer too: stop asking.
+        if (res.status === 'failed' || res.status === 'canceled') {
+          setWaiting(false);
+          return;
+        }
       } catch (err) {
         if (cancelled) return;
         setError(err);
@@ -493,11 +498,17 @@ export function CheckoutComplete() {
    * honest thing is to name it and stop the clock.
    */
   const held = order?.heldForReview === true && !granted;
-  const stillWaiting = !granted && !held && waiting;
+  /*
+   * Failed or abandoned at the payment page. This page used to have no such
+   * state: it polled, gave up, and said 「正在确认支付」 to someone whose card
+   * had been declined — for ever, since the order would never be granted.
+   */
+  const unpaid = !granted && !held && (order?.status === 'failed' || order?.status === 'canceled');
+  const stillWaiting = !granted && !held && !unpaid && waiting;
 
   return (
     <div className="stack stack--loose checkout-return">
-      <h1>{granted ? t('pay.doneTitle') : held ? t('pay.heldTitle') : t('pay.waitTitle')}</h1>
+      <h1>{granted ? t('pay.doneTitle') : held ? t('pay.heldTitle') : unpaid ? t('pay.failedTitle') : t('pay.waitTitle')}</h1>
 
       <ErrorNotice error={error} />
 
@@ -520,6 +531,19 @@ export function CheckoutComplete() {
             <Link className="btn btn--primary" to={returnTo ?? '/create'}>
               {returnTo ? t('pay.backToWork') : t('pay.goCreate')}
             </Link>
+          </>
+        ) : unpaid ? (
+          <>
+            <Badge tone="badge--warn">{t('pay.failedBadge')}</Badge>
+            <p style={{ margin: 0 }}>{t('pay.failedBody')}</p>
+            <div className="row" style={{ flexWrap: 'wrap' }}>
+              <Link className="btn btn--primary" to="/pricing">
+                {t('pay.tryAgain')}
+              </Link>
+              <Link className="btn btn--secondary" to={returnTo ?? '/create'}>
+                {returnTo ? t('pay.backToWork') : t('pay.goCreate')}
+              </Link>
+            </div>
           </>
         ) : held ? (
           <>

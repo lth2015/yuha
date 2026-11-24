@@ -1,3 +1,4 @@
+import { TRIAL_CLAIMED_EVENT, guestSongId } from '../lib/guest';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { TITLE_MAX_CODEPOINTS, seasonOfOccasion, type LyricTimings, type Occasion, type ProductView, type TrackView } from '@yuha/contracts';
@@ -157,6 +158,13 @@ export default function SongDetail() {
   }, [id]);
 
   useEffect(load, [load]);
+  // A trial song just added to this account (TrialClaimAsk): read it again,
+  // so the page shows the song instead of the "not found" it had a moment ago.
+  useEffect(() => {
+    const onClaimed = () => load();
+    window.addEventListener(TRIAL_CLAIMED_EVENT, onClaimed);
+    return () => window.removeEventListener(TRIAL_CLAIMED_EVENT, onClaimed);
+  }, [load]);
 
   useEffect(() => {
     // Focus follows the field that just appeared, and selects what is there so
@@ -190,6 +198,16 @@ export default function SongDetail() {
    * was "back to library", with no retry and nothing re-run. On the buy path.
    */
   if (error) {
+    // The song this browser made before signing in: the account that just
+    // signed in does not own it yet, so the API says "not found". That is not
+    // the news — the prompt above (TrialClaimAsk) is how it becomes theirs.
+    if (me && me.role !== 'guest' && id && guestSongId() === id && error instanceof ApiError && error.status === 404) {
+      return (
+        <div className="stack">
+          <p className="panel" style={{ margin: 0 }}>{t('trial.claim.pendingHere')}</p>
+        </div>
+      );
+    }
     return (
       <div className="stack">
         <ErrorNotice error={error} />

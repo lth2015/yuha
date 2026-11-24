@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { claimPendingTrial, declinePendingTrial, hasPendingTrial } from '../lib/guest';
+import { TRIAL_CLAIMED_EVENT, claimPendingTrial, declinePendingTrial, hasPendingTrial } from '../lib/guest';
 import { useI18n } from '../lib/i18n';
 import { useSession } from '../lib/session';
 
@@ -18,7 +18,7 @@ import { useSession } from '../lib/session';
 export function TrialClaimAsk() {
   const { t } = useI18n();
   const { me, refreshMe, refreshEntitlements } = useSession();
-  const [state, setState] = useState<'ask' | 'adding' | 'done' | 'gone' | 'closed'>('ask');
+  const [state, setState] = useState<'ask' | 'adding' | 'done' | 'gone' | 'closed' | 'confirmNo'>('ask');
 
   if (state === 'closed' || !me || me.role === 'guest' || !me.ageConfirmed) return null;
   // Read each render, not once: the trial is usually started on this very page load, after mount.
@@ -29,6 +29,8 @@ export function TrialClaimAsk() {
     const claimed = await claimPendingTrial();
     if (claimed) {
       await Promise.all([refreshMe(), refreshEntitlements()]);
+      // The song page it may be sitting on was "not found" a moment ago.
+      window.dispatchEvent(new Event(TRIAL_CLAIMED_EVENT));
       setState('done');
     } else {
       // Spent either way (lib/guest.ts): expired, taken by another account, or never valid.
@@ -66,17 +68,25 @@ export function TrialClaimAsk() {
             >
               {state === 'adding' ? t('trial.claim.adding') : t('trial.claim.yes')}
             </button>
-            <button
-              type="button"
-              className="btn btn--sm"
-              disabled={state === 'adding'}
-              onClick={() => {
-                declinePendingTrial();
-                setState('closed');
-              }}
-            >
-              {t('trial.claim.no')}
-            </button>
+            {state === 'confirmNo' ? (
+              <>
+                <span className="trial-claim__warn">{t('trial.claim.noConfirm')}</span>
+                <button
+                  type="button"
+                  className="btn btn--sm"
+                  onClick={() => {
+                    declinePendingTrial();
+                    setState('closed');
+                  }}
+                >
+                  {t('trial.claim.noSure')}
+                </button>
+              </>
+            ) : (
+              <button type="button" className="btn btn--sm" disabled={state === 'adding'} onClick={() => setState('confirmNo')}>
+                {t('trial.claim.no')}
+              </button>
+            )}
           </div>
         </>
       )}

@@ -3043,3 +3043,4 @@ textarea.is-full { border-color: var(--danger); }
 .studio__edit-lyrics { display: grid; gap: var(--s2); margin-top: var(--s6); }
 .studio__edit-lyrics textarea { width: 100%; min-height: 12rem; line-height: 1.8; }
 .studio__edit-lyrics > p { margin: 0; }
+.trial-claim__warn { flex-basis: 100%; font-size: var(--t-caption); color: var(--ink); }
