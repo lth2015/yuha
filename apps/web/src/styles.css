@@ -2980,7 +2980,8 @@ textarea.is-full { border-color: var(--danger); }
 .photo-video__remove { isolation: isolate; }
 .photo-video__actions { display: flex; flex-wrap: wrap; gap: var(--s2); }
 .photo-video__actions label.btn { cursor: pointer; }
-.photo-video__preview { width: min(100%, 320px); aspect-ratio: 9 / 16; border-radius: var(--r-control); background: #000; }
+/* At most half the screen tall, so Download and Share are on screen with it on a phone (they were under the tab bar). */
+.photo-video__preview { height: min(52vh, 568px); width: auto; max-width: 100%; aspect-ratio: 9 / 16; border-radius: var(--r-control); background: #000; }
 .photo-video__result { display: grid; gap: var(--s3); justify-items: start; }
 
 /* Trying without an account (components/TrialAsk.tsx; the keep panel on the song page). */

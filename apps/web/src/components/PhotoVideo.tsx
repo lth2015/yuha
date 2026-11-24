@@ -50,6 +50,12 @@ export function PhotoVideo({
   // photos and the images of the people in them, confirmed before any is chosen.
   const [rights, setRights] = useState(false);
   const input = useRef<HTMLInputElement>(null);
+  const resultRef = useRef<HTMLDivElement>(null);
+
+  // The finished video, with Download and Share, brought into view when it arrives.
+  useEffect(() => {
+    if (result.state === 'ready') resultRef.current?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+  }, [result.state]);
 
   // A finished video's object URL is released when it is replaced or the panel goes.
   useEffect(() => () => {
@@ -192,7 +198,7 @@ export function PhotoVideo({
       <ErrorNotice error={error} />
 
       {result.state === 'ready' && (
-        <div className="photo-video__result">
+        <div className="photo-video__result" ref={resultRef}>
           <video src={result.url} controls playsInline className="photo-video__preview" />
           <div className="photo-video__actions">
             {canShareFiles && (
