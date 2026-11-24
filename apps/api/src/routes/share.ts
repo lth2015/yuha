@@ -200,6 +200,10 @@ export default async function shareRoutes(app: FastifyInstance, opts: { ctx: App
             .array(z.object({ at: z.number().min(0), jpeg: z.string().min(4).max(600_000) }))
             .min(1)
             .max(40),
+          // The owner confirmed the right to use the photos and the people in
+          // them (docs/legal/COUNSEL_RESPONSE_2026-11.md, 2). Required here, not
+          // only on the page, so no client can skip it.
+          rightsConfirmed: z.literal(true),
         })
         .parse(req.body);
       return encodeForOwner(reply, id, req.user!.id, body);

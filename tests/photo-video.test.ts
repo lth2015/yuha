@@ -66,8 +66,9 @@ function probe(mp4: Buffer) {
 }
 
 const leftovers = () => readdirSync(tmpdir()).filter((n) => n.startsWith('yuha-video-'));
-const post = (h: Harness, who: TestUser, id: string, body: unknown) =>
-  h.app.inject({ method: 'POST', url: `/v1/tracks/${id}/photo-video`, headers: who.authHeader, payload: body as never });
+// The rights confirmation is part of every request; a test that means to leave it out says so.
+const post = (h: Harness, who: TestUser, id: string, body: Record<string, unknown>) =>
+  h.app.inject({ method: 'POST', url: `/v1/tracks/${id}/photo-video`, headers: who.authHeader, payload: { rightsConfirmed: true, ...body } as never });
 
 describe('the photo video', () => {
   it('puts the photo frames on the song’s audio as a portrait MP4, and keeps nothing', async () => {
@@ -116,6 +117,17 @@ describe('the photo video', () => {
     // 40 frames at most.
     const many = Array.from({ length: 41 }, (_, i) => ({ at: i * 0.5, jpeg: frame.jpeg }));
     expect((await post(on, user, trackId, { start: 0, duration: 25, frames: many })).statusCode).toBe(400);
+  }, 60_000);
+
+  it('needs the owner to confirm the right to use the photos and the people in them (counsel, 2026-11-24)', async () => {
+    const user = await on.createUser({ credits: 3 });
+    const trackId = await song(on, user);
+    const frame = { at: 0, jpeg: jpeg('black') };
+    for (const rightsConfirmed of [undefined, false, 'yes']) {
+      const res = await post(on, user, trackId, { start: 0, duration: 10, frames: [frame], rightsConfirmed });
+      expect(res.statusCode).toBe(400);
+    }
+    expect(leftovers()).toEqual([]);
   }, 60_000);
 
   it('is announced to the web app only when switched on', async () => {

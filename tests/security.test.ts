@@ -1037,6 +1037,20 @@ describe('SEC-11: cancellation, deletion and marketing are separate actions', ()
    * The parameter is optional now: a caller with no answer from the user does
    * not get to invent one.
    */
+  it('opting in to marketing needs a confirmed age; opting out never does (counsel, 2026-11-24)', async () => {
+    const { execute } = await import('@yuha/db');
+    const user = await h.createUser();
+    await execute('UPDATE users SET age_confirmed_at = NULL WHERE id = ?', [user.id]);
+    const toggle = (optIn: boolean) =>
+      h.app.inject({ method: 'POST', url: '/v1/me/marketing', headers: user.authHeader, payload: { optIn } as never });
+
+    const refused = await toggle(true);
+    expect(refused.statusCode).toBe(403);
+    expect(refused.json().error.code).toBe('AGE_NOT_CONFIRMED');
+    expect((await h.app.inject({ method: 'GET', url: '/v1/me', headers: user.authHeader })).json().marketingOptIn).toBe(false);
+    expect((await toggle(false)).statusCode).toBe(200);
+  });
+
   it('a later age confirmation does not clear a marketing choice', async () => {
     const user = await h.createUser();
     const opted = await h.app.inject({
