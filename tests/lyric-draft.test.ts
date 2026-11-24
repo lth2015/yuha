@@ -186,3 +186,100 @@ describe('three versions at once (docs/LYRIC_COWRITE_SPEC.md)', () => {
   });
 });
 
+
+describe('POST /v1/lyrics/line: one line said three other ways (docs/LYRIC_LINE_SPEC.md)', () => {
+  const LYRICS = '[verse]\n晚风吹过湖面\n灯一盏一盏亮起\n\n[chorus]\n慢慢地 慢慢地';
+  const line = (user: TestUser | null, payload: Record<string, unknown> = {}) =>
+    h.app.inject({
+      method: 'POST',
+      url: '/v1/lyrics/line',
+      headers: user ? user.authHeader : {},
+      payload: { prompt: body.prompt, lyrics: LYRICS, line: 1, ...payload } as never,
+    });
+  const ok = (lines: string[]) => ({ status: 'ok' as const, lines, requestId: null, usage: { costMinor: 1, costIsEstimate: true } });
+
+  it('offers alternatives for that line, none of them the line, and counts as one draft', async () => {
+    const user = await h.createUser();
+    const res = await line(user);
+    expect(res.statusCode).toBe(200);
+    const json = res.json() as { lines: string[]; remaining: number };
+    expect(json.lines.length).toBeGreaterThan(0);
+    expect(json.lines.length).toBeLessThanOrEqual(3);
+    expect(json.lines).not.toContain('晚风吹过湖面');
+    expect(json.remaining).toBe(2);
+  });
+
+  it('gives the model the line it was asked about, in its place in the lyrics', async () => {
+    const user = await h.createUser();
+    let seen: { lyrics: string; line: number } | null = null;
+    await withText({ rewriteLine: async (req) => ((seen = req), ok(['湖面吹来晚风'])) }, () => line(user, { line: 2 }));
+    expect(seen).toMatchObject({ lyrics: LYRICS, line: 2 });
+  });
+
+  it('is for signed-in accounts only', async () => {
+    expect((await line(null)).statusCode).toBe(401);
+  });
+
+  it('refuses a section marker or an empty line, without counting or calling the model', async () => {
+    const user = await h.createUser();
+    let called = 0;
+    await withText({ rewriteLine: async () => ((called += 1), ok(['x'])) }, async () => {
+      for (const n of [0, 3, 4, 99]) expect((await line(user, { line: n })).statusCode).toBe(400);
+    });
+    expect(called).toBe(0);
+    expect((await line(user)).json().remaining).toBe(2);
+  });
+
+  it('does not trim the lyrics: a blank first line keeps every index where the page counted it', async () => {
+    const user = await h.createUser();
+    let original = '';
+    await withText(
+      { rewriteLine: async (req) => ((original = req.lyrics.split('\n')[req.line]!), ok(['y'])) },
+      () => line(user, { lyrics: `\n${LYRICS}`, line: 2 }),
+    );
+    expect(original).toBe('晚风吹过湖面');
+  });
+
+  it('screens the creator’s lyrics as well as the description, before any paid call', async () => {
+    const user = await h.createUser();
+    let called = 0;
+    await withText({ rewriteLine: async () => ((called += 1), ok(['x'])) }, async () => {
+      const res = await line(user, { lyrics: '[verse]\nhttps://example.com/song.mp3 みたいな曲\n晚风', line: 2 });
+      expect(res.statusCode).toBe(422);
+      expect(res.json().error.code).toBe('PROMPT_BLOCKED');
+    });
+    expect(called).toBe(0);
+  });
+
+  it('works with no description, for someone who only wrote lyrics', async () => {
+    const user = await h.createUser();
+    expect((await line(user, { prompt: '' })).statusCode).toBe(200);
+  });
+
+  it('does not offer an alternative the screen would block; none left is a refusal that still counts', async () => {
+    const user = await h.createUser();
+    const some = await withText({ rewriteLine: async () => ok(['https://example.com/x.mp3', '湖面吹来晚风']) }, () => line(user));
+    expect((some.json() as { lines: string[] }).lines).toEqual(['湖面吹来晚风']);
+    const none = await withText({ rewriteLine: async () => ok(['https://example.com/x.mp3']) }, () => line(user));
+    expect(none.json().error.code).toBe('UPSTREAM_REJECTED');
+    // Two calls made, both counted: the third is the last of three.
+    expect((await line(user)).json().remaining).toBe(0);
+  });
+
+  it('shares the daily draft cap with whole drafts', async () => {
+    const user = await h.createUser();
+    for (let i = 0; i < 3; i += 1) expect((await draft(user)).statusCode).toBe(200);
+    let called = 0;
+    const res = await withText({ rewriteLine: async () => ((called += 1), ok(['x'])) }, () => line(user));
+    expect(res.statusCode).toBe(429);
+    expect(called).toBe(0);
+  });
+
+  it('records the call on the cost record as a line rewrite', async () => {
+    const user = await h.createUser();
+    await line(user);
+    const rows = await query<{ usage_data: unknown }>(`SELECT usage_data FROM provider_cost_events`);
+    const usage = typeof rows[0]!.usage_data === 'string' ? JSON.parse(rows[0]!.usage_data) : rows[0]!.usage_data;
+    expect(usage).toMatchObject({ purpose: 'lyric_line' });
+  });
+});

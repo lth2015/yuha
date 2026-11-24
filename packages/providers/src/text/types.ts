@@ -73,6 +73,22 @@ export type LyricsResult =
   | { status: 'refused'; reason: string; requestId: string | null; usage: TextUsage }
   | { status: 'failed'; reason: string; requestId: string | null; usage: TextUsage };
 
+/** One line of lyrics said three other ways (docs/LYRIC_LINE_SPEC.md). */
+export interface LineRewriteRequest {
+  /** What the song is about; may be empty when the creator only wrote lyrics. Data, never instructions. */
+  prompt: string;
+  /** The whole lyrics, already screened, so the line is rewritten in its place. */
+  lyrics: string;
+  /** Index into `lyrics.split('\n')` of the line to rewrite. */
+  line: number;
+  styles: string[];
+}
+
+export type LineRewriteResult =
+  | { status: 'ok'; lines: string[]; requestId: string | null; usage: TextUsage }
+  | { status: 'refused'; reason: string; requestId: string | null; usage: TextUsage }
+  | { status: 'failed'; reason: string; requestId: string | null; usage: TextUsage };
+
 export interface TextProvider {
   readonly providerId: string;
   readonly model: string;
@@ -81,4 +97,6 @@ export interface TextProvider {
   reviseSong?(req: ReviseRequest): Promise<ReviseResult>;
   /** Lyrics ahead of generation. Optional, like reviseSong. */
   writeLyrics?(req: LyricsRequest): Promise<LyricsResult>;
+  /** Three alternatives for one line. Optional, like writeLyrics. */
+  rewriteLine?(req: LineRewriteRequest): Promise<LineRewriteResult>;
 }

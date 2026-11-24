@@ -2976,3 +2976,13 @@ textarea.is-full { border-color: var(--danger); }
 .lyric-versions__list { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--s3); grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); }
 .lyric-versions__card { display: grid; gap: var(--s2); align-content: start; justify-items: start; padding: var(--s4); border: 1px solid var(--line); border-radius: var(--r-control); background: var(--surface); }
 .lyric-versions__text { margin: 0; max-height: 14rem; overflow: auto; width: 100%; white-space: pre-wrap; font: inherit; font-size: var(--t-body); line-height: 1.7; color: var(--ink); }
+
+/* One line said other ways (docs/LYRIC_LINE_SPEC.md), under the lyrics box. */
+.line-rewrite { display: grid; gap: var(--s2); margin-top: var(--s2); }
+.line-rewrite__ask { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s2) var(--s3); min-width: 0; }
+.line-rewrite__target { min-width: 0; overflow-wrap: anywhere; font-size: var(--t-body); color: var(--ink); }
+.line-rewrite__hint { font-size: var(--t-caption); color: var(--muted); }
+.line-rewrite__list { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--s2); }
+.line-rewrite__alt { width: 100%; text-align: start; padding: var(--s2) var(--s3); border: 1px solid var(--line); border-radius: var(--r-control); background: var(--surface); color: var(--ink); font: inherit; line-height: 1.6; overflow-wrap: anywhere; cursor: pointer; }
+.line-rewrite__alt:hover { border-color: var(--ink); }
+.line-rewrite__alt:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }

@@ -174,6 +174,40 @@ export interface LyricDraftResponse {
   variants?: Array<{ angle: LyricAngle; lyrics: string }>;
 }
 
+/**
+ * POST /v1/lyrics/line — three other ways to say one line of the lyrics in
+ * the box (docs/LYRIC_LINE_SPEC.md). Counted as one draft against
+ * LYRIC_DRAFTS_PER_DAY, like any other lyrics call no credit pays for.
+ */
+export const lyricLineRequest = z.object({
+  /** What the song is about; empty when the creator only wrote lyrics. */
+  prompt: promptSchema.default(''),
+  /** Not trimmed: a trimmed blank first line would move every index by one. */
+  lyrics: z.string().refine((v) => [...v].length <= LYRICS_MAX_CODEPOINTS, {
+    message: `lyrics must be at most ${LYRICS_MAX_CODEPOINTS} Unicode code points`,
+  }),
+  /** Index into `lyrics.split('\n')`; the line must be a sung one (`isSungLine`). */
+  line: z.number().int().min(0).max(400),
+  styles: z.array(styleTagSchema).max(MAX_STYLE_TAGS).default([]),
+});
+export type LyricLineRequest = z.infer<typeof lyricLineRequest>;
+
+export interface LyricLineResponse {
+  /** Up to three alternatives, none of them the original line. */
+  lines: string[];
+  remaining: number;
+}
+
+/**
+ * A line that is sung, so it can be rewritten: not empty and not a section
+ * marker on its own line ("[chorus]"), which the music model reads as
+ * structure (the same rule the lyrics parser applies).
+ */
+export function isSungLine(line: string | undefined): boolean {
+  const t = (line ?? '').trim();
+  return t.length > 0 && !/^\[[^\]]*\]$/.test(t);
+}
+
 export const createGenerationRequest = z
   .object({
     projectId: z.string().uuid().optional(),

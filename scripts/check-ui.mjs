@@ -136,6 +136,7 @@ const PAGES = [
   { name: 'song-photo-video', path: '/song/:track', as: 'creator', needs: 'photoVideoEnabled', prepare: openPhotoVideo },
   // Three versions of the lyrics (docs/LYRIC_COWRITE_SPEC.md).
   { name: 'create-cowrite', path: '/create', as: 'creator', prepare: writeThreeVersions },
+  { name: 'create-linefix', path: '/create', as: 'creator', prepare: rewriteOneLine },
   { name: 'song', path: '/song/:track', as: 'creator' },
   { name: 'song-public-view', path: '/song/:track', as: null },
   // The holidays (docs/HOLIDAY_SPEC.md): seen early through the staff preview, and the gift a recipient opens.
@@ -181,6 +182,18 @@ async function writeThreeVersions(page) {
   await page.fill('textarea#prompt', '駅のホームで君を待った冬の夜、白い息、終電のアナウンス');
   await page.click('.lyric-versions__ask button');
   await page.waitForSelector('.lyric-versions__card', { timeout: 30_000 });
+}
+
+/** One line said other ways (docs/LYRIC_LINE_SPEC.md): own lyrics, cursor on the second line, alternatives open. */
+async function rewriteOneLine(page) {
+  await page.click('[aria-labelledby=lyricsby-label] .seg__btn:nth-child(2)');
+  const box = page.locator('textarea#lyrics');
+  await box.fill('[verse]\n駅のホームで君を待った冬の夜、白い息が消えていく\n終電のアナウンス');
+  await box.click();
+  await box.press('Control+Home');
+  await box.press('ArrowDown');
+  await page.click('.line-rewrite__ask button');
+  await page.waitForSelector('.line-rewrite__alt', { timeout: 30_000 });
 }
 
 async function openCustomer(page) {

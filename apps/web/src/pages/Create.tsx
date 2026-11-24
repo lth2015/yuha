@@ -23,6 +23,7 @@ import type { LyricDraftResponse } from '@yuha/contracts';
 import { clampToCodePoints, codePointLength } from '../lib/codepoints';
 import { FIELDS_IN_MORE_PANEL, focusFieldFor } from '../lib/messages';
 import { useI18n } from '../lib/i18n';
+import { LineRewrite } from '../components/LineRewrite';
 import { LyricVersions } from '../components/LyricVersions';
 import { startersFor } from '../lib/scenes';
 import { applyCreateLink } from '../lib/create-link';
@@ -353,6 +354,9 @@ export default function Create() {
   const [instructions, setInstructions] = useState('');
   const [styleInput, setStyleInput] = useState('');
   const lyricsRef = useRef<HTMLTextAreaElement>(null);
+  // The line the cursor is on in the lyrics box, for "other ways to say it" (docs/LYRIC_LINE_SPEC.md).
+  const [caretLine, setCaretLine] = useState<number | null>(null);
+  const noteCaret = (el: HTMLTextAreaElement) => setCaretLine(el.value.slice(0, el.selectionStart).split('\n').length - 1);
   const idemKey = useRef<string>(newIdempotencyKey());
   const pollTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   /**
@@ -1521,9 +1525,27 @@ export default function Create() {
                 const next = [...e.target.value].slice(0, LYRICS_MAX_CODEPOINTS).join('');
                 patch({ lyrics: next });
               }}
+              // Wherever the cursor lands: a tap, a click, the arrow keys, a selection.
+              onSelect={(e) => noteCaret(e.currentTarget)}
+              onClick={(e) => noteCaret(e.currentTarget)}
+              onKeyUp={(e) => noteCaret(e.currentTarget)}
               placeholder={t('create.lyrics.placeholder')}
               aria-describedby="lyrics-hint lyrics-count"
             />
+            {draft.lyrics.trim() && (
+              <LineRewrite
+                lyrics={draft.lyrics}
+                line={caretLine}
+                prompt={draft.prompt}
+                styles={draft.styles}
+                onReplace={(line, text) => {
+                  const lines = draft.lyrics.split('\n');
+                  // Keep the line's own indentation; only the words change.
+                  lines[line] = `${(lines[line] ?? '').match(/^\s*/u)?.[0] ?? ''}${text}`;
+                  patch({ lyrics: [...lines.join('\n')].slice(0, LYRICS_MAX_CODEPOINTS).join('') });
+                }}
+              />
+            )}
             <div className="chips chips--sections" role="group" aria-labelledby="sections-label">
               <span className="studio__dial-label" id="sections-label">
                 {t('create.sections')}
