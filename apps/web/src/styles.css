@@ -1763,7 +1763,7 @@ textarea.is-full { border-color: var(--danger); }
  */
 .studio__fork {
   display: flex; flex-direction: column; gap: var(--s3);
-  margin-top: var(--s6); padding-top: var(--s5);
+  margin-top: var(--s6); padding-top: var(--s4);
   border-top: 1px solid var(--line);
 }
 .studio__fork-label {
