@@ -22,6 +22,29 @@
 | 自动续费 | 本版不新增付款确认条款（仍是 18 岁以上，注册时已确认）；附录的方案 A 下一阶段再按此改 |
 | 运维事项可能改变结论 | 方括号里的事实（区域、备份、日志、作曲服务器位置）**确认前不送审定稿** |
 
+## 已确认的事实（产品负责人提供，2026-11-24）
+
+以下是**产品负责人的事实说明**，尚未有合同或书面依据；送律师时一并注明。
+
+| 项目 | 当前确认内容 |
+| --- | --- |
+| TokenStars 归属 | 日本上市企业旗下（名称按合同写入送审稿；本仓库不写，见 CLAUDE.md 关于运营方名称的规则） |
+| 训练用途 | 数据不用于训练 |
+| 数据保存 | 不保存数据 |
+| 处理地点 | 日本境内的 AWS、Azure、GCP |
+| YUHA 部署 | AWS 东京区域 |
+| 作曲服务器（DGX）物理位置 | 东京 |
+
+**送律师前还需补齐：**
+
+1. **签约主体**：合同上的准确法人名称。「属于某集团」不一定等于与该集团本体签约。
+2. **处理范围和承诺依据**：TokenStars 具体接收哪些数据；「不保存、不训练、日本境内处理」是否覆盖网关、上游供应商及其日志；
+   是否有合同或书面说明支持。
+3. **运维期限**：数据库备份、应用日志、访问日志各保存多久；邮件（SES）和存储（S3）是否也在东京区域。
+
+> 日本境内处理是重要事实，但仅凭地点不能直接判定境外第三方提供规则（个人信息保护法第 28 条）不适用；
+> 还要看处理主体和合同安排。第 4 条的写法等第 1、2 项有书面依据后再定。
+
 ## 提议的英文条文
 
 以下按条给出完整的新文本；未列出的条款不变。方括号 `[…]` 是需要运维或合同确认的事实，**确认前不定稿**。
@@ -57,13 +80,14 @@
 > - **Amazon Web Services** (Tokyo region): the application, database, file storage and queues
 >   [and email: region to be confirmed]. Pages are delivered through Amazon CloudFront, which serves
 >   them from locations near you.
-> - **Our own music server** [location to be confirmed]: turns your description and lyrics into music.
+> - **Our own music server** (in Tokyo): turns your description and lyrics into music.
 >   It is operated by us, not by a third party.
-> - **TokenStars** [legal entity, country, and its own providers, as contracted]: reads your description
->   to plan the song and writes or rewrites lyrics. It receives your description and lyrics, which can
->   contain personal information if you write any; it does not receive your account details.
->   [Processing location, retention, use for training, and the basis for any transfer outside Japan:
->   to be written from the contract.]
+> - **TokenStars** [legal entity as contracted], a service of a company listed in Japan: reads your
+>   description to plan the song and writes or rewrites lyrics. It receives your description and lyrics,
+>   which can contain personal information if you write any; it does not receive your account details.
+>   [Draft, once supported in writing: it processes them in Japan, on AWS, Azure and Google Cloud, does
+>   not keep them and does not use them for training. Whether this covers its gateway logs and upstream
+>   providers, and the basis for it, to be written from the contract.]
 > - **Google**: sign-in with Google (your name, email address and profile picture).
 > - **Stripe**: card payments (your email address and the order; card details go to Stripe, not to us).
 >
