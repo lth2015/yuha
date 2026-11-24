@@ -188,7 +188,10 @@ export default async function shareRoutes(app: FastifyInstance, opts: { ctx: App
     '/v1/tracks/:id/photo-video',
     { preHandler: app.requireAuth, bodyLimit: 16_000_000 },
     async (req, reply) => {
-      if (!(await ctx.features()).photoVideoEnabled) {
+      // Staff may use it while the public switch is off: the preview, on real
+      // songs, before counsel signs off the text (docs/PHOTO_MV_SPEC.md).
+      const staff = req.user!.role === 'admin' || req.user!.role === 'support';
+      if (!(await ctx.features()).photoVideoEnabled && !staff) {
         throw new AppError('SERVICE_DISABLED', 'photo videos are not available yet');
       }
       const { id } = idParam.parse(req.params);

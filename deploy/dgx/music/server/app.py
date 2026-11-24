@@ -96,7 +96,11 @@ V15_THINKING = os.environ.get("V15_THINKING", "true").lower() == "true"  # let t
 # then deleted (docs/legal/PRIVACY_CHANGES_2026-11.md). YUHA copies a finished
 # song into its own storage within minutes, and a signed audio URL lives a day,
 # so nothing here is needed for long. 0 keeps everything (benchmarks only).
-RETENTION_DAYS = float(os.environ.get("RETENTION_DAYS", "30"))
+#
+# Six, not thirty: a song made without an account is promised gone, with what
+# was written to make it, seven days after it was made, and the copy here is
+# one of its copies. Six days plus the hourly sweep is always inside seven.
+RETENTION_DAYS = float(os.environ.get("RETENTION_DAYS", "6"))
 
 JOBS_DIR = DATA_DIR / "jobs"
 AUDIO_DIR = DATA_DIR / "audio"

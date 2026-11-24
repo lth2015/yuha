@@ -1,6 +1,9 @@
-# 隐私政策修改稿（2026-11）— 待律师审阅（第三版）
+# 隐私政策修改稿（2026-11）— 待律师审阅（第四版）
 
-> 第一版 2026-11-23；第二版 2026-11-24 上午；**第三版 2026-11-24 下午**，按律师意见（`COUNSEL_RESPONSE_2026-11.md`）改写。
+> 第一版 2026-11-23；第二版 2026-11-24 上午；第三版 2026-11-24 下午，按第一轮意见改写；
+> **第四版 2026-11-24 晚**，按第二轮审阅建议（`COUNSEL_RESPONSE_2026-11.md` 第二轮）修改。
+> **注意：第二轮回复由产品负责人整理，注明「不能作为日本执业律师的正式审定或上线批准」。**
+> 功能开关仍须等执业律师正式审定后才能打开。
 >
 > **范围：仍然只面向 18 岁以上**（产品负责人 2026-11-24 选定方案①）。这一版只覆盖两个新功能
 > （免注册试做、照片 MV）和条文本来就漏写的事；年龄放宽（方案 A）移到附录，作为下一阶段。
@@ -21,6 +24,21 @@
 | 9 记录期限分项 | 第 6 条加年龄确认、订单记录的期限（方括号待定） |
 | 自动续费 | 本版不新增付款确认条款（仍是 18 岁以上，注册时已确认）；附录的方案 A 下一阶段再按此改 |
 | 运维事项可能改变结论 | 方括号里的事实（区域、备份、日志、作曲服务器位置）**确认前不送审定稿** |
+
+## 第四版按第二轮建议改了什么
+
+| 建议 | 第四版的处理 | 状态 |
+| --- | --- | --- |
+| 4a 试做 7 天删除与作曲服务器 30 天冲突 | 作曲服务器保存期改为 **6 天**（每小时清理，任何副本都在 7 天内删除），条文第 6 条同步 | 代码已改（默认 6 天）；**Spark 上需在 `.env` 加 `RETENTION_DAYS=6` 并重启 music**，无需重建 |
+| 4b 每小时清扫不当然保证 24 小时 | 核实：清扫删除的是**超过 1 小时**的临时目录（不是 24 小时），每小时一次，API 启动时也执行一次。只要 API 在运行，崩溃残留最长约 2 小时；Pod 被替换时临时盘随之删除。条文仍写「最长 24 小时」作为上限 | 已核实（代码和测试见 `sweepStaleVideoDirs`） |
+| 4c 最终输出视频的保存方式缺失 | 核实：成品 MP4 在服务器临时目录生成，直接返回给用户的设备（`cache-control: no-store`），随临时目录一起删除，服务器不保留。条文第 2 条照片一段补一句 | 条文已补 |
+| 4d Google、Stripe 不宜一律称为受托方 | 第 4 条改为「我们使用的外部服务」，分别写各自的角色；Google、Stripe 写明按其自己的政策处理 | 条文已改 |
+| 5 访问数据 90 天 + 月度汇总 | **待产品负责人决定**：后台访问统计现在直接读原始记录、可选任意日期范围；改为 90 天需要同时做月度汇总表和后台改读汇总 | 待决定 |
+| 6 语言条款 | 只有日文版实际提供时才发布第 10 条；在那之前不写「本政策以日文和英文提供」。补「不限制适用法律赋予的权利」 | 条文已改 |
+| 7 HMAC 密钥 | 条文不承诺固定周期；内部另定轮换、吊销、访问控制和事件响应（运维文档） | 待运维文档 |
+| 8 年龄确认记录 | 记录确认事实、时间和提示版本；不收集身份证或生日。**现在只记时间，没有记提示版本**，需要补 | 待开发 |
+| 9、10 TokenStars | 需写入合同、数据处理附件或有效服务条款；第 4 条按实际法人和处理链路披露，不写「集团旗下服务」 | 待合同材料 |
+| 3 员工内部测试 | 员工预览页面写明条件：自愿参与的成年员工、只用本人且有权使用的照片、不用含儿童或他人的照片、不公开视频、测试后确认设备上不留视频 | 已做 |
 
 ## 已确认的事实（产品负责人提供，2026-11-24）
 
@@ -67,7 +85,8 @@
 > still show people who can be identified. We process them only to assemble your video, temporarily:
 > they are not stored persistently, not used for anything else, and not sent to any AI model. They are
 > deleted as soon as the video is made, or, if processing fails or is interrupted, within 24 hours at
-> most. The original photos do not leave your device.
+> most. The finished video is sent straight to your device and is not kept by us. The original photos do
+> not leave your device.
 
 “Service logs” 一段末尾加：
 
@@ -75,21 +94,26 @@
 > have not seen on your account, we email you a notice that includes that device's IP address and
 > browser, so you can recognise a sign-in that was not you.
 
-### 隐私政策 4. Who processes it for us — 整段替换
+### 隐私政策 4. Services we use — 整段替换
 
+> We use the services below. Some process data for us; others, such as Google and Stripe, also handle
+> it under their own terms and privacy policies, which apply to what you give them directly.
+>
 > - **Amazon Web Services** (Tokyo region): the application, database, file storage and queues
 >   [and email: region to be confirmed]. Pages are delivered through Amazon CloudFront, which serves
 >   them from locations near you.
 > - **Our own music server** (in Tokyo): turns your description and lyrics into music.
 >   It is operated by us, not by a third party.
-> - **TokenStars** [legal entity as contracted], a service of a company listed in Japan: reads your
+> - **TokenStars** [the legal entity that provides it, as contracted]: reads your
 >   description to plan the song and writes or rewrites lyrics. It receives your description and lyrics,
 >   which can contain personal information if you write any; it does not receive your account details.
 >   [Draft, once supported in writing: it processes them in Japan, on AWS, Azure and Google Cloud, does
 >   not keep them and does not use them for training. Whether this covers its gateway logs and upstream
 >   providers, and the basis for it, to be written from the contract.]
-> - **Google**: sign-in with Google (your name, email address and profile picture).
-> - **Stripe**: card payments (your email address and the order; card details go to Stripe, not to us).
+> - **Google**: sign-in with Google, if you choose it. We receive your name, email address and profile
+>   picture; Google handles your Google account under its own terms.
+> - **Stripe**: card payments. We send your email address and the order; you give your card details to
+>   Stripe, not to us, and Stripe handles them under its own terms.
 >
 > We do not sell personal data or use advertising or third-party analytics services.
 
@@ -109,11 +133,13 @@
 >   longer relate to any browser may be kept longer. The random identifier in your browser stays until you
 >   clear your browser's storage; the campaign tag there is kept for 30 days.
 > - **The campaign tag recorded on an account:** while the account exists.
-> - **Age confirmation:** the time you confirmed your age is kept while your account exists.
+> - **Age confirmation:** that you confirmed it, when, and which wording you were shown, kept while your
+>   account exists. We do not ask for identity documents or your date of birth.
 > - **Service logs:** [N] days. **Backups:** [N] days, after which deleted data is gone from them too.
-> - **Our music server** keeps the description and lyrics it was given, and the audio it made, for 30 days.
+> - **Our music server** keeps the description and lyrics it was given, and the audio it made, for 6 days,
+>   so that every copy of a song made without an account is gone within 7 days.
 
-（作曲服务器 30 天清理：2026-11-24 已在 Spark 上部署，容器内确认为新代码，引擎仍为 v15。这一句可以写进条文。）
+（作曲服务器：2026-11-24 已部署清理代码；保存期从 30 天改为 6 天，需在 Spark 的 `.env` 加 `RETENTION_DAYS=6` 并重启 music 后才成立。）
 
 ### 隐私政策 9. Local storage — 整段替换
 
@@ -124,11 +150,12 @@
 > payment. We set one cookie, only while you sign in with Google, to protect that sign-in from being
 > hijacked; it lasts at most 10 minutes. No advertising or tracking cookies are used.
 
-### 隐私政策 10. Language（新增）
+### 隐私政策 10. Language（新增，**只在日文版实际发布时**加入）
 
-> This policy is published in Japanese and English. If they differ, the Japanese version prevails.
+> This policy is published in Japanese and English, with the same content. If they differ, the Japanese
+> version prevails. This does not limit any right you have under applicable law.
 
-（日文正本在条文审定后出具；哪种语言优先请律师定。）
+（日文版发布之前不加这一条，也不写「以日文和英文提供」。）
 
 ### 使用条款 4. Your songs and your content — 末尾增加一段
 
