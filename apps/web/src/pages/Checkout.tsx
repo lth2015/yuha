@@ -250,7 +250,7 @@ export function CheckoutConfirm() {
             dictionary for that reason. This is the link to it, which is
             ordinary navigation and reads in the reader's language.
           */}
-          <Link className="small" to="/legal/tokushoho">
+          <Link className="small standalone-link" to="/legal/tokushoho">
             {t('checkout.tokushohoLink')}
           </Link>
         </section>

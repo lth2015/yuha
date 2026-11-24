@@ -288,7 +288,7 @@ export function LegalIndex() {
   const { t } = useI18n();
   return (
     <LegalPage title={t('footer.legal')}>
-      <nav className="stack">
+      <nav className="stack legal-index">
         <Link to="/legal/terms">{t('footer.terms')}</Link>
         <Link to="/legal/privacy">{t('footer.privacy')}</Link>
         <Link to="/legal/company">{t('footer.company')}</Link>
