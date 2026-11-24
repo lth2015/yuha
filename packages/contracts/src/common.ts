@@ -201,4 +201,4 @@ export type PreviewReport = z.infer<typeof previewReport>;
  * Change any of that wording and this must change too: tests/consent-version
  * fails until it does, so a record can never point at a wording it was not.
  */
-export const CONSENT_VERSION = '2026-11-24';
+export const CONSENT_VERSION = '2026-11-24b';

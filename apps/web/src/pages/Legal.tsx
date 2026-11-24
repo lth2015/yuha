@@ -49,6 +49,12 @@ export function useDisclosure() {
 // this commit (the 支払方法 and 返品・キャンセル rows filled from the
 // confirmation screen's reviewed wording in the same change). Text changed
 // after this is not covered by that review.
+//
+// 2026-11-24: the product owner switched on the free trial and photo videos
+// before counsel's formal review (expected the next day). The paragraphs that
+// disclose them are marked on the page itself as added on that date and under
+// legal review (<UnderReview />); they are not covered by the 2026-10-19
+// review, and this constant does not claim they are.
 const LEGAL_TEXT_REVIEWED = true;
 
 /**
@@ -76,6 +82,11 @@ export function DraftBanner({ isPlaceholder }: { isPlaceholder: boolean }) {
   );
 }
 
+/** Marks text added after the last review, on the page, where a reader sees it. */
+function UnderReview() {
+  return <p className="small muted">Added on 2026-11-24; this part is under legal review.</p>;
+}
+
 export function LegalPage({ title, updated = '2026-09-18', children }: { title: string; updated?: string; children: ReactNode }) {
   return (
     <article className="legal-page">
@@ -99,7 +110,7 @@ export function Terms() {
   const d = useDisclosure();
   if (!d) return <Loading />;
   return (
-    <LegalPage title="Terms of Service">
+    <LegalPage title="Terms of Service" updated="2026-11-24">
       <DraftBanner isPlaceholder={d.isPlaceholder} />
       <Section h="1. The service">
         <p>
@@ -139,6 +150,14 @@ export function Terms() {
           You may not resell the audio itself as a music or stock product, present it as a human performance,
           or use it to train competing music models.
         </p>
+        <p>
+          If you make a photo video, you confirm before choosing photos that you have the right to use them
+          and the images of the people in them, and, where children appear, the permission of their legal
+          guardian where the law requires it. The photos, the frames made from them and the resulting video
+          are your content under these terms; you are responsible for them, and the rights of the people
+          shown are their own, separate from any copyright in the photos.
+        </p>
+        <UnderReview />
       </Section>
       <Section h="5. Acceptable use">
         <p>
@@ -176,7 +195,7 @@ export function Privacy() {
   const d = useDisclosure();
   if (!d) return <Loading />;
   return (
-    <LegalPage title="Privacy Policy">
+    <LegalPage title="Privacy Policy" updated="2026-11-24">
       <DraftBanner isPlaceholder={d.isPlaceholder} />
       <Section h="1. Who we are">
         <p>
@@ -200,9 +219,33 @@ export function Privacy() {
           </li>
           <li>
             <strong>Operational data:</strong> service logs and aggregate usage events used to run and
-            improve the Service.
+            improve the Service. Our servers' logs can include the IP address a request came from. When you
+            sign in from a device we have not seen on your account, we email you a notice that includes that
+            device's IP address and browser.
+          </li>
+          <li>
+            <strong>Visit data:</strong> when you open a page, a random identifier your browser creates and
+            keeps (not your account and not your IP address), the page's path, the host name of the site that
+            linked to it, and the campaign tag in the link (for example <code>?src=…</code>) if there was one.
+            We use it to count visits and to learn which links bring people to YUHA. If you create an account
+            within a day of arriving, that campaign tag is recorded on the account.
+          </li>
+          <li>
+            <strong>Trial data:</strong> if you make a song without an account, a random identifier your
+            browser keeps and a keyed hash of your IP address, used only to limit free trials per device and
+            per network. The record we keep for that limit holds the hash, not the address itself.
+          </li>
+          <li>
+            <strong>Photos:</strong> if you make a photo video, your browser resizes the photos you choose and
+            draws them into video frames with the song's lyrics; only those frames are sent to our server. The
+            frames can still show people who can be identified. We process them only to assemble your video,
+            temporarily: they are not stored persistently, not used for anything else and not sent to any AI
+            model. They are deleted as soon as the video is made, or, if processing fails or is interrupted,
+            within 24 hours at most. The finished video is sent straight to your device and is not kept by
+            us. The original photos do not leave your device.
           </li>
         </ul>
+        <UnderReview />
       </Section>
       <Section h="3. Why we process it">
         <p>
@@ -255,6 +298,25 @@ export function Privacy() {
           after 90 days, subject to the same two exceptions. Where audio is held in versioned object
           storage, the underlying copies are expired within a further 30 days.
         </p>
+        <ul>
+          <li>
+            A song made without an account is deleted with its audio and everything entered to make it 7 days
+            after it was made, unless you add it to an account before then.
+          </li>
+          <li>
+            Trial records (the device identifier and the hash of your IP address) are deleted 7 days after the
+            trial, whether or not you then create an account.
+          </li>
+          <li>
+            Individual page views are deleted after 13 months; we keep them that long only to compare how the
+            same campaigns perform from one year to the next.
+          </li>
+          <li>
+            When you confirm your age and accept the terms, we keep that you did, when, and which wording you
+            were shown, while your account exists.
+          </li>
+        </ul>
+        <UnderReview />
       </Section>
       <Section h="7. Your rights">
         <p>
@@ -268,9 +330,14 @@ export function Privacy() {
       </Section>
       <Section h="9. Local storage">
         <p>
-          We use your browser's local storage for your sign-in session and to keep drafts of unsent
-          creations. No advertising or third-party tracking cookies are used.
+          We use your browser's local storage for: your sign-in session; your language; drafts of unsent
+          creations; the random visit identifier and, for 30 days, the campaign tag described in section 2;
+          the random trial identifier and a trial session, until the trial is added to an account or
+          expires; which gift songs you have already opened; and where to return after a payment. We set one
+          cookie, only while you sign in with Google, to protect that sign-in from being hijacked; it lasts at
+          most 10 minutes. No advertising or tracking cookies are used.
         </p>
+        <UnderReview />
       </Section>
     </LegalPage>
   );

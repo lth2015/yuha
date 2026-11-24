@@ -115,6 +115,17 @@ spec:
               value: "production"
             - name: APP_SECRET_DIR
               value: /app/app-secrets
+            # Switched on by the product owner on 2026-11-24, ahead of counsel's
+            # formal review (the disclosures are on the legal pages, marked as
+            # under review). An explicit env value beats the ConfigMap; to turn
+            # either off without a deploy: PUT /v1/admin/settings/feature_overrides
+            # with {"photoVideoEnabled": false} or {"guestTrialEnabled": false}
+            # (an admin, with a reason; the whole object is replaced, so send every
+            # switch you mean to keep off).
+            - name: FEATURE_PHOTO_VIDEO_ENABLED
+              value: "true"
+            - name: FEATURE_GUEST_TRIAL_ENABLED
+              value: "true"
           envFrom:
             - configMapRef:
                 name: qa-music-api-config
@@ -225,6 +236,17 @@ spec:
               value: "production"
             - name: APP_SECRET_DIR
               value: /app/app-secrets
+            # Switched on by the product owner on 2026-11-24, ahead of counsel's
+            # formal review (the disclosures are on the legal pages, marked as
+            # under review). An explicit env value beats the ConfigMap; to turn
+            # either off without a deploy: PUT /v1/admin/settings/feature_overrides
+            # with {"photoVideoEnabled": false} or {"guestTrialEnabled": false}
+            # (an admin, with a reason; the whole object is replaced, so send every
+            # switch you mean to keep off).
+            - name: FEATURE_PHOTO_VIDEO_ENABLED
+              value: "true"
+            - name: FEATURE_GUEST_TRIAL_ENABLED
+              value: "true"
           envFrom:
             - configMapRef:
                 name: qa-music-worker-config
