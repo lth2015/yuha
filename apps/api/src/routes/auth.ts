@@ -211,9 +211,19 @@ export default async function authRoutes(
     return toMeView(updated);
   });
 
-  /** SEC-11: unsubscribing from marketing is its own action, unrelated to billing. */
+  /**
+   * SEC-11: unsubscribing from marketing is its own action, unrelated to billing.
+   *
+   * Opting in needs an account that has confirmed its age; opting out never
+   * does. No marketing to anyone under 18 or whose age is unconfirmed
+   * (docs/legal/COUNSEL_RESPONSE_2026-11.md, principle 6). Today a confirmed
+   * age means 18 or older; when a 13–17 band exists, it is refused here too.
+   */
   app.post('/v1/me/marketing', { preHandler: app.requireAuth }, async (req) => {
     const body = z.object({ optIn: z.boolean() }).parse(req.body);
+    if (body.optIn && !req.user!.age_confirmed_at) {
+      throw new AppError('AGE_NOT_CONFIRMED', 'marketing email needs a confirmed age of 18 or older');
+    }
     await setMarketingOptIn({ userId: req.user!.id, optIn: body.optIn });
     return { marketingOptIn: body.optIn };
   });

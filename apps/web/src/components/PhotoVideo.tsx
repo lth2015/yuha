@@ -43,6 +43,9 @@ export function PhotoVideo({
   const [skipped, setSkipped] = useState(0);
   const [result, setResult] = useState<Result>({ state: 'idle' });
   const [error, setError] = useState<unknown>(null);
+  // Counsel (docs/legal/COUNSEL_RESPONSE_2026-11.md, 2): the right to use the
+  // photos and the images of the people in them, confirmed before any is chosen.
+  const [rights, setRights] = useState(false);
   const input = useRef<HTMLInputElement>(null);
 
   // A finished video's object URL is released when it is replaced or the panel goes.
@@ -69,7 +72,7 @@ export function PhotoVideo({
   };
 
   const make = async () => {
-    if (photos.length < MIN_PHOTOS) return;
+    if (photos.length < MIN_PHOTOS || !rights) return;
     setError(null);
     setResult({ state: 'making' });
     try {
@@ -80,7 +83,12 @@ export function PhotoVideo({
         const canvas = await drawPhotoFrame(song, labels, photos[f.photo]!.canvas, f.line, f.ending === true);
         frames.push({ at: f.at, jpeg: await frameJpeg(canvas, 0.8) });
       }
-      const blob = await apiPostForBlob(`/v1/tracks/${song.trackId}/photo-video`, { start: plan.start, duration: plan.duration, frames });
+      const blob = await apiPostForBlob(`/v1/tracks/${song.trackId}/photo-video`, {
+        start: plan.start,
+        duration: plan.duration,
+        frames,
+        rightsConfirmed: true,
+      });
       const name = `${song.title.replace(/[\\/:*?"<>|]+/g, ' ').trim() || 'yuha'}.mp4`;
       const file = new File([blob], name, { type: 'video/mp4' });
       setResult({ state: 'ready', file, url: URL.createObjectURL(file) });
@@ -120,6 +128,10 @@ export function PhotoVideo({
       </div>
       <p className="photo-video__lead">{t('photo.lead')}</p>
       <p className="photo-video__notice">{t('photo.notice')}</p>
+      <div className="checkbox-row photo-video__rights">
+        <input id="photo-rights" type="checkbox" checked={rights} onChange={(e) => setRights(e.target.checked)} />
+        <label htmlFor="photo-rights">{t('photo.rights')}</label>
+      </div>
 
       {photos.length > 0 && (
         <ol className="photo-video__grid">
@@ -148,13 +160,14 @@ export function PhotoVideo({
 
       <div className="photo-video__actions">
         {photos.length < MAX_PHOTOS && (
-          <label className="btn">
+          <label className={`btn${rights ? '' : ' is-disabled'}`} aria-disabled={!rights}>
             {t('photo.pick')}
             <input
               ref={input}
               type="file"
               accept="image/*"
               multiple
+              disabled={!rights}
               className="visually-hidden"
               onChange={(e) => void add(e.target.files)}
             />
@@ -163,7 +176,7 @@ export function PhotoVideo({
         <button
           type="button"
           className="btn btn--primary"
-          disabled={photos.length < MIN_PHOTOS || result.state === 'making'}
+          disabled={photos.length < MIN_PHOTOS || !rights || result.state === 'making'}
           aria-busy={result.state === 'making'}
           onClick={() => void make()}
         >
@@ -171,6 +184,7 @@ export function PhotoVideo({
         </button>
       </div>
 
+      {!rights && <p className="small muted">{t('photo.rightsFirst')}</p>}
       <ErrorNotice error={error} />
 
       {result.state === 'ready' && (

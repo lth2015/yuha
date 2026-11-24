@@ -565,7 +565,7 @@ html:has(.player-bar) { scroll-padding-bottom: 100px; }
 }
 .btn:hover { border-color: var(--ink); }
 .btn:active { transform: scale(0.98); }
-.btn:disabled { opacity: var(--o-disabled); cursor: default; transform: none; }
+.btn:disabled, .btn.is-disabled { opacity: var(--o-disabled); cursor: default; transform: none; }
 /*
  * The primary action is the brand colour, and it carries ink rather than white.
  *
