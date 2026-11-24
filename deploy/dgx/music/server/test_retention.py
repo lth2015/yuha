@@ -22,6 +22,23 @@ class RetentionTests(unittest.TestCase):
         cls.environment.stop()
         cls.data.cleanup()
 
+    def setUp(self):
+        # `app` is imported once per run, by whichever test file comes first, with
+        # that file's DATA_DIR, which it may already have deleted. Each test here
+        # gets its own directories, whatever ran before.
+        self.dirs = tempfile.TemporaryDirectory()
+        root = Path(self.dirs.name)
+        (root / "jobs").mkdir()
+        (root / "audio").mkdir()
+        self.patches = [patch.object(self.app, "JOBS_DIR", root / "jobs"), patch.object(self.app, "AUDIO_DIR", root / "audio")]
+        for p in self.patches:
+            p.start()
+
+    def tearDown(self):
+        for p in self.patches:
+            p.stop()
+        self.dirs.cleanup()
+
     def job(self, job_id, status, age_days, key=None):
         created = time.time() - age_days * 86400
         self.app.save_job({"id": job_id, "status": status, "created_at": created, "idempotency_key": key, "request": {"lyrics": "secret words"}})
