@@ -349,6 +349,17 @@ function audit({ phone, phase }) {
   if (phone) {
     for (const el of controls) {
       if (el.matches('input[type=checkbox], input[type=radio]')) continue;
+      // A link inside a sentence ("I agree to the Terms") is sized by the line
+      // it sits in; WCAG 2.5.8 exempts it ("Inline"). Only that: an inline <a>
+      // whose parent, laid out as text, says more than the link does. A link
+      // that stands alone is still measured.
+      if (el.tagName === 'A' && getComputedStyle(el).display === 'inline') {
+        const parent = el.parentElement;
+        const flow = parent && !/flex|grid/.test(getComputedStyle(parent).display);
+        const own = (el.textContent || '').trim().length;
+        const around = (parent?.textContent || '').trim().length;
+        if (flow && around > own + 2) continue;
+      }
       const r = el.getBoundingClientRect();
       if (r.height < 32 && el.closest('main')) warnings.push({ rule: 'small-target', what: label(el), detail: `${Math.round(r.height)} px tall` });
     }
