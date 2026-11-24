@@ -475,12 +475,23 @@ export function toJobView(ctx: AppContext, job: JobRow, credit: CreditOutcome, e
     errorCode: job.error_code,
     failureReason: job.error_code?.startsWith('upstream_') ? engineReason(job.error_detail) : null,
     estimate,
+    lyrics: lyricsBeingSung(job, input.instrumental ?? true),
     createdAt: job.created_at.toISOString(),
     updatedAt: job.updated_at.toISOString(),
     demo: ctx.config.isDemo,
     credit,
     failure: failureKind(job.state, job.error_code),
   };
+}
+
+/** States in which the engine has the song: the lyrics are written and not yet on a track. */
+const WITH_ENGINE: ReadonlySet<JobRow['state']> = new Set(['SUBMITTED', 'PROCESSING', 'UNKNOWN']);
+
+/** What the engine is singing, from the resolved intent (the lyrics already screened). */
+function lyricsBeingSung(job: JobRow, instrumental: boolean): string | null {
+  if (instrumental || !WITH_ENGINE.has(job.state)) return null;
+  const lyrics = (job.resolved_params as { lyrics?: unknown } | null)?.lyrics;
+  return typeof lyrics === 'string' && lyrics.trim() ? lyrics : null;
 }
 
 /** Reuse already owner-scoped rows; list views need one queue query, not N+1. */

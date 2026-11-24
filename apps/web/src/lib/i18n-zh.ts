@@ -349,6 +349,8 @@ const zh: Dict = {
   'wait.tryAgain': '再试一次',
   'wait.failedTitle': '这次没能录成',
   'wait.scoreAria': '你的描述正在被写成音乐。',
+  'wait.lyrics.title': "歌词写好了",
+  'wait.lyrics.note': "正在按这些歌词录制；做好后会逐行亮起。",
   // ---- scene / mood / track state ----
   'track.processing': '处理中',
   'track.deliverable': '可下载',

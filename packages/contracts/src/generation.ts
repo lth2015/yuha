@@ -387,6 +387,13 @@ export const jobView = z.object({
   /** The engine's exception type when the music step failed (engineReason), else null. */
   failureReason: z.string().nullable().optional(),
   estimate: jobEstimate,
+  /**
+   * The words being sung, while the engine is making the song: written by
+   * then (the lyrics step runs before submission), so the wait can be spent
+   * reading them. Null while waiting in line, once finished (the track has
+   * them), and for an instrumental.
+   */
+  lyrics: z.string().nullable().optional(),
   queuePosition: z.number().int().positive().nullable().optional(),
   /** While waiting: when it is given up on and its credit returned (JOB_QUEUE_DEADLINE_SECONDS). */
   queueDeadlineAt: z.string().nullable().optional(),

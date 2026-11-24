@@ -331,6 +331,8 @@ const ja: Dict = {
   'wait.tryAgain': 'もう一度つくる',
   'wait.failedTitle': '録音できませんでした',
   'wait.scoreAria': 'あなたの説明が音楽になっていきます。',
+  'wait.lyrics.title': "歌詞ができました",
+  'wait.lyrics.note': "この歌詞で録音しています。できあがると一行ずつ光ります。",
   // ---- scene / mood / track state ----
   'track.processing': '処理中',
   'track.deliverable': 'ダウンロード可',

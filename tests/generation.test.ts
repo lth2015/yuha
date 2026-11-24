@@ -551,3 +551,44 @@ describe('capability honesty (AI-05)', () => {
     });
   });
 });
+
+describe('the lyrics, while the song is being made (docs/WAIT_LYRICS_SPEC.md)', () => {
+  // The creator's own lyrics: the local text provider writes none, and these take the same path.
+  const vocal = { ...defaultBody, mode: 'custom' as const, instrumental: false, durationSeconds: 60, lyrics: '[verse]\n晚风吹过湖面\n灯一盏一盏亮起' };
+  const view = async (user: TestUser, jobId: string) =>
+    (await h.app.inject({ method: 'GET', url: `/v1/jobs/${jobId}`, headers: user.authHeader })).json() as { lyrics?: string | null };
+  const setState = (jobId: string, state: string) => query(`UPDATE generation_jobs SET state = ? WHERE id = ?`, [state, jobId]);
+
+  it('shows the written lyrics while the engine has the song, and not before or after', async () => {
+    const user = await h.createUser({ credits: 3 });
+    const { jobId } = (await post(user, vocal, 'wait-lyrics-1')).json();
+    expect((await view(user, jobId)).lyrics ?? null).toBeNull(); // waiting in line: not written yet
+
+    await runJobStep({ ctx: h.ctx, owner: 'w-lyrics', log }, jobId);
+    const written = ((await getJob(jobId))!.resolved_params as { lyrics?: string }).lyrics;
+    expect(written).toContain('晚风吹过湖面');
+
+    for (const state of ['UNKNOWN', 'PROCESSING', 'SUBMITTED']) {
+      await setState(jobId, state);
+      expect((await view(user, jobId)).lyrics).toBe(written);
+    }
+    // Delivered for real (a faked state would leave a job with no song): the track has them now.
+    expect((await runToCompletion(jobId)).state).toBe('DELIVERED');
+    expect((await view(user, jobId)).lyrics ?? null).toBeNull();
+  });
+
+  it('never for an instrumental, and never to anyone but the owner', async () => {
+    const user = await h.createUser({ credits: 3 });
+    const { jobId } = (await post(user, defaultBody, 'wait-lyrics-2')).json();
+    await runJobStep({ ctx: h.ctx, owner: 'w-lyrics', log }, jobId);
+    await setState(jobId, 'SUBMITTED');
+    expect((await view(user, jobId)).lyrics ?? null).toBeNull();
+
+    const vocalJob = (await post(user, vocal, 'wait-lyrics-3')).json().jobId as string;
+    await runJobStep({ ctx: h.ctx, owner: 'w-lyrics', log }, vocalJob);
+    await setState(vocalJob, 'SUBMITTED');
+    const stranger = await h.createUser();
+    const res = await h.app.inject({ method: 'GET', url: `/v1/jobs/${vocalJob}`, headers: stranger.authHeader });
+    expect(res.statusCode).toBe(404);
+  });
+});

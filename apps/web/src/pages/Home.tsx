@@ -1,4 +1,4 @@
-import { JobOutcome, OpenGenerations, QueueStatus, UnfinishedGenerations, etaText } from '../components/GenerationQueue';
+import { JobOutcome, OpenGenerations, QueueStatus, UnfinishedGenerations, WaitLyrics, etaText } from '../components/GenerationQueue';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import type { JobView, Season, TrackView } from '@yuha/contracts';
@@ -388,6 +388,8 @@ export default function Home() {
             </li>
           ))}
         </ol>
+
+        {!failed && <WaitLyrics job={job} />}
 
         <div className="wait-page__actions">
           {failed && (

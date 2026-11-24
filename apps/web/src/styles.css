@@ -2990,3 +2990,9 @@ textarea.is-full { border-color: var(--danger); }
 .trial-claim { margin: var(--s4) auto 0; max-width: 64rem; }
 .trial-claim__actions { display: flex; flex-wrap: wrap; gap: var(--s2) var(--s3); }
 .trial-claim .btn { white-space: normal; }
+
+/* The lyrics while the song is being made (components/GenerationQueue.tsx WaitLyrics). */
+.wait-lyrics { margin-top: var(--s6); padding: var(--s6); border: 1px solid var(--line); border-radius: var(--r-card); background: var(--surface); text-align: start; display: grid; gap: var(--s2); }
+.wait-lyrics h2 { margin: 0; font-size: var(--t-title); font-weight: 600; }
+.wait-lyrics p { margin: 0; }
+.wait-lyrics__text { margin: var(--s2) 0 0; max-height: 22rem; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; font: inherit; font-size: var(--t-body); line-height: 1.9; color: var(--ink); }
