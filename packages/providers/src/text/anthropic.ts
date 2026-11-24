@@ -9,8 +9,8 @@ import {
   VocalMode,
   musicIntent,
 } from '@yuha/contracts';
-import { LYRIC_CRAFT, angleDirection } from './lyric-craft.js';
-import type { IntentRequest, IntentResult, LyricsRequest, LyricsResult, ReviseRequest, ReviseResult, TextProvider, TextUsage } from './types.js';
+import { LINE_REWRITE_SYSTEM, LYRIC_CRAFT, angleDirection, parseLineAlternatives } from './lyric-craft.js';
+import type { IntentRequest, IntentResult, LineRewriteRequest, LineRewriteResult, LyricsRequest, LyricsResult, ReviseRequest, ReviseResult, TextProvider, TextUsage } from './types.js';
 
 /**
  * Claude as YUHA's text model: the song's parameters, its lyrics, and edits
@@ -242,6 +242,20 @@ export class AnthropicTextProvider implements TextProvider {
     const lyrics = reply.text.replace(/^```[a-z]*\s*/i, '').replace(/\s*```$/, '').trim();
     if (!lyrics) return { status: 'failed', reason: 'lyrics_empty', requestId: reply.requestId, usage: reply.usage };
     return { status: 'ok', lyrics: [...lyrics].slice(0, LYRICS_MAX_CODEPOINTS).join(''), requestId: reply.requestId, usage: reply.usage };
+  }
+
+  /** Three other ways to say one line (docs/LYRIC_LINE_SPEC.md). */
+  async rewriteLine(req: LineRewriteRequest): Promise<LineRewriteResult> {
+    const original = req.lyrics.split('\n')[req.line] ?? '';
+    const reply = await this.ask({
+      system: LINE_REWRITE_SYSTEM.join('\n'),
+      user: JSON.stringify({ user_text: req.prompt, styles: req.styles, lyrics: req.lyrics, line_number: req.line + 1, line: original }),
+    });
+    if (reply.kind === 'refused') return { status: 'refused', reason: reply.reason, requestId: reply.requestId, usage: reply.usage };
+    if (reply.kind === 'failed') return { status: 'failed', reason: reply.code, requestId: reply.requestId, usage: reply.usage };
+    const lines = parseLineAlternatives(reply.text, original);
+    if (!lines.length) return { status: 'failed', reason: 'line_empty', requestId: reply.requestId, usage: reply.usage };
+    return { status: 'ok', lines, requestId: reply.requestId, usage: reply.usage };
   }
 
   async extractIntent(req: IntentRequest): Promise<IntentResult> {

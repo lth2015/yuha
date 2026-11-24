@@ -1,6 +1,6 @@
 import { musicIntent, type MusicIntent } from '@yuha/contracts';
-import { LYRIC_CRAFT, angleDirection } from './lyric-craft.js';
-import type { IntentRequest, IntentResult, LyricsRequest, LyricsResult, ReviseRequest, ReviseResult, TextProvider, TextUsage } from './types.js';
+import { LINE_REWRITE_SYSTEM, LYRIC_CRAFT, angleDirection, parseLineAlternatives } from './lyric-craft.js';
+import type { IntentRequest, IntentResult, LineRewriteRequest, LineRewriteResult, LyricsRequest, LyricsResult, ReviseRequest, ReviseResult, TextProvider, TextUsage } from './types.js';
 
 /**
  * TokenStars text-model adapter (docs.tokenstars.ai — OpenAI-compatible).
@@ -348,6 +348,37 @@ export class TokenStarsTextProvider implements TextProvider {
       .trim();
     if (!text) return { status: 'failed', reason: 'lyrics_empty', requestId, usage };
     return { status: 'ok', lyrics: [...text].slice(0, 3000).join(''), requestId, usage };
+  }
+
+  /**
+   * Three other ways to say one line (docs/LYRIC_LINE_SPEC.md). Plain text,
+   * one call, a reply budget for three short lines; no alternative that
+   * survives parsing is a failure, never an empty success.
+   */
+  async rewriteLine(req: LineRewriteRequest): Promise<LineRewriteResult> {
+    const empty: TextUsage = { costMinor: this.cfg.estimatedCostMinorPerRequest, costIsEstimate: true };
+    const original = req.lyrics.split('\n')[req.line] ?? '';
+    const user = JSON.stringify({ user_text: req.prompt, styles: req.styles, lyrics: req.lyrics, line_number: req.line + 1, line: original });
+    let res;
+    try {
+      res = await this.call(
+        [
+          { role: 'system', content: LINE_REWRITE_SYSTEM.join('\n') },
+          { role: 'user', content: user },
+        ],
+        { responseFormat: false, maxTokens: 240, temperature: 0.9 },
+      );
+    } catch (err) {
+      return { status: 'failed', reason: (err as Error).message, requestId: null, usage: empty };
+    }
+    const usage = this.usage(res.json);
+    const requestId = res.requestId;
+    if (!res.ok) return { status: 'failed', reason: `tokenstars_${res.status}`, requestId, usage };
+    const finish = TokenStarsTextProvider.finishReason(res.json);
+    if (finish === 'content_filter') return { status: 'refused', reason: 'content_filter', requestId, usage };
+    const lines = parseLineAlternatives(TokenStarsTextProvider.content(res.json) ?? '', original);
+    if (!lines.length) return { status: 'failed', reason: 'line_empty', requestId, usage };
+    return { status: 'ok', lines, requestId, usage };
   }
 
   /** `finish_reason` is in the documented response body and was never read. */

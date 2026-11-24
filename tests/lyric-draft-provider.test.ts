@@ -118,3 +118,41 @@ describe('the local provider (demo and tests)', () => {
     }
   });
 });
+
+describe('TokenStars: one line said three other ways (docs/LYRIC_LINE_SPEC.md)', () => {
+  const lineReq = { prompt: req.prompt, styles: [], lyrics: LYRICS, line: 1 };
+
+  it('asks once, for plain text, with the line and the lyrics around it fenced as data', async () => {
+    const calls = stub(completion('湖面吹来晚风\n晚风轻拂湖面\n风从湖上走过'));
+    const r = await provider().rewriteLine!(lineReq);
+    expect(calls).toHaveLength(1);
+    expect(calls[0]!.body.response_format).toBeUndefined();
+    const user = JSON.parse((calls[0]!.body.messages as Array<{ content: string }>)[1]!.content);
+    expect(user).toMatchObject({ line: '晚风吹过湖面', line_number: 2, lyrics: LYRICS });
+    expect(r).toMatchObject({ status: 'ok', lines: ['湖面吹来晚风', '晚风轻拂湖面', '风从湖上走过'] });
+  });
+
+  it('takes off numbering and quotes, and drops the original, repeats, markers and blanks', async () => {
+    stub(completion('1. 「湖面吹来晚风」\n2) 晚风吹过湖面\n\n- 湖面吹来晚风\n[verse]\n“风从湖上走过”\n夜色落满湖面'));
+    const r = await provider().rewriteLine!(lineReq);
+    expect(r).toMatchObject({ status: 'ok', lines: ['湖面吹来晚风', '风从湖上走过', '夜色落满湖面'] });
+  });
+
+  it('nothing usable is a failure, and a content filter a refusal', async () => {
+    stub(completion('晚风吹过湖面\n'));
+    expect((await provider().rewriteLine!(lineReq)).status).toBe('failed');
+    stub(completion('', 'content_filter'));
+    expect((await provider().rewriteLine!(lineReq)).status).toBe('refused');
+  });
+});
+
+describe('the local provider: line rewrites', () => {
+  it('offers alternatives that differ from the line', async () => {
+    const r = await new LocalTextProvider().rewriteLine!({ prompt: '', styles: [], lyrics: LYRICS, line: 1 });
+    expect(r.status).toBe('ok');
+    if (r.status === 'ok') {
+      expect(r.lines.length).toBeGreaterThan(0);
+      expect(r.lines).not.toContain('晚风吹过湖面');
+    }
+  });
+});

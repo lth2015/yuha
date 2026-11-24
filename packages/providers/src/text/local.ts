@@ -1,5 +1,5 @@
 import type { Mood, Scene, TempoHint } from '@yuha/contracts';
-import type { IntentRequest, IntentResult, LyricsRequest, LyricsResult, ReviseRequest, ReviseResult, TextProvider } from './types.js';
+import type { IntentRequest, IntentResult, LineRewriteRequest, LineRewriteResult, LyricsRequest, LyricsResult, ReviseRequest, ReviseResult, TextProvider } from './types.js';
 
 /**
  * Deterministic local intent extractor for demo mode and tests.
@@ -154,6 +154,23 @@ export class LocalTextProvider implements TextProvider {
     const chorus = [line(1), line(1), line(4), line(0)];
     const lyrics = ['[verse]', ...verse, '', '[chorus]', ...chorus].join('\n');
     return { status: 'ok', lyrics, requestId: null, usage: { costMinor: 0, costIsEstimate: true } };
+  }
+
+  /**
+   * Placeholder alternatives for demo mode: the line's own phrases, turned
+   * around three ways, so the flow runs and a pick visibly changes the line.
+   */
+  async rewriteLine(req: LineRewriteRequest): Promise<LineRewriteResult> {
+    const original = (req.lyrics.split('\n')[req.line] ?? '').trim();
+    const words = original.split(/\s+/).filter(Boolean);
+    const chars = [...original];
+    const half = Math.max(1, Math.floor(chars.length / 2));
+    const lines = [
+      words.length > 1 ? [...words].reverse().join(' ') : [...chars.slice(half), ...chars.slice(0, half)].join(''),
+      `${original}，慢慢地`,
+      `还是${original}`,
+    ].filter((l, i, all) => l !== original && all.indexOf(l) === i);
+    return { status: 'ok', lines, requestId: null, usage: { costMinor: 0, costIsEstimate: true } };
   }
 
   async reviseSong(req: ReviseRequest): Promise<ReviseResult> {
