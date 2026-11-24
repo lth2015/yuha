@@ -104,7 +104,7 @@ export function PhotoVideo({
 
   if (!open) {
     return (
-      <button type="button" className="text-action" onClick={() => setOpen(true)}>
+      <button type="button" className="text-action photo-video__open" onClick={() => setOpen(true)}>
         {t('photo.open')}
       </button>
     );
