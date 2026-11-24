@@ -137,6 +137,7 @@ const PAGES = [
   // Three versions of the lyrics (docs/LYRIC_COWRITE_SPEC.md).
   { name: 'create-cowrite', path: '/create', as: 'creator', prepare: writeThreeVersions },
   { name: 'create-linefix', path: '/create', as: 'creator', prepare: rewriteOneLine },
+  { name: 'library-trial-claim', path: '/library', as: 'creator', prepare: offerTrialSong },
   { name: 'song', path: '/song/:track', as: 'creator' },
   { name: 'song-public-view', path: '/song/:track', as: null },
   // The holidays (docs/HOLIDAY_SPEC.md): seen early through the staff preview, and the gift a recipient opens.
@@ -194,6 +195,13 @@ async function rewriteOneLine(page) {
   await box.press('ArrowDown');
   await page.click('.line-rewrite__ask button');
   await page.waitForSelector('.line-rewrite__alt', { timeout: 30_000 });
+}
+
+/** A trial song left on this browser, offered to the account now signed in (components/TrialClaimAsk.tsx). */
+async function offerTrialSong(page) {
+  await page.evaluate(() => localStorage.setItem('yuha.guest', 'check-ui-pending-trial-token'));
+  await page.reload({ waitUntil: 'networkidle' });
+  await page.waitForSelector('.trial-claim', { timeout: 10_000 });
 }
 
 async function openCustomer(page) {

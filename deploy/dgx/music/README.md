@@ -76,6 +76,18 @@ Then update `AUDIO_BASE_URL` in `.env` and `docker compose up -d`.
 - Jobs/mp3: `./data/` · Weights: `~/.cache/ace-step/checkpoints`
 - Quality/speed knob: `ACE_INFER_STEPS` in `.env` (default 60; 27 is ACE-Step's fast setting)
 
+## Retention (`RETENTION_DAYS`, default 30)
+
+`data/jobs/*.json` holds what YUHA sent (the brief and the lyrics) and
+`data/audio/` what came back. Both used to be kept forever, which the privacy
+text cannot promise (docs/legal/PRIVACY_CHANGES_2026-11.md). The server now
+deletes finished jobs and their audio older than `RETENTION_DAYS`, at start
+and every hour; queued and running jobs are never touched. YUHA has its own
+copy of a finished song within minutes, so 30 days is generous. `0` keeps
+everything (benchmarks only). Takes effect on the Spark only after the image
+is rebuilt and the container restarted (`01_deploy.sh`); this box is not
+deployed by the Deploy QA workflow.
+
 ## Lyric alignment (`POST /v1/align`)
 
 **First, forced alignment (`server/forced.py`, `ALIGN_METHOD=forced`, the

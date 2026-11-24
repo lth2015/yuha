@@ -129,6 +129,9 @@ importers:
       '@fontsource-variable/noto-sans-sc':
         specifier: 5.3.1
         version: 5.3.1
+      '@fontsource/m-plus-2':
+        specifier: 5.3.1
+        version: 5.3.1
       '@yuha/contracts':
         specifier: workspace:*
         version: link:../../packages/contracts
@@ -1038,6 +1041,9 @@ packages:
 
   '@fontsource-variable/noto-sans-sc@5.3.1':
     resolution: {integrity: sha512-UB96JJ17HyD5ehEU7Em0hDdh7fvTMB4B4Hzmq5c4QaNwwSLqTrdM2S+coySeBqCkXwh0DxqXT0b0wMrmzorFpQ==}
+
+  '@fontsource/m-plus-2@5.3.1':
+    resolution: {integrity: sha512-dLdQ271lEv0MgmjEupKSybg9tXNv1WDQRAWue8aB8Aw2PlZ6NljrfmJmtfZcwB+fwSyCA0ukk+RKtZiYtX8o4w==}
 
   '@ionic/cli-framework-output@2.2.8':
     resolution: {integrity: sha512-TshtaFQsovB4NWRBydbNFawql6yul7d5bMiW1WYYf17hd99V6xdDdk3vtF51bw6sLkxON3bDQpWsnUc9/hVo3g==}
@@ -3644,6 +3650,8 @@ snapshots:
   '@fontsource-variable/noto-sans-jp@5.3.1': {}
 
   '@fontsource-variable/noto-sans-sc@5.3.1': {}
+
+  '@fontsource/m-plus-2@5.3.1': {}
 
   '@ionic/cli-framework-output@2.2.8':
     dependencies:

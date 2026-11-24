@@ -10,6 +10,7 @@ import {
   purgeExpiredGuestTrials,
 } from '@yuha/api';
 import {
+  deleteOldPageViews,
   claimJob,
   claimJobById,
   claimOutboxBatch,
@@ -74,6 +75,8 @@ export function makeLogger(component: string) {
 }
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+/** How long a page view is kept (docs/legal/PRIVACY_CHANGES_2026-11.md, section 6). */
+const VISIT_RETENTION_MONTHS = 13;
 
 /**
  * Outbox dispatcher.
@@ -488,6 +491,14 @@ export async function maintenanceLoop(deps: LoopDeps, intervalMs = 60_000): Prom
         log: { error: (obj, msg) => log('error', msg, obj as Record<string, unknown>) },
       });
       if (purged) log('info', 'purged expired guest trials', { count: purged });
+    });
+
+    // Visit data is kept thirteen months (docs/legal/PRIVACY_CHANGES_2026-11.md).
+    await step('visit-retention', async () => {
+      const cutoff = new Date();
+      cutoff.setUTCMonth(cutoff.getUTCMonth() - VISIT_RETENTION_MONTHS);
+      const removed = await deleteOldPageViews(cutoff);
+      if (removed) log('info', 'deleted page views past the retention window', { count: removed });
     });
 
     await step('reconcile-balances', async () => {

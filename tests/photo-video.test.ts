@@ -169,3 +169,24 @@ describe('the plan of a photo video', () => {
     expect(plan.frames.length).toBeLessThanOrEqual(40);
   });
 });
+
+describe('frames a crashed encode left behind (docs/legal/PRIVACY_CHANGES_2026-11.md)', () => {
+  it('are swept after an hour; a directory still in use, and anything else in /tmp, are left alone', async () => {
+    const { sweepStaleVideoDirs } = await import('../apps/api/src/services/share-video.js');
+    const { mkdirSync, utimesSync, existsSync } = await import('node:fs');
+    const root = mkdtempSync(join(tmpdir(), 'sweep-root-'));
+    const stale = join(root, 'yuha-video-stale');
+    const fresh = join(root, 'yuha-video-fresh');
+    const other = join(root, 'someone-elses');
+    for (const d of [stale, fresh, other]) mkdirSync(d);
+    writeFileSync(join(stale, 'f000.jpg'), 'photo');
+    const twoHoursAgo = new Date(Date.now() - 2 * 3_600_000);
+    utimesSync(stale, twoHoursAgo, twoHoursAgo);
+    utimesSync(other, twoHoursAgo, twoHoursAgo);
+
+    expect(await sweepStaleVideoDirs({ root })).toBe(1);
+    expect(existsSync(stale)).toBe(false);
+    expect(existsSync(fresh)).toBe(true);
+    expect(existsSync(other)).toBe(true);
+  });
+});

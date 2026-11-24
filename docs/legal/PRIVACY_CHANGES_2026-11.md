@@ -87,8 +87,7 @@
 >
 > We do not sell personal data or use advertising or third-party analytics services.
 
-（若 Google Fonts 未按「上线前要改的代码」4 自托管，需在此加一行 Google Fonts：「the site's fonts are
-loaded from Google, which receives your IP address and browser information」。）
+（Google Fonts 已改为自托管，不再需要列出。）
 
 ### 6. Retention — 整段替换
 
@@ -120,20 +119,21 @@ loaded from Google, which receives your IP address and browser information」。
 
 ## 上线前要改的代码（审定前就可以做，开关仍关闭）
 
-条文要说真话，下面几处代码先改，否则条文写了也不成立：
+条文要说真话，下面几处代码先改，否则条文写了也不成立。**2026-11-24 已全部完成**（同一个 PR），状态如下：
 
-1. **照片临时文件的清扫。** API 启动时、以及每小时，删除临时目录里超过 1 小时的 `yuha-video-*`。
-   使「最长 24 小时内删除」在进程崩溃时也成立。
-2. **认领后的试做哈希也在 7 天时清除。** 现在只清未认领的。
-3. **IP 哈希的密钥。** 现在密钥缺失时会退回一个写在代码里的公开字符串，等于没有密钥（IPv4 可以穷举还原）。
-   改为：生产环境没有专用密钥时，免注册试做不启动（返回「暂不可用」），不退回公开字符串。
-4. **Google Fonts 改为自托管。** 字体文件放到自己的 CloudFront 上，每个访问者的 IP 就不再发给 Google，
-   第 4 条也少一个处理方。
-5. **作曲服务器的保存期限和传输加密。** DGX Spark 上的任务记录（含描述、歌词）和音频目前永久保存，
-   7 天删除的承诺到不了那里。需要给它加定期清理（建议 30 天，与音频已经存入 S3 的时间对齐），并给它与 AWS
-   之间的连接加 TLS。这台机器由产品负责人的同事运维，代码可以由我们写好。
-6. **访问数据 13 个月清理。** `analytics_events` 目前永不删除。
-7. **认领流程改为用户主动确认**（下一节）。
+| # | 内容 | 状态 |
+| --- | --- | --- |
+| 1 | 照片临时文件的清扫：API 启动时和每小时删除临时目录里超过 1 小时的 `yuha-video-*`（`sweepStaleVideoDirs`），使「最长 24 小时内删除」在进程崩溃时也成立 | ✅ 完成 |
+| 2 | 认领后的试做哈希也在 7 天时清除（`clearClaimedTrialRefs`） | ✅ 完成 |
+| 3 | IP 哈希的密钥：去掉写在代码里的公开字符串；没有服务器密钥时免注册试做不启动 | ✅ 完成 |
+| 4 | Google Fonts 改为自托管（`@fontsource/m-plus-2`，由本站 CloudFront 提供）。第 4 条不再需要列 Google Fonts | ✅ 完成，浏览器验证只请求本站 |
+| 5 | 作曲服务器（DGX Spark）保存期限：完成的任务记录和音频 30 天后删除（`RETENTION_DAYS`）。**需要同事重建并重启 Spark 上的容器才生效**；传输加密（TLS）属于网络配置，代码之外，仍待运维 | ✅ 代码完成 / ⏳ 待部署 / ⏳ TLS 待运维 |
+| 6 | 访问数据 13 个月清理（只删 `page_view`，worker 每轮执行） | ✅ 完成 |
+| 7 | 认领流程改为用户主动确认，且账户须先确认年龄和条款（服务器同样要求） | ✅ 完成，浏览器验证「加入」「不用了」两条路径 |
+
+另有一处**没有改**，需要决定：「新设备登录」提醒用的来源哈希（`known_sign_in_sources`）在没有 `STORAGE_SIGNING_SECRET` 时同样退回公开字符串。
+直接改密钥会让所有用户下次登录都收到一封「新设备登录」提醒。先请运维确认生产环境是否设置了 `STORAGE_SIGNING_SECRET`：
+设置了就无需改；没设置，则设置它（一次性的提醒邮件可以接受，或者同时清空该表）。
 
 ## 免注册试做的认领流程（对应意见「明确的认领流程」）
 
@@ -161,7 +161,7 @@ loaded from Google, which receives your IP address and browser information」。
 ## 上线顺序
 
 1. 运维确认上面方括号里的事实（区域、备份、日志、作曲服务器位置）。
-2. 「上线前要改的代码」1–7 合并上线（开关仍关闭）。
+2. 「上线前要改的代码」1–7 合并上线（开关仍关闭）。✅ 2026-11-24；第 5 项还需在 Spark 上重新部署。
 3. 律师审定条文（可能有修改）。
 4. 同一个提交里：改 `Legal.tsx` 的 `Privacy()` 和使用条款，`LEGAL_TEXT_REVIEWED` 保持 `true`，
    注释里写明审阅日期和范围（与 2026-10-19 那次的写法一致）。

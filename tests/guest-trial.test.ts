@@ -220,11 +220,19 @@ describe('keeping the song, or losing it after seven days', () => {
     expect((await on.app.inject({ method: 'GET', url: `/v1/tracks/${g.trackId}/license`, headers: user.authHeader })).statusCode).toBe(200);
   }, 60_000);
 
-  it('counts the trial whichever comes first, the claim or the welcome grant', async () => {
+  it('is taken only by an account that has confirmed its own age and terms', async () => {
+    const { execute } = await import('@yuha/db');
     const g = await guestSong();
     const user = await on.createUser();
-    expect((await claim(user, g.token)).statusCode).toBe(200);
+    // As an account is before it answers the consent gate.
+    await execute('UPDATE users SET age_confirmed_at = NULL, terms_accepted_at = NULL WHERE id = ?', [user.id]);
+    const before = await claim(user, g.token);
+    expect(before.statusCode).toBe(403);
+    expect(before.json().error.code).toBe('AGE_NOT_CONFIRMED');
+    expect((await queryOne<{ owner_id: string }>('SELECT owner_id FROM tracks WHERE id = ?', [g.trackId]))!.owner_id).toBe(g.userId);
     await consentOf(user);
+    expect((await claim(user, g.token)).statusCode).toBe(200);
+    // Still two songs free in all.
     expect((await getBalance(user.id)).available).toBe(1);
   }, 60_000);
 
@@ -232,6 +240,8 @@ describe('keeping the song, or losing it after seven days', () => {
     const g = await guestSong();
     const first = await on.createUser();
     const second = await on.createUser();
+    await consentOf(first);
+    await consentOf(second);
     expect((await claim(first, g.token)).statusCode).toBe(200);
     expect((await claim(first, g.token)).json().claimed).toBe(0);
     expect((await claim(second, g.token)).statusCode).toBe(409);
@@ -263,6 +273,43 @@ describe('keeping the song, or losing it after seven days', () => {
     expect(trial!.purged_at).not.toBeNull();
     expect((await on.app.inject({ method: 'GET', url: '/v1/me', headers: bearer(g.token) })).statusCode).toBe(401);
   }, 60_000);
+
+  it('keeps a claimed song, but drops its two hashes after seven days too', async () => {
+    const { purgeExpiredGuestTrials } = await import('@yuha/api');
+    const { execute } = await import('@yuha/db');
+    const g = await guestSong();
+    const user = await on.createUser();
+    await consentOf(user);
+    expect((await claim(user, g.token)).statusCode).toBe(200);
+    const refs = () => queryOne<{ device_ref: string | null; ip_ref: string | null }>('SELECT device_ref, ip_ref FROM guest_trials WHERE user_id = ?', [g.userId]);
+
+    await purgeExpiredGuestTrials(on.ctx);
+    expect((await refs())!.device_ref).not.toBeNull(); // within the seven days: still counting trials
+    await execute('UPDATE guest_trials SET created_at = UTC_TIMESTAMP(3) - INTERVAL 8 DAY WHERE user_id = ?', [g.userId]);
+    expect(await purgeExpiredGuestTrials(on.ctx)).toBe(0); // nothing deleted: the song is the account's
+    expect(await refs()).toMatchObject({ device_ref: null, ip_ref: null });
+    expect((await queryOne<{ owner_id: string; state: string }>('SELECT owner_id, state FROM tracks WHERE id = ?', [g.trackId]))).toMatchObject({ owner_id: user.id });
+    expect((await queryOne<{ state: string }>('SELECT state FROM tracks WHERE id = ?', [g.trackId]))!.state).not.toBe('deleted');
+  }, 60_000);
+});
+
+describe('the key the trial limits are hashed with (docs/legal/PRIVACY_CHANGES_2026-11.md)', () => {
+  it('has no public fallback: with no server secret there is no trial, not a hash anyone can reverse', async () => {
+    const cfg = on.ctx.config as Record<string, unknown>;
+    const saved = { s: cfg.STORAGE_SIGNING_SECRET, g: cfg.GOOGLE_SESSION_SECRET, d: cfg.DEV_AUTH_SECRET };
+    cfg.STORAGE_SIGNING_SECRET = undefined;
+    cfg.GOOGLE_SESSION_SECRET = undefined;
+    cfg.DEV_AUTH_SECRET = undefined;
+    try {
+      const res = await start(on, {});
+      expect(res.json().error?.code).toBe('SERVICE_DISABLED');
+    } finally {
+      cfg.STORAGE_SIGNING_SECRET = saved.s;
+      cfg.GOOGLE_SESSION_SECRET = saved.g;
+      cfg.DEV_AUTH_SECRET = saved.d;
+    }
+    expect(await queryOne('SELECT user_id FROM guest_trials')).toBeUndefined();
+  });
 });
 
 describe('"today" for the daily limits', () => {

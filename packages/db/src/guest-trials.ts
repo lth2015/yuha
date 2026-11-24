@@ -120,6 +120,15 @@ export async function listExpiredGuestTrials(cutoff: Date, limit = 50): Promise<
   );
 }
 
+/** The device and network hashes of claimed trials made before `cutoff`, cleared. */
+export async function clearClaimedTrialRefs(cutoff: Date): Promise<void> {
+  await execute(
+    `UPDATE guest_trials SET device_ref = NULL, ip_ref = NULL
+      WHERE claimed_by IS NOT NULL AND created_at < ? AND (device_ref IS NOT NULL OR ip_ref IS NOT NULL)`,
+    [cutoff],
+  );
+}
+
 export async function markGuestPurged(guestId: string, tx?: PoolConnection): Promise<void> {
   await execute(`UPDATE guest_trials SET device_ref = NULL, ip_ref = NULL, purged_at = UTC_TIMESTAMP(3) WHERE user_id = ?`, [guestId], tx);
 }

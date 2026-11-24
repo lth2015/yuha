@@ -184,3 +184,22 @@ describe('track retention sweep', () => {
     expect(await query(`SELECT id FROM asset_versions WHERE track_id = ?`, [trackId])).toHaveLength(1);
   });
 });
+
+describe('visit data (docs/legal/PRIVACY_CHANGES_2026-11.md, section 6)', () => {
+  it('deletes page views older than the cutoff and nothing else', async () => {
+    const { deleteOldPageViews, execute, trackEvent } = await import('@yuha/db');
+    const ev = (name: string) => trackEvent({ name, userRef: 'visitor-1', props: {}, runMode: 'production', isInternal: false });
+    await ev('page_view');
+    await ev('page_view');
+    await ev('lyrics_drafted');
+    await execute(`UPDATE analytics_events SET occurred_at = UTC_TIMESTAMP(3) - INTERVAL 14 MONTH WHERE name = 'lyrics_drafted'`);
+    await execute(`UPDATE analytics_events SET occurred_at = UTC_TIMESTAMP(3) - INTERVAL 14 MONTH WHERE name = 'page_view' LIMIT 1`);
+
+    const cutoff = new Date();
+    cutoff.setUTCMonth(cutoff.getUTCMonth() - 13);
+    expect(await deleteOldPageViews(cutoff)).toBe(1);
+    const left = await query<{ name: string }>(`SELECT name FROM analytics_events ORDER BY name`);
+    // The recent page view stays, and so does the old event that is not a page view.
+    expect(left.map((r) => r.name)).toEqual(['lyrics_drafted', 'page_view']);
+  });
+});

@@ -28,11 +28,13 @@ export default async function trialRoutes(app: FastifyInstance, opts: { ctx: App
   );
 
   /**
-   * POST /v1/trial/claim — a guest who has just signed up keeps their song.
-   * Called by the web app right after sign-in, with the guest session it kept.
+   * POST /v1/trial/claim — the account signed in now takes the song made on
+   * this browser before it signed in. Only when the person says so
+   * (components/TrialClaimAsk.tsx), and only once the account has confirmed
+   * its own age and terms: the guest's confirmation was the guest's.
    * An account only: a guest cannot claim into another guest.
    */
-  app.post('/v1/trial/claim', { preHandler: app.requireAuth }, async (req) => {
+  app.post('/v1/trial/claim', { preHandler: app.requireAgeConfirmed }, async (req) => {
     const body = z.object({ guestToken: z.string().min(10).max(2000) }).parse(req.body);
     return claimGuestTrial(ctx, { guestToken: body.guestToken, userId: req.user!.id });
   });

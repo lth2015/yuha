@@ -1,5 +1,5 @@
 import { spawn } from 'node:child_process';
-import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdtemp, readdir, readFile, rm, stat, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -107,6 +107,34 @@ export async function renderShareVideo(params: {
     busy = false;
     if (dir) await rm(dir, { recursive: true, force: true });
   }
+}
+
+/**
+ * Removes encode directories left behind by a process that died mid-encode.
+ *
+ * `renderShareVideo` deletes its directory in `finally`, which covers success,
+ * an ffmpeg failure and the timeout, but not a crash or an OOM kill: then the
+ * frames (people's photos, for a photo video) stay in the pod's /tmp until
+ * the pod is replaced. The privacy text promises they are gone within a day,
+ * so the API runs this at start and every hour. An hour is far past the
+ * 50-second encode limit, so a directory still in use is never touched.
+ */
+export async function sweepStaleVideoDirs(opts: { root?: string; olderThanMs?: number; now?: number } = {}): Promise<number> {
+  const root = opts.root ?? tmpdir();
+  const cutoff = (opts.now ?? Date.now()) - (opts.olderThanMs ?? 3_600_000);
+  let removed = 0;
+  for (const name of await readdir(root).catch(() => [] as string[])) {
+    if (!name.startsWith('yuha-video-')) continue;
+    const path = join(root, name);
+    try {
+      if ((await stat(path)).mtimeMs >= cutoff) continue;
+      await rm(path, { recursive: true, force: true });
+      removed += 1;
+    } catch {
+      /* gone already, or another process's: the next sweep tries again */
+    }
+  }
+  return removed;
 }
 
 /** JPEG bytes start FF D8 FF. */

@@ -3,7 +3,7 @@ import type { FastifyInstance, FastifyReply } from 'fastify';
 import { z } from 'zod';
 import { AppError, type Dedication } from '@yuha/contracts';
 import { getMasterAsset, getShareCard, getTrack, upsertShareCard, type TrackRow } from '@yuha/db';
-import { VideoBusyError, isJpeg, renderShareVideo } from '../services/share-video.js';
+import { VideoBusyError, isJpeg, renderShareVideo, sweepStaleVideoDirs } from '../services/share-video.js';
 import type { AppContext } from '../context.js';
 
 /**
@@ -67,6 +67,12 @@ function pngSize(buf: Buffer): { width: number; height: number } | null {
 
 export default async function shareRoutes(app: FastifyInstance, opts: { ctx: AppContext }) {
   const { ctx } = opts;
+  // Frames a crashed encode left in /tmp: swept at start and hourly (sweepStaleVideoDirs).
+  const sweep = () => void sweepStaleVideoDirs().catch((err) => app.log.error({ err }, 'video temp sweep failed'));
+  sweep();
+  const sweeper = setInterval(sweep, 3_600_000);
+  sweeper.unref();
+  app.addHook('onClose', async () => clearInterval(sweeper));
   const webOrigin = new URL(ctx.config.PUBLIC_WEB_URL).origin;
   const apiBase = new URL(ctx.config.PUBLIC_API_URL);
 
