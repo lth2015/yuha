@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { TrialClaimAsk } from './TrialClaimAsk';
+import { guestSongId } from '../lib/guest';
 import { Link, NavLink, useLocation, useNavigate } from 'react-router-dom';
 import type { TrackView } from '@yuha/contracts';
 import { apiFetch } from '../lib/api';
@@ -304,6 +305,20 @@ export function Layout({ children }: { children: ReactNode }) {
     }
   }, [nowPlaying]);
 
+  /*
+   * A guest has no library: "My songs" sent it to the sign-in page. It has one
+   * song, so the second place is that song, once made (lib/guest.ts).
+   */
+  const trialSong = me?.role === 'guest' ? guestSongId() : null;
+  const navItems = [
+    { to: '/', key: 'nav.create', end: true },
+    ...(me?.role === 'guest'
+      ? trialSong
+        ? [{ to: `/song/${trialSong}`, key: 'nav.trialSong', end: true }]
+        : []
+      : [{ to: '/library', key: 'nav.library', end: false }]),
+  ];
+
   return (
     <>
       <LightField />
@@ -334,10 +349,7 @@ export function Layout({ children }: { children: ReactNode }) {
           </Link>
 
           <nav className="topnav__nav" aria-label={t('nav.mainAria')}>
-            {[
-              { to: '/', key: 'nav.create', end: true },
-              { to: '/library', key: 'nav.library', end: false },
-            ].map((item) => (
+            {navItems.map((item) => (
               <NavLink
                 key={item.to}
                 to={item.to}
@@ -484,10 +496,7 @@ export function Layout({ children }: { children: ReactNode }) {
           announced as "skip to content". Only one of this and .topnav__nav is
           ever displayed (styles.css), so they share the main-navigation name. */}
       <nav className="tabbar" aria-label={t('nav.mainAria')}>
-        {[
-          { to: '/', key: 'nav.create', end: true },
-          { to: '/library', key: 'nav.library', end: false },
-        ].map((item) => (
+        {navItems.map((item) => (
           <NavLink
             key={item.to}
             to={item.to}

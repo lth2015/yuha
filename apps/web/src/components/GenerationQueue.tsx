@@ -16,15 +16,29 @@ import { ErrorNotice } from './common';
  * minute and a half it is seconds; above, whole minutes — the lower bound
  * rounded, the upper rounded up, so 118–155 s reads 2–3, not 1–3.
  */
-export function etaText(job: JobView, t: (key: string, vars?: Record<string, string | number>) => string): string {
+export function etaText(
+  job: JobView,
+  t: (key: string, vars?: Record<string, string | number>) => string,
+  opts: { guest?: boolean } = {},
+): string {
   const e = job.estimate;
-  if (e.delayed) return t('create.job.delayed');
-  if (e.basis === 'default') return t('eta.usual');
-  if (e.maxSeconds <= 0) return t('eta.almost');
-  if (e.maxSeconds < 90) return t('eta.seconds', { min: Math.max(e.minSeconds, 1), max: e.maxSeconds });
   const min = Math.max(1, Math.round(e.minSeconds / 60));
   const max = Math.max(min, Math.ceil(e.maxSeconds / 60));
-  return min === max ? t('eta.minute', { n: max }) : t('eta.minutes', { min, max });
+  const when = e.delayed
+    ? t('create.job.delayed')
+    : e.basis === 'default'
+      ? t('eta.usual')
+      : e.maxSeconds <= 0
+        ? t('eta.almost')
+        : e.maxSeconds < 90
+          ? t('eta.seconds', { min: Math.max(e.minSeconds, 1), max: e.maxSeconds })
+          : min === max
+            ? t('eta.minute', { n: max })
+            : t('eta.minutes', { min, max });
+  // Where the song will be if they leave: an account has a library; a trial
+  // has only its own song, which the home page brings back (lib/guest.ts).
+  const leave = t(opts.guest ? 'eta.leaveGuest' : 'eta.leave');
+  return `${when}${/[.!?]$/.test(when) ? ' ' : ''}${leave}`;
 }
 
 export function QueueStatus({ job, onUpdate, onCancelled }: {

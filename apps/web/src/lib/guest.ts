@@ -13,6 +13,8 @@ import { ApiError, apiFetch, setToken } from './api';
  */
 const DEVICE_KEY = 'yuha.trial-device';
 const GUEST_KEY = 'yuha.guest';
+/** The trial's song, once made, so a guest who leaves can find it again (part of the trial session). */
+const SONG_KEY = 'yuha.guest-song';
 
 function deviceId(): string {
   try {
@@ -65,8 +67,28 @@ function pendingGuest(): string | null {
 function forgetGuest(): void {
   try {
     localStorage.removeItem(GUEST_KEY);
+    localStorage.removeItem(SONG_KEY);
   } catch {
     /* ignore */
+  }
+}
+
+/** Remembers the trial's song when it is ready. */
+export function rememberGuestSong(trackId: string): void {
+  try {
+    localStorage.setItem(SONG_KEY, trackId);
+  } catch {
+    /* without storage the song page is still where they are now */
+  }
+}
+
+/** The trial's song on this browser, if one was made and is still the guest's. */
+export function guestSongId(): string | null {
+  try {
+    const id = localStorage.getItem(SONG_KEY);
+    return id && /^[0-9a-f-]{36}$/i.test(id) ? id : null;
+  } catch {
+    return null;
   }
 }
 

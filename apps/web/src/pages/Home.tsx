@@ -6,7 +6,7 @@ import { ApiError, apiFetch, newIdempotencyKey } from '../lib/api';
 import { messageFor } from '../lib/messages';
 import { useI18n } from '../lib/i18n';
 import { useSession } from '../lib/session';
-import { startGuestTrial } from '../lib/guest';
+import { guestSongId, rememberGuestSong, startGuestTrial } from '../lib/guest';
 import { TrialAsk } from '../components/TrialAsk';
 import { Score } from '../components/Score';
 import { NewYearCountdown } from '../components/HolidayMoments';
@@ -205,6 +205,28 @@ export default function Home() {
   const trialOpen = !me && runtime?.features.guestTrialEnabled === true;
   const isGuest = me?.role === 'guest';
 
+  /*
+   * A guest who left while the song was being made comes back here with no
+   * library to look in. Its one job is picked up again (the wait page goes
+   * on), and a song already made is offered at the top.
+   */
+  const [trialSong, setTrialSong] = useState<string | null>(null);
+  useEffect(() => {
+    if (!isGuest || job) return;
+    setTrialSong(guestSongId());
+    let gone = false;
+    void apiFetch<{ items: JobView[] }>('/v1/jobs')
+      .then((res) => {
+        const open = res.items.find((j) => !['done', 'failed'].includes(j.phase));
+        if (!gone && open) setJob(open);
+      })
+      .catch(() => undefined);
+    return () => {
+      gone = true;
+    };
+    // Once per arrival as a guest; a job started here sets `job` itself.
+  }, [isGuest]);
+
   const startTrial = async () => {
     setSubmitting(true);
     setError(null);
@@ -310,6 +332,8 @@ export default function Home() {
   useEffect(() => {
     if (!job || ['done', 'failed'].includes(job.phase)) {
       if (job?.phase === 'done' && job.trackId) {
+        // A guest has no library: this is how it finds its song again.
+        if (me?.role === 'guest') rememberGuestSong(job.trackId);
         navigate(`/song/${job.trackId}`, { replace: true });
       } else if (job?.phase === 'failed') {
         // A failed generation is refunded server-side. Without this the
@@ -360,7 +384,7 @@ export default function Home() {
       <div className="wait-page" aria-live="polite">
         <p className="eyebrow">{failed ? t('wait.failedEyebrow') : t('wait.eyebrow')}</p>
         <h1 className="wait-page__title">{failed ? t('wait.failedTitle') : t(phaseKey(job.phase))}</h1>
-        <p className="muted wait-page__sub">{failed ? t(`job.failure.${job.failure ?? 'technical'}`) : etaText(job, t)}</p>
+        <p className="muted wait-page__sub">{failed ? t(`job.failure.${job.failure ?? 'technical'}`) : etaText(job, t, { guest: isGuest })}</p>
         {!failed && job.phase !== 'queued' && <p className="small muted">{t('create.job.noCancel')}</p>}
         {failed && <JobOutcome job={job} />}
 
@@ -422,6 +446,15 @@ export default function Home() {
             {t('hero.slogan2')}
           </h1>
           <p className="hero__intro">{t('hero.intro')}</p>
+
+          {isGuest && trialSong && (
+            <div className="trial-song panel">
+              <span>{t('trial.song.ready')}</span>
+              <Link to={`/song/${trialSong}`} className="btn btn--primary btn--sm">
+                {t('trial.song.open')}
+              </Link>
+            </div>
+          )}
 
           <div className="composer panel">
             <label htmlFor="home-prompt">{t('composer.label')}</label>
