@@ -435,7 +435,7 @@ const en: Dict = {
   // Trying without an account (docs/GROWTH_SPEC.md, part three).
   'trial.cta': "Try one song without signing up (1 min)",
   'trial.title': "Try one first — no sign-up",
-  'trial.body': "Make one one-minute song to listen to and share. Sign up and it's kept in your account; otherwise it's deleted after 7 days.",
+  'trial.body': "Make one one-minute song to listen to and share. After you sign up you can add it to your account; otherwise it's deleted after 7 days.",
   'trial.signin': "Have an account? Sign in",
   'trial.hint': "You can try one song without signing up",
   'trial.header': "Sign up to keep",

@@ -435,7 +435,7 @@ const ja: Dict = {
   // Trying without an account (docs/GROWTH_SPEC.md, part three).
   'trial.cta': "登録なしで 1 曲つくる（1 分）",
   'trial.title': "登録なしで、まず 1 曲",
-  'trial.body': "1 分の歌を 1 曲つくれます。聴くこともシェアもできます。登録するとこの曲はアカウントに保存され、登録しない場合は 7 日後に削除されます。",
+  'trial.body': "1 分の歌を 1 曲つくれます。聴くこともシェアもできます。登録後、この曲をアカウントに追加できます。追加しない場合は 7 日後に削除されます。",
   'trial.signin': "アカウントをお持ちの方はログイン",
   'trial.hint': "登録なしで 1 曲つくれます",
   'trial.header': "登録して保存",

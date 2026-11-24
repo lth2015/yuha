@@ -453,7 +453,7 @@ const zh: Dict = {
   // Trying without an account (docs/GROWTH_SPEC.md, part three).
   'trial.cta': "免注册试做一首（1 分钟）",
   'trial.title': "先试一首，不用注册",
-  'trial.body': "做一首 1 分钟的歌，可以听、可以分享。注册后这首歌会保存到你的账户；不注册的话，7 天后删除。",
+  'trial.body': "做一首 1 分钟的歌，可以听、可以分享。注册后可以把它加到你的账户；不加的话，7 天后删除。",
   'trial.signin': "已有账户？登录",
   'trial.hint': "可以免注册试做 1 首",
   'trial.header': "注册保存",
