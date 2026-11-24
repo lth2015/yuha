@@ -334,6 +334,17 @@ export default function Home() {
       if (job?.phase === 'done' && job.trackId) {
         // A guest has no library: this is how it finds its song again.
         if (me?.role === 'guest') rememberGuestSong(job.trackId);
+        // The words became a song; coming back to an old description read as
+        // if it had not been made. A failure keeps them, to try again.
+        // Written to storage here as well as to state: the page goes to the
+        // song on the next line and unmounts before the effect that saves
+        // `prompt` would run, so state alone left the old words stored.
+        setPrompt('');
+        try {
+          localStorage.setItem(DRAFT_KEY, '');
+        } catch {
+          /* private browsing */
+        }
         navigate(`/song/${job.trackId}`, { replace: true });
       } else if (job?.phase === 'failed') {
         // A failed generation is refunded server-side. Without this the
@@ -473,8 +484,22 @@ export default function Home() {
                   mode: instrumental ? t('composer.instrumental') : t('composer.vocals'),
                 })}
               </span>
-              <span id="home-prompt-count" className="num">
-                {prompt.length} / 400
+              <span className="composer__meta-end">
+                <span id="home-prompt-count" className="num">
+                  {prompt.length} / 400
+                </span>
+                {written && (
+                  <button
+                    type="button"
+                    className="composer__clear"
+                    onClick={() => {
+                      setPrompt('');
+                      promptRef.current?.focus();
+                    }}
+                  >
+                    {t('create.clear')}
+                  </button>
+                )}
               </span>
             </div>
 

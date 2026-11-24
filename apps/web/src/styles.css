@@ -3034,3 +3034,8 @@ textarea.is-full { border-color: var(--danger); }
 .photo-video__preview-note { margin: 0; padding: var(--s2) var(--s3); border-radius: var(--r-control); background: var(--surface-soft); color: var(--ink); font-size: var(--t-caption); }
 /* A guest's trial song, offered again on the home page (Home.tsx). */
 .trial-song { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--s2) var(--s3); margin-bottom: var(--s4); padding: var(--s4) var(--s6); }
+/* Clear what was written (Home, Create): a quiet control beside the count. */
+.composer__meta-end { display: inline-flex; align-items: center; gap: var(--s3); }
+.composer__clear { border: 0; background: none; padding: 0 var(--s1); min-height: var(--tap); color: var(--link); font: inherit; font-size: var(--t-caption); cursor: pointer; }
+.composer__clear:hover { text-decoration: underline; }
+.composer__cleared { margin: 0; font-size: var(--t-caption); color: var(--muted); }

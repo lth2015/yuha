@@ -101,6 +101,18 @@ interface Draft {
   giftNote: string;
 }
 
+/** What "clear" empties: what was written, not how this person likes to make songs. */
+const CLEARED_CONTENT: Pick<Draft, 'title' | 'prompt' | 'lyrics' | 'gift' | 'giftTo' | 'giftOccasion' | 'giftNote' | 'lyricsBy'> = {
+  title: '',
+  prompt: '',
+  lyrics: '',
+  lyricsBy: 'ai',
+  gift: false,
+  giftTo: '',
+  giftOccasion: null,
+  giftNote: '',
+};
+
 const DEFAULT_DRAFT: Draft = {
   title: '',
   prompt: '',
@@ -354,6 +366,17 @@ export default function Create() {
   const [instructions, setInstructions] = useState('');
   const [styleInput, setStyleInput] = useState('');
   const lyricsRef = useRef<HTMLTextAreaElement>(null);
+  /** The job this draft was sent as, so finishing it clears the draft and nothing else does. */
+  const submittedFromDraft = useRef<string | null>(null);
+  /** What "clear" took away, for one undo. */
+  const [cleared, setCleared] = useState<Partial<Draft> | null>(null);
+  const clearContent = () => {
+    setCleared({
+      title: draft.title, prompt: draft.prompt, lyrics: draft.lyrics, lyricsBy: draft.lyricsBy,
+      gift: draft.gift, giftTo: draft.giftTo, giftOccasion: draft.giftOccasion, giftNote: draft.giftNote,
+    });
+    setDraft((d) => ({ ...d, ...CLEARED_CONTENT }));
+  };
   // The line the cursor is on in the lyrics box, for "other ways to say it" (docs/LYRIC_LINE_SPEC.md).
   const [caretLine, setCaretLine] = useState<number | null>(null);
   const noteCaret = (el: HTMLTextAreaElement) => setCaretLine(el.value.slice(0, el.selectionStart).split('\n').length - 1);
@@ -550,6 +573,14 @@ export default function Create() {
         apiFetch<TrackView>(`/v1/tracks/${job.trackId}`)
           .then(setResult)
           .catch(() => undefined);
+        // The words went into a song: the next one starts from a clean page.
+        // Only a job sent from this draft — one resumed from elsewhere is not
+        // what is in the boxes. Settings (length, styles, voice, visibility)
+        // stay; they are how this person makes songs.
+        if (submittedFromDraft.current === job.jobId) {
+          submittedFromDraft.current = null;
+          setDraft((d) => ({ ...d, ...CLEARED_CONTENT }));
+        }
       } else if (job?.phase === 'failed') {
         // A failed generation is refunded server-side. Without this the studio
         // still shows the pre-failure balance, and a creator who was down to
@@ -744,6 +775,7 @@ export default function Create() {
         body,
       });
       setJob(res);
+      if (!editTrackId) submittedFromDraft.current = res.jobId;
       void refreshEntitlements();
     } catch (err) {
       setError(err);
@@ -1290,17 +1322,43 @@ export default function Create() {
         <textarea
           id="prompt"
           value={draft.prompt}
-          onChange={(e) => patch({ prompt: clampToCodePoints(e.target.value, PROMPT_MAX_CODEPOINTS) })}
+          onChange={(e) => {
+            if (cleared) setCleared(null);
+            patch({ prompt: clampToCodePoints(e.target.value, PROMPT_MAX_CODEPOINTS) });
+          }}
           placeholder={t('create.prompt.placeholderSimple')}
           className={promptAtLimit ? 'is-full' : undefined}
           aria-describedby="prompt-format prompt-count"
         />
         <div className={`composer__meta${promptAtLimit ? ' is-full' : ''}`}>
           <span id="prompt-format">{promptAtLimit ? t('create.atLimit') : format}</span>
-          <span id="prompt-count" className="num" aria-live="polite">
-            {promptLength} / {PROMPT_MAX_CODEPOINTS}
+          <span className="composer__meta-end">
+            <span id="prompt-count" className="num" aria-live="polite">
+              {promptLength} / {PROMPT_MAX_CODEPOINTS}
+            </span>
+            {/* Empties what was written (description, title, lyrics, gift); settings stay. One undo. */}
+            {(draft.prompt || draft.title || draft.lyrics || draft.gift) && (
+              <button type="button" className="composer__clear" onClick={clearContent}>
+                {t('create.clear')}
+              </button>
+            )}
           </span>
         </div>
+        {cleared && (
+          <p className="composer__cleared" role="status">
+            {t('create.cleared')}{' '}
+            <button
+              type="button"
+              className="composer__clear"
+              onClick={() => {
+                setDraft((d) => ({ ...d, ...cleared }));
+                setCleared(null);
+              }}
+            >
+              {t('create.undo')}
+            </button>
+          </p>
+        )}
 
         <div className="studio__dial studio__dial--styles">
           <span className="studio__dial-label" id="styles-label">
