@@ -430,18 +430,28 @@ async function fixtures(browser, states) {
     }
   }
   if (!tracks.length) throw new Error('fixtures: the demo generation produced no track in 60 s — is the worker running?');
-  const track = tracks[0].id;
+  /*
+   * `trackId`: the list's field. This read `.id`, which the list does not
+   * have, so every page built on it — the song page signed in and out, export,
+   * licence — measured /song/undefined, a "not found" page with nothing on it
+   * to fail, and passed. Found when a state needing a real song's button could
+   * not find it. A fixture that cannot name a real song now stops the run.
+   */
+  const track = tracks[0].trackId;
+  if (!/^[0-9a-f-]{36}$/.test(String(track))) throw new Error(`fixtures: no song id in the track list (got ${track})`);
   // Public, so the signed-out view of the song page is a real page too.
   await call('POST', `/v1/tracks/${track}/visibility`, { visibility: 'public' }).catch(() => undefined);
 
   let orders = (await call('GET', '/v1/orders')).items ?? [];
-  let order = orders.find((o) => o.status === 'paid')?.id;
+  // `orderId`, the view's field: `.id` missed every time, so each run paid for a new order.
+  let order = orders.find((o) => o.status === 'paid')?.orderId;
   if (!order) {
     const co = await call('POST', '/v1/checkout', { priceKey: 'drop_5', idempotencyKey: key() });
     const sessionId = new URL(co.checkoutUrl, BASE).searchParams.get('session_id');
     await call('POST', '/v1/dev/simulate-payment', { sessionId, outcome: 'paid' });
     order = co.orderId;
   }
+  if (!/^[0-9a-f-]{36}$/.test(String(order))) throw new Error(`fixtures: no order id (got ${order})`);
   // A job that ended without a song, so the home page, the library and the
   // composer show the recovery list, and the failure page has one to show.
   // Cancelled before the worker takes it; if the worker wins, try again.
