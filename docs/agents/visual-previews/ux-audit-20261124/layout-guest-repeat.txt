@@ -1,0 +1,10 @@
+✓ song-guest-owner @ phone-360 [en]
+✓ song-guest-owner @ phone-360 [zh]
+✓ song-guest-owner @ phone-360 [ja]
+✓ song-guest-owner @ phone-393 [en]
+✓ song-guest-owner @ phone-393 [ja]
+✓ song-guest-owner @ phone-393 [zh]
+✓ song-guest-owner @ desktop-1280 [zh]
+✓ song-guest-owner @ tablet-768 [zh]
+
+8 page views checked; 0 problems, 0 warnings (UI_WARN=1 to list them).

@@ -1,0 +1,139 @@
+{
+  "sourceCommit": "31b1aee48cf437f639e78e0a419f7d8696ed847c",
+  "environment": "local demo; synthetic users, songs, orders and photo fixtures only",
+  "captures": [
+    {
+      "file": "04-claim-success-not-found-390.png",
+      "width": 390,
+      "height": 844,
+      "bytes": 192986,
+      "sha256": "793cb26c6b39af47fdd4f7a7169241e0f8a34b7384d9e76d869fa1d1c71a9671"
+    },
+    {
+      "file": "07-lyric-quota-message-390.png",
+      "width": 390,
+      "height": 3001,
+      "bytes": 323387,
+      "sha256": "978eaeee7fedc4feb7f0af5754e9db2f3a059be962d3e8ac4071e67d5aa5d493"
+    },
+    {
+      "file": "08-studio-delivered-390.png",
+      "width": 390,
+      "height": 1109,
+      "bytes": 230868,
+      "sha256": "f4889ee3b64c783db68ac24d6a9e8f733ab35025aba3c0e6c8fab72fdd294093"
+    },
+    {
+      "file": "12-photo-preview-viewport-390.png",
+      "width": 390,
+      "height": 844,
+      "bytes": 307610,
+      "sha256": "de8b6ec4c34789ed19d7efc2d2b5c68d46a222360be63820f764f0242f871ec7"
+    },
+    {
+      "file": "13-recreate-no-lyric-tools-390.png",
+      "width": 390,
+      "height": 1109,
+      "bytes": 230819,
+      "sha256": "a023cacdd8ac2e3ba7c9411178fb3fc8251696e0b04041c8fad041e61a577c2a"
+    },
+    {
+      "file": "14-home-draft-after-delivery-390.png",
+      "width": 390,
+      "height": 2706,
+      "bytes": 368879,
+      "sha256": "6fd20f79a63c30456921e121cad249f015539b15e9c1166e34797dc98991876f"
+    },
+    {
+      "file": "15-decline-not-found-360.png",
+      "width": 360,
+      "height": 780,
+      "bytes": 163448,
+      "sha256": "b220c1a28a143e6692dfa9c077168c22553e732313e920336a8965b73d28906c"
+    },
+    {
+      "file": "17-checkout-confirm-390.png",
+      "width": 390,
+      "height": 1711,
+      "bytes": 287269,
+      "sha256": "7b6aaf7f6fddf8e00baf9342939ea1ed427389910445a30ab6f0d8b7f8a1dd29"
+    },
+    {
+      "file": "18-checkout-complete-390.png",
+      "width": 390,
+      "height": 844,
+      "bytes": 185661,
+      "sha256": "844cffa85afaf03643bffe0b13cb6348c34ba71b9ac05b45400db1f710094bbc"
+    },
+    {
+      "file": "20-billing-ja-360.png",
+      "width": 360,
+      "height": 2389,
+      "bytes": 238618,
+      "sha256": "97c768fc7d5256163ed35804ef45e33ccb67fea6d30977947d3ba28e1f9d1f23"
+    },
+    {
+      "file": "22-home-vocal-reset-360.png",
+      "width": 360,
+      "height": 2753,
+      "bytes": 338321,
+      "sha256": "47ffee0053d57e62b143dff42c760a59c23ab227f6b05c60bbc71619593b5121"
+    },
+    {
+      "file": "23-completed-studio-draft-360.png",
+      "width": 360,
+      "height": 3669,
+      "bytes": 353080,
+      "sha256": "0ec3964acb1a6bf6e65de70d0f96779f371d0d34223f35f9edfa7f9aa5b1bfdf"
+    },
+    {
+      "file": "24-library-after-delete-360.png",
+      "width": 360,
+      "height": 780,
+      "bytes": 167170,
+      "sha256": "0a26e28c2e9d2d7fb93691fe9f0b1cc8a918702c8ff6367af9bc6d2cd66046b9"
+    },
+    {
+      "file": "layout-full-home-xmas-tablet-768.png",
+      "width": 768,
+      "height": 2535,
+      "bytes": 600273,
+      "sha256": "b43c2b8b495af2eccf4b331bd2139fb129766445287823dba1e51065d7e829b2"
+    },
+    {
+      "file": "layout-full-song-guest-tablet-768.png",
+      "width": 768,
+      "height": 1502,
+      "bytes": 375055,
+      "sha256": "58d2a90876c25bfc82743eeb013faafd3ba19e7ba63fa3dc475ef33bd52adc94"
+    },
+    {
+      "file": "scene-en-1280.png",
+      "width": 1280,
+      "height": 1112,
+      "bytes": 560571,
+      "sha256": "383aeabf210040acb10a03c98046299979d423f9a0dac5b62f0149b4b4c57dde"
+    },
+    {
+      "file": "scene-ja-360.png",
+      "width": 360,
+      "height": 1585,
+      "bytes": 247909,
+      "sha256": "f59c0e4dd63fdd1d380e56d2d20b98fbd9157909f707e93d224015ce532a24de"
+    },
+    {
+      "file": "scene-zh-390.png",
+      "width": 390,
+      "height": 1471,
+      "bytes": 261413,
+      "sha256": "1e42ad6d7fb293671941c0145b60d4249e07e0284575e2d89298f82a8d4ae72b"
+    },
+    {
+      "file": "share-card-demo.png",
+      "width": 1200,
+      "height": 630,
+      "bytes": 484131,
+      "sha256": "79f19c26a9222c9cdda4ce2ca845c1deb010b46c173d04084f7d9de1617f3218"
+    }
+  ]
+}

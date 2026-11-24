@@ -1,0 +1,523 @@
+{
+  "sourceCommit": "31b1aee48cf437f639e78e0a419f7d8696ed847c",
+  "scope": "Observed demo interactions; not a unit-test runner or production acceptance. Intentional network/consent fixtures are labelled.",
+  "observations": [
+    {
+      "name": "claim-yes",
+      "data": {
+        "after": "跳到内容\n＋\n充值\nU\n\n已加到你的账户。 去我的歌\n\n没有找到\n可能已被删除。请从作品列表重新选择。\n回到我的作品\n内容申诉\n法律信息\n© 2026 YUHA · 让心动，有回声。 · 代码由 NETX 技术社区维护\n创作\n我的作品\nKitchen Light\n创作者 · 有人声\nSeek",
+        "songs": "跳到内容\n＋\n充值\nU\n我的作品\n新的创作\n全部\n已完成\n生成中\n已暂停\n温度\n82°YU\nKitchen Light\n你\n·\n1:00\n·\n有人声\n温暖\nmid-tempo\ninstrumental\n内容申诉\n法律信息\n© 2026 YUHA · 让心动，有回声。 · 代码由 NETX 技术社区维护\n创作\n我的作品"
+      },
+      "at": "2026-11-24T14:17:42.521Z"
+    },
+    {
+      "name": "three-versions",
+      "data": {
+        "count": 3,
+        "text": "先写三版歌词看看\n今天还能写 7 次草稿\n直白\n[verse]\n写给朋友小林的生日歌\n海边旅行和一起走过的街道\n温暖轻快\n写给朋友小林的生日歌\n\n[chorus]\n海边旅行和一起走过的街道\n海边旅行和一起走过的街道\n海边旅行和一起走过的街道\n写给朋友小林的生日歌\n用这一版\n画面\n[verse]\n海边旅行和一起走过的街道\n温暖轻快\n写给朋友小林的生日歌\n海边旅行和一起走过的街道\n\n[chorus]\n温暖轻快\n温暖轻快\n温暖轻快\n海边旅行和一起走过的街道\n用这一版\n故事\n[verse]\n温暖轻快\n写给朋友小林的生日歌\n海边旅行和一起走过的街道\n温暖轻快\n\n[chorus]\n写给朋友小林的生日歌\n写给朋友小林的生日歌\n写给朋友小林的生日歌\n温暖轻快\n用这一版"
+      },
+      "at": "2026-11-24T14:21:52.930Z"
+    },
+    {
+      "name": "studio-cowrite-line-draft",
+      "data": {
+        "alternatives": 3,
+        "prompt": "写给朋友小林的生日歌，海边旅行和一起走过的街道，温暖轻快",
+        "lyrics": "[verse]\n林的生日歌写给朋友小\n海边旅行和一起走过的街道\n温暖轻快\n写给朋友小林的生日歌\n\n[chorus]\n海边旅行和一起走过的街道\n海边旅行和一起走过的街道\n海边旅行和一起走过的街道\n写给朋友小林的生日歌\n\n[副歌]\n",
+        "gift": "小林",
+        "visibility": true
+      },
+      "at": "2026-11-24T14:22:12.281Z"
+    },
+    {
+      "name": "studio-delivered",
+      "data": {
+        "url": "http://localhost:5173/create",
+        "body": "跳到内容\n＋\n充值\nU\n\n录制完成\n\n海风里的生日\n\n你的歌已经完成了，可以试听和下载。\n\n打开《海风里的生日》\n分享这首歌\n去我的作品\n校验中\n排队中\n生成中\n处理中\n检查中\n完成\n\n59040438 · 60s · 含人声 · 演示音频（合成）\n\n内容申诉\n法律信息\n© 2026 YUHA · 让心动，有回声。 · 代码由 NETX 技术社区维护\n创作\n我的作品",
+        "stored": {
+          "title": "海风里的生日",
+          "prompt": "写给朋友小林的生日歌，海边旅行和一起走过的街道，温暖轻快",
+          "lyrics": "[verse]\n林的生日歌写给朋友小\n海边旅行和一起走过的街道\n温暖轻快\n写给朋友小林的生日歌\n\n[chorus]\n海边旅行和一起走过的街道\n海边旅行和一起走过"
+        }
+      },
+      "at": "2026-11-24T14:23:04.949Z"
+    },
+    {
+      "name": "photo-video-export",
+      "data": {
+        "file": "海风里的生日·审计.mp4",
+        "video": {
+          "duration": 30,
+          "width": 720,
+          "height": 1280
+        },
+        "body": "照片 MV\n收起\n\n选 3–10 张照片，配上这首歌的 30 秒，歌词会随着歌声出现。\n\n照片只在你的设备上缩小并合成画面；服务器只临时处理合成后的画面，不作持久保存：正常完成后立即删除，异常情况下最长 24 小时内删除。照片不会交给任何 AI 模型。\n\n我确认有权使用所选照片，以及照片中人物的影像；涉及儿童时，已取得依法需要的法定代理人许可。\n×\n×\n×\n\n已选 3 张（3–10 张）\n\n选择照片\n生成视频\n下载视频"
+      },
+      "at": "2026-11-24T14:25:42.619Z"
+    },
+    {
+      "name": "problem-report-photo-preview",
+      "data": {
+        "bounds": {
+          "height": 533.328125,
+          "width": 300,
+          "viewport": 844
+        },
+        "report": "这首歌哪里不对？\n\n已收到，编号 IR-VSTZGW27。处理结果会显示在这里。\n\n这首歌的报告\nIR-VSTZGW27 · 其他 · 0:00 · 处理中\n关闭"
+      },
+      "at": "2026-11-24T14:26:25.216Z"
+    },
+    {
+      "name": "recreate",
+      "data": {
+        "body": "跳到内容\n＋\n充值\nU\n改写这首歌\n1 次额度\n正在改写《海风里的生日·审计》\n\n写清楚要改什么，工作室会重做一版。消耗 1 次额度；原曲保留在你的作品里。\n\n要改哪里？\n沿用原曲：1:00 · 含人声 · 凭链接可打开\n0 / 500\n1 次额度\n生成后还剩 0 次\n放弃改写\n生成歌曲 · 1 次额度\n\n先写下要改哪里，再点生成。\n\n生成失败不扣额度。除非你自己选择，否则不会公开。\n\n内容申诉\n法律信息\n© 2026 YUHA · 让心动，有回声。 · 代码由 NETX 技术社区维护\n创作\n我的作品\n海风里的生日\n创作者 · 有人声\nSeek",
+        "lyricsTools": 0
+      },
+      "at": "2026-11-24T14:26:25.545Z"
+    },
+    {
+      "name": "home-generated-draft",
+      "data": {
+        "trackId": "e80cb78b-eab8-4119-8418-dda2b89933ff",
+        "prompt": "雨后城市的傍晚，一起慢慢走回家，纯音乐",
+        "body": "跳到内容\n＋\n充值\nU\n让心动，\n有回声。\n\n写下一段心情，做成属于这一刻的音乐。\n\n今天，想听见什么？\n完整歌曲 · 2:00 · 含人声 · 仅自己可见\n19 / 400\n城市散步\n日落公路\n房间里的雨\n深夜自习\n含人声\n纯音乐\n自己写歌词、调风格 →\n额度已用完\n当前可用 0 次\n获取额度\n↗\n\n你写的内容已经保存，买完额度回来就能直接生成。\n\n送给一个人\n有个人，值得一首歌\n\n生日、谢谢、想念……写下 TA 的名字和想说的话，歌和歌词就为 TA 而写。做好后一键送出，TA 打开链接就能听。\n\n为 TA 写一首\n写给 小林\n生日快乐\n空气作曲\n不必懂音乐，让感觉先有声音\n\n手指在屏幕上随意划动，每一下都有好听的回应。玩出喜欢的感觉，再把它写成一首完整的歌。\n\n去试试\n听听别人做出了什么\n\n这些歌都是在 YUHA 上做的，作者选择了公开。\n\n温度\n40°YU\nStill Water\nCreator\n·\n0:30\n·\n纯音乐\n放松\n温度\n32°YU\nCold Wire\nKite\n·\n1:00\n·\n纯音乐\n鼓打贝斯\n紧张\n战斗\n温度\n34°YU\nPaper Moon\nAoi\n·\n2:00\n·\n纯音乐\n氛围\n梦幻\n温度\n56°YU\nGolden Hour\nMei\n·\n2:00\n·\n有人声\nVlog\n原声\n温暖\n温度\n36°YU\nNight Signal\nKite\n·\n2:00\n·\n纯音乐\n合成器浪潮\n街机\n史诗\n温度\n40°YU\nChrome Heart\nRin\n·\n2:00\n·\n有人声\n陷阱说唱\n时尚\n自信\n温度\n45°YU\nNeon Rain\nAoi\n·\n2:00\n·\n纯音乐\n低保真\n放松\n夜晚\n内容申诉\n法律信息\n© 2026 YUHA · 让心动，有回声。 · 代码由 NETX 技术社区维护\n创作\n我的作品"
+      },
+      "at": "2026-11-24T14:27:01.314Z"
+    },
+    {
+      "name": "checkout-billing",
+      "data": {
+        "before": 0,
+        "blocked": true,
+        "after": 5,
+        "complete": "跳到内容\n＋\n充值\nU\n支付完成\n额度已到账\n\n已确认 JP¥980（含税）的支付。\n生成额度已经进入你的账户。\n\n回去接着做\n内容申诉\n法律信息\n© 2026 YUHA · 让心动，有回声。 · 代码由 NETX 技术社区维护\n创作\n我的作品",
+        "billing": "跳到内容\n＋\n充值\nU\n账单与订阅\n剩余额度\n5\n可用次数\n0\n生成中占用\n来源\t发放\t剩余\t有效期\n试用\n2\n0\n2026年12月24日\n单次包\n5\n5\n2027年2月22日\n\n先消耗重置发的额度，再按到期先后消耗其余额度。\n\n充值额度\n额度记录\n单次包\n2026年11月24日 23:28\n+5\nGolden Hour Loop\n2026年11月24日 23:26 · 已用 1 首\n−1\n海风里的生日·审计\n2026年11月24日 23:22 · 已用 1 首\n−1\n试用\n2026年11月24日 23:21\n+2\n\n每一行都来自账本：生成失败的额度会退回；如果原额度在生成期间过期，会补发一首新的。\n\n月度订阅\n\n当前没有订阅中的月度套餐。\n\n查看价格\n购买记录\n时间 (JST)\t内容\t金额\t状态\t发放\t收据\n2026/11/24 23:28\nDROP — 5 songs\nJP¥980\n已支付\n已发放\n查看\n账户\n账户设置\n内容申诉\n法律信息\n© 2026 YUHA · 让心动，有回声。 · 代码由 NETX 技术社区维护\n创作\n我的作品"
+      },
+      "at": "2026-11-24T14:28:11.881Z"
+    },
+    {
+      "name": "visibility-visitor-gift-card",
+      "data": {
+        "privateState": "private",
+        "denied": true,
+        "recipient": "跳到内容\n中\n日\nEN\n登录\n温度\n90°YU\n试听\n写给 小林\n生日快乐\n\n生日快乐，一起听海风\n\n已公开 · 有人声 · 1:00\n\n海风里的生日·审计\n\n一位创作者 · 原声\n\n分享 ↗\n登录后购买授权 ↗\n\n演示环境：音频为合成示例。\n\n我也给一个人写一首\n\n0:00 / 1:00\n歌词\n估算同步\n下载 .lrc\n\n这首歌的时间轴是按字数估算的——没有任何模型听过它的声音，所以间奏停在哪里、哪一句唱得慢，它都不知道。要逐词对齐需要声音对齐服务跑成功。\n\nVERSE\n林的生日歌写给朋友小\n林的生日歌写给朋友小\n海边旅行和一起走过的街道\n海边旅行和一起走过的街道\n温暖轻快\n温暖轻快\n写给朋友小林的生日歌\n写给朋友小林的生日歌\nCHORUS\n海边旅行和一起走过的街道\n海边旅行和一起走过的街道\n海边旅行和一起走过的街道\n海边旅行和一起走过的街道\n海边旅行和一起走过的街道\n海边旅行和一起走过的街道\n写给朋友小林的生日歌\n写给朋友小林的生日歌\n收到一首歌，你也可以为一个人写一首\n我也给一个人写一首\n\n新账户送 2 首，生成失败不扣额度。\n\n内容申诉\n法律信息\n© 2026 YUHA · 让心动，有回声。 · 代码由 NETX 技术社区维护\n创作\n我的作品",
+        "ownerControls": 0,
+        "cta": "/create?gift=1&occasion=birthday&src=share-birthday",
+        "cardStatus": 200,
+        "cardType": "image/png"
+      },
+      "at": "2026-11-24T14:30:01.666Z"
+    },
+    {
+      "name": "account-language",
+      "data": {
+        "initial": true,
+        "changed": false,
+        "persisted": false,
+        "jaHeading": "請求・契約",
+        "enHeading": "My songs"
+      },
+      "at": "2026-11-24T14:30:26.209Z"
+    },
+    {
+      "name": "home-vocal-setting-lost",
+      "data": {
+        "prompt": "审计：保留这段描述和纯音乐选择",
+        "instrumentalPressed": "false"
+      },
+      "at": "2026-11-24T14:30:56.260Z"
+    },
+    {
+      "name": "clear-draft-confirmed",
+      "data": {
+        "prompt": ""
+      },
+      "at": "2026-11-24T14:31:58.867Z"
+    },
+    {
+      "name": "delete-confirm-cancel",
+      "data": {
+        "canceledKeepsSong": true,
+        "after": "/library",
+        "deletedStatus": 404
+      },
+      "at": "2026-11-24T14:32:01.444Z"
+    },
+    {
+      "name": "studio-all-settings",
+      "data": {
+        "duration": 30,
+        "voice": "female",
+        "styles": [
+          "acoustic",
+          "soft rock"
+        ],
+        "lyricsBy": "me",
+        "energy": 0.85,
+        "visibility": "public",
+        "lyrics": "[verse]\n街灯照亮回家的路\n[chorus]\n明天我们再一起唱"
+      },
+      "at": "2026-11-24T14:32:45.527Z"
+    },
+    {
+      "name": "failed-retry",
+      "data": {
+        "failed": "跳到内容\n＋\n充值\nU\n\n录制中断\n\n这次没能生成\n\n技术故障中断了这首歌，不是你写的内容有问题。\n\n1 首额度已退回你的账户，账本里有记录。\n\n任务编号 06b44077-d619-4565-926e-ff90cc9afd44 复制\n\n错误代码 upstream_failed\n\n再试一次\n重新来一首\n\n06b44077 · 30s · 纯音乐 · 演示音频（合成）\n\n内容申诉\n法律信息\n© 2026 YUHA · 让心动，有回声。 · 代码由 NETX 技术社区维护\n创作\n我的作品",
+        "retryPrompt": "quiet city walk __FAULT_FAIL__"
+      },
+      "at": "2026-11-24T14:32:49.543Z"
+    },
+    {
+      "name": "home-examples-desktop-library",
+      "data": {
+        "kept": "自己写的描述保留",
+        "seeded": "日落公路，朋友骑车回家。轻快一点，像风穿过衬衫。",
+        "library": "我的作品\n新的创作\n全部\n已完成\n生成中\n已暂停\n温度\n90°YU\n链接已开启\n海风里的生日·审计\n你\n·\n1:00\n·\n有人声\n原声\n没有完成的生成\nquiet city walk __FAULT_FAIL__\n2026年11月24日 23:32 · 技术故障 · 额度已退回\n任务编号 06b44077-d619-4565-926e-ff90cc9afd44\n查看\n再试一次\n不要了",
+        "pageErrors": []
+      },
+      "at": "2026-11-24T14:35:00.961Z"
+    },
+    {
+      "name": "lyrics-follow-confirmed",
+      "data": {
+        "pausedLabel": {
+          "text": "试听",
+          "ariaLabel": "暂停"
+        },
+        "before": [
+          "林的生日歌写给朋友小"
+        ],
+        "after": [],
+        "time": "1.3"
+      },
+      "at": "2026-11-24T14:42:33.963Z"
+    },
+    {
+      "name": "seek-keyboard",
+      "data": {
+        "seekEnd": "0.8",
+        "seekAfterHome": "0.3"
+      },
+      "at": "2026-11-24T14:43:00.849Z"
+    },
+    {
+      "name": "local-audio-range",
+      "data": {
+        "status": 200,
+        "acceptRanges": null,
+        "contentRange": null,
+        "contentLength": "1441521"
+      },
+      "at": "2026-11-24T14:43:16.231Z"
+    }
+  ],
+  "auxiliaryObservations": [
+    {
+      "name": "scene-link",
+      "data": {
+        "lang": "zh",
+        "width": 390,
+        "slug": "birthday",
+        "heading": "今年的生日礼物，是一首只属于 TA 的歌",
+        "href": "/create?gift=1&occasion=birthday&src=scene-birthday",
+        "arrived": "/auth?next=%2Fcreate%3Fgift%3D1%26occasion%3Dbirthday%26src%3Dscene-birthday",
+        "overflow": false
+      }
+    },
+    {
+      "name": "scene-link",
+      "data": {
+        "lang": "zh",
+        "width": 390,
+        "slug": "love",
+        "heading": "说不出口的话，让歌替你说",
+        "href": "/create?gift=1&occasion=love&src=scene-love",
+        "arrived": "/auth?next=%2Fcreate%3Fgift%3D1%26occasion%3Dlove%26src%3Dscene-love",
+        "overflow": false
+      }
+    },
+    {
+      "name": "scene-link",
+      "data": {
+        "lang": "zh",
+        "width": 390,
+        "slug": "thanks",
+        "heading": "一句谢谢，写成一首歌",
+        "href": "/create?gift=1&occasion=thanks&src=scene-thanks",
+        "arrived": "/auth?next=%2Fcreate%3Fgift%3D1%26occasion%3Dthanks%26src%3Dscene-thanks",
+        "overflow": false
+      }
+    },
+    {
+      "name": "scene-link",
+      "data": {
+        "lang": "zh",
+        "width": 390,
+        "slug": "miss",
+        "heading": "隔着距离，也能送一首歌",
+        "href": "/create?gift=1&occasion=miss&src=scene-miss",
+        "arrived": "/auth?next=%2Fcreate%3Fgift%3D1%26occasion%3Dmiss%26src%3Dscene-miss",
+        "overflow": false
+      }
+    },
+    {
+      "name": "scene-link",
+      "data": {
+        "lang": "zh",
+        "width": 390,
+        "slug": "memory",
+        "heading": "把一段时光，留成一首歌",
+        "href": "/create?src=scene-memory",
+        "arrived": "/auth?next=%2Fcreate%3Fsrc%3Dscene-memory",
+        "overflow": false
+      }
+    },
+    {
+      "name": "scene-link",
+      "data": {
+        "lang": "zh",
+        "width": 390,
+        "slug": "cheer",
+        "heading": "在 TA 最需要的时候，送一首歌",
+        "href": "/create?gift=1&occasion=cheer&src=scene-cheer",
+        "arrived": "/auth?next=%2Fcreate%3Fgift%3D1%26occasion%3Dcheer%26src%3Dscene-cheer",
+        "overflow": false
+      }
+    },
+    {
+      "name": "scene-link",
+      "data": {
+        "lang": "ja",
+        "width": 360,
+        "slug": "birthday",
+        "heading": "今年の誕生日は、その人だけの一曲を",
+        "href": "/create?gift=1&occasion=birthday&src=scene-birthday",
+        "arrived": "/auth?next=%2Fcreate%3Fgift%3D1%26occasion%3Dbirthday%26src%3Dscene-birthday",
+        "overflow": false
+      }
+    },
+    {
+      "name": "scene-link",
+      "data": {
+        "lang": "ja",
+        "width": 360,
+        "slug": "love",
+        "heading": "言えない気持ちは、歌にして",
+        "href": "/create?gift=1&occasion=love&src=scene-love",
+        "arrived": "/auth?next=%2Fcreate%3Fgift%3D1%26occasion%3Dlove%26src%3Dscene-love",
+        "overflow": false
+      }
+    },
+    {
+      "name": "scene-link",
+      "data": {
+        "lang": "ja",
+        "width": 360,
+        "slug": "thanks",
+        "heading": "ありがとうを、一曲に",
+        "href": "/create?gift=1&occasion=thanks&src=scene-thanks",
+        "arrived": "/auth?next=%2Fcreate%3Fgift%3D1%26occasion%3Dthanks%26src%3Dscene-thanks",
+        "overflow": false
+      }
+    },
+    {
+      "name": "scene-link",
+      "data": {
+        "lang": "ja",
+        "width": 360,
+        "slug": "miss",
+        "heading": "離れていても、歌なら届く",
+        "href": "/create?gift=1&occasion=miss&src=scene-miss",
+        "arrived": "/auth?next=%2Fcreate%3Fgift%3D1%26occasion%3Dmiss%26src%3Dscene-miss",
+        "overflow": false
+      }
+    },
+    {
+      "name": "scene-link",
+      "data": {
+        "lang": "ja",
+        "width": 360,
+        "slug": "memory",
+        "heading": "あのころを、一曲に残す",
+        "href": "/create?src=scene-memory",
+        "arrived": "/auth?next=%2Fcreate%3Fsrc%3Dscene-memory",
+        "overflow": false
+      }
+    },
+    {
+      "name": "scene-link",
+      "data": {
+        "lang": "ja",
+        "width": 360,
+        "slug": "cheer",
+        "heading": "いちばん必要なときに、一曲を",
+        "href": "/create?gift=1&occasion=cheer&src=scene-cheer",
+        "arrived": "/auth?next=%2Fcreate%3Fgift%3D1%26occasion%3Dcheer%26src%3Dscene-cheer",
+        "overflow": false
+      }
+    },
+    {
+      "name": "scene-link",
+      "data": {
+        "lang": "en",
+        "width": 1280,
+        "slug": "birthday",
+        "heading": "This year, give them a song that's only theirs",
+        "href": "/create?gift=1&occasion=birthday&src=scene-birthday",
+        "arrived": "/auth?next=%2Fcreate%3Fgift%3D1%26occasion%3Dbirthday%26src%3Dscene-birthday",
+        "overflow": false
+      }
+    },
+    {
+      "name": "scene-link",
+      "data": {
+        "lang": "en",
+        "width": 1280,
+        "slug": "love",
+        "heading": "When the words won't come, let a song say it",
+        "href": "/create?gift=1&occasion=love&src=scene-love",
+        "arrived": "/auth?next=%2Fcreate%3Fgift%3D1%26occasion%3Dlove%26src%3Dscene-love",
+        "overflow": false
+      }
+    },
+    {
+      "name": "scene-link",
+      "data": {
+        "lang": "en",
+        "width": 1280,
+        "slug": "thanks",
+        "heading": "Turn a thank-you into a song",
+        "href": "/create?gift=1&occasion=thanks&src=scene-thanks",
+        "arrived": "/auth?next=%2Fcreate%3Fgift%3D1%26occasion%3Dthanks%26src%3Dscene-thanks",
+        "overflow": false
+      }
+    },
+    {
+      "name": "scene-link",
+      "data": {
+        "lang": "en",
+        "width": 1280,
+        "slug": "miss",
+        "heading": "Far apart, a song still gets there",
+        "href": "/create?gift=1&occasion=miss&src=scene-miss",
+        "arrived": "/auth?next=%2Fcreate%3Fgift%3D1%26occasion%3Dmiss%26src%3Dscene-miss",
+        "overflow": false
+      }
+    },
+    {
+      "name": "scene-link",
+      "data": {
+        "lang": "en",
+        "width": 1280,
+        "slug": "memory",
+        "heading": "Keep a stretch of time as a song",
+        "href": "/create?src=scene-memory",
+        "arrived": "/auth?next=%2Fcreate%3Fsrc%3Dscene-memory",
+        "overflow": false
+      }
+    },
+    {
+      "name": "scene-link",
+      "data": {
+        "lang": "en",
+        "width": 1280,
+        "slug": "cheer",
+        "heading": "A song for when they need it most",
+        "href": "/create?gift=1&occasion=cheer&src=scene-cheer",
+        "arrived": "/auth?next=%2Fcreate%3Fgift%3D1%26occasion%3Dcheer%26src%3Dscene-cheer",
+        "overflow": false
+      }
+    },
+    {
+      "name": "trial-decline",
+      "data": {
+        "guestId": "6bbdda3e-c42c-42e4-912d-d1618e903585",
+        "body": "跳到内容\n＋\n充值\nU\n没有找到\n可能已被删除。请从作品列表重新选择。\n回到我的作品\n内容申诉\n法律信息\n© 2026 YUHA · 让心动，有回声。 · 代码由 NETX 技术社区维护\n创作\n我的作品",
+        "forgotten": true,
+        "library": "跳到内容\n＋\n充值\nU\n我的作品\n新的创作\n全部\n已完成\n生成中\n已暂停\n还没有作品\n\n生成过的音乐会出现在这里——默认私密，发布前只有你能看到。\n\n开始第一段创作\n内容申诉\n法律信息\n© 2026 YUHA · 让心动，有回声。 · 代码由 NETX 技术社区维护\n创作\n我的作品"
+      }
+    },
+    {
+      "name": "consent-gate-fixture",
+      "data": {
+        "initiallyDisabled": true,
+        "dismissed": true,
+        "note": "synthetic stale-consent GET, actual consent POST; not live Google OAuth"
+      }
+    },
+    {
+      "name": "network-error-recovery",
+      "data": {
+        "body": "跳到内容\n＋\n充值\nU\n一次生成，一首成品\n\n一次额度换一首完整歌曲 —— 含人声或纯音乐。生成失败不扣额度。 新账号赠送 2 次，先听到再决定。\n\n网络连接失败\n请检查网络后再试一次。页面上的内容还在，没有提交也没有扣额度。\n再试一次\n购买前请了解\n含税价，卡号不经过我们\n标价已含消费税。银行卡付款由 Stripe 处理，我们的服务器不会接触你的卡号。\n订阅随时可以取消\n订阅每月自动续费。你可以随时在「账单」页取消，已付费的当期结束前照常使用。\n额度的有效期\n单次包额度自购买起 90 天内有效。订阅额度每个账期重新发放，未用完的不会累积到下一期。\n作品归你\n你生成的歌曲归你。每首歌的「使用记录」写明了它的使用条件。\n\n完整条款： 服务条款 · 特定商取引法相关标示\n\n内容申诉\n法律信息\n© 2026 YUHA · 让心动，有回声。 · 代码由 NETX 技术社区维护\n创作\n我的作品",
+        "recovered": true,
+        "injected": true
+      }
+    }
+  ],
+  "exportMetadata": [
+    {
+      "file": "song.mp3",
+      "metadata": {
+        "programs": [],
+        "stream_groups": [],
+        "streams": [
+          {
+            "codec_name": "mp3"
+          }
+        ],
+        "format": {
+          "duration": "60.029388",
+          "size": "1441521"
+        }
+      }
+    },
+    {
+      "file": "share.mp4",
+      "metadata": {
+        "programs": [],
+        "stream_groups": [],
+        "streams": [
+          {
+            "codec_name": "h264",
+            "width": 720,
+            "height": 1280,
+            "side_data_list": [
+              {}
+            ]
+          },
+          {
+            "codec_name": "aac"
+          }
+        ],
+        "format": {
+          "duration": "20.000000",
+          "size": "2937464"
+        }
+      }
+    },
+    {
+      "file": "photo.mp4",
+      "metadata": {
+        "programs": [],
+        "stream_groups": [],
+        "streams": [
+          {
+            "codec_name": "h264",
+            "width": 720,
+            "height": 1280,
+            "side_data_list": [
+              {}
+            ]
+          },
+          {
+            "codec_name": "aac"
+          }
+        ],
+        "format": {
+          "duration": "30.000000",
+          "size": "4501708"
+        }
+      }
+    }
+  ]
+}

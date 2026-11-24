@@ -1,0 +1,10 @@
+✓ home-xmas @ phone-360 [ja]
+✓ home-xmas @ phone-360 [zh]
+✓ home-xmas @ phone-360 [en]
+✓ home-xmas @ phone-393 [zh]
+✓ home-xmas @ phone-393 [ja]
+✓ home-xmas @ phone-393 [en]
+✓ home-xmas @ desktop-1280 [zh]
+✓ home-xmas @ tablet-768 [zh]
+
+8 page views checked; 0 problems, 0 warnings (UI_WARN=1 to list them).
