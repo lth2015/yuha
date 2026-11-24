@@ -1398,7 +1398,11 @@ textarea.is-full { border-color: var(--danger); }
 .issue-report__history h3 { margin: 0; font-size: var(--t-body); font-weight: 600; }
 .issue-report__history ul { margin: 0; padding-left: 1.1em; display: grid; gap: var(--s2); }
 .issue-report__history p { margin: var(--s1) 0 0; color: var(--muted); }
-.song-spread__report { margin-top: var(--s2); }
+.song-spread__report { margin-top: 0; }
+/* Report a problem and delete: last, together, apart from the main actions (SongDetail.tsx). */
+.song-spread__manage { display: flex; flex-wrap: wrap; gap: var(--s3); margin-top: var(--s8); padding-top: var(--s4); border-top: 1px solid var(--line); }
+/* The photo MV is a way of sharing: right under the actions, a little apart. */
+.photo-video__open { margin-top: var(--s1); }
 .issue-queue__song { display: inline-flex; align-items: center; min-height: 24px; }
 .song-gift-edit { gap: var(--s2); margin-bottom: var(--s4); padding-left: var(--s3); border-left: 3px solid var(--petal); }
 .song-spread__player { display: flex; flex-direction: column; align-items: stretch; gap: 6px; margin-top: var(--s6); }

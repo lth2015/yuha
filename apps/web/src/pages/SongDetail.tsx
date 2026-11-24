@@ -716,20 +716,6 @@ export default function SongDetail() {
               )
             )}
             </div>
-            {/* Its own group: separated at every width, never pushed to the
-                right-hand end of whatever line a wrap happened to put it on. */}
-            {manages && (
-              <div className="song-spread__actions-end">
-                <button
-                  type="button"
-                  className="text-action is-danger"
-                  disabled={busy}
-                  onClick={() => void remove()}
-                >
-                  {t('song.delete')}
-                </button>
-              </div>
-            )}
           </div>
 
           {/* A trial's song: kept only by signing up (docs/GROWTH_SPEC.md, part three). */}
@@ -773,10 +759,23 @@ export default function SongDetail() {
               onClose={() => setReporting(null)}
             />
           )}
-          {manages && !reporting && song.state === 'deliverable' && (
-            <button type="button" className="text-action song-spread__report" onClick={() => setReporting({})}>
-              {t('issue.open')}
-            </button>
+          {/*
+            The rarely-needed actions, last and together. Delete used to sit in
+            the row with Share and Download, as large as either: on a phone it
+            was the third thing under the thumb. It is findable here, outlined
+            in red, and nowhere near the things people come to do.
+          */}
+          {manages && (
+            <div className="song-spread__manage">
+              {!reporting && song.state === 'deliverable' && (
+                <button type="button" className="text-action song-spread__report" onClick={() => setReporting({})}>
+                  {t('issue.open')}
+                </button>
+              )}
+              <button type="button" className="text-action is-danger" disabled={busy} onClick={() => void remove()}>
+                {t('song.delete')}
+              </button>
+            </div>
           )}
 
           {/* The owner's to know, nobody else's: shown to a visitor it was a public
