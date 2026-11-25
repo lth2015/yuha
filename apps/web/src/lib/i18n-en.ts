@@ -218,7 +218,7 @@ const en: Dict = {
   'lyrics.save': 'Save',
   'lyrics.saving': 'Saving…',
   'lyrics.revert': 'Revert',
-  'lyrics.estimated.why': 'These timings are estimated from syllable counts — nothing listened to the audio, so it cannot know where an interlude sits or which line is held. Word-level sync needs the alignment service to have run.',
+  'lyrics.estimated.why': "How to line them up: press Play, and the moment a line starts being sung, tap “Set to now” beside it. If everything is early or late, use “0.5s earlier” / “0.5s later” above. Then press Save — the video and the lyrics page will both use these times.",
   'lyrics.playFrom': 'Play from here',
 
   'card.play': 'Play “{title}”', 'card.pause': 'Pause “{title}”',

@@ -232,7 +232,7 @@ const zh: Dict = {
   'lyrics.save': '保存',
   'lyrics.saving': '保存中…',
   'lyrics.revert': '撤销',
-  'lyrics.estimated.why': '这首歌的时间轴是按字数估算的——没有任何模型听过它的声音，所以间奏停在哪里、哪一句唱得慢，它都不知道。要逐词对齐需要声音对齐服务跑成功。',
+  'lyrics.estimated.why': "怎么对准：先点「试听」播放，听到某一句开始唱的那一刻，点那一句旁边的「对准这句」；整体都偏早或偏晚，用上面的「早 0.5 秒 / 晚 0.5 秒」。对好后点「保存」，视频和歌词页都会用这个时间。",
   'lyrics.playFrom': '从这里播放',
 
   'card.play': '播放「{title}」', 'card.pause': '暂停「{title}」',
