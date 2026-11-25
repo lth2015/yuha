@@ -209,6 +209,7 @@ export default function App() {
               <Route path="/thanks" element={<ScenePage slug="thanks" />} />
               <Route path="/miss" element={<ScenePage slug="miss" />} />
               <Route path="/memory" element={<ScenePage slug="memory" />} />
+              <Route path="/travel" element={<ScenePage slug="travel" />} />
               <Route path="/cheer" element={<ScenePage slug="cheer" />} />
               <Route path="/help/rights" element={<Rights />} />
               <Route path="/legal" element={<LegalIndex />} />

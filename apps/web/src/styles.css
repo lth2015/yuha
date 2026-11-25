@@ -3022,3 +3022,10 @@ textarea.is-full { border-color: var(--danger); }
 .mv-entry__play { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -60%); width: 36px; height: 36px; border-radius: 50%; display: grid; place-items: center; background: rgb(255 255 255 / 85%); color: #7E2A17; font-size: 14px; }
 .lib__pick-note { margin: 0 0 var(--s4); }
 @media (max-width: 480px) { .mv-entry__phone { display: none; } }
+
+/* Scene pages that lead to a photo MV (docs/ITERATION_EN_JA_MV.md). */
+.scene__facts { margin: var(--s4) 0 0; padding-left: 1.2em; color: var(--muted); display: grid; gap: var(--s2); }
+.scene__video { display: block; width: min(100%, 320px); aspect-ratio: 9 / 16; border-radius: var(--r-card); background: #000; margin: var(--s4) 0; }
+.scene__faq dl { margin: 0; display: grid; gap: var(--s4); }
+.scene__faq dt { font-weight: 600; }
+.scene__faq dd { margin: var(--s1) 0 0; color: var(--muted); }

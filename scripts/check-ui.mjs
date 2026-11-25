@@ -122,6 +122,7 @@ const PAGES = [
   { name: 'scene-thanks', path: '/thanks', as: null },
   { name: 'scene-miss', path: '/miss', as: null },
   { name: 'scene-memory', path: '/memory', as: null },
+  { name: 'scene-travel', path: '/travel', as: null },
   { name: 'scene-cheer', path: '/cheer', as: null },
   { name: 'create-scene', path: '/create?gift=1&occasion=birthday&starter=scene.birthday.starter1&src=scene-birthday', as: 'creator' },
   { name: 'not-found', path: '/no-such-page', as: null },

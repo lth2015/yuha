@@ -1,6 +1,6 @@
 import { Link, useNavigate } from 'react-router-dom';
 import { useI18n } from '../lib/i18n';
-import { SCENES, sceneBySlug, sceneCreateHref, type SceneSlug } from '../lib/scenes';
+import { SCENES, sceneBySlug, sceneCreateHref, sceneTryHref, type SceneSlug } from '../lib/scenes';
 import { useSession } from '../lib/session';
 
 /**
@@ -14,7 +14,7 @@ import { useSession } from '../lib/session';
  * any kind: no plays, no likes (CLAUDE.md, Scope decisions).
  */
 export default function ScenePage({ slug }: { slug: SceneSlug }) {
-  const { t } = useI18n();
+  const { t, lang } = useI18n();
   const { runtime, me } = useSession();
   const navigate = useNavigate();
   /*
@@ -29,10 +29,12 @@ export default function ScenePage({ slug }: { slug: SceneSlug }) {
     } catch {
       /* the home page still opens; the box is empty */
     }
-    navigate('/');
+    navigate(sceneTryHref(scene, lang));
   };
   const scene = sceneBySlug(slug)!;
   const trialUnits = runtime?.features.freeTrialEnabled ? runtime.features.freeTrialUnits : 0;
+  // Known off only once the server has said so; the prerendered page describes the feature as offered.
+  const photosOff = runtime != null && !runtime.features.photoVideoEnabled && !runtime.features.photoVideoPreview;
 
   return (
     <div className={`scene scene--${slug}`}>
@@ -43,7 +45,7 @@ export default function ScenePage({ slug }: { slug: SceneSlug }) {
         <span className="scene__kicker">{t(scene.kicker)}</span>
         <h1 id="scene-title">{t(scene.title)}</h1>
         <p className="scene__body">{t(scene.body)}</p>
-        <Link className="btn btn--primary btn--lg" to={sceneCreateHref(scene)}>
+        <Link className="btn btn--primary btn--lg" to={sceneCreateHref(scene, undefined, lang)}>
           {t(scene.cta)}
         </Link>
         {canTry && (
@@ -59,7 +61,7 @@ export default function ScenePage({ slug }: { slug: SceneSlug }) {
         <h2 id="scene-starters">{t('scene.starters.title')}</h2>
         <div className="scene__starters">
           {scene.starters.map((key) => (
-            <Link key={key} className="chip chip--btn" to={sceneCreateHref(scene, key)}>
+            <Link key={key} className="chip chip--btn" to={sceneCreateHref(scene, key, lang)}>
               {t(key)}
             </Link>
           ))}
@@ -74,6 +76,61 @@ export default function ScenePage({ slug }: { slug: SceneSlug }) {
           <li>{t('scene.how.3')}</li>
         </ol>
       </section>
+
+      {scene.mv && (
+        <section className="scene__section scene__mv" aria-labelledby="scene-mv">
+          <h2 id="scene-mv">{t('scene.mv.title')}</h2>
+          <p>{t(scene.slug === 'travel' ? 'scene.mv.lead.travel' : 'scene.mv.lead.birthday')}</p>
+          {scene.video?.filter((v) => v.lang === lang).map((v) => (
+            <video key={v.src} className="scene__video" src={v.src} poster={v.poster} controls playsInline preload="none" />
+          ))}
+          {/* Photos paused by the switch: say so; a video from the cover still works. */}
+          {photosOff && <p className="scene__note">{t('scene.mv.photosPaused')}</p>}
+          <ol className="scene__steps">
+            <li>{t('scene.mv.step1')}</li>
+            <li>{t('scene.mv.step2')}</li>
+            <li>{t(photosOff ? 'scene.mv.step3Cover' : 'scene.mv.step3')}</li>
+            <li>{t('scene.mv.step4')}</li>
+          </ol>
+          <ul className="scene__facts">
+            <li>{t('scene.mv.fact.length')}</li>
+            {!photosOff && <li>{t('scene.mv.fact.photos')}</li>}
+            <li>{t('scene.mv.fact.save')}</li>
+            <li>{t('scene.mv.fact.cost')}</li>
+          </ul>
+        </section>
+      )}
+
+      {scene.mv && (
+        <section className="scene__section scene__faq" aria-labelledby="scene-faq">
+          <h2 id="scene-faq">{t('scene.faq.title')}</h2>
+          <dl>
+            {(['time', 'free', 'photos', 'formats', 'use'] as const).map((k) => (
+              <div key={k}>
+                <dt>{t(`scene.faq.${k}.q`)}</dt>
+                <dd>
+                  {t(`scene.faq.${k}.a`)}
+                  {/* Only what the server says is on now; the prerendered page promises neither. */}
+                  {k === 'free' && trialUnits > 0 && <> {t('scene.faq.free.units', { n: trialUnits })}</>}
+                  {k === 'free' && runtime?.features.guestTrialEnabled === true && <> {t('scene.faq.free.trial')}</>}
+                  {k === 'use' && (
+                    <>
+                      {' '}
+                      <Link to="/legal/terms">{t('scene.faq.use.link')}</Link>
+                    </>
+                  )}
+                  {k === 'free' && (
+                    <>
+                      {' '}
+                      <Link to="/pricing">{t('scene.faq.free.link')}</Link>
+                    </>
+                  )}
+                </dd>
+              </div>
+            ))}
+          </dl>
+        </section>
+      )}
 
       {scene.examples.length > 0 && (
         <section className="scene__section" aria-labelledby="scene-examples">

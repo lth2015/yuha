@@ -8,7 +8,7 @@ import type { Occasion } from '@yuha/contracts';
  * Keys are written out in full, not built from the slug, so check:i18n sees
  * every one of them in use.
  */
-export type SceneSlug = 'birthday' | 'love' | 'thanks' | 'miss' | 'memory' | 'cheer';
+export type SceneSlug = 'birthday' | 'travel' | 'love' | 'thanks' | 'miss' | 'memory' | 'cheer';
 
 /**
  * A song shown on a scene page. Only the product owner's own public songs,
@@ -26,6 +26,8 @@ export interface Scene {
   /** The gift occasion /create opens on; null writes a song for oneself. */
   occasion: Occasion | null;
   name: string;
+  /** The page title for search, where it should say more than the nav name (the MV scenes). */
+  seoTitle?: string;
   kicker: string;
   title: string;
   body: string;
@@ -33,6 +35,16 @@ export interface Scene {
   description: string;
   starters: readonly [string, string, string];
   examples: readonly SceneExample[];
+  /**
+   * The scene leads to a photo MV (docs/ITERATION_EN_JA_MV.md): the page shows
+   * how, what is true of it, and its questions answered.
+   */
+  mv?: boolean;
+  /**
+   * A finished MV to watch, made by the product owner from a real song and
+   * photos they may use. Absent until there is one: no stand-in is shown.
+   */
+  video?: { src: string; poster: string; lang: 'zh' | 'ja' | 'en' }[];
 }
 
 export const SCENES: readonly Scene[] = [
@@ -40,6 +52,7 @@ export const SCENES: readonly Scene[] = [
     slug: 'birthday',
     occasion: 'birthday',
     name: 'scene.birthday.name',
+    seoTitle: 'scene.birthday.seoTitle',
     kicker: 'scene.birthday.kicker',
     title: 'scene.birthday.title',
     body: 'scene.birthday.body',
@@ -47,6 +60,21 @@ export const SCENES: readonly Scene[] = [
     description: 'seo.desc.scene.birthday',
     starters: ['scene.birthday.starter1', 'scene.birthday.starter2', 'scene.birthday.starter3'],
     examples: [],
+    mv: true,
+  },
+  {
+    slug: 'travel',
+    occasion: null,
+    name: 'scene.travel.name',
+    seoTitle: 'scene.travel.seoTitle',
+    kicker: 'scene.travel.kicker',
+    title: 'scene.travel.title',
+    body: 'scene.travel.body',
+    cta: 'scene.travel.cta',
+    description: 'seo.desc.scene.travel',
+    starters: ['scene.travel.starter1', 'scene.travel.starter2', 'scene.travel.starter3'],
+    examples: [],
+    mv: true,
   },
   {
     slug: 'love',
@@ -120,14 +148,15 @@ export function sceneBySlug(slug: string): Scene | undefined {
  * this only names visits that arrived without a campaign tag), with an opening
  * line when one was picked.
  */
-export function sceneCreateHref(scene: Scene, starter?: string): string {
+export function sceneCreateHref(scene: Scene, starter?: string, lang?: string): string {
   const q = new URLSearchParams();
   if (scene.occasion) {
     q.set('gift', '1');
     q.set('occasion', scene.occasion);
   }
   if (starter && scene.starters.includes(starter)) q.set('starter', starter);
-  q.set('src', `scene-${scene.slug}`);
+  // `scene-<slug>-<lang>`: the dashboard's totals read the scene and language from it (lib/funnel.ts).
+  q.set('src', lang ? `scene-${scene.slug}-${lang}` : `scene-${scene.slug}`);
   return `/create?${q.toString()}`;
 }
 
@@ -144,4 +173,13 @@ export function startersFor(occasion: Occasion | null): readonly string[] {
 
 export function isStarterKey(key: string | null): key is string {
   return !!key && SCENES.some((s) => s.starters.includes(key));
+}
+
+/**
+ * The "try one first, no sign-up" entry on a scene page: the home composer,
+ * tagged like the create button (PR #122 review, PR122-04). lib/visits.ts
+ * keeps the first tag a browser came with, so an ad's visitor keeps the ad's.
+ */
+export function sceneTryHref(scene: Scene, lang: string): string {
+  return `/?src=scene-${scene.slug}-${lang}`;
 }
