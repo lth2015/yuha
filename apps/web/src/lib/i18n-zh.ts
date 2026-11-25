@@ -1176,6 +1176,8 @@ const zh: Dict = {
   'gift.line.other': '',
   'song.gift.to': '写给 {to}',
   'song.gift.send': '送给 TA',
+  'song.notFound.title': "这首歌打不开",
+  'song.notFound.next': "可能还没有公开，或者已经删除。如果是别人发给你的链接，请对方确认已经「公开」或「送给 TA」。",
   'song.gift.confirmPublic': '送出后，拿到链接的人都能听这首歌、看到上面的名字和那句话。要送出吗？',
   'song.gift.shareText': '我为{to}写了一首歌：《{title}》',
   'song.gift.again': '我也给一个人写一首',
