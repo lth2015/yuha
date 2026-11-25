@@ -1,6 +1,6 @@
 # YUHA
 
-> YUHA (yuha.studio) is an AI song studio: describe a feeling in a sentence and get a finished song back — sung or instrumental, 30 seconds to 4 minutes long. Lyrics can be in English, Japanese or Chinese, written by YUHA or by you.
+> YUHA (yuha.studio) is an AI song maker (AI 写歌 / AI 作曲): describe a feeling in a sentence and get a finished song back — sung or instrumental, 30 seconds to 4 minutes long. Lyrics can be in English, Japanese or Chinese, written by YUHA or by you.
 
 What it does:
 

@@ -58,8 +58,9 @@ describe('page titles', () => {
 
   it('every title key exists in all three languages', () => {
     const keys = [...new Set(ROUTES.map(([, k]) => k).filter((k): k is string => k !== null))];
-    // The home page is titled by the brand and its slogan.
-    keys.push('footer.slogan');
+    // The home page is titled by the brand and what it is (an AI song maker),
+    // so it is not taken for another "yuha studio" in search results.
+    keys.push('seo.title.home');
     for (const key of keys) {
       expect(definedIn(key), `${key} should be defined once per language`).toBe(3);
     }
