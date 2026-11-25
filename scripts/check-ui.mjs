@@ -682,6 +682,21 @@ async function runLane(lane) {
     for (const phase of ['top', 'bottom']) {
       await page.evaluate((p) => window.scrollTo(0, p === 'top' ? 0 : document.documentElement.scrollHeight), phase);
       await page.waitForTimeout(150);
+      // Content that arrives after the first scroll (a list fetched on mount)
+      // moves the page under a fixed bar: what sits there at that instant is
+      // in transit, not hidden. Settle at the real end before judging it.
+      if (phase === 'bottom') {
+        for (let i = 0; i < 10; i++) {
+          const atEnd = await page.evaluate(() => {
+            const max = document.documentElement.scrollHeight - innerHeight;
+            if (scrollY >= max - 1) return true;
+            window.scrollTo(0, document.documentElement.scrollHeight);
+            return false;
+          });
+          if (atEnd) break;
+          await page.waitForTimeout(150);
+        }
+      }
       results.push(await page.evaluate(audit, { phone: vp.width < 600, phase }));
     }
     const problems = [];
