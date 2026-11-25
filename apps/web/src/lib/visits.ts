@@ -19,6 +19,7 @@ import { apiFetch } from './api';
 const KEY = 'yuha.visitor';
 let memoryId: string | null = null;
 let referrerSent = false;
+let landingSeen = false;
 
 function visitorId(): string {
   try {
@@ -33,9 +34,8 @@ function visitorId(): string {
   }
 }
 
-function externalReferrerHost(): string | undefined {
-  if (referrerSent) return undefined;
-  referrerSent = true;
+/** The site that sent this page load, if it is another site. Reads only; nothing is consumed. */
+function landingReferrerHost(): string | undefined {
   try {
     if (!document.referrer) return undefined;
     const host = new URL(document.referrer).hostname;
@@ -43,6 +43,13 @@ function externalReferrerHost(): string | undefined {
   } catch {
     return undefined;
   }
+}
+
+/** The referring site, once per page load: later in-app navigations were not referred by it. */
+function externalReferrerHost(): string | undefined {
+  if (referrerSent) return undefined;
+  referrerSent = true;
+  return landingReferrerHost();
 }
 
 /**
@@ -89,12 +96,19 @@ export function organicSource(path: string, search: string, refHost: string | un
 
 function captureSource(): string | null {
   const kept = keptSource();
+  // Only the page a search landed on is named after it. document.referrer
+  // stays the same through in-app navigation, so a later page must not take
+  // the credit for a search that landed somewhere else.
+  const atLanding = !landingSeen;
+  landingSeen = true;
   if (kept) return kept.source;
   try {
     const q = new URLSearchParams(window.location.search);
     const source =
       normalizeSource(q.get('src') ?? q.get('utm_campaign') ?? q.get('utm_source')) ??
-      organicSource(window.location.pathname, window.location.search, externalReferrerHost(), document.documentElement.lang || 'zh');
+      (atLanding
+        ? organicSource(window.location.pathname, window.location.search, landingReferrerHost(), document.documentElement.lang || 'zh')
+        : null);
     if (!source) return null;
     localStorage.setItem(SOURCE_KEY, JSON.stringify({ source, at: Date.now() }));
     return source;
