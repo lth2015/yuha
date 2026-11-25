@@ -29,6 +29,19 @@ export interface QualityReport {
   lyricsAligned: QualityMetric;
   /** Delivered at least 24 h ago and still kept, with no problem report ÷ those delivered at least 24 h ago. */
   approval: QualityMetric;
+  /**
+   * Why the sung songs that missed `lyricsAligned` missed it, by the first
+   * word of the aligner's reason (the rest — a coverage figure, a status
+   * body — differs per song). `deleted`: the song was deleted (its words go
+   * with it). `no_lyrics`: sung with no words to align — the text model wrote
+   * none, or they failed screening, and the song was sung wordless.
+   * `no_timing`: there were words, and nothing could be stored at all.
+   * Past the eighth reason the rest are summed as `other`, so the counts
+   * always add up to the misses.
+   * `not_recorded`: an estimate with no reason, which is a song made before
+   * reasons were kept, or the estimator being the only aligner configured.
+   */
+  lyricsFallback: Array<{ reason: string; n: number }>;
 }
 
 /** How long a song must have existed before keeping it says anything. */
@@ -43,6 +56,8 @@ interface Row {
   track_id: string | null;
   deleted_at: Date | null;
   timing: string | null;
+  fallback: string | null;
+  has_lyrics: number;
   byte_size: number | null;
   duration_ms: number | null;
   reports: number;
@@ -69,6 +84,8 @@ export async function qualityReport(params: { hours: number; buildSha?: string |
   const rows = await query<Row>(
     `SELECT j.id, j.state, j.input, j.finished_at, t.id AS track_id, t.deleted_at,
             JSON_UNQUOTE(JSON_EXTRACT(t.lyric_timings, '$.source')) AS timing,
+            JSON_UNQUOTE(JSON_EXTRACT(t.lyric_timings, '$.fallbackReason')) AS fallback,
+            (t.lyrics IS NOT NULL AND t.lyrics <> '') AS has_lyrics,
             a.byte_size, a.duration_ms,
             (SELECT COUNT(*) FROM issue_reports r WHERE r.track_id = t.id) AS reports
        FROM generation_jobs j
@@ -93,7 +110,9 @@ export async function qualityReport(params: { hours: number; buildSha?: string |
     length: metric(),
     lyricsAligned: metric(),
     approval: metric(),
+    lyricsFallback: [],
   };
+  const reasons = new Map<string, number>();
 
   for (const r of rows) {
     const finished = r.finished_at.getTime();
@@ -122,8 +141,26 @@ export async function qualityReport(params: { hours: number; buildSha?: string |
     const sung = input.instrumental === false;
     const aligned = r.timing === 'aligned' || r.timing === 'corrected';
     if (sung) count(report.lyricsAligned, aligned, r.id);
+    if (sung && !aligned) {
+      // A recorded reason first; then a song whose words went with its
+      // deletion (an account deleted, an unclaimed trial expired).
+      const why = r.fallback
+        ? r.fallback.split(/[\s:=]/)[0]!
+        : !r.track_id || r.deleted_at
+          ? 'deleted'
+          : !Number(r.has_lyrics)
+            ? 'no_lyrics'
+            : r.timing == null
+              ? 'no_timing'
+              : 'not_recorded';
+      reasons.set(why, (reasons.get(why) ?? 0) + 1);
+    }
 
     count(report.complete, longEnough && (!sung || aligned), r.id);
   }
+  const ranked = [...reasons].map(([reason, n]) => ({ reason, n })).sort((a, b) => b.n - a.n || a.reason.localeCompare(b.reason));
+  report.lyricsFallback = ranked.slice(0, 8);
+  const rest = ranked.slice(8).reduce((sum, r) => sum + r.n, 0);
+  if (rest) report.lyricsFallback.push({ reason: 'other', n: rest });
   return report;
 }

@@ -28,6 +28,7 @@ import {
   softDeleteTrack,
   trackEvent,
   type TrackRow,
+  clientTimings,
 } from '@yuha/db';
 import { licenseStateFor } from '../services/market.js';
 import type { AppContext } from '../context.js';
@@ -70,7 +71,7 @@ async function toTrackView(
     visibility: row.visibility,
     durationSeconds: row.duration_ms / 1000,
     coverSeed: row.cover_seed,
-    lyricTimings: (row.lyric_timings ?? null) as LyricTimings | null,
+    lyricTimings: clientTimings(row.lyric_timings),
     dedication: row.dedication ?? null,
     licenseCount: await countLicenses(row.id),
     licensedByMe: viewerId === row.owner_id ? false : await hasLicense(row.id, viewerId),

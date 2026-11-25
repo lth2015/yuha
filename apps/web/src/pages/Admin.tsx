@@ -22,7 +22,10 @@ interface Measured {
 }
 
 type QualityMetric = { numerator: number; denominator: number; misses: string[] };
-type QualityReport = Record<'completion' | 'playable' | 'complete' | 'length' | 'lyricsAligned' | 'approval', QualityMetric>;
+type QualityReport = Record<'completion' | 'playable' | 'complete' | 'length' | 'lyricsAligned' | 'approval', QualityMetric> & {
+  /** Why sung songs missed lyricsAligned, by the reason's first word (packages/db/src/quality.ts). */
+  lyricsFallback?: Array<{ reason: string; n: number }>;
+};
 const QUALITY_ROWS = ['completion', 'playable', 'complete', 'length', 'lyricsAligned', 'approval'] as const;
 
 interface Overview {
@@ -184,6 +187,13 @@ function QualityCard({ q }: { q: NonNullable<Overview['quality']> }) {
             </li>
           ))}
         </ul>
+      )}
+      {/* Why the lyrics were not aligned this week: the first thing to look at
+          when a customer says the words run ahead of the voice (docs/LYRIC_ALIGNMENT.md). */}
+      {(q.all.week.lyricsFallback?.length ?? 0) > 0 && (
+        <p className="small muted num" style={{ margin: 0, overflowWrap: 'anywhere' }}>
+          {t('admin.quality.lyricsFallback')}: {q.all.week.lyricsFallback!.map((r) => `${r.reason} × ${r.n}`).join(' · ')}
+        </p>
       )}
       <p className="small muted" style={{ margin: 0 }}>
         {q.build ? t('admin.quality.noteBuild', { sha: q.build.slice(0, 7) }) : t('admin.quality.noteNoBuild')}

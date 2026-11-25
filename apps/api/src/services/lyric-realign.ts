@@ -136,7 +136,8 @@ async function runLyricRealign(ctx: AppContext, id: string, actorRole: string): 
       if (result?.status === 'ok' && result.fallbackReason) {
         console.log(JSON.stringify({ level: 'warn', component: 'lyric_realign', ts: new Date().toISOString(), msg: 'lyric_realign_estimated', runId: id, trackId: song.id, reason: result.fallbackReason }));
       }
-      await withTxRetry((tx) => finishRealignedTrack(run, song.id, timings, tx));
+      const why = result?.status === 'ok' ? (result.fallbackReason ?? null) : null;
+      await withTxRetry((tx) => finishRealignedTrack(run, song.id, timings, tx, why));
     }
   }
   // Done and its audit row in one transaction, as for credit resets.

@@ -46,7 +46,7 @@ export class HttpAlignmentProvider implements AlignmentProvider {
 
   async align(req: AlignmentRequest): Promise<AlignmentResult> {
     const audioUrl = this.cfg.audioUrlResolver({ providerRequestId: req.providerRequestId });
-    if (!audioUrl) return { status: 'failed', reason: 'no audio url available for alignment' };
+    if (!audioUrl) return { status: 'failed', reason: 'no_audio_url: ALIGNMENT_AUDIO_URL_TEMPLATE is not set' };
 
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), this.cfg.timeoutMs ?? 60_000);
@@ -73,7 +73,7 @@ export class HttpAlignmentProvider implements AlignmentProvider {
 
       const rawLines = read(json, this.cfg.linesField);
       if (!Array.isArray(rawLines) || !rawLines.length) {
-        return { status: 'failed', reason: 'aligner response had no lines' };
+        return { status: 'failed', reason: 'aligner_no_lines' };
       }
       const lines: LyricTimings['lines'] = [];
       for (const raw of rawLines.slice(0, 200)) {
@@ -81,7 +81,7 @@ export class HttpAlignmentProvider implements AlignmentProvider {
         const start = read(raw, this.cfg.lineStartField);
         const end = read(raw, this.cfg.lineEndField);
         if (typeof text !== 'string' || typeof start !== 'number' || typeof end !== 'number') {
-          return { status: 'failed', reason: 'aligner line missing text/start/end' };
+          return { status: 'failed', reason: 'aligner_bad_line: missing text/start/end' };
         }
         const section = this.cfg.sectionField ? read(raw, this.cfg.sectionField) : undefined;
         const rawWords = this.cfg.wordsField ? read(raw, this.cfg.wordsField) : undefined;
@@ -108,12 +108,13 @@ export class HttpAlignmentProvider implements AlignmentProvider {
       }
       const timings: LyricTimings = { source: 'aligned', lines, aligner: this.cfg.providerId };
       if (!timingsMatchLyrics(req.lyrics, timings)) {
-        return { status: 'failed', reason: 'aligner lyrics mismatch' };
+        return { status: 'failed', reason: 'aligner_lyrics_mismatch' };
       }
       return { status: 'ok', timings };
     } catch (err) {
       if ((err as Error).name === 'AbortError') return { status: 'failed', reason: 'aligner_timeout' };
-      return { status: 'failed', reason: (err as Error).message };
+      // A network failure is caught here, not thrown to the fallback wrapper, so it is named here.
+      return { status: 'failed', reason: `aligner_threw: ${(err as Error).message}` };
     } finally {
       clearTimeout(timer);
     }

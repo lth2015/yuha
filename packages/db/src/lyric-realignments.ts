@@ -116,6 +116,8 @@ export async function finishRealignedTrack(
   trackId: string,
   timings: LyricTimings | null,
   tx: PoolConnection,
+  /** Why the aligner fell back this time, when it did. */
+  fallbackReason?: string | null,
 ): Promise<boolean> {
   const row = await queryOne<{ status: string; cursor_track_id: string | null }>(
     `SELECT status, cursor_track_id FROM lyric_realignments WHERE id = ? FOR UPDATE`,
@@ -143,6 +145,15 @@ export async function finishRealignedTrack(
       );
       rewritten = true;
     }
+  } else if (fallbackReason) {
+    // Still an estimate: the newest reason is the one worth reading
+    // (docs/LYRIC_ALIGNMENT.md). Only an estimate's; a correction has none.
+    await execute(
+      `UPDATE tracks SET lyric_timings = JSON_SET(lyric_timings, '$.fallbackReason', ?)
+        WHERE id = ? AND JSON_UNQUOTE(JSON_EXTRACT(lyric_timings, '$.source')) = 'estimated'`,
+      [fallbackReason.slice(0, 200), trackId],
+      tx,
+    );
   }
   await execute(
     `UPDATE lyric_realignments
