@@ -1193,6 +1193,7 @@ const ja: Dict = {
   'song.again.lead': "あなたも、誰かに一曲贈ってみませんか",
   'song.again.lead.plain': "気持ちを書けば、あなたもこんな一曲を",
   'create.job.share': "この曲をシェア",
+  'create.job.sendGift': "{to} さんに贈る",
   'song.gift.edit': '献辞を編集',
   'issue.open': '問題を報告',
   'issue.title': 'この曲のどこが気になりますか？',

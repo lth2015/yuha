@@ -1193,6 +1193,7 @@ const en: Dict = {
   'song.again.lead': "Write one for someone, too",
   'song.again.lead.plain': "Write a feeling, and make a song like this one",
   'create.job.share': "Share this song",
+  'create.job.sendGift': "Send it to {to}",
   'song.gift.edit': 'Edit dedication',
   'issue.open': 'Report a problem',
   'issue.title': 'What’s wrong with this song?',

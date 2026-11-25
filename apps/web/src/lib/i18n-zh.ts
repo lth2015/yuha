@@ -1211,6 +1211,7 @@ const zh: Dict = {
   'song.again.lead': "收到一首歌，你也可以为一个人写一首",
   'song.again.lead.plain': "写下一段心情，你也能做一首这样的歌",
   'create.job.share': "分享这首歌",
+  'create.job.sendGift': "送给 {to}",
   'song.gift.edit': '修改赠言',
   'issue.open': '报告问题',
   'issue.title': '这首歌哪里不对？',
