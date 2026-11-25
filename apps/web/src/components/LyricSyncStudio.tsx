@@ -111,7 +111,7 @@ export function LyricSyncStudio({
   useEffect(() => {
     if (!loop || !active) return;
     return player.onTime((s) => {
-      if (s >= loop.to || s < loop.from - 0.5) player.seek(loop.from);
+      if (s >= loop.to || loop.from - 0.5 > s) player.seek(loop.from);
     });
   }, [loop, active, player]);
   const listen = () => {
@@ -308,7 +308,7 @@ export function LyricSyncStudio({
             </button>
           ),
         )}
-        {active && now >= view.from && now <= view.to && <span className="sync-studio__cursor" style={{ left: pct(now) }} aria-hidden="true" />}
+        {active && now >= view.from && view.to >= now && <span className="sync-studio__cursor" style={{ left: pct(now) }} aria-hidden="true" />}
       </div>
       <p className="small muted sync-studio__wavenote">{t(wave === 'failed' ? 'sync.wave.failed' : 'sync.wave.note')}</p>
 

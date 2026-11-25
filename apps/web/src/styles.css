@@ -2931,7 +2931,7 @@ textarea.is-full { border-color: var(--danger); }
 }
 .sync-studio__preview.is-cover { background-image: linear-gradient(160deg, var(--violet), var(--petal-deep)); }
 .sync-studio__preview-line {
-  width: 100%; padding: 6px; font-size: 10px; line-height: 1.35; color: #fff; text-align: center; text-wrap: balance; overflow-wrap: anywhere;
+  width: 100%; padding: 6px; font-size: var(--t-caption); line-height: 1.35; color: #fff; text-align: center; text-wrap: balance; overflow-wrap: anywhere;
   background: linear-gradient(to top, rgb(0 0 0 / 70%), transparent);
 }
 .sync-studio__transport { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s2); min-width: 0; }
@@ -2943,7 +2943,7 @@ textarea.is-full { border-color: var(--danger); }
 .sync-studio__wave { position: absolute; inset: 0; width: 100%; height: 100%; }
 .sync-studio__block {
   position: absolute; bottom: 6px; height: 30px; min-width: 0; padding: 0; box-sizing: border-box; border: 1px solid var(--line-strong); border-radius: 6px;
-  background: var(--glass-strong); color: var(--ink); font: inherit; font-size: 11px; text-align: left; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; cursor: pointer;
+  background: var(--glass-strong); color: var(--ink); font: inherit; font-size: var(--t-caption); text-align: left; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; cursor: pointer;
 }
 /* Padding on the text, not the block: two lines 0.4 s apart give a block narrower than any padding, which pushed it onto its neighbour. */
 .sync-studio__block span { pointer-events: none; display: block; padding: 0 4px; overflow: hidden; text-overflow: ellipsis; }

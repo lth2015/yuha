@@ -134,7 +134,7 @@ const PAGES = [
   { name: 'home-trial-ask', path: '/', as: null, needs: 'guestTrialEnabled', prepare: openTrialAsk },
   { name: 'song-guest-owner', path: '/song/:guestTrack', as: 'guest', needs: 'guestTrialEnabled' },
   { name: 'song-photo-video', path: '/song/:track', as: 'creator', needs: 'photoVideoEnabled', prepare: openPhotoVideo },
-  { name: 'song-lyric-sync', path: '/song/:track', as: 'creator', prepare: openLyricSync },
+  { name: 'song-lyric-sync', path: '/song/:sungTrack', as: 'creator', prepare: openLyricSync },
   // Three versions of the lyrics (docs/LYRIC_COWRITE_SPEC.md).
   { name: 'create-cowrite', path: '/create', as: 'creator', prepare: writeThreeVersions },
   { name: 'create-linefix', path: '/create', as: 'creator', prepare: rewriteOneLine },
@@ -185,7 +185,7 @@ async function openPhotoVideo(page) {
 // The lyric timing workspace inside the video card (components/LyricSyncStudio.tsx).
 async function openLyricSync(page) {
   await page.click('.photo-video__open');
-  // Only a sung song has lyrics to time; the seed's creator song is one (a gift with vocals).
+  // Only a song with sung, written lyrics has a timeline to adjust (fixtures: `sung`).
   if (!(await page.locator('.photo-video__sync > .btn').count())) {
     throw new Error('song-lyric-sync: the fixture song has no sung lyrics, so there is no timing workspace to check');
   }
@@ -559,6 +559,38 @@ async function fixtures(browser, states) {
     }
   }
   if (!gift) throw new Error('fixtures: the Christmas song was not delivered in 60 s — is the worker running?');
+  /*
+   * A sung song with written lyrics, for the lyric timing workspace. The song
+   * above has none in demo mode — a simple-mode song's lyrics come from the
+   * music model, which the demo adapter does not write — so the workspace
+   * never appeared on it, and CI said so before anyone could believe a pass.
+   */
+  // The list carries no lyrics, so each sung, finished song is read in full.
+  const sungOf = async (items) => {
+    for (const x of items.filter((t) => t.vocalMode !== 'instrumental' && t.state === 'deliverable').slice(0, 20)) {
+      if ((await call('GET', `/v1/tracks/${x.trackId}`))?.lyrics) return x.trackId;
+    }
+    return undefined;
+  };
+  let sung = await sungOf((await call('GET', '/v1/tracks')).items ?? []);
+  if (!sung) {
+    await call(
+      'POST',
+      '/v1/generations',
+      {
+        mode: 'custom',
+        prompt: '冬天的早晨',
+        lyrics: '[verse]\n冬天的早晨\n和家人一起做早饭\n窗外的雪慢慢落下\n[chorus]\n热汤的香气飘满屋\n这就是我想要的家',
+        durationSeconds: 60,
+      },
+      { 'idempotency-key': key() },
+    );
+    for (let i = 0; i < 60 && !sung; i++) {
+      await page.waitForTimeout(1000);
+      sung = await sungOf((await call('GET', '/v1/tracks')).items ?? []);
+    }
+  }
+  if (!sung) throw new Error('fixtures: the song with written lyrics was not delivered in 60 s — is the worker running?');
   await ctx.close();
 
   const actx = await browser.newContext({ storageState: states.admin });
@@ -577,7 +609,7 @@ async function fixtures(browser, states) {
     });
   }, [USERS.creator, `ui-check-grant-${new Date().toISOString().slice(0, 10)}`]);
   await actx.close();
-  return { track, order, job, gift };
+  return { track, order, job, gift, sung };
 }
 
 mkdirSync(SHOTS, { recursive: true });
@@ -635,7 +667,8 @@ for (const p of PAGES) {
     .replace(':order', data.order)
     .replace(':job', data.job)
     .replace(':gift', data.gift)
-    .replace(':guestTrack', data.guestTrack ?? '');
+    .replace(':guestTrack', data.guestTrack ?? '')
+    .replace(':sungTrack', data.sung);
 }
 let failures = 0;
 let warnings = 0;
