@@ -22,6 +22,7 @@ import { ErrorNotice } from '../components/common';
 import { Score } from '../components/Score';
 import { ShareMenu } from '../components/ShareMenu';
 import { PhotoVideo } from '../components/PhotoVideo';
+import { useConfirm } from '../components/ConfirmDialog';
 import { SyncedLyrics } from '../components/SyncedLyrics';
 import { scoreFromSeed } from '../lib/score';
 import { usePageTitle } from '../lib/title';
@@ -51,6 +52,7 @@ export default function SongDetail() {
   const navigate = useNavigate();
   const { me, runtime } = useSession();
   const player = usePlayer();
+  const [confirm, confirmDialog] = useConfirm();
   const [song, setSong] = useState<SongDetailResponse | null>(null);
   // A song page is best titled by its song, not by the word "song".
   usePageTitle(song?.title);
@@ -320,7 +322,7 @@ export default function SongDetail() {
    * share menu on the published song.
    */
   const sendGift = async () => {
-    if (!window.confirm(t('song.gift.confirmPublic'))) return;
+    if (!(await confirm({ message: t('song.gift.confirmPublic'), confirmLabel: t('song.gift.send') }))) return;
     if (await setVisibility('public')) setSendNow(true);
   };
 
@@ -380,8 +382,10 @@ export default function SongDetail() {
       setSendNow(true);
       return;
     }
-    if (!window.confirm(t(song.dedication ? 'song.gift.confirmPublic' : 'song.share.confirmPublic'))) return;
-    void setVisibility('public').then((ok) => ok && setSendNow(true));
+    void confirm({
+      message: t(song.dedication ? 'song.gift.confirmPublic' : 'song.share.confirmPublic'),
+      confirmLabel: t(song.dedication ? 'song.gift.send' : 'song.share.publishOk'),
+    }).then((yes) => yes && setVisibility('public').then((ok) => ok && setSendNow(true)));
   };
   const shareUrl = `${API_BASE || window.location.origin}/v1/share/songs/${song.trackId}`;
   const shareText = song.dedication
@@ -389,7 +393,7 @@ export default function SongDetail() {
     : undefined;
 
   const remove = async () => {
-    if (!window.confirm(t('song.confirmDelete', { title: song.title }))) return;
+    if (!(await confirm({ message: t('song.confirmDelete', { title: song.title }), confirmLabel: t('song.delete'), danger: true }))) return;
     setBusy(true);
     setActionError(null);
     try {
@@ -455,6 +459,7 @@ export default function SongDetail() {
 
   return (
     <div className="song-page">
+      {confirmDialog}
       {giftSeason && song.dedication && (
         <HolidayOpening trackId={song.trackId} season={giftSeason} to={song.dedication.to} onOpen={play} />
       )}
@@ -674,7 +679,17 @@ export default function SongDetail() {
                 <button
                   type="button"
                   className={`text-action${song.visibility === 'public' || song.dedication ? '' : ' is-strong'}`}
-                  onClick={() => void setVisibility(song.visibility === 'public' ? 'private' : 'public')}
+                  onClick={() => {
+                    // Taking a link back is instant; opening it asks, like Share does (UX audit #29).
+                    if (song.visibility === 'public') {
+                      void setVisibility('private');
+                      return;
+                    }
+                    void confirm({
+                      message: t(song.dedication ? 'song.gift.confirmPublic' : 'song.share.confirmPublic'),
+                      confirmLabel: t('song.share.publishOk'),
+                    }).then((yes) => yes && setVisibility('public'));
+                  }}
                   disabled={busy}
                 >
                   {t(song.visibility === 'public' ? 'song.unpublish' : 'song.publish')}

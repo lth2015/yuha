@@ -1,7 +1,8 @@
 import { JobOutcome, OpenGenerations, QueueStatus, UnfinishedGenerations, WaitLyrics, etaText } from '../components/GenerationQueue';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import type { JobView, Season, TrackView } from '@yuha/contracts';
+import { PROMPT_MAX_CODEPOINTS, type JobView, type Season } from '@yuha/contracts';
+import { clampToCodePoints, codePointLength } from '../lib/codepoints';
 import { ApiError, apiFetch, newIdempotencyKey } from '../lib/api';
 import { messageFor } from '../lib/messages';
 import { useI18n } from '../lib/i18n';
@@ -492,8 +493,8 @@ export default function Home() {
               id="home-prompt"
               ref={promptRef}
               value={prompt}
-              maxLength={400}
-              onChange={(e) => setPrompt(e.target.value)}
+              // The studio's limit, counted the same way (UX audit #32: 400 here, 500 there).
+              onChange={(e) => setPrompt(clampToCodePoints(e.target.value, PROMPT_MAX_CODEPOINTS))}
               placeholder={t('composer.placeholder')}
               aria-describedby="home-prompt-format home-prompt-count"
             />
@@ -506,7 +507,7 @@ export default function Home() {
               </span>
               <span className="composer__meta-end">
                 <span id="home-prompt-count" className="num">
-                  {prompt.length} / 400
+                  {codePointLength(prompt)} / {PROMPT_MAX_CODEPOINTS}
                 </span>
                 {written && (
                   <button
