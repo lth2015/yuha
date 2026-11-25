@@ -29,7 +29,7 @@
 
 | 建议 | 第四版的处理 | 状态 |
 | --- | --- | --- |
-| 4a 试做 7 天删除与作曲服务器 30 天冲突 | 作曲服务器保存期改为 **6 天**（每小时清理，任何副本都在 7 天内删除），条文第 6 条同步 | 代码已改（默认 6 天）；**Spark 上需在 `.env` 加 `RETENTION_DAYS=6` 并重启 music**，无需重建 |
+| 4a 试做 7 天删除与作曲服务器 30 天冲突 | 作曲服务器保存期改为 **6 天**（每小时清理，任何副本都在 7 天内删除），条文第 6 条同步 | 代码已改（默认 6 天）；Spark 上 `RETENTION_DAYS=6` 已设置并重启 music（2026-11-25，产品负责人确认；命令输出未留存） |
 | 4b 每小时清扫不当然保证 24 小时 | 核实：清扫删除的是**超过 1 小时**的临时目录（不是 24 小时），每小时一次，API 启动时也执行一次。只要 API 在运行，崩溃残留最长约 2 小时；Pod 被替换时临时盘随之删除。条文仍写「最长 24 小时」作为上限 | 已核实（代码和测试见 `sweepStaleVideoDirs`） |
 | 4c 最终输出视频的保存方式缺失 | 核实：成品 MP4 在服务器临时目录生成，直接返回给用户的设备（`cache-control: no-store`），随临时目录一起删除，服务器不保留。条文第 2 条照片一段补一句 | 条文已补 |
 | 4d Google、Stripe 不宜一律称为受托方 | 第 4 条改为「我们使用的外部服务」，分别写各自的角色；Google、Stripe 写明按其自己的政策处理 | 条文已改 |
@@ -143,7 +143,7 @@
 > - **Our music server** keeps the description and lyrics it was given, and the audio it made, for 6 days,
 >   so that every copy of a song made without an account is gone within 7 days.
 
-（作曲服务器：2026-11-24 已部署清理代码；保存期从 30 天改为 6 天，需在 Spark 的 `.env` 加 `RETENTION_DAYS=6` 并重启 music 后才成立。操作步骤见 `REQUESTS_2026-11-25.md` 第一部分。）
+（作曲服务器：2026-11-24 已部署清理代码；2026-11-25 在 Spark 上设为 6 天并重启 music，产品负责人确认。操作步骤见 `REQUESTS_2026-11-25.md` 第一部分。）
 
 ### 隐私政策 9. Local storage — 整段替换
 
