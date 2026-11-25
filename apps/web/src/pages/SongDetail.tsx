@@ -797,6 +797,7 @@ export default function SongDetail() {
               lyrics={song.lyrics}
               lyricTimings={song.lyricTimings}
               makeCoverVideo={makeVideo}
+              startOpen={params.get('video') === '1'}
               photosEnabled={runtime?.features.photoVideoEnabled === true || runtime?.features.photoVideoPreview === true}
             />
           )}

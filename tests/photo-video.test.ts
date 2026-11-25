@@ -9,7 +9,7 @@ import { execFileSync } from 'node:child_process';
 import { mkdtempSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { claimOutboxBatch, queryOne, withTx } from '@yuha/db';
+import { claimOutboxBatch, jstToday, query, queryOne, statsReport, withTx } from '@yuha/db';
 import { runJobStep } from '@yuha/worker/pipeline';
 import { createHarness, resetData, teardown, type Harness, type TestUser } from './helpers/harness.js';
 import { planPhotoClip } from '../apps/web/src/lib/share-art.js';
@@ -94,6 +94,29 @@ describe('the photo video', () => {
     expect(Number(info.format.duration)).toBeLessThan(12.6);
     // The frames held the photos; the working directory is gone with them.
     expect(leftovers().length).toBe(before);
+  }, 60_000);
+
+  it('is counted for the dashboard, cover and photo apart, and records nothing of what was in it', async () => {
+    const user = await on.createUser({ credits: 3 });
+    const trackId = await song(on, user);
+    const frames = [{ at: 0, jpeg: jpeg('0xF46B45') }];
+    expect((await post(on, user, trackId, { start: 0, duration: 4, frames })).statusCode).toBe(200);
+    const cover = await on.app.inject({
+      method: 'POST',
+      url: `/v1/tracks/${trackId}/share-video`,
+      headers: user.authHeader,
+      payload: { start: 0, duration: 4, frames } as never,
+    });
+    expect(cover.statusCode).toBe(200);
+    // A refused one is not a video made.
+    expect((await post(on, user, trackId, { start: 0, duration: 4, frames, rightsConfirmed: false })).statusCode).toBe(400);
+
+    const today = jstToday();
+    const report = await statsReport({ granularity: 'day', from: today, to: today });
+    expect(report.videos).toEqual({ cover: 1, photo: 1 });
+    const rows = await query<{ props: string }>(`SELECT props FROM analytics_events WHERE name = 'video_made'`);
+    expect(rows).toHaveLength(2);
+    for (const r of rows) expect(JSON.stringify(r.props)).not.toMatch(/jpeg|frames|\/9j\//);
   }, 60_000);
 
   it('is refused while the switch is off', async () => {

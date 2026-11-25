@@ -907,6 +907,12 @@ export default function Create() {
                 {t('create.job.open', { title: result.title })}
               </Link>
             )}
+            {/* The song as a video, straight from here (it was only on the song page). */}
+            {result && result.previewUrl && (
+              <Link to={`/song/${result.trackId}?video=1`} className="btn">
+                {t('video.title')}
+              </Link>
+            )}
             {/* Straight to sharing (docs/GROWTH_SPEC.md, part two). */}
             {result && result.previewUrl && !result.dedication && (
               <Link to={`/song/${result.trackId}?share=1`} className="btn">

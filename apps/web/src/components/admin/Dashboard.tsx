@@ -44,6 +44,8 @@ interface Report {
   };
   /** Songs without an account (docs/GROWTH_SPEC.md, part three). */
   trials: { opened: number; made: number; claimed: number };
+  /** Absent from an API older than the count. */
+  videos?: { cover: number; photo: number };
 }
 
 /* Categorical slots 1–3 of the validated palette (blue, orange, aqua), in
@@ -310,6 +312,10 @@ export function Dashboard() {
             <h3 className="dash__subhead">{t('admin.dash.trials.h')}</h3>
             <p className="small">
               {t('admin.dash.trials.line', { opened: num(report.trials.opened), made: num(report.trials.made), claimed: num(report.trials.claimed) })}
+            </p>
+            <h3 className="dash__subhead">{t('admin.dash.videos.h')}</h3>
+            <p className="small">
+              {t('admin.dash.videos.line', { cover: num(report.videos?.cover ?? 0), photo: num(report.videos?.photo ?? 0) })}
             </p>
           </section>
 

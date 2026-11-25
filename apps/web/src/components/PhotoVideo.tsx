@@ -39,6 +39,7 @@ export function PhotoVideo({
   lyricTimings,
   makeCoverVideo,
   photosEnabled,
+  startOpen = false,
 }: {
   song: ShareSong & { trackId: string; title: string; durationSeconds: number };
   labels: ShareLabels;
@@ -48,11 +49,17 @@ export function PhotoVideo({
   makeCoverVideo: () => Promise<File>;
   /** The photo path, behind its own switch (or the staff preview). */
   photosEnabled: boolean;
+  /** Arrived from a "make a video" link (`?video=1`): open, and in view. */
+  startOpen?: boolean;
 }) {
   const { t } = useI18n();
   const { runtime } = useSession();
   const preview = runtime?.features.photoVideoPreview === true;
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(startOpen);
+  const sectionRef = useRef<HTMLElement>(null);
+  useEffect(() => {
+    if (startOpen) sectionRef.current?.scrollIntoView({ block: 'start', behavior: 'smooth' });
+  }, [startOpen]);
   const [photos, setPhotos] = useState<Picked[]>([]);
   const [skipped, setSkipped] = useState(0);
   const [result, setResult] = useState<Result>({ state: 'idle' });
@@ -157,7 +164,7 @@ export function PhotoVideo({
   }
 
   return (
-    <section className="photo-video" aria-labelledby="photo-video-title">
+    <section className="photo-video" aria-labelledby="photo-video-title" ref={sectionRef}>
       <div className="photo-video__head">
         <h2 id="photo-video-title">{t('video.title')}</h2>
         <button type="button" className="text-action" onClick={() => setOpen(false)}>

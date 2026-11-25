@@ -285,6 +285,8 @@ export interface StatsReport {
   sources: VisitSources;
   /** Songs without an account in the range (docs/GROWTH_SPEC.md, part three). */
   trials: TrialStats;
+  /** Videos made in the range (song page, 「做一段视频」): from the cover, or with photos. */
+  videos: { cover: number; photo: number };
 }
 
 export interface TrialStats {
@@ -306,6 +308,18 @@ async function trialStats(fromUtc: Date, toUtc: Date): Promise<TrialStats> {
     [fromUtc, toUtc],
   );
   return { opened: Number(row?.opened ?? 0), made: Number(row?.made ?? 0), claimed: Number(row?.claimed ?? 0) };
+}
+
+async function videoStats(fromUtc: Date, toUtc: Date): Promise<{ cover: number; photo: number }> {
+  const rows = await query<{ kind: string | null; n: number }>(
+    `SELECT JSON_UNQUOTE(JSON_EXTRACT(props, '$.kind')) AS kind, COUNT(*) AS n
+       FROM analytics_events
+      WHERE name = 'video_made' AND occurred_at >= ? AND occurred_at < ?
+      GROUP BY kind`,
+    [fromUtc, toUtc],
+  );
+  const of = (k: string) => Number(rows.find((r) => r.kind === k)?.n ?? 0);
+  return { cover: of('cover'), photo: of('photo') };
 }
 
 /**
@@ -419,12 +433,13 @@ export async function statsReport(params: { granularity: Granularity; from: stri
   const spanMs = toUtc.getTime() - fromUtc.getTime();
   const prevFromUtc = new Date(fromUtc.getTime() - spanMs);
 
-  const [series, totals, previous, sources, trials] = await Promise.all([
+  const [series, totals, previous, sources, trials, videos] = await Promise.all([
     collect(fromUtc, toUtc, params.granularity),
     collect(fromUtc, toUtc, null),
     collect(prevFromUtc, fromUtc, null),
     visitSources(fromUtc, toUtc),
     trialStats(fromUtc, toUtc),
+    videoStats(fromUtc, toUtc),
   ]);
   const strip = (b: StatsBucket | undefined): StatsTotals => {
     const { key: _key, ...rest } = b ?? emptyBucket('all');
@@ -439,6 +454,7 @@ export async function statsReport(params: { granularity: Granularity; from: stri
     previous: strip(previous.get('all')),
     sources,
     trials,
+    videos,
   };
 }
 
