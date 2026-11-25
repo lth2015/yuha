@@ -108,9 +108,8 @@ export default async function publicRoutes(app: FastifyInstance, opts: { ctx: Ap
   /**
    * Synthesised sample audio with its provenance note (UI-01 heritage).
    *
-   * Not the landing page's source any more, whatever this used to say: Home
-   * renders the showcase from `GET /v1/explore`, and nothing in `apps/web`
-   * calls this. Kept because it is the one endpoint that serves audio we own
+   * Not the landing page's source any more, whatever this used to say:
+   * nothing in `apps/web` calls this. Kept because it is the one endpoint that serves audio we own
    * outright, which is what a sales or legal conversation needs — but it has
    * no reader in the product, and a route with no reader is a route nobody
    * notices breaking.

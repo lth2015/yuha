@@ -100,7 +100,7 @@ function retryPause(signal: AbortSignal): Promise<void> {
  */
 async function request(path: string, opts: RequestOptions): Promise<{ res: Response; text: string; token: string | null }> {
   if (IOS_PREVIEW && ((opts.method ?? 'GET') !== 'GET' ||
-    !['/v1/runtime', '/v1/explore', '/v1/legal/business-disclosure', '/v1/products'].includes(path))) {
+    !['/v1/runtime', '/v1/legal/business-disclosure', '/v1/products'].includes(path))) {
     throw new Error('iOS preview: this operation is not enabled');
   }
   const headers: Record<string, string> = {};

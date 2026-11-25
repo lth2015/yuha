@@ -2,9 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import { AppError, setVisibilityRequest, type TrackView } from '@yuha/contracts';
 import type { LyricTimings } from '@yuha/contracts';
 import {
-  getMasterAsset,
   getPublicTrack,
-  listPublicTracks,
   getTrackForUser,
   hasLicense,
   countLicenses,
@@ -53,76 +51,18 @@ export function toPublicTrackView(
 }
 
 /**
- * How many songs the showcase hands out.
+ * The play counter and the visibility flip.
  *
- * The seeded showcase is six; the cap is what stops a growing public catalogue
- * from turning a landing page into an unbounded query.
- */
-const SHOWCASE_LIMIT = 12;
-
-async function previewUrlFor(ctx: AppContext, trackId: string): Promise<string | null> {
-  const master = await getMasterAsset(trackId);
-  if (!master) return null;
-  return (
-    await ctx.storage.signedUrl({
-      zone: 'delivery',
-      key: master.storage_key,
-      ttlSeconds: ctx.config.DOWNLOAD_URL_TTL_SECONDS,
-    })
-  ).url;
-}
-
-/**
- * The showcase list, the play counter, and the visibility flip.
+ * `GET /v1/explore`, a capped newest-first list of published songs for the
+ * home page, was removed on 2026-11-25 by product decision: there is no
+ * browsable list of songs (CLAUDE.md, "No public feed"). Songs are private, and
+ * "public" means anyone holding the link can open it.
  *
- * The ranked public feed that once lived here was removed in b63d66b as a
- * product decision, and its listing in 91be961. `GET /v1/explore` is back by a
- * later decision, but deliberately smaller than what was deleted: a capped,
- * newest-first list of published songs so the landing page can be heard before
- * anyone signs up. No ranking, no trending, no like counter — those were the
- * parts that had no reader, and they are not coming back with it.
- *
- * It is the one route in this app that answers without a bearer token. That is
- * the point of it: a visitor with no account is exactly who it is for. It
- * returns only what `getPublicTrack` would already hand out for the same song,
- * so it widens who can list published songs, never what a published song
- * reveals.
+ * Earlier: a ranked feed (removed in b63d66b, its listing in 91be961), then
+ * this smaller showcase list, now gone too.
  */
 export default async function exploreRoutes(app: FastifyInstance, opts: { ctx: AppContext }) {
   const { ctx } = opts;
-
-  /**
-   * GET /v1/explore — the landing page's showcase, no sign-in required.
-   *
-   * Rate-limited per IP like the play counter beside it, because it is
-   * unauthenticated and each row costs a signed-URL round trip.
-   */
-  app.get(
-    '/v1/explore',
-    {
-      config: {
-        rateLimit: { max: 60, timeWindow: '1 minute' },
-      },
-    },
-    async () => {
-      const rows = await listPublicTracks(SHOWCASE_LIMIT);
-      const items = await Promise.all(
-        rows.map(async (row) => ({
-          ...toPublicTrackView(ctx, row, {
-            previewUrl: await previewUrlFor(ctx, row.id),
-            licenseCount: 0,
-            // Nobody is signed in on this route, so there is no "me" to answer
-            // for. null is the view's own word for "not known", not for "no".
-            licensedByMe: null,
-          }),
-          // Never on the showcase, even if a gift slipped into the list: who a
-          // song was for is for the people holding its link.
-          dedication: null,
-        })),
-      );
-      return { items };
-    },
-  );
 
   /** POST /v1/explore/:id/plays — engagement counter; rate-limited per IP. */
   app.post(

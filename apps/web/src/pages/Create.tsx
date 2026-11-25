@@ -1321,6 +1321,24 @@ export default function Create() {
                 </button>
               ))}
             </div>
+            {/* A starter sets more than the words (UX audit #10): say what, so
+                vocals turning off or a style appearing is not a surprise. */}
+            {(() => {
+              const on = PRESETS.find((p) => draft.prompt === t(p.promptKey));
+              if (!on) return null;
+              return (
+                <p className="composer__presets-set" role="status">
+                  {t('create.presets.set', {
+                    mode: t(on.instrumental ? 'create.vocals.instrumental' : 'create.vocals.sing'),
+                    styles: on.styles.map((x) => styleLabel(x, t)).join(t('common.listSep')),
+                    length:
+                      on.durationSeconds === 'auto'
+                        ? t('create.length.auto')
+                        : `${Math.floor(on.durationSeconds / 60)}:${String(on.durationSeconds % 60).padStart(2, '0')}`,
+                  })}
+                </p>
+              );
+            })()}
           </div>
         )}
 

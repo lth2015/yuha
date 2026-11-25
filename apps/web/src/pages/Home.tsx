@@ -10,8 +10,7 @@ import { guestSongId, rememberGuestSong, startGuestTrial } from '../lib/guest';
 import { TrialAsk } from '../components/TrialAsk';
 import { Score } from '../components/Score';
 import { NewYearCountdown } from '../components/HolidayMoments';
-import { Shelf } from '../components/Shelf';
-import { SongCard } from '../components/SongCard';
+import { styleLabel } from '../lib/style-label';
 import { JOB_PHASES, fractionOfPhase, phaseKey } from '../lib/phases';
 
 const DRAFT_KEY = 'yuha.home-draft';
@@ -19,6 +18,18 @@ const DRAFT_KEY = 'yuha.home-draft';
 const MODE_KEY = 'yuha.home-instrumental';
 
 const MOOD_KEYS = ['city', 'sunset', 'rain', 'night'] as const;
+/**
+ * What a mood chip sets on the song: real style tags from the studio's own
+ * list (lib/style-label.ts), not the chip's label. The label used to be sent
+ * as the style, so a song came back tagged 「房间里的雨」 (UX audit #11), and
+ * nothing said a chip had changed the song at all.
+ */
+const MOOD_STYLES: Record<(typeof MOOD_KEYS)[number], string[]> = {
+  city: ['pop', 'lofi'],
+  sunset: ['acoustic', 'pop'],
+  rain: ['ambient', 'lofi'],
+  night: ['lofi', 'ambient'],
+};
 
 /** The simple path commits to one shape: a full song, two minutes, private.
     Everything else lives in the studio at /create. */
@@ -82,27 +93,6 @@ export default function Home() {
   const { t } = useI18n();
   const { me, entitlements, refreshEntitlements, refreshMe, runtime } = useSession();
   const season = runtime?.season ?? null;
-  /**
-   * Published songs, so the landing page can be heard before anyone signs up.
-   *
-   * `null` until answered and `[]` when there are none; neither renders, so a
-   * fresh install never shows an empty shelf and a visitor never sees it flash
-   * in. A failure is swallowed: this strip is an invitation, not the task, and
-   * an error banner under a working composer would claim the page is broken.
-   */
-  const [showcase, setShowcase] = useState<TrackView[] | null>(null);
-
-  useEffect(() => {
-    let cancelled = false;
-    apiFetch<{ items: TrackView[] }>('/v1/explore')
-      .then((r) => {
-        if (!cancelled) setShowcase(r.items);
-      })
-      .catch(() => undefined);
-    return () => {
-      cancelled = true;
-    };
-  }, []);
   const navigate = useNavigate();
   /**
    * Hydrated lazily rather than in an effect.
@@ -203,12 +193,14 @@ export default function Home() {
     }
     const ownWords = prompt.trim().length > 0 && !MOOD_KEYS.some((k) => t(`mood.${k}.text`) === prompt);
     setActiveMood(mood);
+    // Say what the chip did to the song, not only to the text box.
+    const styles = MOOD_STYLES[mood].map((x) => styleLabel(x, t)).join(t('common.listSep'));
     if (ownWords) {
-      setFeedbackKey({ key: 'composer.moodKept', params: { mood: t(`mood.${mood}`) } });
+      setFeedbackKey({ key: 'composer.moodKept', params: { mood: t(`mood.${mood}`), styles } });
       return;
     }
     setPrompt(t(`mood.${mood}.text`));
-    setFeedbackKey({ key: 'composer.moodSeeded' });
+    setFeedbackKey({ key: 'composer.moodSeeded', params: { styles } });
   };
 
   /*
@@ -291,7 +283,7 @@ export default function Home() {
         body: {
           mode: 'simple',
           prompt: prompt.trim(),
-          styles: activeMood ? [t(`mood.${activeMood}`)] : [],
+          styles: activeMood ? MOOD_STYLES[activeMood as (typeof MOOD_KEYS)[number]] : [],
           instrumental,
           energy: 0.5,
           durationSeconds: SIMPLE_DURATION_SECONDS,
@@ -650,25 +642,6 @@ export default function Home() {
         </section>
       )}
 
-      {showcase && showcase.length > 0 && (
-        <section className="showcase" aria-labelledby="showcase-heading">
-          <Shelf
-            head={(
-              <>
-                <h2 id="showcase-heading">{t('home.showcase.title')}</h2>
-                <p className="showcase__sub">{t('home.showcase.sub')}</p>
-              </>
-            )}
-            rowClass="showcase__row"
-            prevLabel={t('home.showcase.prev')}
-            nextLabel={t('home.showcase.next')}
-          >
-            {showcase.map((song, i) => (
-              <SongCard key={song.trackId} song={song} queue={showcase} index={i} />
-            ))}
-          </Shelf>
-        </section>
-      )}
     </div>
   );
 }

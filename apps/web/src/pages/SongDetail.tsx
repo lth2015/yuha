@@ -623,7 +623,6 @@ export default function SongDetail() {
                 label={isOwner && song.dedication ? t('song.gift.send') : undefined}
                 autoOpen={sendNow}
                 onOpen={isOwner ? uploadCard : undefined}
-                makeVideo={isOwner && song.state === 'deliverable' ? makeVideo : undefined}
               />
             )}
             {isOwner && song.dedication && song.visibility !== 'public' && song.state === 'deliverable' && (
@@ -736,6 +735,13 @@ export default function SongDetail() {
             </div>
           </div>
 
+          {/* A song someone was given: recommend the licence, saying what it gives
+              (product decision 2026-11-25). Only what is true of every licence:
+              the MP3 can be downloaded, and the licence is recorded in your name. */}
+          {!isOwner && song.dedication && song.visibility === 'public' && song.state === 'deliverable' && !song.licensedByMe && (
+            <p className="song-spread__license-pitch">{t('song.license.giftPitch')}</p>
+          )}
+
           {/* A trial's song: kept only by signing up (docs/GROWTH_SPEC.md, part three). */}
           {isOwner && !manages && (
             <div className="trial-keep">
@@ -753,14 +759,21 @@ export default function SongDetail() {
 
           {/* The photo MV (docs/PHOTO_MV_SPEC.md): the owner's, once the song plays,
               and only where the switch is on. */}
-          {manages && song.state === 'deliverable' && runtime?.features.photoVideoEnabled && (
-            <PhotoVideo song={song} labels={shareLabels()} lyrics={song.lyrics} lyricTimings={song.lyricTimings} />
+          {manages && song.state === 'deliverable' && (
+            <PhotoVideo
+              song={song}
+              labels={shareLabels()}
+              lyrics={song.lyrics}
+              lyricTimings={song.lyricTimings}
+              makeCoverVideo={makeVideo}
+              photosEnabled={runtime?.features.photoVideoEnabled === true || runtime?.features.photoVideoPreview === true}
+            />
           )}
           {/* A trial's song cannot be made into a video yet; say that it can, once kept. */}
-          {isOwner && !manages && song.state === 'deliverable' && runtime?.features.photoVideoEnabled && (
+          {isOwner && !manages && song.state === 'deliverable' && (
             <section className="photo-video photo-video--closed" aria-labelledby="photo-video-title">
-              <h2 id="photo-video-title">{t('photo.title')}</h2>
-              <p className="photo-video__lead">{t('photo.lead')}</p>
+              <h2 id="photo-video-title">{t('video.title')}</h2>
+              <p className="photo-video__lead">{t(runtime?.features.photoVideoEnabled ? 'video.lead' : 'video.leadCover')}</p>
               <p className="photo-video__lead">{t('photo.afterSignup')}</p>
             </section>
           )}
