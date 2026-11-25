@@ -207,6 +207,25 @@ describe('keeping the song, or losing it after seven days', () => {
   const claim = (user: { authHeader: Record<string, string> }, guestToken: string) =>
     on.app.inject({ method: 'POST', url: '/v1/trial/claim', headers: user.authHeader, payload: { guestToken } as never });
 
+  it('tells a guest which song is its trial, even if this browser never saw it finish', async () => {
+    const fresh = (await start(on, {}, '10.88.1.1')).json() as { token: string };
+    const none = await on.app.inject({ method: 'GET', url: '/v1/trial/song', headers: bearer(fresh.token) });
+    expect(none.statusCode).toBe(200);
+    expect(none.json()).toEqual({ trackId: null });
+
+    const g = await guestSong();
+    const res = await on.app.inject({ method: 'GET', url: '/v1/trial/song', headers: bearer(g.token) });
+    expect(res.json()).toEqual({ trackId: g.trackId });
+    // Still not a library: the list stays closed to guests.
+    expect((await on.app.inject({ method: 'GET', url: '/v1/tracks', headers: bearer(g.token) })).statusCode).toBe(403);
+  });
+
+  it('answers only for guests', async () => {
+    const user = await on.createUser();
+    const res = await on.app.inject({ method: 'GET', url: '/v1/trial/song', headers: user.authHeader });
+    expect(res.statusCode).toBe(403);
+  });
+
   it('writes no authorship record while the song is a guest’s, and the account’s when it is claimed', async () => {
     const g = await guestSong();
     expect(await snapshotOwner(g.trackId)).toBeNull();

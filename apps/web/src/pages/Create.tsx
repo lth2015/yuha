@@ -1,6 +1,6 @@
 import { JobOutcome, OpenGenerations, QueueStatus, UnfinishedGenerations, WaitLyrics, etaText } from '../components/GenerationQueue';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Link, useNavigate, useSearchParams } from 'react-router-dom';
+import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import {
   DEDICATION_NOTE_MAX,
   DEDICATION_TO_MAX,
@@ -328,8 +328,30 @@ export default function Create() {
    * worse than losing the draft: the overwrite is valid JSON, so the next
    * mount restores it and the creator's work silently becomes the defaults.
    */
+  /*
+   * "Write your own lyrics, set the style →" on the home composer: whatever was
+   * written there comes along (UX audit, Codex UX-06). It used to open on the
+   * studio's own draft, so the words just typed seemed to vanish. If the studio
+   * held a different description, it can be had back with one tap.
+   */
+  const location = useLocation();
+  const fromHome = (location.state as { fromHome?: { prompt: string; instrumental: boolean } } | null)?.fromHome;
+  const [mounted] = useState(() => {
+    let start = editTrackId ? DEFAULT_DRAFT : air.kind === 'fill' ? { ...DEFAULT_DRAFT, ...air.fields } : readStoredDraft();
+    let replaced: string | null = null;
+    if (!editTrackId && air.kind !== 'fill' && fromHome && fromHome.prompt.trim()) {
+      if (start.prompt.trim() && start.prompt !== fromHome.prompt) replaced = start.prompt;
+      start = { ...start, prompt: fromHome.prompt, instrumental: fromHome.instrumental };
+    }
+    return { start, replaced };
+  });
+  const [replacedPrompt, setReplacedPrompt] = useState<string | null>(mounted.replaced);
+  useEffect(() => {
+    // Taken once: a reload restores the saved draft, not the hand-off over it.
+    if (fromHome) navigate(`${location.pathname}${location.search}`, { replace: true, state: null });
+  }, []);
   const [draft, setDraft] = useState<Draft>(() => {
-    const start = editTrackId ? DEFAULT_DRAFT : air.kind === 'fill' ? { ...DEFAULT_DRAFT, ...air.fields } : readStoredDraft();
+    const start = mounted.start;
     // `?gift=1` is where "write one for somebody too" on a received song leads;
     // the holiday banner adds `&occasion=christmas` (docs/HOLIDAY_SPEC.md).
     // `?gift=1&occasion=` and `?starter=` (lib/create-link.ts).
@@ -473,7 +495,6 @@ export default function Create() {
       })
       .catch((err) => setAirLyrics(err instanceof ApiError && err.code === 'RATE_LIMITED' ? 'limit' : 'failed'));
     // Mount only: `air` and the draft's first values are what this arrival asked for.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // The sketch is in the draft (or declined) now: drop it from the address, so a
@@ -1425,6 +1446,21 @@ export default function Create() {
             )}
           </span>
         </div>
+        {replacedPrompt !== null && !cleared && (
+          <p className="composer__cleared" role="status">
+            {t('create.fromHome')}{' '}
+            <button
+              type="button"
+              className="composer__clear"
+              onClick={() => {
+                setDraft((d) => ({ ...d, prompt: replacedPrompt }));
+                setReplacedPrompt(null);
+              }}
+            >
+              {t('create.fromHomeRestore')}
+            </button>
+          </p>
+        )}
         {cleared && (
           <p className="composer__cleared" role="status">
             {t('create.cleared')}{' '}

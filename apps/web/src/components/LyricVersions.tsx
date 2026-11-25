@@ -33,7 +33,10 @@ export function LyricVersions({
   const [versions, setVersions] = useState<NonNullable<LyricDraftResponse['variants']>>([]);
   const [remaining, setRemaining] = useState<number | null>(null);
   const [error, setError] = useState<unknown>(null);
+  /** The description these versions were written from: they belong to it, not to whatever is typed now. */
+  const [writtenFor, setWrittenFor] = useState('');
   const written = prompt.trim().length > 0;
+  const stale = versions.length > 0 && prompt.trim() !== writtenFor;
 
   const write = async () => {
     setState('writing');
@@ -44,6 +47,7 @@ export function LyricVersions({
         body: { prompt: prompt.trim(), styles, durationSeconds, variants: 3 },
       });
       setVersions(res.variants ?? [{ angle: 'plain', lyrics: res.lyrics }]);
+      setWrittenFor(prompt.trim());
       setRemaining(res.remaining);
     } catch (err) {
       setError(err);
@@ -62,20 +66,25 @@ export function LyricVersions({
           aria-busy={state === 'writing'}
           onClick={() => void write()}
         >
-          {state === 'writing' ? t('cowrite.writing') : t('cowrite.cta')}
+          {state === 'writing' ? t('cowrite.writing') : stale ? t('cowrite.rewrite') : t('cowrite.cta')}
         </button>
         <span className="lyric-versions__hint">
           {!written ? t('cowrite.needPrompt') : remaining !== null ? t('cowrite.left', { n: remaining }) : t('cowrite.hint')}
         </span>
       </div>
       <ErrorNotice error={error} />
+      {stale && (
+        <p className="lyric-versions__stale" role="status">
+          {t('cowrite.stale', { prompt: writtenFor.length > 24 ? `${[...writtenFor].slice(0, 24).join('')}…` : writtenFor })}
+        </p>
+      )}
       {versions.length > 0 && (
-        <ol className="lyric-versions__list">
+        <ol className={`lyric-versions__list${stale ? ' is-stale' : ''}`}>
           {versions.map((v) => (
             <li key={v.angle} className="lyric-versions__card">
               <strong>{t(ANGLE_LABEL[v.angle] ?? 'cowrite.angle.plain')}</strong>
               <pre className="lyric-versions__text">{v.lyrics}</pre>
-              <button type="button" className="btn btn--primary btn--sm" onClick={() => onPick(v.lyrics)}>
+              <button type="button" className={`btn btn--sm${stale ? '' : ' btn--primary'}`} onClick={() => onPick(v.lyrics)}>
                 {t('cowrite.use')}
               </button>
             </li>

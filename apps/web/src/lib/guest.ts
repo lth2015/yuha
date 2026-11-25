@@ -76,6 +76,9 @@ function forgetGuest(): void {
 /** Fired when a trial song has been added to the signed-in account. */
 export const TRIAL_CLAIMED_EVENT = 'yuha:trial-claimed';
 
+/** Fired when the trial's song becomes known on this browser, so the nav can offer it. */
+export const GUEST_SONG_EVENT = 'yuha:guest-song';
+
 /** Remembers the trial's song when it is ready. */
 export function rememberGuestSong(trackId: string): void {
   try {
@@ -83,6 +86,7 @@ export function rememberGuestSong(trackId: string): void {
   } catch {
     /* without storage the song page is still where they are now */
   }
+  window.dispatchEvent(new Event(GUEST_SONG_EVENT));
 }
 
 /** The trial's song on this browser, if one was made and is still the guest's. */

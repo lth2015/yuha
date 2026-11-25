@@ -166,6 +166,9 @@
 - **白名单**：`requireAuth` 默认拒绝 guest；只有生成、看任务、看自己的歌、设为公开、`/v1/me` 用 `requireAuthOrGuest`。
   购买、下载、作品库、账户、后台对 guest 一律 403——新接口默认不对 guest 开放。
 - 18 岁和条款：开始试做时必须勾选，写进这一行的 `age_confirmed_at` / `terms_accepted_at`。
+- **找回试做的歌**：`GET /v1/trial/song` 只回答「这个 guest 的试做歌是哪首」（`{ trackId | null }`），只对 guest 开放。
+  生成中离开、浏览器没看到完成的人回到首页，靠它拿回「去听」和导航里的「我的试做」；`/v1/jobs` 只列未完成的任务，
+  作品库仍然对 guest 关闭（Codex 审查 UX-01）。
 
 **限次**（`POST /v1/trial/start`，迁移 0033 的 `guest_trials` 表）：
 - 浏览器随机编号的 HMAC：同一编号只能开始 1 次；
