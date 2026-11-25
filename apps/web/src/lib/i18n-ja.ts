@@ -1158,6 +1158,8 @@ const ja: Dict = {
   'gift.line.other': '',
   'song.gift.to': '{to} へ',
   'song.gift.send': '贈る',
+  'song.notFound.title': "この曲は開けません",
+  'song.notFound.next': "まだ公開されていないか、削除された可能性があります。送られてきたリンクなら、送った人に「公開」または「贈る」を済ませたか確認してください。",
   'song.gift.confirmPublic': '贈ると、リンクを知っている人なら誰でもこの曲を聴けて、名前とひとことも見られます。贈りますか？',
   'song.gift.shareText': '{to}に歌を作りました：「{title}」',
   'song.gift.again': '私も誰かに一曲贈る',

@@ -210,6 +210,22 @@ export default function SongDetail() {
         </div>
       );
     }
+    // A song link that does not open is usually one sent before it was made
+    // public, opened by somebody with no library to go back to (UX audit #17):
+    // say that, not "choose again from your library".
+    if (error instanceof ApiError && error.status === 404) {
+      return (
+        <div className="stack">
+          <div className="alert alert--warn" role="alert">
+            <div className="alert__title">{t('song.notFound.title')}</div>
+            <div>{t('song.notFound.next')}</div>
+          </div>
+          <Link to={me ? '/library' : '/'} className="btn">
+            {t(me ? 'song.backMarket' : 'song.backHome')}
+          </Link>
+        </div>
+      );
+    }
     return (
       <div className="stack">
         <ErrorNotice error={error} />

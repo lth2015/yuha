@@ -1158,6 +1158,8 @@ const en: Dict = {
   'gift.line.other': '',
   'song.gift.to': 'For {to}',
   'song.gift.send': 'Send it to them',
+  'song.notFound.title': "This song can’t be opened",
+  'song.notFound.next': "It may not be public yet, or it was deleted. If someone sent you this link, ask them to check they made it public or sent it.",
   'song.gift.confirmPublic': 'Once sent, anyone with the link can play this song and see the name and your line. Send it?',
   'song.gift.shareText': 'I wrote a song for {to}: “{title}”',
   'song.gift.again': 'Write one for someone too',
