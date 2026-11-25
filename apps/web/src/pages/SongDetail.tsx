@@ -53,6 +53,8 @@ export default function SongDetail() {
   const { me, runtime } = useSession();
   const player = usePlayer();
   const [confirm, confirmDialog] = useConfirm();
+  // "Line the lyrics up first" from the video card opens the timing tools below.
+  const [tuneRequest, setTuneRequest] = useState(0);
   const [song, setSong] = useState<SongDetailResponse | null>(null);
   // A song page is best titled by its song, not by the word "song".
   usePageTitle(song?.title);
@@ -798,6 +800,10 @@ export default function SongDetail() {
               lyricTimings={song.lyricTimings}
               makeCoverVideo={makeVideo}
               startOpen={params.get('video') === '1'}
+              onFixTiming={() => {
+                setTuneRequest((n) => n + 1);
+                document.getElementById('lyrics-heading')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+              }}
               photosEnabled={runtime?.features.photoVideoEnabled === true || runtime?.features.photoVideoPreview === true}
             />
           )}
@@ -904,6 +910,7 @@ export default function SongDetail() {
             currentTime={active ? player.currentTime : 0}
             live={active}
             timings={song.lyricTimings}
+            tuneRequest={tuneRequest}
             title={song.title}
             artist={song.artistName}
             onSeek={active ? player.seek : undefined}
