@@ -332,6 +332,26 @@ function audit({ phone, phase }) {
   }
 
   // ---- overlap --------------------------------------------------------------
+  // What of a control is on screen: its box cut to every ancestor that clips
+  // (a scrolling lyrics panel, say). A line scrolled out of its panel is not
+  // over the link below the panel, however its unclipped box reads.
+  const clipOf = (el) => {
+    let clip = { left: -Infinity, top: -Infinity, right: Infinity, bottom: Infinity };
+    for (let a = el.parentElement; a && a !== document.body; a = a.parentElement) {
+      const st = getComputedStyle(a);
+      if (st.overflowX === 'visible' && st.overflowY === 'visible') continue;
+      const ar = a.getBoundingClientRect();
+      if (st.overflowX !== 'visible') clip = { ...clip, left: Math.max(clip.left, ar.left), right: Math.min(clip.right, ar.right) };
+      if (st.overflowY !== 'visible') clip = { ...clip, top: Math.max(clip.top, ar.top), bottom: Math.min(clip.bottom, ar.bottom) };
+    }
+    return clip;
+  };
+  const shown = (el) => {
+    const clip = clipOf(el);
+    return [...el.getClientRects()]
+      .map((r) => ({ left: Math.max(r.left, clip.left), top: Math.max(r.top, clip.top), right: Math.min(r.right, clip.right), bottom: Math.min(r.bottom, clip.bottom) }))
+      .filter((r) => r.right - r.left > 2 && r.bottom - r.top > 2);
+  };
   const controls = targets.filter(isControl).filter((el) => !bars.some((b) => b.contains(el)));
   for (let i = 0; i < controls.length; i++) {
     for (let j = i + 1; j < controls.length; j++) {
@@ -340,8 +360,8 @@ function audit({ phone, phase }) {
       if (a.contains(c) || c.contains(a)) continue;
       // Line boxes, not bounding boxes: a link that wraps onto two lines has
       // a bounding box as wide as the paragraph and "overlaps" its neighbour.
-      const hit = [...a.getClientRects()].some((r1) =>
-        [...c.getClientRects()].some((r2) => {
+      const hit = shown(a).some((r1) =>
+        shown(c).some((r2) => {
           const ix = Math.min(r1.right, r2.right) - Math.max(r1.left, r2.left);
           const iy = Math.min(r1.bottom, r2.bottom) - Math.max(r1.top, r2.top);
           return ix > 2 && iy > 2;

@@ -3002,3 +3002,6 @@ textarea.is-full { border-color: var(--danger); }
 .confirm-dialog::backdrop { background: rgb(0 0 0 / 35%); }
 .confirm-dialog p { margin: 0 0 var(--s4); line-height: 1.6; }
 .confirm-dialog__actions { display: flex; justify-content: flex-end; gap: var(--s3); flex-wrap: wrap; }
+
+/* On the home page the strip follows the hero score, which already leaves room. */
+.home__recent { margin-top: var(--s6); }
