@@ -1,0 +1,182 @@
+[
+  {
+    "name": "static",
+    "lang": "zh",
+    "scene": "birthday",
+    "faq": 5,
+    "pass": true
+  },
+  {
+    "name": "static",
+    "lang": "zh",
+    "scene": "travel",
+    "faq": 5,
+    "pass": true
+  },
+  {
+    "name": "static",
+    "lang": "ja",
+    "scene": "birthday",
+    "faq": 5,
+    "pass": true
+  },
+  {
+    "name": "static",
+    "lang": "ja",
+    "scene": "travel",
+    "faq": 5,
+    "pass": true
+  },
+  {
+    "name": "static",
+    "lang": "en",
+    "scene": "birthday",
+    "faq": 5,
+    "pass": true
+  },
+  {
+    "name": "static",
+    "lang": "en",
+    "scene": "travel",
+    "faq": 5,
+    "pass": true
+  },
+  {
+    "name": "flags",
+    "lang": "ja",
+    "scene": "birthday",
+    "enabled": false,
+    "trial": 0,
+    "paused": 1,
+    "faq": "生成に失敗したとき、動画を作るときはクレジットを使いません。新規アカウントの無料分と料金は料金ページのとおりです。 料金と無料分を見る",
+    "step3": "曲のページで「動画にする」を押し、曲のジャケットで作る（登録なしのお試し曲は、登録してアカウントに追加すると作れます）",
+    "formats": "動画は縦型の MP4 で、写真アプリに保存できます。曲は MP3 でダウンロードできます。登録なしのお試し曲は、登録してアカウントに追加すると MP3 のダウンロードと MV 作成ができます（登録は無料です）。",
+    "pass": true
+  },
+  {
+    "name": "flags",
+    "lang": "ja",
+    "scene": "birthday",
+    "enabled": true,
+    "trial": 1,
+    "paused": 0,
+    "faq": "生成に失敗したとき、動画を作るときはクレジットを使いません。新規アカウントの無料分と料金は料金ページのとおりです。 いま新規登録のアカウントには 2 曲分の無料分があります。 登録せずに 1 曲お試しもできます。 料金と無料分を見る",
+    "step3": "曲のページで「動画にする」を押し、ジャケットか写真 3〜10 枚を選ぶ（登録なしのお試し曲は、登録してアカウントに追加すると作れます）",
+    "formats": "動画は縦型の MP4 で、写真アプリに保存できます。曲は MP3 でダウンロードできます。登録なしのお試し曲は、登録してアカウントに追加すると MP3 のダウンロードと MV 作成ができます（登録は無料です）。",
+    "pass": true
+  },
+  {
+    "name": "flags",
+    "lang": "ja",
+    "scene": "travel",
+    "enabled": false,
+    "trial": 0,
+    "paused": 1,
+    "faq": "生成に失敗したとき、動画を作るときはクレジットを使いません。新規アカウントの無料分と料金は料金ページのとおりです。 料金と無料分を見る",
+    "step3": "曲のページで「動画にする」を押し、曲のジャケットで作る（登録なしのお試し曲は、登録してアカウントに追加すると作れます）",
+    "formats": "動画は縦型の MP4 で、写真アプリに保存できます。曲は MP3 でダウンロードできます。登録なしのお試し曲は、登録してアカウントに追加すると MP3 のダウンロードと MV 作成ができます（登録は無料です）。",
+    "pass": true
+  },
+  {
+    "name": "flags",
+    "lang": "ja",
+    "scene": "travel",
+    "enabled": true,
+    "trial": 1,
+    "paused": 0,
+    "faq": "生成に失敗したとき、動画を作るときはクレジットを使いません。新規アカウントの無料分と料金は料金ページのとおりです。 いま新規登録のアカウントには 2 曲分の無料分があります。 登録せずに 1 曲お試しもできます。 料金と無料分を見る",
+    "step3": "曲のページで「動画にする」を押し、ジャケットか写真 3〜10 枚を選ぶ（登録なしのお試し曲は、登録してアカウントに追加すると作れます）",
+    "formats": "動画は縦型の MP4 で、写真アプリに保存できます。曲は MP3 でダウンロードできます。登録なしのお試し曲は、登録してアカウントに追加すると MP3 のダウンロードと MV 作成ができます（登録は無料です）。",
+    "pass": true
+  },
+  {
+    "name": "flags",
+    "lang": "en",
+    "scene": "birthday",
+    "enabled": false,
+    "trial": 0,
+    "paused": 1,
+    "faq": "A song that fails, and making a video, use no credit. Free songs for new accounts and prices are as shown on the pricing page. See prices and free songs",
+    "step3": "On the song page, tap “Make a video” and make it from the song’s cover (a trial song needs signing up and adding to your account first)",
+    "formats": "The video is a portrait MP4 you can save to Photos; the song downloads as an MP3. A trial song can be downloaded and made into a video once you sign up and add it to your account (signing up is free).",
+    "pass": true
+  },
+  {
+    "name": "flags",
+    "lang": "en",
+    "scene": "birthday",
+    "enabled": true,
+    "trial": 1,
+    "paused": 0,
+    "faq": "A song that fails, and making a video, use no credit. Free songs for new accounts and prices are as shown on the pricing page. Right now, new accounts get 2 songs free. You can also try one song without signing up. See prices and free songs",
+    "step3": "On the song page, tap “Make a video” and choose the cover or 3–10 photos (a trial song needs signing up and adding to your account first)",
+    "formats": "The video is a portrait MP4 you can save to Photos; the song downloads as an MP3. A trial song can be downloaded and made into a video once you sign up and add it to your account (signing up is free).",
+    "pass": true
+  },
+  {
+    "name": "flags",
+    "lang": "en",
+    "scene": "travel",
+    "enabled": false,
+    "trial": 0,
+    "paused": 1,
+    "faq": "A song that fails, and making a video, use no credit. Free songs for new accounts and prices are as shown on the pricing page. See prices and free songs",
+    "step3": "On the song page, tap “Make a video” and make it from the song’s cover (a trial song needs signing up and adding to your account first)",
+    "formats": "The video is a portrait MP4 you can save to Photos; the song downloads as an MP3. A trial song can be downloaded and made into a video once you sign up and add it to your account (signing up is free).",
+    "pass": true
+  },
+  {
+    "name": "flags",
+    "lang": "en",
+    "scene": "travel",
+    "enabled": true,
+    "trial": 1,
+    "paused": 0,
+    "faq": "A song that fails, and making a video, use no credit. Free songs for new accounts and prices are as shown on the pricing page. Right now, new accounts get 2 songs free. You can also try one song without signing up. See prices and free songs",
+    "step3": "On the song page, tap “Make a video” and choose the cover or 3–10 photos (a trial song needs signing up and adding to your account first)",
+    "formats": "The video is a portrait MP4 you can save to Photos; the song downloads as an MP3. A trial song can be downloaded and made into a video once you sign up and add it to your account (signing up is free).",
+    "pass": true
+  },
+  {
+    "name": "trial-source",
+    "existing": null,
+    "source": "scene-travel-ja",
+    "requestCapturedAndAborted": true,
+    "pass": true
+  },
+  {
+    "name": "trial-source",
+    "existing": "x-travel-en-1",
+    "source": "x-travel-en-1",
+    "requestCapturedAndAborted": true,
+    "pass": true
+  },
+  {
+    "name": "organic-integrated",
+    "refHost": "www.google.com",
+    "path": "/en/birthday.html",
+    "documentReferrerHost": "www.google.com",
+    "storedSource": null,
+    "visits": [
+      {
+        "path": "/birthday",
+        "refHost": "www.google.com",
+        "source": null
+      }
+    ]
+  },
+  {
+    "name": "organic-integrated",
+    "refHost": "www.bing.com",
+    "path": "/ja/travel.html",
+    "documentReferrerHost": "www.bing.com",
+    "storedSource": null,
+    "visits": [
+      {
+        "path": "/travel",
+        "refHost": "www.bing.com",
+        "source": null
+      }
+    ]
+  }
+]
