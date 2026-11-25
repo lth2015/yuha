@@ -745,6 +745,7 @@ const zh: Dict = {
   'admin.quality.complete': '完整交付率',
   'admin.quality.length': '· 时长达标',
   'admin.quality.lyricsAligned': '· 歌词对齐（人声）',
+  'admin.quality.lyricsFallback': "歌词未对齐的原因（近 7 天）",
   'admin.quality.approval': '用户认可度（交付满 24 小时）',
   'admin.quality.noteBuild': '「当前版本」只算由正在运行的 {sha} 生成的任务。用户自己取消的不计入。认可度 = 交付满 24 小时后仍保留、没被报告问题的歌。',
   'admin.quality.noteNoBuild': '这个进程没有 build SHA，只能显示全部。用户自己取消的不计入。',

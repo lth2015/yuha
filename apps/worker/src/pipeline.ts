@@ -596,7 +596,12 @@ async function processAudio(
             reason: alignment.fallbackReason,
           });
         }
-        await setTrackLyricTimings({ trackId: delivered.trackId, timings: alignment.timings }).catch((err) =>
+        // Why it is an estimate stays with the song (the log is kept 15 days;
+        // a customer reports a song weeks later): docs/LYRIC_ALIGNMENT.md.
+        const timings = alignment.fallbackReason
+          ? { ...alignment.timings, fallbackReason: alignment.fallbackReason.slice(0, 200) }
+          : alignment.timings;
+        await setTrackLyricTimings({ trackId: delivered.trackId, timings }).catch((err) =>
           log('warn', 'lyric timing storage failed', { jobId: job.id, error: (err as Error).message }),
         );
       } else {

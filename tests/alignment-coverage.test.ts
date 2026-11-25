@@ -18,7 +18,7 @@ afterEach(() => vi.unstubAllGlobals());
 describe('HTTP alignment coverage', () => {
   it('refuses a successful response that silently omitted original lyrics', async () => {
     vi.stubGlobal('fetch', async () => Response.json({ lines: [complete[0], complete[2]] }));
-    expect(await provider.align(request)).toMatchObject({ status: 'failed', reason: 'aligner lyrics mismatch' });
+    expect(await provider.align(request)).toMatchObject({ status: 'failed', reason: 'aligner_lyrics_mismatch' });
   });
 
   it('keeps complete alignment times, including backing vocals', async () => {

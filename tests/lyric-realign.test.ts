@@ -148,6 +148,35 @@ describe('a re-alignment run', () => {
     expect(await timingsOf(id)).toEqual(before);
   });
 
+  it('records why an estimate is still an estimate after a run, without changing its timing', async () => {
+    const user = await h.createUser({ credits: 3 });
+    // The song's first alignment fell back, for one reason...
+    (h.ctx as { alignment: AlignmentProvider }).alignment = {
+      kind: 'fallback',
+      align: async () => ({
+        status: 'ok',
+        timings: { source: 'estimated', aligner: 'estimated-v1', lines: [{ text: 'lo-fi hearts', section: '', start: 1, end: 4 }] },
+        fallbackReason: 'aligner_timeout',
+      }),
+    };
+    const id = await song(user);
+    const lines = parsed(await timingsOf(id))!.lines;
+    // ...and the run falls back for another: the newest reason is the one to read.
+    (h.ctx as { alignment: AlignmentProvider }).alignment = {
+      kind: 'fallback',
+      align: async () => ({
+        status: 'ok',
+        timings: { source: 'estimated', aligner: 'estimated-v1', lines: [] },
+        fallbackReason: 'aligner_http_422 low_coverage coverage=0.20',
+      }),
+    };
+    await realign();
+    const after = parsed(await timingsOf(id)) as LyricTimings & { fallbackReason?: string };
+    expect(after.fallbackReason).toBe('aligner_http_422 low_coverage coverage=0.20');
+    expect(after.lines).toEqual(lines);
+    expect(after.source).toBe('estimated');
+  });
+
   it('never touches a song whose timing a person corrected', async () => {
     const user = await h.createUser({ credits: 3 });
     const id = await song(user);

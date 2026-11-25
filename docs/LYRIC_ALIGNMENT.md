@@ -17,6 +17,51 @@ of `aligner_timeout`, `aligner_http_422 low_coverage coverage=0.62` or
 `aligner_threw: …`. Before 2026-10-29 that reason was discarded, so an
 estimated song left no trace of why.
 
+Since 2026-11-25 the reason is also kept with the song, as `fallbackReason`
+inside `tracks.lyric_timings`, because the log is kept 15 days and customers
+report a song weeks after they made it. No client ever receives it
+(`clientTimings` in `packages/db/src/tracks.ts` strips it from every view), and
+a person's correction replaces the whole timeline, reason included.
+
+## Diagnosing a song whose words do not match the voice
+
+**Across all songs**: admin console → 运营 → 生成质量. 「歌词对齐（人声）」 is the
+share of sung songs with `aligned` or `corrected` timing. The line under the
+table, 「歌词未对齐的原因（近 7 天）」, counts the rest by the first word of the reason:
+
+| Reason | Means | Look at |
+| --- | --- | --- |
+| `deleted` | The song was deleted after it was made; its words went with it. | Nothing. |
+| `no_lyrics` | Sung with no words: in simple mode the text model wrote none, or they failed screening and the song was sung wordless. Nothing to align, nothing shown. | The text model, not the aligner. Many of these is a lyric-writing problem. |
+| `no_timing` | There were words, and nothing could be stored: the aligner failed and the estimator did too, or storing failed. | Worker log, `lyric alignment failed`. |
+| `not_recorded` | An estimate with no reason: a song made before 2026-11-25, or `ALIGNMENT_ADAPTER` is `estimated` (unset), so the aligner was never asked. | If new songs keep landing here, the deployment's alignment settings. |
+| `aligner_timeout` | The DGX did not answer within `ALIGNMENT_TIMEOUT_MS` (180 s in `03_wire_yuha.sh`). | DGX load: alignment waits behind song renders on the same GPU. |
+| `aligner_http_4xx` / `5xx` | The DGX answered and refused. `422 … coverage=0.31` is "heard too little of the lyrics". | The song itself, then `ALIGN_FORCED_MIN_COVERAGE`. |
+| `aligner_threw` | The request did not complete (connection refused, DNS, TLS). | Whether the DGX is reachable from the worker. |
+| `aligner_no_lines` / `aligner_bad_line` / `aligner_lyrics_mismatch` | The DGX answered 200 with something the app cannot use: no lines, a malformed line, or lines that are not these lyrics. | The DGX's response format (`ALIGNMENT_*_FIELD`), then the aligner itself. |
+| `other` | Everything past the eighth reason, summed, so the counts add up to the misses. | The worker log for the rare ones. |
+| `no_audio_url` | `ALIGNMENT_AUDIO_URL_TEMPLATE` is not set, so the aligner cannot fetch the song. | The deployment's alignment settings. |
+
+**One song**: its `tracks.lyric_timings` has `source`, `aligner` and, for an
+estimate made since 2026-11-25, `fallbackReason`:
+
+```sql
+SELECT JSON_UNQUOTE(JSON_EXTRACT(lyric_timings, '$.source')) AS source,
+       JSON_UNQUOTE(JSON_EXTRACT(lyric_timings, '$.aligner')) AS aligner,
+       JSON_UNQUOTE(JSON_EXTRACT(lyric_timings, '$.fallbackReason')) AS why
+  FROM tracks WHERE id = ?;
+```
+
+`aligned` with lines in the wrong place is a different problem from an
+estimate: the aligner heard something and placed it wrongly, which is a sample
+for the DGX side (`deploy/dgx/music/README.md`), not a configuration fault.
+Either way the owner can fix it on the song page without making the song
+again, and nothing is charged for it.
+
+The DGX keeps a render for six days (`RETENTION_DAYS`). A song older than that
+cannot be re-aligned, because the aligner fetches the audio from the DGX
+(`ALIGNMENT_AUDIO_URL_TEMPLATE`), and the run below leaves it as it was.
+
 ## How the aligner listens
 
 `deploy/dgx/music/README.md` → "Lyric alignment" has the detail. In short,

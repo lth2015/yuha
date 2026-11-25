@@ -1,6 +1,5 @@
 import type { FastifyInstance } from 'fastify';
 import { AppError, setVisibilityRequest, type TrackView } from '@yuha/contracts';
-import type { LyricTimings } from '@yuha/contracts';
 import {
   getPublicTrack,
   getTrackForUser,
@@ -12,6 +11,7 @@ import {
   trackEvent,
   withTx,
   type TrackWithArtist,
+  clientTimings,
 } from '@yuha/db';
 import { licenseStateFor } from '../services/market.js';
 import type { AppContext } from '../context.js';
@@ -40,7 +40,7 @@ export function toPublicTrackView(
     visibility: row.visibility,
     durationSeconds: row.duration_ms / 1000,
     coverSeed: row.cover_seed,
-    lyricTimings: (row.lyric_timings ?? null) as LyricTimings | null,
+    lyricTimings: clientTimings(row.lyric_timings),
     dedication: row.dedication ?? null,
     licenseCount: opts.licenseCount ?? 0,
     licensedByMe: opts.licensedByMe ?? null,

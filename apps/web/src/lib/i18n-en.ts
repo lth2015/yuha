@@ -727,6 +727,7 @@ const en: Dict = {
   'admin.quality.complete': 'Delivered whole',
   'admin.quality.length': '· Full length',
   'admin.quality.lyricsAligned': '· Lyrics aligned (sung)',
+  'admin.quality.lyricsFallback': "Why lyrics were not aligned (last 7 days)",
   'admin.quality.approval': 'Kept by the customer (24 h+)',
   'admin.quality.noteBuild': '"This build" counts only jobs created by the running {sha}. Cancellations by the customer are not counted. Kept = still there 24 h after delivery, with no problem report.',
   'admin.quality.noteNoBuild': 'This process has no build SHA, so only "all" is shown. Cancellations by the customer are not counted.',

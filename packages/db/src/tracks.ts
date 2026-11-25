@@ -76,9 +76,22 @@ function normaliseRow<T>(row: T): T {
   return row;
 }
 
+/**
+ * A stored timeline may carry why it is an estimate (`fallbackReason`, set by
+ * the worker when the aligner could not hear the song). That is for the
+ * console, not for anyone's browser: `clientTimings` is what a view sends.
+ */
+export type StoredLyricTimings = LyricTimings & { fallbackReason?: string };
+
+export function clientTimings(t: StoredLyricTimings | null | undefined): LyricTimings | null {
+  if (!t) return null;
+  const { fallbackReason: _why, ...rest } = t;
+  return rest;
+}
+
 /** Stores the worker's alignment output (source-labelled inside the JSON). */
 export async function setTrackLyricTimings(
-  params: { trackId: string; timings: LyricTimings },
+  params: { trackId: string; timings: StoredLyricTimings },
   tx?: PoolConnection,
 ): Promise<void> {
   await execute(
