@@ -45,7 +45,8 @@ export function SyncedLyrics({
   onSaveTimings,
   compact = false,
   live = true,
-  tuneRequest = 0,
+  draft: sharedDraft,
+  onDraft,
 }: {
   lyrics: string;
   duration: number;
@@ -56,8 +57,13 @@ export function SyncedLyrics({
   artist?: string | null;
   /** Owner only. Absent means the correction controls are not offered. */
   onSaveTimings?: (timings: LyricTimings) => Promise<void>;
-  /** Bumped by "line them up first" on the video card: open the timing tools. */
-  tuneRequest?: number;
+  /**
+   * The page's unsaved timing edit, shared with the video card's workspace
+   * (LyricSyncStudio) so both edit one draft. Without `onDraft` the draft is
+   * this component's own.
+   */
+  draft?: LyricTimings | null;
+  onDraft?: (next: LyricTimings | null) => void;
   compact?: boolean;
   /**
    * Whether the player is playing THIS song. The frame-rate clock below is
@@ -84,14 +90,17 @@ export function SyncedLyrics({
    * never reads. Afterwards the audio is fixed, a late line is a fact, and
    * fixing it costs nothing — no credit, no re-generation, no waiting.
    */
-  const [draft, setDraft] = useState<LyricTimings | null>(null);
+  const [ownDraft, setOwnDraft] = useState<LyricTimings | null>(null);
+  const draft = onDraft ? (sharedDraft ?? null) : ownDraft;
+  const setDraft = (next: LyricTimings | null) => (onDraft ? onDraft(next) : setOwnDraft(next));
   const [saving, setSaving] = useState(false);
   const [offset, setOffset] = useState(0);
   /** The owner opened the timing tools (folded away by default). */
   const [tuning, setTuning] = useState(false);
+  // Undone, discarded or saved from the video card: nothing is offset any more.
   useEffect(() => {
-    if (tuneRequest > 0 && onSaveTimings) setTuning(true);
-  }, [tuneRequest]);
+    if (!draft) setOffset(0);
+  }, [draft]);
   const shown = draft ?? timeline;
   const lines = shown.lines;
   const source = shown.source;
@@ -151,12 +160,12 @@ export function SyncedLyrics({
   }, [active, live, runtime?.season, lines]);
 
   const nudge = (seconds: number) => {
-    setDraft((d) => shiftTimings(d ?? timeline, seconds, duration));
+    setDraft(shiftTimings(draft ?? timeline, seconds, duration));
     setOffset((o) => Number((o + seconds).toFixed(1)));
   };
 
   const stampLine = (index: number) => {
-    setDraft((d) => setLineStart(d ?? timeline, index, liveTime, duration));
+    setDraft(setLineStart(draft ?? timeline, index, liveTime, duration));
   };
 
   const saveTimings = async () => {

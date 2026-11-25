@@ -42,14 +42,30 @@ export default async function fileRoutes(app: FastifyInstance, opts: { ctx: AppC
     }
 
     const filename = q['filename'];
-    return reply
+    reply
       .header('content-type', key.endsWith('.wav') ? 'audio/wav' : 'audio/mpeg')
       .header('cache-control', 'private, max-age=60')
       .header('x-content-type-options', 'nosniff')
+      .header('accept-ranges', 'bytes')
       .header(
         'content-disposition',
         filename ? `attachment; filename*=UTF-8''${encodeURIComponent(filename)}` : 'inline',
-      )
-      .send(body);
+      );
+    /*
+     * Byte ranges, as S3 serves a presigned URL: Chrome cannot seek an
+     * <audio> element without them, so every jump inside a song snapped back
+     * to the start here and nowhere else. One range is all a media element asks for.
+     */
+    const range = /^bytes=(\d*)-(\d*)$/.exec(String(req.headers.range ?? ''));
+    if (range && (range[1] || range[2])) {
+      const size = body.length;
+      const start = range[1] ? Number(range[1]) : Math.max(0, size - Number(range[2]));
+      const end = range[1] && range[2] ? Math.min(Number(range[2]), size - 1) : size - 1;
+      if (start >= size || start > end) {
+        return reply.code(416).header('content-range', `bytes */${size}`).send();
+      }
+      return reply.code(206).header('content-range', `bytes ${start}-${end}/${size}`).send(body.subarray(start, end + 1));
+    }
+    return reply.send(body);
   });
 }

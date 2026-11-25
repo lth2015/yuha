@@ -1,7 +1,7 @@
 import { TRIAL_CLAIMED_EVENT, guestSongId } from '../lib/guest';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
-import { TITLE_MAX_CODEPOINTS, seasonOfOccasion, type LyricTimings, type Occasion, type ProductView, type TrackView } from '@yuha/contracts';
+import { TITLE_MAX_CODEPOINTS, markCorrected, seasonOfOccasion, type LyricTimings, type Occasion, type ProductView, type TrackView } from '@yuha/contracts';
 import { API_BASE, ApiError, apiFetch, apiPostForBlob } from '../lib/api';
 import { drawVideoFrame, frameJpeg, planShareClip, shareCardPng } from '../lib/share-art';
 import { resolveLyricTimings } from '../lib/lyrics';
@@ -24,6 +24,8 @@ import { ShareMenu } from '../components/ShareMenu';
 import { PhotoVideo } from '../components/PhotoVideo';
 import { useConfirm } from '../components/ConfirmDialog';
 import { SyncedLyrics } from '../components/SyncedLyrics';
+import { LyricSyncStudio } from '../components/LyricSyncStudio';
+import { emptyHistory, record, redo, undo, type EditHistory } from '../lib/sync-studio';
 import { scoreFromSeed } from '../lib/score';
 import { usePageTitle } from '../lib/title';
 import { shareCreateHref } from '../lib/create-link';
@@ -53,8 +55,14 @@ export default function SongDetail() {
   const { me, runtime } = useSession();
   const player = usePlayer();
   const [confirm, confirmDialog] = useConfirm();
-  // "Line the lyrics up first" from the video card opens the timing tools below.
-  const [tuneRequest, setTuneRequest] = useState(0);
+  /*
+   * Unsaved lyric timing edits, held here so the video card's workspace and
+   * the lyrics area edit one draft with one undo (docs/MV_LYRIC_SYNC_UX_SPEC.md).
+   */
+  const [edits, setEdits] = useState<EditHistory>(emptyHistory);
+  const setTimingDraft = useCallback((next: LyricTimings | null) => setEdits((h) => (next ? record(h, next) : emptyHistory)), []);
+  // Another song's page: its draft is not this one's.
+  useEffect(() => setEdits(emptyHistory), [id]);
   const [song, setSong] = useState<SongDetailResponse | null>(null);
   // A song page is best titled by its song, not by the word "song".
   usePageTitle(song?.title);
@@ -250,6 +258,18 @@ export default function SongDetail() {
   const manages = isOwner && me?.role !== 'guest';
   const active = player.activeId === song.trackId;
   const playing = active && player.status === 'playing';
+
+  const saveTimings = async (timings: LyricTimings) => {
+    const saved = await apiFetch<{ lyricTimings: LyricTimings }>(`/v1/tracks/${song.trackId}/lyric-timings`, {
+      method: 'POST',
+      body: timings,
+    });
+    setSong((s) => (s ? { ...s, lyricTimings: saved.lyricTimings } : s));
+    // Only if nothing was changed while the request was out: a nudge made
+    // meanwhile is still unsaved, and clearing it would lose it silently.
+    const sent = JSON.stringify(timings);
+    setEdits((h) => (h.present && JSON.stringify(markCorrected(h.present)) === sent ? emptyHistory : h));
+  };
 
   const play = () => {
     if (!song.previewUrl) return;
@@ -800,10 +820,29 @@ export default function SongDetail() {
               lyricTimings={song.lyricTimings}
               makeCoverVideo={makeVideo}
               startOpen={params.get('video') === '1'}
-              onFixTiming={() => {
-                setTuneRequest((n) => n + 1);
-                document.getElementById('lyrics-heading')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-              }}
+              timingsUnsaved={edits.present !== null}
+              studio={
+                song.lyrics && song.vocalMode !== 'instrumental'
+                  ? (photos) => (
+                      <LyricSyncStudio
+                        trackId={song.trackId}
+                        lyrics={song.lyrics!}
+                        savedTimings={song.lyricTimings}
+                        duration={song.durationSeconds}
+                        draft={edits.present}
+                        onDraft={setTimingDraft}
+                        onUndo={() => setEdits(undo)}
+                        onRedo={() => setEdits(redo)}
+                        canUndo={edits.past.length > 0}
+                        canRedo={edits.future.length > 0}
+                        onSave={saveTimings}
+                        active={active}
+                        onPlay={play}
+                        photos={photos}
+                      />
+                    )
+                  : undefined
+              }
               photosEnabled={runtime?.features.photoVideoEnabled === true || runtime?.features.photoVideoPreview === true}
             />
           )}
@@ -910,21 +949,12 @@ export default function SongDetail() {
             currentTime={active ? player.currentTime : 0}
             live={active}
             timings={song.lyricTimings}
-            tuneRequest={tuneRequest}
+            draft={manages ? edits.present : undefined}
+            onDraft={manages ? setTimingDraft : undefined}
             title={song.title}
             artist={song.artistName}
             onSeek={active ? player.seek : undefined}
-            onSaveTimings={
-              manages
-                ? async (timings) => {
-                    const saved = await apiFetch<{ lyricTimings: LyricTimings }>(
-                      `/v1/tracks/${song.trackId}/lyric-timings`,
-                      { method: 'POST', body: timings },
-                    );
-                    setSong((s) => (s ? { ...s, lyricTimings: saved.lyricTimings } : s));
-                  }
-                : undefined
-            }
+            onSaveTimings={manages ? saveTimings : undefined}
           />
         </section>
       )}
