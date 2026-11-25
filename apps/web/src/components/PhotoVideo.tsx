@@ -46,7 +46,7 @@ export function PhotoVideo({
   lyrics: string | null;
   lyricTimings: Parameters<typeof resolveLyricTimings>[2];
   /** The cover-and-lyrics video (POST /v1/tracks/:id/share-video). */
-  makeCoverVideo: () => Promise<File>;
+  makeCoverVideo: (seconds: number) => Promise<File>;
   /** The photo path, behind its own switch (or the staff preview). */
   photosEnabled: boolean;
   /** Arrived from a "make a video" link (`?video=1`): open, and in view. */
@@ -63,6 +63,15 @@ export function PhotoVideo({
   const [photos, setPhotos] = useState<Picked[]>([]);
   const [skipped, setSkipped] = useState(0);
   const [result, setResult] = useState<Result>({ state: 'idle' });
+  /*
+   * How long (the product owner: thirty seconds was short). A minute by
+   * default; the whole song when it is wanted. Both ways use it.
+   */
+  const [length, setLength] = useState<number>(Math.min(60, Math.floor(song.durationSeconds)));
+  const lengths = [30, 60].filter((n) => n < song.durationSeconds - 1);
+  // Lyrics placed by counting characters drift from the singing; say so before
+  // the video is made, and where to fix it (the song page's timing tool).
+  const estimated = Boolean(lyrics) && resolveLyricTimings(lyrics ?? '', song.durationSeconds, lyricTimings).source === 'estimated';
   const [error, setError] = useState<unknown>(null);
   // Counsel (docs/legal/COUNSEL_RESPONSE_2026-11.md, 2): the right to use the
   // photos and the images of the people in them, confirmed before any is chosen.
@@ -104,11 +113,12 @@ export function PhotoVideo({
     setResult({ state: 'making' });
     try {
       const lines = lyrics ? resolveLyricTimings(lyrics, song.durationSeconds, lyricTimings).lines : [];
-      const plan = planPhotoClip(lines, song.durationSeconds, photos.length);
+      const plan = planPhotoClip(lines, song.durationSeconds, photos.length, length);
       const frames = [];
       for (const f of plan.frames) {
         const canvas = await drawPhotoFrame(song, labels, photos[f.photo]!.canvas, f.line, f.ending === true);
-        frames.push({ at: f.at, jpeg: await frameJpeg(canvas, 0.8) });
+        // Smaller frames for a long video, so the upload stays a phone's size.
+        frames.push({ at: f.at, jpeg: await frameJpeg(canvas, plan.frames.length > 60 ? 0.7 : 0.8) });
       }
       const blob = await apiPostForBlob(`/v1/tracks/${song.trackId}/photo-video`, {
         start: plan.start,
@@ -129,7 +139,7 @@ export function PhotoVideo({
     setError(null);
     setResult({ state: 'making' });
     try {
-      const file = await makeCoverVideo();
+      const file = await makeCoverVideo(length);
       setResult({ state: 'ready', file, url: URL.createObjectURL(file) });
     } catch (err) {
       setError(err);
@@ -171,6 +181,29 @@ export function PhotoVideo({
           {t('photo.close')}
         </button>
       </div>
+
+      <div className="photo-video__length" role="group" aria-label={t('video.length')}>
+        <span className="small muted">{t('video.length')}</span>
+        {lengths.map((n) => (
+          <button key={n} type="button" className="chip chip--btn" aria-pressed={length === n} onClick={() => setLength(n)}>
+            {t('video.seconds', { n })}
+          </button>
+        ))}
+        <button
+          type="button"
+          className="chip chip--btn"
+          aria-pressed={length >= Math.floor(song.durationSeconds)}
+          onClick={() => setLength(Math.floor(song.durationSeconds))}
+        >
+          {t('video.whole', { time: `${Math.floor(song.durationSeconds / 60)}:${String(Math.floor(song.durationSeconds % 60)).padStart(2, '0')}` })}
+        </button>
+      </div>
+      {estimated && (
+        <p className="photo-video__notice" role="note">
+          {t('video.estimated')}{' '}
+          <a href="#lyrics-heading">{t('video.estimatedFix')}</a>
+        </p>
+      )}
 
       <div className="photo-video__way">
         <h3>{t('video.cover.title')}</h3>

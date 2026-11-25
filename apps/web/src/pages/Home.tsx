@@ -662,6 +662,8 @@ export default function Home() {
         </section>
       )}
 
+      {!IOS_BUILD && <MvEntry latest={recent?.[0]?.trackId ?? null} signedIn={!!me && me.role !== 'guest'} onCompose={() => promptRef.current?.focus()} />}
+
       {!IOS_BUILD && !season && <GiftEntry season={null} />}
 
       {/* Air composition: a static page beside this app (apps/air), so a plain
@@ -728,6 +730,52 @@ function GiftEntry({ season }: { season: Season | null }) {
           <strong>{t(copy.line)}</strong>
         </div>
       )}
+    </section>
+  );
+}
+
+/**
+ * The song as a video, from the home page (the product owner could not find
+ * it: it lived on each song's page). With a song to hand, one tap opens the
+ * latest with the video ready, or the library to pick another; without one,
+ * it says the song comes first and goes back to the composer.
+ */
+function MvEntry({ latest, signedIn, onCompose }: { latest: string | null; signedIn: boolean; onCompose: () => void }) {
+  const { t } = useI18n();
+  return (
+    <section className="gift-entry mv-entry" aria-labelledby="mv-entry-heading">
+      <div className="gift-entry__text">
+        <span className="gift-entry__kicker">{t('home.mv.kicker')}</span>
+        <h2 id="mv-entry-heading">{t('home.mv.title')}</h2>
+        <p>{t(latest ? 'home.mv.body' : 'home.mv.bodyFirst')}</p>
+        <div className="mv-entry__actions">
+          {latest ? (
+            <>
+              <Link className="btn btn--primary" to={`/song/${latest}?video=1`}>
+                {t('home.mv.latest')}
+              </Link>
+              <Link className="btn" to="/library?video=1">
+                {t('home.mv.pick')}
+              </Link>
+            </>
+          ) : (
+            <button
+              type="button"
+              className="btn btn--primary"
+              onClick={() => {
+                window.scrollTo({ top: 0, behavior: 'smooth' });
+                onCompose();
+              }}
+            >
+              {t(signedIn ? 'home.mv.first' : 'home.mv.firstTrial')}
+            </button>
+          )}
+        </div>
+      </div>
+      <div className="mv-entry__phone" aria-hidden="true">
+        <span className="mv-entry__line">{t('home.mv.sampleLine')}</span>
+        <span className="mv-entry__play">▶</span>
+      </div>
     </section>
   );
 }

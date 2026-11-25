@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { OpenGenerations, UnfinishedGenerations } from '../components/GenerationQueue';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import type { TrackView } from '@yuha/contracts';
 import { apiFetch } from '../lib/api';
 import { useI18n } from '../lib/i18n';
@@ -16,6 +16,9 @@ type Filter = 'all' | 'processing' | 'deliverable' | 'suspended';
  * enforces that server-side (UI-08 heritage) — this page just renders it.
  */
 export default function Library() {
+  // From the home page's 「做 MV」 card: choosing a song opens it with the video ready.
+  const [search] = useSearchParams();
+  const pickingVideo = search.get('video') === '1';
   const { t } = useI18n();
   const navigate = useNavigate();
   const [songs, setSongs] = useState<TrackView[] | null>(null);
@@ -219,10 +222,12 @@ export default function Library() {
         </div>
       ) : (
         <>
+          {pickingVideo && <p className="panel lib__pick-note" role="status">{t('lib.pickVideo')}</p>}
           <div className="masonry">
             {songs.map((song, i) => (
               <SongCard
                 key={song.trackId}
+                openWith={pickingVideo ? '?video=1' : ''}
                 song={song}
                 queue={songs}
                 index={i}

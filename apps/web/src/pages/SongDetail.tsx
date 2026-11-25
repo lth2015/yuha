@@ -365,9 +365,9 @@ export default function SongDetail() {
    * chorus, each sung line on its own frame, drawn here and put on the song's
    * audio by the API. Returned as a file for the phone's share sheet.
    */
-  const makeVideo = async (): Promise<File> => {
+  const makeVideo = async (seconds: number): Promise<File> => {
     const lines = song.lyrics ? resolveLyricTimings(song.lyrics, song.durationSeconds, song.lyricTimings).lines : [];
-    const plan = planShareClip(lines, song.durationSeconds);
+    const plan = planShareClip(lines, song.durationSeconds, 200, seconds);
     const labels = shareLabels();
     const frames = [];
     for (const f of plan.frames) {
