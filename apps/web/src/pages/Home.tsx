@@ -15,6 +15,8 @@ import { SongCard } from '../components/SongCard';
 import { JOB_PHASES, fractionOfPhase, phaseKey } from '../lib/phases';
 
 const DRAFT_KEY = 'yuha.home-draft';
+/** The one choice the home composer makes, kept with the words (Codex audit UX-04). */
+const MODE_KEY = 'yuha.home-instrumental';
 
 const MOOD_KEYS = ['city', 'sunset', 'rain', 'night'] as const;
 
@@ -122,7 +124,13 @@ export default function Home() {
     }
   });
   const [activeMood, setActiveMood] = useState<string | null>(null);
-  const [instrumental, setInstrumental] = useState(false);
+  const [instrumental, setInstrumental] = useState(() => {
+    try {
+      return localStorage.getItem(MODE_KEY) === '1';
+    } catch {
+      return false;
+    }
+  });
   const [feedbackKey, setFeedbackKey] = useState<{ key: string; params?: Record<string, string | number> } | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -154,6 +162,13 @@ export default function Home() {
       /* private browsing */
     }
   }, [prompt]);
+  useEffect(() => {
+    try {
+      localStorage.setItem(MODE_KEY, instrumental ? '1' : '0');
+    } catch {
+      /* private browsing */
+    }
+  }, [instrumental]);
 
   const written = prompt.trim().length > 0;
   /** Signed in, has written something, and has nothing left to spend. */

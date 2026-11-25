@@ -51,14 +51,18 @@
 | 数据保存 | 不保存数据 |
 | 处理地点 | 日本境内的 AWS、Azure、GCP |
 | YUHA 部署 | AWS 东京区域 |
-| 作曲服务器（DGX）物理位置 | 东京 |
+| 作曲服务器（DGX）物理位置 | 日本东京，办公室 |
+| 邮件（SES）、文件存储（S3） | AWS 东京区域（2026-11-25 确认） |
+| 数据库备份 | 7 天（2026-11-25 确认） |
+| 服务器日志 | 15 天（2026-11-25 确认） |
+| ALB / CloudFront 访问日志 | 不开启（2026-11-25 确认） |
 
 **送律师前还需补齐：**
 
 1. **签约主体**：合同上的准确法人名称。「属于某集团」不一定等于与该集团本体签约。
 2. **处理范围和承诺依据**：TokenStars 具体接收哪些数据；「不保存、不训练、日本境内处理」是否覆盖网关、上游供应商及其日志；
    是否有合同或书面说明支持。
-3. **运维期限**：数据库备份、应用日志、访问日志各保存多久；邮件（SES）和存储（S3）是否也在东京区域。
+3. ~~**运维期限**~~ ✅ 2026-11-25 已确认，见上表。
 
 > 日本境内处理是重要事实，但仅凭地点不能直接判定境外第三方提供规则（个人信息保护法第 28 条）不适用；
 > 还要看处理主体和合同安排。第 4 条的写法等第 1、2 项有书面依据后再定。
@@ -99,17 +103,16 @@
 > We use the services below. Some process data for us; others, such as Google and Stripe, also handle
 > it under their own terms and privacy policies, which apply to what you give them directly.
 >
-> - **Amazon Web Services** (Tokyo region): the application, database, file storage and queues
->   [and email: region to be confirmed]. Pages are delivered through Amazon CloudFront, which serves
->   them from locations near you.
-> - **Our own music server** (in Tokyo): turns your description and lyrics into music.
+> - **Amazon Web Services** (Tokyo region): the application, database, file storage, queues and
+>   email. Pages are delivered through Amazon CloudFront, which serves them from locations near you.
+> - **Our own music server** (in our office in Tokyo, Japan): turns your description and lyrics into music.
 >   It is operated by us, not by a third party.
-> - **TokenStars** [the legal entity that provides it, as contracted]: reads your
+> - **TokenStars** [provider name as given in its published terms]: reads your
 >   description to plan the song and writes or rewrites lyrics. It receives your description and lyrics,
 >   which can contain personal information if you write any; it does not receive your account details.
->   [Draft, once supported in writing: it processes them in Japan, on AWS, Azure and Google Cloud, does
->   not keep them and does not use them for training. Whether this covers its gateway logs and upstream
->   providers, and the basis for it, to be written from the contract.]
+>   It handles them as described in its own terms and privacy policy [link].
+>   [Only what those published documents state — for example on retention, training and where data is
+>   processed — is repeated here; nothing they do not state is promised on its behalf.]
 > - **Google**: sign-in with Google, if you choose it. We receive your name, email address and profile
 >   picture; Google handles your Google account under its own terms.
 > - **Stripe**: card payments. We send your email address and the order; you give your card details to
@@ -135,11 +138,12 @@
 > - **The campaign tag recorded on an account:** while the account exists.
 > - **Age confirmation:** that you confirmed it, when, and which wording you were shown, kept while your
 >   account exists. We do not ask for identity documents or your date of birth.
-> - **Service logs:** [N] days. **Backups:** [N] days, after which deleted data is gone from them too.
+> - **Service logs:** 15 days. **Database backups:** 7 days, after which deleted data is gone from them
+>   too. We do not keep access logs of our load balancer or content delivery network.
 > - **Our music server** keeps the description and lyrics it was given, and the audio it made, for 6 days,
 >   so that every copy of a song made without an account is gone within 7 days.
 
-（作曲服务器：2026-11-24 已部署清理代码；保存期从 30 天改为 6 天，需在 Spark 的 `.env` 加 `RETENTION_DAYS=6` 并重启 music 后才成立。）
+（作曲服务器：2026-11-24 已部署清理代码；保存期从 30 天改为 6 天，需在 Spark 的 `.env` 加 `RETENTION_DAYS=6` 并重启 music 后才成立。操作步骤见 `REQUESTS_2026-11-25.md` 第一部分。）
 
 ### 隐私政策 9. Local storage — 整段替换
 
@@ -176,9 +180,11 @@
 
 ## 送审前必须先完成的（A 类，代码之外）
 
-1. **TokenStars**：签约主体法人名称和国家；网关与上游各收到什么、保存多久、是否用于训练；再委托和处理地点的合同约束；
-   境外提供的依据。（律师意见 4：上线前的重要核实项）
-2. **运维**：SES / S3 区域、备份保留天数、日志保留天数、ALB / CloudFront 访问日志、作曲服务器位置。
+1. **TokenStars**：产品负责人决定（2026-11-25）不另行索取书面材料，以注册时同意的公开利用規約和隐私政策为依据。
+   第 4 条只引述其公开文件写明的内容，不替对方作未写明的保证（如「全部在日本处理」），并链接其政策。
+   待：公开文件的链接或副本。（律师意见 4；条文措辞随修改稿请律师确认）
+2. ~~**运维**~~ ✅ 2026-11-25 产品负责人确认：SES、S3 均在东京区域；数据库备份 7 天；服务器日志 15 天；
+   ALB、CloudFront 访问日志不开启；作曲服务器在日本东京的办公室。已写入第 4、6 条。
 3. ~~作曲服务器重新部署~~ ✅ 2026-11-24 完成。
 
 ## 请律师再看的几点（第三版）

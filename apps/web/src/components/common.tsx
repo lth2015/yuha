@@ -218,3 +218,22 @@ export function AudioPlayer({
   );
 }
 
+/**
+ * A lyric draft refused for the day's draft limit, said as that (Codex audit
+ * UX-05). The generic RATE_LIMITED text blamed concurrent generations and
+ * invited a retry in a moment, which fails again until the window moves.
+ */
+export function LyricDraftError({ error }: { error: unknown }) {
+  const { t } = useI18n();
+  const limit =
+    error instanceof ApiError && error.code === 'RATE_LIMITED'
+      ? (error.details as { limit?: unknown } | undefined)?.limit
+      : undefined;
+  if (typeof limit !== 'number') return <ErrorNotice error={error} />;
+  return (
+    <div className="alert alert--warn" role="alert">
+      <div className="alert__title">{t('cowrite.limitTitle')}</div>
+      <div>{t('cowrite.limitNext', { n: limit })}</div>
+    </div>
+  );
+}

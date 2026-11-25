@@ -120,10 +120,16 @@ export function PhotoVideo({
     result.state === 'ready' && typeof navigator.canShare === 'function' && navigator.canShare({ files: [result.file] });
 
   if (!open) {
+    // A card, not a line of link text: as a text link under the actions it was
+    // on the page and still not found by the person it was built for.
     return (
-      <button type="button" className="text-action photo-video__open" onClick={() => setOpen(true)}>
-        {t('photo.open')}
-      </button>
+      <section className="photo-video photo-video--closed" aria-labelledby="photo-video-title">
+        <h2 id="photo-video-title">{t('photo.title')}</h2>
+        <p className="photo-video__lead">{t('photo.lead')}</p>
+        <button type="button" className="btn btn--primary btn--sm photo-video__open" onClick={() => setOpen(true)}>
+          {t('photo.open')}
+        </button>
+      </section>
     );
   }
 

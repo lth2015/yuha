@@ -2,7 +2,7 @@ import { useState } from 'react';
 import type { LyricDraftResponse } from '@yuha/contracts';
 import { apiFetch } from '../lib/api';
 import { useI18n } from '../lib/i18n';
-import { ErrorNotice } from './common';
+import { LyricDraftError } from './common';
 
 /**
  * Three versions of the lyrics before any credit is spent
@@ -72,7 +72,7 @@ export function LyricVersions({
           {!written ? t('cowrite.needPrompt') : remaining !== null ? t('cowrite.left', { n: remaining }) : t('cowrite.hint')}
         </span>
       </div>
-      <ErrorNotice error={error} />
+      <LyricDraftError error={error} />
       {stale && (
         <p className="lyric-versions__stale" role="status">
           {t('cowrite.stale', { prompt: writtenFor.length > 24 ? `${[...writtenFor].slice(0, 24).join('')}…` : writtenFor })}
