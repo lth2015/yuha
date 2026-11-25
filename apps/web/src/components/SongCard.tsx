@@ -33,6 +33,7 @@ export function SongCard({
   onRemove,
   onVisibilityChange,
   disambiguator,
+  openWith = '',
 }: {
   song: TrackView;
   queue: TrackView[];
@@ -54,6 +55,8 @@ export function SongCard({
    * are auto-named, so this is not a corner case.
    */
   disambiguator?: string;
+  /** Added to the song's address when the card is opened (`?video=1` while picking a song for a video). */
+  openWith?: string;
 }) {
   const { t } = useI18n();
   const [confirm, confirmDialog] = useConfirm();
@@ -194,7 +197,7 @@ export function SongCard({
           read out twice. The play button and the badges come after it in the
           document, so they sit on top and keep their own jobs.
         */}
-        <Link className="song-card__open" to={`/song/${song.trackId}`} tabIndex={-1} aria-hidden="true" />
+        <Link className="song-card__open" to={`/song/${song.trackId}${openWith}`} tabIndex={-1} aria-hidden="true" />
         {active && <Eq live={playing} className="song-card__eq" />}
         <button
           type="button"
@@ -232,7 +235,7 @@ export function SongCard({
         */}
         <div className="song-card__head">
           <h2 className="song-card__title" title={song.title}>
-            <Link to={`/song/${song.trackId}`}>
+            <Link to={`/song/${song.trackId}${openWith}`}>
               {song.title}
               {disambiguator && <span className="sr-only"> {disambiguator}</span>}
             </Link>
