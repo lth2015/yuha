@@ -47,4 +47,21 @@ describe('a visit from a search engine with no tag', () => {
     expect(organicSource('/en/birthday.html', '', undefined, 'en')).toBeNull();
     expect(organicSource('/song/abc/def', '', 'www.google.com', 'en')).toBeNull();
   });
+
+  it('is a search engine’s results page, not every site the same company runs', () => {
+    // A link in a Google Doc, Gmail or a Naver blog is a share, not a search.
+    for (const host of ['docs.google.com', 'mail.google.com', 'drive.google.com', 'mail.yahoo.co.jp', 'blog.naver.com', 'news.yahoo.co.jp']) {
+      expect(organicSource('/en/birthday.html', '', host, 'en')).toBeNull();
+    }
+    for (const host of ['google.com', 'www.google.co.jp', 'www.bing.com', 'search.yahoo.co.jp', 'duckduckgo.com', 'search.naver.com', 'www.baidu.com', 'yandex.ru', 'www.ecosia.org', 'search.brave.com']) {
+      expect(organicSource('/en/birthday.html', '', host, 'en')).toBe('seo-birthday-en');
+    }
+  });
+
+  it('reads a language root with no trailing slash as that language’s home page', () => {
+    expect(organicSource('/ja', '', 'www.google.co.jp', 'zh-CN')).toBe('seo-home-ja');
+    expect(organicSource('/en', '', 'www.google.com', 'zh-CN')).toBe('seo-home-en');
+    // …and a page whose name merely starts like a language is still that page.
+    expect(organicSource('/jazz', '?lang=en', 'www.google.com', 'en')).toBe('seo-jazz-en');
+  });
 });
