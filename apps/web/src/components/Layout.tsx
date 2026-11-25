@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { TrialClaimAsk } from './TrialClaimAsk';
-import { guestSongId } from '../lib/guest';
+import { GUEST_SONG_EVENT, guestSongId } from '../lib/guest';
 import { Link, NavLink, useLocation, useNavigate } from 'react-router-dom';
 import type { TrackView } from '@yuha/contracts';
 import { apiFetch } from '../lib/api';
@@ -309,6 +309,12 @@ export function Layout({ children }: { children: ReactNode }) {
    * A guest has no library: "My songs" sent it to the sign-in page. It has one
    * song, so the second place is that song, once made (lib/guest.ts).
    */
+  const [, setGuestSongSeen] = useState(0);
+  useEffect(() => {
+    const seen = () => setGuestSongSeen((n) => n + 1);
+    window.addEventListener(GUEST_SONG_EVENT, seen);
+    return () => window.removeEventListener(GUEST_SONG_EVENT, seen);
+  }, []);
   const trialSong = me?.role === 'guest' ? guestSongId() : null;
   // "Create" is both the home composer and the studio: lit on /create too.
   const createsHere = (to: string) => to === '/' && location.pathname.startsWith('/create');

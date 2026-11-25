@@ -217,8 +217,20 @@ export default function Home() {
     let gone = false;
     void apiFetch<{ items: JobView[] }>('/v1/jobs')
       .then((res) => {
+        if (gone) return;
         const open = res.items.find((j) => !['done', 'failed'].includes(j.phase));
-        if (!gone && open) setJob(open);
+        if (open) {
+          setJob(open);
+          return;
+        }
+        // Finished while they were elsewhere: this browser never saw it end,
+        // so nothing remembered it. The server knows (GET /v1/trial/song).
+        if (guestSongId()) return;
+        return apiFetch<{ trackId: string | null }>('/v1/trial/song').then((song) => {
+          if (gone || !song.trackId) return;
+          rememberGuestSong(song.trackId);
+          setTrialSong(song.trackId);
+        });
       })
       .catch(() => undefined);
     return () => {
@@ -537,7 +549,8 @@ export default function Home() {
                   {t('composer.instrumental')}
                 </button>
               </div>
-              <Link to="/create" className="composer__advanced">
+              {/* Going on in the fuller editor: what is written here goes with it. */}
+              <Link to="/create" state={{ fromHome: { prompt, instrumental } }} className="composer__advanced">
                 {t('composer.advanced')}
               </Link>
             </div>

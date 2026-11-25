@@ -3053,3 +3053,5 @@ textarea.is-full { border-color: var(--danger); }
 
 /* The account menu sits over page content; glass let the page's text read through it. */
 .account__menu { background-color: var(--bg); }
+.lyric-versions__stale { margin: var(--s2) 0 0; font-size: var(--t-caption); color: var(--muted); }
+.lyric-versions__list.is-stale .lyric-versions__card { border-style: dashed; }

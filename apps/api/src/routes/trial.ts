@@ -1,5 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
+import { listTracks } from '@yuha/db';
+import { AppError } from '@yuha/contracts';
 import type { AppContext } from '../context.js';
 import { claimGuestTrial, openGuestTrial } from '../services/guest-trial.js';
 
@@ -26,6 +28,20 @@ export default async function trialRoutes(app: FastifyInstance, opts: { ctx: App
       return reply.status(201).send({ token: opened.token, expiresAt: opened.expiresAt.toISOString(), userId: opened.userId });
     },
   );
+
+  /**
+   * GET /v1/trial/song — which song is this guest's trial, if it is made.
+   *
+   * A guest who left while it was being made, and whose browser therefore
+   * never saw it finish, had no way back to it: `/v1/jobs` lists open jobs
+   * only, and a guest has no library (Codex UX audit, UX-01). This answers
+   * that one question and nothing else; the list stays closed to guests.
+   */
+  app.get('/v1/trial/song', { preHandler: app.requireAuth, config: { guestAllowed: true } }, async (req) => {
+    if (req.user!.role !== 'guest') throw new AppError('FORBIDDEN', 'only a trial has a trial song');
+    const [song] = await listTracks({ userId: req.user!.id, limit: 1 });
+    return { trackId: song?.id ?? null };
+  });
 
   /**
    * POST /v1/trial/claim — the account signed in now takes the song made on
