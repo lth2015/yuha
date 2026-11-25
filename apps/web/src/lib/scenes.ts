@@ -26,6 +26,8 @@ export interface Scene {
   /** The gift occasion /create opens on; null writes a song for oneself. */
   occasion: Occasion | null;
   name: string;
+  /** The page title for search, where it should say more than the nav name (the MV scenes). */
+  seoTitle?: string;
   kicker: string;
   title: string;
   body: string;
@@ -50,6 +52,7 @@ export const SCENES: readonly Scene[] = [
     slug: 'birthday',
     occasion: 'birthday',
     name: 'scene.birthday.name',
+    seoTitle: 'scene.birthday.seoTitle',
     kicker: 'scene.birthday.kicker',
     title: 'scene.birthday.title',
     body: 'scene.birthday.body',
@@ -63,6 +66,7 @@ export const SCENES: readonly Scene[] = [
     slug: 'travel',
     occasion: null,
     name: 'scene.travel.name',
+    seoTitle: 'scene.travel.seoTitle',
     kicker: 'scene.travel.kicker',
     title: 'scene.travel.title',
     body: 'scene.travel.body',

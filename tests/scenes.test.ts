@@ -20,12 +20,12 @@ const checkUi = readFileSync(new URL('../scripts/check-ui.mjs', import.meta.url)
 
 describe('scene pages', () => {
   it('are each routed, public, prerendered, titled and visited by check:ui', () => {
-    expect(SCENES.map((s) => s.slug)).toEqual(['birthday', 'love', 'thanks', 'miss', 'memory', 'cheer']);
+    expect(SCENES.map((s) => s.slug)).toEqual(['birthday', 'travel', 'love', 'thanks', 'miss', 'memory', 'cheer']);
     for (const s of SCENES) {
       const path = `/${s.slug}`;
       expect(app).toContain(`<Route path="${path}" element={<ScenePage slug="${s.slug}" />} />`);
       expect(PUBLIC_PAGES.find((p) => p.path === path)).toEqual({ path, description: s.description, prerender: true });
-      expect(pageTitleKey(path)).toBe(s.name);
+      expect(pageTitleKey(path)).toBe(s.seoTitle ?? s.name);
       expect(checkUi).toContain(`path: '${path}'`);
     }
   });
@@ -50,12 +50,14 @@ describe('scene pages', () => {
       'https://example.test',
     );
     const ja = pages.find((p) => p.file === staticPath('/birthday', 'ja'))!.html;
-    expect(ja).toContain(`<title>${textIn('ja', 'scene.birthday.name')} — YUHA</title>`);
+    // The MV scenes are titled for search (docs/ITERATION_EN_JA_MV.md), not by their nav name.
+    expect(ja).toContain(`<title>${textIn('ja', 'scene.birthday.seoTitle')} — YUHA</title>`);
     expect(ja).toContain(textIn('ja', 'scene.birthday.title'));
-    expect(ja).toContain('href="/create?gift=1&amp;occasion=birthday&amp;src=scene-birthday"');
+    // Tagged with the page's language too, for the dashboard's totals (lib/funnel.ts).
+    expect(ja).toContain('href="/create?gift=1&amp;occasion=birthday&amp;src=scene-birthday-ja"');
     // Its own card: Codex's illustration, the same in every language.
     expect(ja).toContain('<meta property="og:image" content="https://example.test/scene/og-scene-birthday.png"');
-    expect(ja).toContain(`<meta property="og:title" content="${textIn('ja', 'scene.birthday.name')} — YUHA"`);
+    expect(ja).toContain(`<meta property="og:title" content="${textIn('ja', 'scene.birthday.seoTitle')} — YUHA"`);
     // The other scenes are linked as files a crawler can read.
     expect(ja).toContain('href="/ja/love.html"');
   });
