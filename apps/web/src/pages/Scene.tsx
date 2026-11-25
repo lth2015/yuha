@@ -1,6 +1,6 @@
 import { Link, useNavigate } from 'react-router-dom';
 import { useI18n } from '../lib/i18n';
-import { SCENES, sceneBySlug, sceneCreateHref, type SceneSlug } from '../lib/scenes';
+import { SCENES, sceneBySlug, sceneCreateHref, sceneTryHref, type SceneSlug } from '../lib/scenes';
 import { useSession } from '../lib/session';
 
 /**
@@ -29,10 +29,12 @@ export default function ScenePage({ slug }: { slug: SceneSlug }) {
     } catch {
       /* the home page still opens; the box is empty */
     }
-    navigate('/');
+    navigate(sceneTryHref(scene, lang));
   };
   const scene = sceneBySlug(slug)!;
   const trialUnits = runtime?.features.freeTrialEnabled ? runtime.features.freeTrialUnits : 0;
+  // Known off only once the server has said so; the prerendered page describes the feature as offered.
+  const photosOff = runtime != null && !runtime.features.photoVideoEnabled && !runtime.features.photoVideoPreview;
 
   return (
     <div className={`scene scene--${slug}`}>
@@ -82,15 +84,17 @@ export default function ScenePage({ slug }: { slug: SceneSlug }) {
           {scene.video?.filter((v) => v.lang === lang).map((v) => (
             <video key={v.src} className="scene__video" src={v.src} poster={v.poster} controls playsInline preload="none" />
           ))}
+          {/* Photos paused by the switch: say so; a video from the cover still works. */}
+          {photosOff && <p className="scene__note">{t('scene.mv.photosPaused')}</p>}
           <ol className="scene__steps">
             <li>{t('scene.mv.step1')}</li>
             <li>{t('scene.mv.step2')}</li>
-            <li>{t('scene.mv.step3')}</li>
+            <li>{t(photosOff ? 'scene.mv.step3Cover' : 'scene.mv.step3')}</li>
             <li>{t('scene.mv.step4')}</li>
           </ol>
           <ul className="scene__facts">
             <li>{t('scene.mv.fact.length')}</li>
-            <li>{t('scene.mv.fact.photos')}</li>
+            {!photosOff && <li>{t('scene.mv.fact.photos')}</li>}
             <li>{t('scene.mv.fact.save')}</li>
             <li>{t('scene.mv.fact.cost')}</li>
           </ul>
@@ -106,6 +110,9 @@ export default function ScenePage({ slug }: { slug: SceneSlug }) {
                 <dt>{t(`scene.faq.${k}.q`)}</dt>
                 <dd>
                   {t(`scene.faq.${k}.a`)}
+                  {/* Only what the server says is on now; the prerendered page promises neither. */}
+                  {k === 'free' && trialUnits > 0 && <> {t('scene.faq.free.units', { n: trialUnits })}</>}
+                  {k === 'free' && runtime?.features.guestTrialEnabled === true && <> {t('scene.faq.free.trial')}</>}
                   {k === 'use' && (
                     <>
                       {' '}

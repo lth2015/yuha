@@ -175,3 +175,11 @@ export function isStarterKey(key: string | null): key is string {
   return !!key && SCENES.some((s) => s.starters.includes(key));
 }
 
+/**
+ * The "try one first, no sign-up" entry on a scene page: the home composer,
+ * tagged like the create button (PR #122 review, PR122-04). lib/visits.ts
+ * keeps the first tag a browser came with, so an ad's visitor keeps the ad's.
+ */
+export function sceneTryHref(scene: Scene, lang: string): string {
+  return `/?src=scene-${scene.slug}-${lang}`;
+}

@@ -5,7 +5,7 @@
  */
 import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
-import { SCENES, sceneCreateHref, startersFor, isStarterKey } from '../apps/web/src/lib/scenes.js';
+import { SCENES, sceneCreateHref, sceneTryHref, startersFor, isStarterKey } from '../apps/web/src/lib/scenes.js';
 import { applyCreateLink } from '../apps/web/src/lib/create-link.js';
 import { PUBLIC_PAGES, staticPath } from '../apps/web/src/lib/seo.js';
 import { pageTitleKey } from '../apps/web/src/lib/title.js';
@@ -60,6 +60,37 @@ describe('scene pages', () => {
     expect(ja).toContain(`<meta property="og:title" content="${textIn('ja', 'scene.birthday.seoTitle')} — YUHA"`);
     // The other scenes are linked as files a crawler can read.
     expect(ja).toContain('href="/ja/love.html"');
+  });
+});
+
+describe('the photo-MV scenes (PR #122 review)', () => {
+  it('say only what stays true whichever switch is off, in the page a crawler reads', async () => {
+    const pages = await prerenderPages(
+      '<html lang="zh-CN"><title>x</title><meta name="description" content="x"/><meta property="og:title" content="x" />' +
+        '<meta property="og:description" content="x" /><meta property="og:image" content="https://example.test/brand/og-card.png" />' +
+        '<div id="root"><main></main></div></html>',
+      'https://example.test',
+    );
+    for (const lang of ['zh', 'ja', 'en'] as const) {
+      for (const slug of ['birthday', 'travel']) {
+        const html = pages.find((p) => p.file === staticPath(`/${slug}`, lang))!.html;
+        // The MV section and its five questions are in the HTML itself.
+        expect(html).toContain(textIn(lang, 'scene.mv.title'));
+        expect(html.match(/<dt>/g)).toHaveLength(5);
+        // No promise of free songs or a no-sign-up trial: those are switches.
+        expect(html).not.toContain(textIn(lang, 'scene.faq.free.trial'));
+        expect(html).toContain(textIn(lang, 'scene.faq.free.a'));
+        // A trial song is downloaded and made into a video only once kept in an account.
+        expect(html).toContain(textIn(lang, 'scene.faq.formats.a'));
+      }
+    }
+    expect(textIn('en', 'scene.faq.formats.a')).toMatch(/sign up/i);
+    expect(textIn('en', 'scene.faq.free.a')).not.toMatch(/without signing up|\bget free songs\b/i);
+  });
+
+  it('tag the no-sign-up entry with the scene and language, as the create button is', () => {
+    const travel = SCENES.find((s) => s.slug === 'travel')!;
+    expect(sceneTryHref(travel, 'ja')).toBe('/?src=scene-travel-ja');
   });
 });
 
