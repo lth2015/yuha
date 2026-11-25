@@ -15,17 +15,20 @@ import { allowInvariantBreach } from './helpers/invariant-guard.js';
 
 let h: Harness;
 let live: Harness;
+let trials: Harness;
 let admin: TestUser;
 beforeAll(async () => {
   h = await createHarness({ ADMIN_MFA_REQUIRED: 'false' });
   // In the demo every page view is internal by design; counting needs a live mode.
   live = await createHarness({ ADMIN_MFA_REQUIRED: 'false', RUN_MODE: 'integration' });
+  trials = await createHarness({ ADMIN_MFA_REQUIRED: 'false', FEATURE_GUEST_TRIAL_ENABLED: 'true', GUEST_TRIAL_PER_NETWORK: '50' });
 });
 beforeEach(async () => {
   await resetData();
   admin = await h.createUser({ email: 'attr-admin@example.test', role: 'admin' });
 });
 afterAll(async () => {
+  await trials.close();
   await live.close();
   await teardown();
 });
@@ -98,8 +101,58 @@ describe('the dashboard, per source', () => {
 
     const { sources } = (await h.app.inject({ method: 'GET', url: `/v1/admin/stats?granularity=day&from=${today()}&to=${today()}`, headers: admin.authHeader })).json();
     const by = Object.fromEntries((sources.campaigns as Array<{ source: string | null }>).map((r) => [r.source ?? '-', r]));
-    expect(by['x-ad-1']).toEqual({ source: 'x-ad-1', visitors: 2, signups: 2, madeASong: 2, paid: 1, revenueJpy: 980 });
-    expect(by['x-ad-2']).toEqual({ source: 'x-ad-2', visitors: 1, signups: 1, madeASong: 0, paid: 0, revenueJpy: 0 });
+    expect(by['x-ad-1']).toEqual({ source: 'x-ad-1', visitors: 2, trials: 0, signups: 2, madeASong: 2, madeAVideo: 0, paid: 1, revenueJpy: 980 });
+    expect(by['x-ad-2']).toEqual({ source: 'x-ad-2', visitors: 1, trials: 0, signups: 1, madeASong: 0, madeAVideo: 0, paid: 0, revenueJpy: 0 });
+  });
+});
+
+/*
+ * The iteration's funnel (docs/ITERATION_EN_JA_MV.md): visit → trial → song →
+ * video → purchase, per source. A visitor who tries before signing up was
+ * invisible to it: the source was only ever reported after sign-in, and the
+ * trial is the step the ads lead to.
+ */
+describe('the trial and the video in the funnel', () => {
+  const startTrial = (source?: string) =>
+    trials.app.inject({
+      method: 'POST',
+      url: '/v1/trial/start',
+      remoteAddress: `10.9.${Math.floor(Math.random() * 250)}.${Math.floor(Math.random() * 250)}`,
+      payload: { deviceId: randomUUID(), ageConfirmed: true, termsAccepted: true, ...(source ? { source } : {}) } as never,
+    });
+
+  it('records the source a trial was started from, and counts it as a trial, not a sign-up', async () => {
+    const res = await startTrial('X-Birthday-EN-1');
+    expect(res.statusCode).toBe(201);
+    const guest = res.json().userId as string;
+    expect(await sourceOf(guest)).toBe('x-birthday-en-1');
+    // A malformed tag is dropped; the trial still opens.
+    expect((await startTrial('not a <tag>')).statusCode).toBe(201);
+
+    const { sources } = (await trials.app.inject({ method: 'GET', url: `/v1/admin/stats?granularity=day&from=${today()}&to=${today()}`, headers: admin.authHeader })).json();
+    const row = (sources.campaigns as Array<{ source: string }>).find((r) => r.source === 'x-birthday-en-1');
+    expect(row).toMatchObject({ trials: 1, signups: 0 });
+  });
+
+  it('carries a trial’s source to the new account that keeps its song', async () => {
+    const started = (await startTrial('x-travel-ja-1')).json() as { token: string; userId: string };
+    const user = await trials.createUser({ email: 'kept@example.test' });
+    await trials.app.inject({ method: 'POST', url: '/v1/me/consent', headers: user.authHeader, payload: { ageConfirmed: true, termsAccepted: true } as never });
+    const claim = await trials.app.inject({ method: 'POST', url: '/v1/trial/claim', headers: user.authHeader, payload: { guestToken: started.token } as never });
+    expect(claim.statusCode).toBe(200);
+    expect(await sourceOf(user.id)).toBe('x-travel-ja-1');
+  });
+
+  it('counts the accounts from a source that made a video', async () => {
+    const a = await h.createUser({ email: 'v@example.test' });
+    await tag(a, 'x-birthday-ja-1');
+    await execute(
+      `INSERT INTO analytics_events (id, name, user_ref, props, run_mode, is_internal, occurred_at) VALUES (?, 'video_made', ?, '{"kind":"photo"}', 'demo', 0, UTC_TIMESTAMP(3))`,
+      [randomUUID(), a.id],
+    );
+    const { sources } = (await h.app.inject({ method: 'GET', url: `/v1/admin/stats?granularity=day&from=${today()}&to=${today()}`, headers: admin.authHeader })).json();
+    const row = (sources.campaigns as Array<{ source: string }>).find((r) => r.source === 'x-birthday-ja-1');
+    expect(row).toMatchObject({ signups: 1, madeAVideo: 1 });
   });
 });
 

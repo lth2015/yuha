@@ -1,6 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { listTracks } from '@yuha/db';
+import { normalizeSource } from '@yuha/contracts';
 import { AppError } from '@yuha/contracts';
 import type { AppContext } from '../context.js';
 import { claimGuestTrial, openGuestTrial } from '../services/guest-trial.js';
@@ -15,6 +16,8 @@ const startBody = z.object({
   deviceId: z.string().uuid(),
   ageConfirmed: z.literal(true),
   termsAccepted: z.literal(true),
+  /** The campaign tag the visitor arrived with; a malformed one is dropped, not refused. */
+  source: z.unknown().optional(),
 });
 
 export default async function trialRoutes(app: FastifyInstance, opts: { ctx: AppContext }) {
@@ -24,7 +27,7 @@ export default async function trialRoutes(app: FastifyInstance, opts: { ctx: App
     { config: { rateLimit: { max: 10, timeWindow: '1 hour' } } },
     async (req, reply) => {
       const body = startBody.parse(req.body);
-      const opened = await openGuestTrial(ctx, { deviceId: body.deviceId, ip: req.ip });
+      const opened = await openGuestTrial(ctx, { deviceId: body.deviceId, ip: req.ip, source: normalizeSource(body.source) });
       return reply.status(201).send({ token: opened.token, expiresAt: opened.expiresAt.toISOString(), userId: opened.userId });
     },
   );

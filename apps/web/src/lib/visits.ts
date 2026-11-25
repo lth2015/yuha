@@ -70,18 +70,42 @@ function keptSource(): { source: string; at: number; sent?: boolean } | null {
   }
 }
 
+/** Hosts whose referral is a search, not a campaign: what brought the visit is the page it landed on. */
+const SEARCH = /(^|\.)(google|bing|yahoo|duckduckgo|yandex|baidu|naver|ecosia|brave)\.[a-z.]+$/;
+
+/**
+ * A visit from a search engine with no tag of its own is named after the page
+ * it landed on, `seo-<page>-<lang>` (docs/ITERATION_EN_JA_MV.md): which
+ * prerendered page, in which language, a search brought somebody to.
+ */
+export function organicSource(path: string, search: string, refHost: string | undefined, docLang: string): string | null {
+  if (!refHost || !SEARCH.test(refHost)) return null;
+  const m = /^\/(?:(zh|ja|en)\/)?([a-z-]*?)(?:\.html)?\/?$/.exec(path);
+  if (!m) return null;
+  const page = !m[2] || m[2] === 'index' ? 'home' : m[2];
+  const lang = m[1] ?? new URLSearchParams(search).get('lang') ?? (docLang.startsWith('zh') ? 'zh' : docLang.slice(0, 2));
+  return normalizeSource(`seo-${page}-${['zh', 'ja', 'en'].includes(lang) ? lang : 'en'}`);
+}
+
 function captureSource(): string | null {
   const kept = keptSource();
   if (kept) return kept.source;
   try {
     const q = new URLSearchParams(window.location.search);
-    const source = normalizeSource(q.get('src') ?? q.get('utm_campaign') ?? q.get('utm_source'));
+    const source =
+      normalizeSource(q.get('src') ?? q.get('utm_campaign') ?? q.get('utm_source')) ??
+      organicSource(window.location.pathname, window.location.search, externalReferrerHost(), document.documentElement.lang || 'zh');
     if (!source) return null;
     localStorage.setItem(SOURCE_KEY, JSON.stringify({ source, at: Date.now() }));
     return source;
   } catch {
     return null;
   }
+}
+
+/** The campaign this browser came through, for a trial to carry (it has no account to report to). */
+export function currentSource(): string | null {
+  return captureSource();
 }
 
 /**

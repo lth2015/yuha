@@ -1,3 +1,4 @@
+import { currentSource } from './visits';
 import { ApiError, apiFetch, setToken } from './api';
 
 /**
@@ -32,7 +33,7 @@ function deviceId(): string {
 export async function startGuestTrial(): Promise<void> {
   const res = await apiFetch<{ token: string }>('/v1/trial/start', {
     method: 'POST',
-    body: { deviceId: deviceId(), ageConfirmed: true, termsAccepted: true },
+    body: { deviceId: deviceId(), ageConfirmed: true, termsAccepted: true, ...(currentSource() ? { source: currentSource() } : {}) },
   });
   setToken(res.token);
   try {

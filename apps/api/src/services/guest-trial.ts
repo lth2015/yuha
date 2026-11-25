@@ -63,7 +63,7 @@ function keyed(secret: string, kind: 'device' | 'ip', value: string): string {
 
 export async function openGuestTrial(
   ctx: AppContext,
-  params: { deviceId: string; ip: string; now?: Date },
+  params: { deviceId: string; ip: string; now?: Date; source?: string | null },
 ): Promise<{ token: string; expiresAt: Date; userId: string }> {
   if (!(await ctx.features()).guestTrialEnabled) {
     throw new AppError('SERVICE_DISABLED', 'trying without an account is not available');
@@ -86,7 +86,7 @@ export async function openGuestTrial(
     if (counts.day >= ctx.config.GUEST_TRIAL_DAILY_LIMIT) refuse('day');
     if (counts.network >= ctx.config.GUEST_TRIAL_PER_NETWORK) refuse('network');
 
-    const user = await insertGuest({ deviceRef, ipRef, consentVersion: CONSENT_VERSION }, tx);
+    const user = await insertGuest({ deviceRef, ipRef, consentVersion: CONSENT_VERSION, source: params.source ?? null }, tx);
     await grantUnits(
       {
         userId: user.id,
@@ -143,6 +143,17 @@ export async function claimGuestTrial(
       );
     }
     await markGuestClaimed({ guestId: guest.id, userId: params.userId }, tx);
+    // The campaign that brought the trial brought the account too, if the
+    // account is new and came with none of its own (docs/ATTRIBUTION_SPEC.md).
+    const came = await queryOne<{ s: string | null }>(`SELECT acquisition_source AS s FROM users WHERE id = ?`, [guest.id], tx);
+    if (came?.s) {
+      await execute(
+        `UPDATE users SET acquisition_source = ?
+          WHERE id = ? AND acquisition_source IS NULL AND created_at >= UTC_TIMESTAMP(3) - INTERVAL 1 DAY`,
+        [came.s, params.userId],
+        tx,
+      );
+    }
 
     const spent = await queryOne<{ n: number }>(
       `SELECT COALESCE(SUM(consumed_units), 0) AS n FROM entitlement_batches WHERE user_id = ? AND source = 'promo_trial'`,
