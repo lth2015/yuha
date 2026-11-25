@@ -166,8 +166,7 @@ export async function getTrack(id: string, tx?: PoolConnection): Promise<TrackRo
  *
  * "Anonymous" would be wrong here: `GET /v1/tracks/:id` requires a bearer
  * token, so the reader this serves is a signed-in account that is not the
- * owner. The one route that answers with no token at all is `GET /v1/explore`,
- * and it is built on `listPublicTracks` above, under the same two conditions.
+ * owner.
  */
 export async function getPublicTrack(id: string): Promise<TrackWithArtist | undefined> {
   const row = await queryOne<TrackWithArtist>(
@@ -211,35 +210,6 @@ export async function getLicensedTrack(id: string): Promise<TrackWithArtist | un
     [id],
   );
   return row ? normaliseRow(row) : undefined;
-}
-
-/**
- * The showcase strip on the landing page.
- *
- * A public feed was removed in b63d66b as a product decision, and its ranked
- * listing went with it in 91be961 because it sorted by a like counter that no
- * longer exists. This is deliberately not that: no ranking, no trending, no
- * counter — the newest published songs, capped, in the order they were made.
- * Anything that sorts by engagement needs a reason to exist and a reader, and
- * neither is back.
- *
- * `visibility = 'public'` and `state = 'deliverable'` are the same two
- * conditions `getPublicTrack` applies, so a song reachable here is exactly a
- * song reachable by its own link.
- */
-export async function listPublicTracks(limit: number): Promise<TrackWithArtist[]> {
-  const rows = await query<TrackWithArtist>(
-    `${TRACK_SELECT}
-      WHERE t.visibility = 'public' AND t.state = 'deliverable' AND t.deleted_at IS NULL
-        -- A song written for somebody is theirs: "public" on a gift means the
-        -- link opens for the person it was sent to, not that it is shown to
-        -- every visitor of the home page with their name and the note on it.
-        AND t.dedication IS NULL
-      ORDER BY t.created_at DESC
-      LIMIT ?`,
-    [limit],
-  );
-  return rows.map(normaliseRow);
 }
 
 /** Owner-facing read that also carries the artist columns for detail views. */

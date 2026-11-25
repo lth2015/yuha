@@ -2386,75 +2386,6 @@ textarea.is-full { border-color: var(--danger); }
 }
 
 /*
- * The showcase under the hero.
- *
- * Same horizontal shelf as the create page's recent strip, one size up: this
- * one is the first thing a visitor with no account can actually play, so it
- * gets room rather than being tucked under a form.
- */
-.showcase {
-  margin: var(--s16) 0 var(--s12);
-}
-.showcase .shelf__head {
-  margin-bottom: var(--s6);
-}
-.showcase .shelf__title h2 {
-  margin: 0 0 var(--s1);
-  font-size: var(--t-heading);
-  font-weight: 600;
-}
-.showcase__sub {
-  margin: 0;
-  font-size: var(--t-body);
-  color: var(--muted);
-}
-.showcase__row {
-  display: grid;
-  grid-auto-flow: column;
-  /* Capped at the cover's own maximum (CoverArt size 300): with 1fr a lone
-     song stretched the card across the page while its cover stayed 300px,
-     leaving the play button and badges floating at the far right. */
-  grid-auto-columns: minmax(240px, 300px);
-  gap: var(--s6);
-  overflow-x: auto;
-  padding-bottom: var(--s3);
-  scrollbar-width: thin;  /* A carousel, not a table: cards snap into place, and the next one peeking
-     past the edge is the cue that there is more. */
-  scroll-snap-type: x mandatory;
-}
-.showcase__row > * { scroll-snap-align: start; }
-
-/* A shelf (components/Shelf.tsx) that runs past the edge says so: the side
-   with more fades out, and arrows beside the heading move a page at a time. */
-.shelf__head { display: flex; align-items: flex-end; justify-content: space-between; gap: var(--s4); }
-.shelf__title { min-width: 0; }
-.shelf__nav { display: flex; gap: 8px; flex: none; }
-.shelf__arrow {
-  width: 44px; height: 44px; padding: 0; border-radius: 999px;
-  display: inline-flex; align-items: center; justify-content: center;
-  border: 1px solid var(--line); background: rgb(255 255 255 / 80%); color: var(--ink);
-  box-shadow: var(--shadow-card); cursor: pointer;
-  transition: background var(--t-ui) var(--ease-ui), color var(--t-ui) var(--ease-ui);
-}
-.shelf__arrow:hover:not(:disabled) { background: white; }
-.shelf__arrow:disabled { color: var(--muted); background: transparent; cursor: default; box-shadow: none; }
-.shelf__arrow svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
-.shelf__row[data-after] { mask-image: linear-gradient(to right, #000 calc(100% - 72px), transparent); }
-.shelf__row[data-before] { mask-image: linear-gradient(to right, transparent, #000 72px); }
-.shelf__row[data-before][data-after] { mask-image: linear-gradient(to right, transparent, #000 72px, #000 calc(100% - 72px), transparent); }
-/* Touch screens swipe the row itself; the fade and the peeking card are the cue. */
-@media (hover: none) { .shelf__nav { display: none; } }
-@media (max-width: 720px) {
-  .showcase {
-    margin-top: var(--s12);
-  }
-  .showcase__row {
-    grid-auto-columns: minmax(170px, 72%);
-    gap: var(--s4);
-  }
-}
-
-/*
  * The last few songs, under the composer.
  *
  * A row that scrolls sideways rather than a grid: this is a glance back, not
@@ -2572,8 +2503,6 @@ textarea.is-full { border-color: var(--danger); }
 .share__note { margin: 0; font-size: var(--t-caption); line-height: 1.5; color: var(--muted); }
 /* The share video: one full-width action that becomes "send" when it is ready
    (two taps — see ShareMenu). Ready is the petal, ink on it, as .btn--primary. */
-.share__video { display: grid; gap: 6px; }
-.share__video .share__copy { width: 100%; }
 .share__copy.is-strong { background: var(--petal); border-color: var(--petal); color: var(--ink); font-weight: 600; }
 .share__copy.is-strong:hover { background: var(--petal-lift); }
 .share__copy[aria-busy='true'] { cursor: progress; }
@@ -3056,3 +2985,8 @@ textarea.is-full { border-color: var(--danger); }
 .account__menu { background-color: var(--bg); }
 .lyric-versions__stale { margin: var(--s2) 0 0; font-size: var(--t-caption); color: var(--muted); }
 .lyric-versions__list.is-stale .lyric-versions__card { border-style: dashed; }
+
+.composer__presets-set { margin: var(--s2) 0 0; font-size: var(--t-caption); color: var(--muted); }
+.song-spread__license-pitch { margin: var(--s3) 0 0; font-size: var(--t-caption); color: var(--muted); }
+.photo-video__way { display: grid; gap: var(--s3); padding-top: var(--s4); border-top: 1px solid var(--line); }
+.photo-video__way h3 { margin: 0; font-size: var(--t-body); font-weight: 600; }

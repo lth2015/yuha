@@ -110,8 +110,8 @@ export default async function telemetryRoutes(app: FastifyInstance, opts: { ctx:
    * been reporting as not computable while the data to compute it went
    * nowhere. This is the join.
    *
-   * `optionalAuth`, not `requireAuth`: the showcase on the landing page plays
-   * to people with no account, and a visitor who listens to a whole song is
+   * `optionalAuth`, not `requireAuth`: a shared song plays to people with no
+   * account, and a visitor who listens to a whole song is
    * worth counting even though the activation query — which asks what a
    * *registered* user did in their first 24 hours — will not count them. A
    * null `user_ref` is the honest record of "somebody, we do not know who".

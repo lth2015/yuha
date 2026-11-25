@@ -99,6 +99,10 @@ Rules of engagement:
   later change. Showing the number turns a private song into a performance,
   and a song with two plays into a failure.
 
+  The home page's showcase of published songs, and the `GET /v1/explore`
+  list behind it, were removed on 2026-11-25 by the product owner's decision;
+  `tests/explore.test.ts` pins that the list route is gone.
+
   Do not reintroduce a browsable feed, a like system, or any user-visible
   engagement counter without asking.
 - **No creator revenue sharing.** The platform sells its own service; the

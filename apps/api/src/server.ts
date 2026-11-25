@@ -66,8 +66,8 @@ export async function buildServer(ctx: AppContext): Promise<FastifyInstance> {
      * `POST /v1/rights-cases`, which is unauthenticated by design and whose own
      * comment calls rate limiting "the only gate". Filing a case suspends the
      * named track immediately (SEC-10), so a forged header turned 5 complaints
-     * an hour into unlimited, and an unauthenticated caller could read 12 real
-     * track ids from `GET /v1/explore` and take every one of them down.
+     * an hour into unlimited, and an unauthenticated caller could take down
+     * every track whose id it knew (then, 12 at a time from a public list).
      *
      * The value below names which peers may be believed: loopback and the
      * private ranges, which is where the nginx in front of this app sits and

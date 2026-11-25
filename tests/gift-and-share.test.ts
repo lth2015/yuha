@@ -314,20 +314,6 @@ describe('the share video', () => {
 });
 
 describe('what a gift keeps private', () => {
-  it('is never on the home page showcase, name or note', async () => {
-    const user = await h.createUser({ credits: 3 });
-    const { trackId: gift } = await song(user, { dedication });
-    const { trackId: plain } = await song(user);
-    await publish(user, gift!);
-    await publish(user, plain!);
-    const res = await h.app.inject({ method: 'GET', url: '/v1/explore' });
-    const ids = res.json().items.map((i: { trackId: string }) => i.trackId);
-    expect(ids).toContain(plain);
-    expect(ids).not.toContain(gift);
-    expect(res.body).not.toContain('小林');
-    expect(res.json().items.every((i: { dedication: unknown }) => i.dedication === null)).toBe(true);
-  });
-
   it('opens for a person reading inside LINE, and is previewed for LINE’s own crawler', async () => {
     const user = await h.createUser({ credits: 3 });
     const { trackId } = await song(user, { dedication });

@@ -21,7 +21,6 @@ export function ShareMenu({
   text: textOverride,
   autoOpen = false,
   onOpen,
-  makeVideo,
 }: {
   url: string;
   title: string;
@@ -33,8 +32,6 @@ export function ShareMenu({
   autoOpen?: boolean;
   /** Each time the menu opens: the owner's page uses it to upload the link-preview card. */
   onOpen?: () => void;
-  /** Makes the share video (owner only). Absent, the menu offers no video. */
-  makeVideo?: () => Promise<File>;
   /**
    * Once a song is public, sharing it is the thing the page is for, so it is
    * the one filled action in the row. Before that the row has no primary at
@@ -45,44 +42,6 @@ export function ShareMenu({
   const { t, lang } = useI18n();
   const [open, setOpen] = useState(autoOpen);
   const [copy, setCopy] = useState<'idle' | 'done' | 'failed'>('idle');
-  /*
-   * Two taps, not one. A phone opens its share sheet only within a few
-   * seconds of a tap, and the video takes longer than that to make — so the
-   * first tap makes it, and the second, on a button that says it is ready,
-   * sends it.
-   */
-  const [video, setVideo] = useState<{ state: 'idle' | 'making' | 'failed' } | { state: 'ready' | 'saved'; file: File }>({ state: 'idle' });
-  const startVideo = async () => {
-    if (!makeVideo) return;
-    setVideo({ state: 'making' });
-    try {
-      setVideo({ state: 'ready', file: await makeVideo() });
-    } catch {
-      setVideo({ state: 'failed' });
-    }
-  };
-  const sendVideo = async (file: File) => {
-    if (typeof navigator.canShare === 'function' && navigator.canShare({ files: [file] })) {
-      try {
-        await navigator.share({ files: [file], text });
-        setOpen(false);
-      } catch {
-        /* closed the sheet; the video is still ready */
-      }
-      return;
-    }
-    // No file sharing here (most desktops): save it, and say where it goes.
-    const href = URL.createObjectURL(file);
-    const a = document.createElement('a');
-    a.href = href;
-    a.download = file.name;
-    // In the document: a detached link's download name is ignored by some browsers.
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    setTimeout(() => URL.revokeObjectURL(href), 10_000);
-    setVideo({ state: 'saved', file });
-  };
   const root = useRef<HTMLDivElement>(null);
   const text = textOverride ?? t('song.share.text', { title });
   const internal = isPrivateHost(new URL(url).hostname);
@@ -135,35 +94,6 @@ export function ShareMenu({
           </div>
           {copy === 'failed' && <p className="share__note">{t('song.share.copyFailed')}</p>}
           {internal && <p className="share__note">{t('song.share.internal')}</p>}
-          {makeVideo && (
-            <div className="share__video">
-              {video.state === 'ready' || video.state === 'saved' ? (
-                <button type="button" className="share__copy is-strong" role="menuitem" onClick={() => void sendVideo(video.file)}>
-                  {t('song.share.videoSend')}
-                </button>
-              ) : (
-                <button
-                  type="button"
-                  className="share__copy"
-                  role="menuitem"
-                  onClick={() => void startVideo()}
-                  disabled={video.state === 'making'}
-                  aria-busy={video.state === 'making'}
-                >
-                  {t(video.state === 'making' ? 'song.share.videoMaking' : 'song.share.video')}
-                </button>
-              )}
-              <p className="share__note" aria-live="polite">
-                {video.state === 'failed'
-                  ? t('song.share.videoFailed')
-                  : video.state === 'saved'
-                    ? t('song.share.videoSaved')
-                    : video.state === 'ready'
-                      ? t('song.share.videoReady')
-                      : t('song.share.videoHint')}
-              </p>
-            </div>
-          )}
           <div className="share__targets">
             {shareTargets(url, text, lang).map((target) => (
               <a
