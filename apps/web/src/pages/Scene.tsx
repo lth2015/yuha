@@ -1,4 +1,4 @@
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { useI18n } from '../lib/i18n';
 import { SCENES, sceneBySlug, sceneCreateHref, type SceneSlug } from '../lib/scenes';
 import { useSession } from '../lib/session';
@@ -15,7 +15,22 @@ import { useSession } from '../lib/session';
  */
 export default function ScenePage({ slug }: { slug: SceneSlug }) {
   const { t } = useI18n();
-  const { runtime } = useSession();
+  const { runtime, me } = useSession();
+  const navigate = useNavigate();
+  /*
+   * Signed out, with trials open: the home page lets a visitor make a song
+   * with no account, and this page sent the same visitor straight to sign-up.
+   * The trial goes from here too, starting from this scene's first line.
+   */
+  const canTry = !me && runtime?.features.guestTrialEnabled === true;
+  const tryFirst = () => {
+    try {
+      localStorage.setItem('yuha.home-draft', t(scene.starters[0] ?? scene.title));
+    } catch {
+      /* the home page still opens; the box is empty */
+    }
+    navigate('/');
+  };
   const scene = sceneBySlug(slug)!;
   const trialUnits = runtime?.features.freeTrialEnabled ? runtime.features.freeTrialUnits : 0;
 
@@ -31,6 +46,11 @@ export default function ScenePage({ slug }: { slug: SceneSlug }) {
         <Link className="btn btn--primary btn--lg" to={sceneCreateHref(scene)}>
           {t(scene.cta)}
         </Link>
+        {canTry && (
+          <button type="button" className="btn btn--lg scene__try" onClick={tryFirst}>
+            {t('scene.tryFirst')}
+          </button>
+        )}
         {trialUnits > 0 && <p className="scene__note">{t('scene.free', { n: trialUnits })}</p>}
         </div>
       </section>

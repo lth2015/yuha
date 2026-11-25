@@ -1,3 +1,4 @@
+import { TRIAL_CLAIMED_EVENT, guestSongId } from '../lib/guest';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { TITLE_MAX_CODEPOINTS, seasonOfOccasion, type LyricTimings, type Occasion, type ProductView, type TrackView } from '@yuha/contracts';
@@ -157,6 +158,13 @@ export default function SongDetail() {
   }, [id]);
 
   useEffect(load, [load]);
+  // A trial song just added to this account (TrialClaimAsk): read it again,
+  // so the page shows the song instead of the "not found" it had a moment ago.
+  useEffect(() => {
+    const onClaimed = () => load();
+    window.addEventListener(TRIAL_CLAIMED_EVENT, onClaimed);
+    return () => window.removeEventListener(TRIAL_CLAIMED_EVENT, onClaimed);
+  }, [load]);
 
   useEffect(() => {
     // Focus follows the field that just appeared, and selects what is there so
@@ -190,6 +198,16 @@ export default function SongDetail() {
    * was "back to library", with no retry and nothing re-run. On the buy path.
    */
   if (error) {
+    // The song this browser made before signing in: the account that just
+    // signed in does not own it yet, so the API says "not found". That is not
+    // the news — the prompt above (TrialClaimAsk) is how it becomes theirs.
+    if (me && me.role !== 'guest' && id && guestSongId() === id && error instanceof ApiError && error.status === 404) {
+      return (
+        <div className="stack">
+          <p className="panel" style={{ margin: 0 }}>{t('trial.claim.pendingHere')}</p>
+        </div>
+      );
+    }
     return (
       <div className="stack">
         <ErrorNotice error={error} />
@@ -716,20 +734,6 @@ export default function SongDetail() {
               )
             )}
             </div>
-            {/* Its own group: separated at every width, never pushed to the
-                right-hand end of whatever line a wrap happened to put it on. */}
-            {manages && (
-              <div className="song-spread__actions-end">
-                <button
-                  type="button"
-                  className="text-action is-danger"
-                  disabled={busy}
-                  onClick={() => void remove()}
-                >
-                  {t('song.delete')}
-                </button>
-              </div>
-            )}
           </div>
 
           {/* A trial's song: kept only by signing up (docs/GROWTH_SPEC.md, part three). */}
@@ -773,10 +777,23 @@ export default function SongDetail() {
               onClose={() => setReporting(null)}
             />
           )}
-          {manages && !reporting && song.state === 'deliverable' && (
-            <button type="button" className="text-action song-spread__report" onClick={() => setReporting({})}>
-              {t('issue.open')}
-            </button>
+          {/*
+            The rarely-needed actions, last and together. Delete used to sit in
+            the row with Share and Download, as large as either: on a phone it
+            was the third thing under the thumb. It is findable here, outlined
+            in red, and nowhere near the things people come to do.
+          */}
+          {manages && (
+            <div className="song-spread__manage">
+              {!reporting && song.state === 'deliverable' && (
+                <button type="button" className="text-action song-spread__report" onClick={() => setReporting({})}>
+                  {t('issue.open')}
+                </button>
+              )}
+              <button type="button" className="text-action is-danger" disabled={busy} onClick={() => void remove()}>
+                {t('song.delete')}
+              </button>
+            </div>
           )}
 
           {/* The owner's to know, nobody else's: shown to a visitor it was a public

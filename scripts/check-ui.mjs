@@ -137,6 +137,8 @@ const PAGES = [
   // Three versions of the lyrics (docs/LYRIC_COWRITE_SPEC.md).
   { name: 'create-cowrite', path: '/create', as: 'creator', prepare: writeThreeVersions },
   { name: 'create-linefix', path: '/create', as: 'creator', prepare: rewriteOneLine },
+  // AI re-create: the song's lyrics in the editor, with the lyric tools.
+  { name: 'create-edit', path: '/create?edit=:track', as: 'creator', prepare: openEditLyrics },
   { name: 'library-trial-claim', path: '/library', as: 'creator', prepare: offerTrialSong },
   { name: 'song', path: '/song/:track', as: 'creator' },
   { name: 'song-public-view', path: '/song/:track', as: null },
@@ -202,6 +204,10 @@ async function offerTrialSong(page) {
   await page.evaluate(() => localStorage.setItem('yuha.guest', 'check-ui-pending-trial-token'));
   await page.reload({ waitUntil: 'networkidle' });
   await page.waitForSelector('.trial-claim', { timeout: 10_000 });
+}
+
+async function openEditLyrics(page) {
+  await page.waitForSelector('textarea#edit-lyrics, textarea#instructions', { timeout: 15_000 });
 }
 
 async function openCustomer(page) {

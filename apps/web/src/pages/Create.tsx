@@ -101,6 +101,18 @@ interface Draft {
   giftNote: string;
 }
 
+/** What "clear" empties: what was written, not how this person likes to make songs. */
+const CLEARED_CONTENT: Pick<Draft, 'title' | 'prompt' | 'lyrics' | 'gift' | 'giftTo' | 'giftOccasion' | 'giftNote' | 'lyricsBy'> = {
+  title: '',
+  prompt: '',
+  lyrics: '',
+  lyricsBy: 'ai',
+  gift: false,
+  giftTo: '',
+  giftOccasion: null,
+  giftNote: '',
+};
+
 const DEFAULT_DRAFT: Draft = {
   title: '',
   prompt: '',
@@ -352,8 +364,27 @@ export default function Create() {
    */
   const [recent, setRecent] = useState<TrackView[] | null>(null);
   const [instructions, setInstructions] = useState('');
+  /**
+   * The song's lyrics in the re-create editor (/create?edit=): shown, editable,
+   * with the studio's lyric tools. They used to be invisible here — the only
+   * way to change a word was to describe the change and let the model guess.
+   */
+  const [editLyrics, setEditLyrics] = useState('');
+  const editLyricsRef = useRef<HTMLTextAreaElement>(null);
+  const [editCaretLine, setEditCaretLine] = useState<number | null>(null);
   const [styleInput, setStyleInput] = useState('');
   const lyricsRef = useRef<HTMLTextAreaElement>(null);
+  /** The job this draft was sent as, so finishing it clears the draft and nothing else does. */
+  const submittedFromDraft = useRef<string | null>(null);
+  /** What "clear" took away, for one undo. */
+  const [cleared, setCleared] = useState<Partial<Draft> | null>(null);
+  const clearContent = () => {
+    setCleared({
+      title: draft.title, prompt: draft.prompt, lyrics: draft.lyrics, lyricsBy: draft.lyricsBy,
+      gift: draft.gift, giftTo: draft.giftTo, giftOccasion: draft.giftOccasion, giftNote: draft.giftNote,
+    });
+    setDraft((d) => ({ ...d, ...CLEARED_CONTENT }));
+  };
   // The line the cursor is on in the lyrics box, for "other ways to say it" (docs/LYRIC_LINE_SPEC.md).
   const [caretLine, setCaretLine] = useState<number | null>(null);
   const noteCaret = (el: HTMLTextAreaElement) => setCaretLine(el.value.slice(0, el.selectionStart).split('\n').length - 1);
@@ -380,7 +411,10 @@ export default function Create() {
     // the rewrite will keep. Nothing is submitted until the creator writes
     // instructions and confirms the credit.
     apiFetch<TrackView & { lyrics: string | null }>(`/v1/tracks/${editTrackId}`)
-      .then(setEditSource)
+      .then((src) => {
+        setEditSource(src);
+        setEditLyrics(src.lyrics ?? '');
+      })
       .catch((err) => setError(err));
   }, [editTrackId]);
 
@@ -550,6 +584,14 @@ export default function Create() {
         apiFetch<TrackView>(`/v1/tracks/${job.trackId}`)
           .then(setResult)
           .catch(() => undefined);
+        // The words went into a song: the next one starts from a clean page.
+        // Only a job sent from this draft — one resumed from elsewhere is not
+        // what is in the boxes. Settings (length, styles, voice, visibility)
+        // stay; they are how this person makes songs.
+        if (submittedFromDraft.current === job.jobId) {
+          submittedFromDraft.current = null;
+          setDraft((d) => ({ ...d, ...CLEARED_CONTENT }));
+        }
       } else if (job?.phase === 'failed') {
         // A failed generation is refunded server-side. Without this the studio
         // still shows the pre-failure balance, and a creator who was down to
@@ -615,15 +657,18 @@ export default function Create() {
     [draft.prompt, t],
   );
 
+  const editSung = !!editSource && editSource.vocalMode !== 'instrumental';
+  const editLyricsChanged = editSung && editLyrics.trim() !== (editSource?.lyrics ?? '').trim() && editLyrics.trim().length > 0;
+
   const canSubmit = useMemo(() => {
     if (submitting || credits < 1) return false;
-    if (editTrackId) return instructions.trim().length > 0;
+    if (editTrackId) return instructions.trim().length > 0 || editLyricsChanged;
     // Mirrors createGenerationRequest: simple mode requires a description,
     // custom mode is satisfied by the lyrics that made it custom, and a song
     // for somebody is described by who and why — but needs the who.
     if (draft.gift && (!draft.giftTo.trim() || !draft.giftOccasion)) return false;
     return mode === 'custom' || draft.prompt.trim().length > 0 || draft.gift;
-  }, [submitting, credits, editTrackId, instructions, mode, draft.prompt, draft.gift, draft.giftTo, draft.giftOccasion]);
+  }, [submitting, credits, editTrackId, instructions, editLyricsChanged, mode, draft.prompt, draft.gift, draft.giftTo, draft.giftOccasion]);
 
   /*
    * Why the button is off, when it is off for something the writer can fix.
@@ -639,13 +684,13 @@ export default function Create() {
    */
   const blockedReason = useMemo(() => {
     if (submitting || credits < 1 || canSubmit) return null;
-    if (editTrackId) return 'create.needInstructions';
+    if (editTrackId) return editSung ? 'create.needChangeOrLyrics' : 'create.needInstructions';
     // A gift with nobody named said "describe the song" — about a field that
     // was not what was missing.
     if (draft.gift && !draft.giftTo.trim()) return 'create.needGiftTo';
     if (draft.gift && !draft.giftOccasion) return 'create.needOccasion';
     return 'create.needPrompt';
-  }, [submitting, credits, canSubmit, editTrackId, draft.gift, draft.giftTo, draft.giftOccasion]);
+  }, [submitting, credits, canSubmit, editTrackId, editSung, draft.gift, draft.giftTo, draft.giftOccasion]);
 
   const promptAtLimit = promptLength >= PROMPT_MAX_CODEPOINTS;
   const lyricsAtLimit = lyricsLength >= LYRICS_MAX_CODEPOINTS;
@@ -715,7 +760,7 @@ export default function Create() {
     try {
       const endpoint = editTrackId ? `/v1/tracks/${editTrackId}/edit` : '/v1/generations';
       const body = editTrackId
-        ? { instructions: instructions.trim() }
+        ? { instructions: instructions.trim(), ...(editLyricsChanged ? { lyrics: editLyrics.trim() } : {}) }
         : {
             mode,
             ...(draft.title.trim() ? { title: draft.title.trim() } : {}),
@@ -744,6 +789,7 @@ export default function Create() {
         body,
       });
       setJob(res);
+      if (!editTrackId) submittedFromDraft.current = res.jobId;
       void refreshEntitlements();
     } catch (err) {
       setError(err);
@@ -842,6 +888,13 @@ export default function Create() {
             <Link to="/library" className="btn">
               {t('wait.goLibrary')}
             </Link>
+            {/* Once it is made: the studio again, with a clean page (the draft
+                that made this song was emptied when it finished). */}
+            {done && (
+              <button type="button" className="btn" onClick={startAnother}>
+                {t('create.job.startAnother')}
+              </button>
+            )}
           </>
         )}
       </div>
@@ -924,8 +977,11 @@ export default function Create() {
 
         {!failed && !done && actions}
 
+        {/* What the song is, in a person's terms. A job id prefix used to lead
+            this line; it means nothing to the reader and support has the full
+            id from the report form. */}
         <p className="small muted" style={{ marginTop: 'var(--s6)' }}>
-          {job.jobId.slice(0, 8)} · {job.durationSeconds}s ·{' '}
+          {job.durationSeconds}s ·{' '}
           {job.instrumental ? t('create.vocals.instrumental') : t('composer.vocals')}
           {runtime?.syntheticAudio ? ` · ${t('create.job.demoAudio')}` : ''}
         </p>
@@ -1032,6 +1088,63 @@ export default function Create() {
               {codePointLength(instructions)} / {PROMPT_MAX_CODEPOINTS}
             </span>
           </div>
+
+          {/*
+            The lyrics themselves, as the song has them: edit a word, put the
+            cursor on a line for other ways to say it, or have three new
+            versions written from the description above (or the title). What
+            is here is sung as written; the description changes the rest.
+          */}
+          {editSung && (
+            <div className="studio__edit-lyrics">
+              <label htmlFor="edit-lyrics">{t('create.edit.lyrics')}</label>
+              <p className="small muted" id="edit-lyrics-hint">{t('create.edit.lyricsHint')}</p>
+              <textarea
+                id="edit-lyrics"
+                ref={editLyricsRef}
+                rows={9}
+                value={editLyrics}
+                onChange={(e) => setEditLyrics([...e.target.value].slice(0, LYRICS_MAX_CODEPOINTS).join(''))}
+                onSelect={(e) => setEditCaretLine(e.currentTarget.value.slice(0, e.currentTarget.selectionStart).split('\n').length - 1)}
+                onClick={(e) => setEditCaretLine(e.currentTarget.value.slice(0, e.currentTarget.selectionStart).split('\n').length - 1)}
+                onKeyUp={(e) => setEditCaretLine(e.currentTarget.value.slice(0, e.currentTarget.selectionStart).split('\n').length - 1)}
+                aria-describedby="edit-lyrics-hint"
+              />
+              <div className="composer__meta">
+                <span>{editLyricsChanged ? t('create.edit.lyricsChanged') : t('create.edit.lyricsSame')}</span>
+                <span className="composer__meta-end">
+                  <span className="num">{codePointLength(editLyrics)} / {LYRICS_MAX_CODEPOINTS}</span>
+                  {editLyricsChanged && (
+                    <button type="button" className="composer__clear" onClick={() => setEditLyrics(editSource.lyrics ?? '')}>
+                      {t('create.edit.lyricsReset')}
+                    </button>
+                  )}
+                </span>
+              </div>
+              {editLyrics.trim() && (
+                <LineRewrite
+                  lyrics={editLyrics}
+                  line={editCaretLine}
+                  prompt={instructions.trim() || editSource.title}
+                  styles={editSource.styles ?? []}
+                  onReplace={(line, text) => {
+                    const lines = editLyrics.split('\n');
+                    lines[line] = `${(lines[line] ?? '').match(/^\s*/u)?.[0] ?? ''}${text}`;
+                    setEditLyrics([...lines.join('\n')].slice(0, LYRICS_MAX_CODEPOINTS).join(''));
+                  }}
+                />
+              )}
+              <LyricVersions
+                prompt={instructions.trim() || editSource.title}
+                styles={editSource.styles ?? []}
+                durationSeconds={Math.round(editSource.durationSeconds) as 30 | 60 | 120 | 180 | 240}
+                onPick={(lyrics) => {
+                  setEditLyrics([...lyrics].slice(0, LYRICS_MAX_CODEPOINTS).join(''));
+                  requestAnimationFrame(() => editLyricsRef.current?.focus());
+                }}
+              />
+            </div>
+          )}
 
           <SubmitError error={error} />
 
@@ -1290,17 +1403,43 @@ export default function Create() {
         <textarea
           id="prompt"
           value={draft.prompt}
-          onChange={(e) => patch({ prompt: clampToCodePoints(e.target.value, PROMPT_MAX_CODEPOINTS) })}
+          onChange={(e) => {
+            if (cleared) setCleared(null);
+            patch({ prompt: clampToCodePoints(e.target.value, PROMPT_MAX_CODEPOINTS) });
+          }}
           placeholder={t('create.prompt.placeholderSimple')}
           className={promptAtLimit ? 'is-full' : undefined}
           aria-describedby="prompt-format prompt-count"
         />
         <div className={`composer__meta${promptAtLimit ? ' is-full' : ''}`}>
           <span id="prompt-format">{promptAtLimit ? t('create.atLimit') : format}</span>
-          <span id="prompt-count" className="num" aria-live="polite">
-            {promptLength} / {PROMPT_MAX_CODEPOINTS}
+          <span className="composer__meta-end">
+            <span id="prompt-count" className="num" aria-live="polite">
+              {promptLength} / {PROMPT_MAX_CODEPOINTS}
+            </span>
+            {/* Empties what was written (description, title, lyrics, gift); settings stay. One undo. */}
+            {(draft.prompt || draft.title || draft.lyrics || draft.gift) && (
+              <button type="button" className="composer__clear" onClick={clearContent}>
+                {t('create.clear')}
+              </button>
+            )}
           </span>
         </div>
+        {cleared && (
+          <p className="composer__cleared" role="status">
+            {t('create.cleared')}{' '}
+            <button
+              type="button"
+              className="composer__clear"
+              onClick={() => {
+                setDraft((d) => ({ ...d, ...cleared }));
+                setCleared(null);
+              }}
+            >
+              {t('create.undo')}
+            </button>
+          </p>
+        )}
 
         <div className="studio__dial studio__dial--styles">
           <span className="studio__dial-label" id="styles-label">

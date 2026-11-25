@@ -163,13 +163,15 @@ export default function Pricing() {
 
           {plans.map((p) => {
               const copy = PLAN_COPY[p.priceKey]!;
+              // "Most chosen" on a plan nobody can buy yet is not true.
+              const featured = copy.highlight && p.available && canBePaid(p);
               return (
                 <article
                   key={p.priceKey}
-                  className={`plan${copy.highlight ? ' plan--highlight' : ''}`}
+                  className={`plan${featured ? ' plan--highlight' : ''}`}
                   aria-labelledby={`plan-${p.priceKey}-name`}
                 >
-                  {copy.highlight && <span className="plan__badge">{t('price.popular')}</span>}
+                  {featured && <span className="plan__badge">{t('price.popular')}</span>}
                   <h2 id={`plan-${p.priceKey}-name`}>{p.displayName.split('—')[0]!.trim()}</h2>
                   <p className="plan__price">
                     {formatMoney(p.amountMinor, p.currency, locale)}

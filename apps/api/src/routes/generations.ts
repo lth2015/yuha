@@ -3,10 +3,11 @@ import { z } from 'zod';
 import {
   AppError,
   IDEMPOTENCY_HEADER,
+  LYRICS_MAX_CODEPOINTS,
   createGenerationRequest,
   idempotencyKeySchema,
 } from '@yuha/contracts';
-import { dismissUnfinishedJob, getBalance, getTrackForUser, listOpenJobs, listUnfinishedJobs, trackEvent } from '@yuha/db';
+import { dismissUnfinishedJob, getBalance, getJob, getTrackForUser, listOpenJobs, listUnfinishedJobs, trackEvent } from '@yuha/db';
 import type { AppContext } from '../context.js';
 import { cancelGeneration, createGeneration, getJobDraft, getJobViews, getJobView } from '../services/generation.js';
 
@@ -111,8 +112,17 @@ export default async function generationRoutes(app: FastifyInstance, opts: { ctx
   });
 
   const editRequestSchema = z.object({
-    /** The creator's change instructions, screened like any prompt. */
-    instructions: z.string().trim().min(1).max(300),
+    /** The creator's change instructions, screened like any prompt. Optional when the lyrics changed. */
+    instructions: z.string().trim().max(300).default(''),
+    /**
+     * The lyrics as the creator left them in the editor, when they changed
+     * them. Their words are sung as written: a description changes the rest.
+     */
+    lyrics: z
+      .string()
+      .trim()
+      .refine((v) => [...v].length <= LYRICS_MAX_CODEPOINTS, { message: `lyrics must be at most ${LYRICS_MAX_CODEPOINTS} Unicode code points` })
+      .optional(),
   });
 
   /**
@@ -144,35 +154,52 @@ export default async function generationRoutes(app: FastifyInstance, opts: { ctx
       if (!track) throw new AppError('NOT_FOUND', 'track not found');
       if (track.state !== 'deliverable') throw new AppError('TRACK_NOT_DELIVERABLE', 'only finished songs can be edited');
 
-      if (!ctx.text.reviseSong) {
+      // What the creator changed: a description, the lyrics, or both. Lyrics
+      // only count on a sung song and only when they differ from what it has.
+      const sung = track.vocal_mode === 'with_vocals';
+      const ownLyrics = sung && body.lyrics && body.lyrics !== (track.lyrics ?? '').trim() ? body.lyrics : null;
+      if (!body.instructions && !ownLyrics) {
+        throw new AppError('VALIDATION_FAILED', 'describe a change or change the lyrics');
+      }
+
+      const { checkLyrics, checkPrompt } = await import('@yuha/providers');
+      for (const verdict of [body.instructions ? checkPrompt(body.instructions) : null, ownLyrics ? checkLyrics(ownLyrics) : null]) {
+        if (verdict && !verdict.allowed) {
+          throw new AppError('PROMPT_BLOCKED', `rejected: ${verdict.reason}`, {
+            reason: verdict.reason,
+            hintKey: verdict.hintKey,
+            appealable: verdict.appealable,
+          });
+        }
+      }
+
+      // A lyrics-only change asks nothing of the model: the title, styles and
+      // description carry over, and the creator's lyrics are sung.
+      const unchanged = { status: 'ok' as const, title: track.title, styles: track.styles ?? [], lyrics: ownLyrics, usage: { costMinor: 0, costIsEstimate: true } };
+      if (body.instructions && !ctx.text.reviseSong) {
         throw new AppError('UNSUPPORTED_CAPABILITY', 'the configured text provider cannot edit songs');
       }
-
-      const { checkPrompt } = await import('@yuha/providers');
-      const safety = checkPrompt(body.instructions);
-      if (!safety.allowed) {
-        throw new AppError('PROMPT_BLOCKED', `instructions rejected: ${safety.reason}`, {
-          reason: safety.reason,
-          hintKey: safety.hintKey,
-          appealable: safety.appealable,
-        });
-      }
-
-      const revision = await ctx.text.reviseSong({
-        instructions: body.instructions,
-        original: {
-          title: track.title,
-          styles: track.styles ?? [],
-          lyrics: track.lyrics,
-          instrumental: track.vocal_mode === 'instrumental',
-          durationSeconds: Math.round(track.duration_ms / 1000),
-        },
-      });
+      const revision = body.instructions
+        ? await ctx.text.reviseSong!({
+            instructions: body.instructions,
+            original: {
+              title: track.title,
+              styles: track.styles ?? [],
+              // The model is shown the creator's version, not the one they replaced.
+              lyrics: ownLyrics ?? track.lyrics,
+              instrumental: track.vocal_mode === 'instrumental',
+              durationSeconds: Math.round(track.duration_ms / 1000),
+            },
+          })
+        : unchanged;
+      // What the song is about, for a change with no description of its own.
+      const source = body.instructions ? null : await getJob(track.job_id);
+      const aboutSong = (source?.input as { prompt?: string } | undefined)?.prompt?.trim() || track.title || '';
 
       await trackEvent({
         name: 'song_edit_requested',
         userRef: req.user!.id,
-        props: { track_id: track.id, revision_status: revision.status },
+        props: { track_id: track.id, revision_status: revision.status, own_lyrics: !!ownLyrics, described: !!body.instructions },
         runMode: ctx.config.mode,
         isInternal: ctx.config.isDemo,
       }).catch(() => undefined);
@@ -189,8 +216,9 @@ export default async function generationRoutes(app: FastifyInstance, opts: { ctx
         request: {
           mode: 'custom',
           ...(revision.title ? { title: `${revision.title}` } : {}),
-          prompt: body.instructions,
-          ...(revision.lyrics && track.vocal_mode === 'with_vocals' ? { lyrics: revision.lyrics } : {}),
+          prompt: body.instructions || aboutSong,
+          // The creator's own lyrics win over anything the model rewrote.
+          ...((ownLyrics ?? revision.lyrics) && sung ? { lyrics: (ownLyrics ?? revision.lyrics)! } : {}),
           styles: revision.styles,
           instrumental: track.vocal_mode === 'instrumental',
           // KNOWN GAP: an edit does not carry the original voice choice over,

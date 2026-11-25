@@ -1398,7 +1398,11 @@ textarea.is-full { border-color: var(--danger); }
 .issue-report__history h3 { margin: 0; font-size: var(--t-body); font-weight: 600; }
 .issue-report__history ul { margin: 0; padding-left: 1.1em; display: grid; gap: var(--s2); }
 .issue-report__history p { margin: var(--s1) 0 0; color: var(--muted); }
-.song-spread__report { margin-top: var(--s2); }
+.song-spread__report { margin-top: 0; }
+/* Report a problem and delete: last, together, apart from the main actions (SongDetail.tsx). */
+.song-spread__manage { display: flex; flex-wrap: wrap; gap: var(--s3); margin-top: var(--s8); padding-top: var(--s4); border-top: 1px solid var(--line); }
+/* The photo MV is a way of sharing: right under the actions, a little apart. */
+.photo-video__open { margin-top: var(--s1); }
 .issue-queue__song { display: inline-flex; align-items: center; min-height: 24px; }
 .song-gift-edit { gap: var(--s2); margin-bottom: var(--s4); padding-left: var(--s3); border-left: 3px solid var(--petal); }
 .song-spread__player { display: flex; flex-direction: column; align-items: stretch; gap: 6px; margin-top: var(--s6); }
@@ -2976,7 +2980,8 @@ textarea.is-full { border-color: var(--danger); }
 .photo-video__remove { isolation: isolate; }
 .photo-video__actions { display: flex; flex-wrap: wrap; gap: var(--s2); }
 .photo-video__actions label.btn { cursor: pointer; }
-.photo-video__preview { width: min(100%, 320px); aspect-ratio: 9 / 16; border-radius: var(--r-control); background: #000; }
+/* At most half the screen tall, so Download and Share are on screen with it on a phone (they were under the tab bar). */
+.photo-video__preview { height: min(52vh, 568px); width: auto; max-width: 100%; aspect-ratio: 9 / 16; border-radius: var(--r-control); background: #000; }
 .photo-video__result { display: grid; gap: var(--s3); justify-items: start; }
 
 /* Trying without an account (components/TrialAsk.tsx; the keep panel on the song page). */
@@ -3029,3 +3034,22 @@ textarea.is-full { border-color: var(--danger); }
 .photo-video__preview-note { margin: 0; padding: var(--s2) var(--s3); border-radius: var(--r-control); background: var(--surface-soft); color: var(--ink); font-size: var(--t-caption); }
 /* A guest's trial song, offered again on the home page (Home.tsx). */
 .trial-song { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--s2) var(--s3); margin-bottom: var(--s4); padding: var(--s4) var(--s6); }
+/* Clear what was written (Home, Create): a quiet control beside the count. */
+.composer__meta-end { display: inline-flex; align-items: center; gap: var(--s3); }
+.composer__clear { border: 0; background: none; padding: 0 var(--s1); min-height: var(--tap); color: var(--link); font: inherit; font-size: var(--t-caption); cursor: pointer; }
+.composer__clear:hover { text-decoration: underline; }
+.composer__cleared { margin: 0; font-size: var(--t-caption); color: var(--muted); }
+/* The lyrics in the re-create editor (Create.tsx, ?edit=). */
+.studio__edit-lyrics { display: grid; gap: var(--s2); margin-top: var(--s6); }
+.studio__edit-lyrics textarea { width: 100%; min-height: 12rem; line-height: 1.8; }
+.studio__edit-lyrics > p { margin: 0; }
+.trial-claim__warn { flex-basis: 100%; font-size: var(--t-caption); color: var(--ink); }
+/* Lyric timing tools, folded away for the owner (SyncedLyrics.tsx). */
+.lyrics-sync__toolbar { display: flex; justify-content: flex-end; }
+.lyrics-sync__tune { border: 0; background: none; color: var(--muted); font: inherit; font-size: var(--t-caption); min-height: var(--tap); padding: 0 var(--s1); cursor: pointer; }
+.lyrics-sync__tune:hover { color: var(--link); text-decoration: underline; }
+.scene__try { margin-left: var(--s3); }
+@media (max-width: 560px) { .scene__try { margin: var(--s3) 0 0; } }
+
+/* The account menu sits over page content; glass let the page's text read through it. */
+.account__menu { background-color: var(--bg); }

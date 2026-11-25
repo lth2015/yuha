@@ -31,7 +31,10 @@ export function etaText(
       : e.maxSeconds <= 0
         ? t('eta.almost')
         : e.maxSeconds < 90
-          ? t('eta.seconds', { min: Math.max(e.minSeconds, 1), max: e.maxSeconds })
+          ? Math.max(e.minSeconds, 1) >= e.maxSeconds
+            // "5–5 秒" is a range of one: say the one number.
+            ? t('eta.secondsOne', { n: e.maxSeconds })
+            : t('eta.seconds', { min: Math.max(e.minSeconds, 1), max: e.maxSeconds })
           : min === max
             ? t('eta.minute', { n: max })
             : t('eta.minutes', { min, max });
@@ -49,6 +52,18 @@ export function QueueStatus({ job, onUpdate, onCancelled }: {
   const active = useRef(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<unknown>(null);
+  /** The cancel came too late: the engine already had the song. Said, not swallowed. */
+  const [tooLate, setTooLate] = useState(false);
+  if (tooLate) {
+    return (
+      <div className="queue-status" role="status">
+        <div className="queue-status__body">
+          <strong>{t('create.queue.tooLate')}</strong>
+          <p className="small muted">{t('create.queue.tooLateNote')}</p>
+        </div>
+      </div>
+    );
+  }
   if (job.state !== 'QUEUED' || job.queuePosition == null) return null;
   const cancel = async () => {
     if (active.current) return;
@@ -60,6 +75,9 @@ export function QueueStatus({ job, onUpdate, onCancelled }: {
         await refreshEntitlements();
         onCancelled();
       } else {
+        // Between the last poll and the tap, the engine took the song. The
+        // screen had just promised the credit back; it must now say it will not.
+        setTooLate(true);
         onUpdate(await apiFetch<JobView>(`/v1/jobs/${job.jobId}`));
       }
     } catch (err) { setError(err); }

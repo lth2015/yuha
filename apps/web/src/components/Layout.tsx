@@ -310,6 +310,8 @@ export function Layout({ children }: { children: ReactNode }) {
    * song, so the second place is that song, once made (lib/guest.ts).
    */
   const trialSong = me?.role === 'guest' ? guestSongId() : null;
+  // "Create" is both the home composer and the studio: lit on /create too.
+  const createsHere = (to: string) => to === '/' && location.pathname.startsWith('/create');
   const navItems = [
     { to: '/', key: 'nav.create', end: true },
     ...(me?.role === 'guest'
@@ -354,7 +356,7 @@ export function Layout({ children }: { children: ReactNode }) {
                 key={item.to}
                 to={item.to}
                 end={item.end}
-                className={({ isActive }) => `topnav__link${isActive ? ' is-active' : ''}`}
+                className={({ isActive }) => `topnav__link${isActive || createsHere(item.to) ? ' is-active' : ''}`}
               >
                 {t(item.key)}
               </NavLink>
@@ -365,9 +367,12 @@ export function Layout({ children }: { children: ReactNode }) {
             <LangSwitch lang={lang} setLang={setLang} label={t('a11y.lang')} />
             {me?.role === 'guest' ? (
               /* A trial (docs/GROWTH_SPEC.md, part three): no account to show,
-                 no credits to buy; the one thing to do is keep the song. */
-              <Link className="btn btn--primary btn--sm" to="/auth">
-                {t('trial.header')}
+                 no credits to buy. It was a primary button, and the phone
+                 header hides primaries — so on a phone a guest had no way in
+                 at all, not even someone who already has an account. The same
+                 sign-in a visitor gets, which also leads to sign-up. */
+              <Link className="btn btn--ghost btn--sm" to="/auth">
+                {t('nav.signin')}
               </Link>
             ) : me ? (
               <>
@@ -501,7 +506,7 @@ export function Layout({ children }: { children: ReactNode }) {
             key={item.to}
             to={item.to}
             end={item.end}
-            className={({ isActive }) => `tabbar__link${isActive ? ' is-active' : ''}`}
+            className={({ isActive }) => `tabbar__link${isActive || createsHere(item.to) ? ' is-active' : ''}`}
           >
             {t(item.key)}
           </NavLink>
