@@ -40,6 +40,7 @@ export function PhotoVideo({
   makeCoverVideo,
   photosEnabled,
   startOpen = false,
+  onFixTiming,
 }: {
   song: ShareSong & { trackId: string; title: string; durationSeconds: number };
   labels: ShareLabels;
@@ -51,6 +52,8 @@ export function PhotoVideo({
   photosEnabled: boolean;
   /** Arrived from a "make a video" link (`?video=1`): open, and in view. */
   startOpen?: boolean;
+  /** Opens the song page's lyric timing tools, scrolled to them. */
+  onFixTiming?: () => void;
 }) {
   const { t } = useI18n();
   const { runtime } = useSession();
@@ -201,7 +204,13 @@ export function PhotoVideo({
       {estimated && (
         <p className="photo-video__notice" role="note">
           {t('video.estimated')}{' '}
-          <a href="#lyrics-heading">{t('video.estimatedFix')}</a>
+          {onFixTiming ? (
+            <button type="button" className="text-action" onClick={onFixTiming}>
+              {t('video.estimatedFix')}
+            </button>
+          ) : (
+            <a href="#lyrics-heading">{t('video.estimatedFix')}</a>
+          )}
         </p>
       )}
 

@@ -81,7 +81,7 @@ export async function prerenderPages(template: string, origin: string): Promise<
       const html = pageDocument(template, {
         lang,
         head,
-        title: key === null ? `YUHA — ${t('footer.slogan')}` : `${t(key)} — YUHA`,
+        title: key === null ? `YUHA${t('seo.title.sep')}${t('seo.title.home')}` : `${t(key)} — YUHA`,
         description: t(head.description ?? 'seo.desc.home'),
         rendered: renderPage(page.path, lang),
         // A scene page's own card (Codex, PR #96): text-free, so one image serves all three languages.

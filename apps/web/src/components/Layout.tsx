@@ -175,7 +175,7 @@ export function Layout({ children }: { children: ReactNode }) {
   useEffect(() => {
     const key = pageTitleKey(location.pathname);
     document.title =
-      key === null ? `YUHA — ${t('footer.slogan')}` : `${titleOverride ?? t(key)} — YUHA`;
+      key === null ? `YUHA${t('seo.title.sep')}${t('seo.title.home')}` : `${titleOverride ?? t(key)} — YUHA`;
     // What a crawler may index, in the same pass (lib/seo.ts).
     applyHead(document, headFor(location.pathname, lang, window.location.origin), t);
   }, [location.pathname, lang, t, titleOverride]);

@@ -45,6 +45,7 @@ export function SyncedLyrics({
   onSaveTimings,
   compact = false,
   live = true,
+  tuneRequest = 0,
 }: {
   lyrics: string;
   duration: number;
@@ -55,6 +56,8 @@ export function SyncedLyrics({
   artist?: string | null;
   /** Owner only. Absent means the correction controls are not offered. */
   onSaveTimings?: (timings: LyricTimings) => Promise<void>;
+  /** Bumped by "line them up first" on the video card: open the timing tools. */
+  tuneRequest?: number;
   compact?: boolean;
   /**
    * Whether the player is playing THIS song. The frame-rate clock below is
@@ -86,6 +89,9 @@ export function SyncedLyrics({
   const [offset, setOffset] = useState(0);
   /** The owner opened the timing tools (folded away by default). */
   const [tuning, setTuning] = useState(false);
+  useEffect(() => {
+    if (tuneRequest > 0 && onSaveTimings) setTuning(true);
+  }, [tuneRequest]);
   const shown = draft ?? timeline;
   const lines = shown.lines;
   const source = shown.source;

@@ -74,7 +74,10 @@ describe('prerendered public pages', () => {
     expect(en).toContain('<link rel="canonical" href="https://example.test/en/pricing.html" data-seo="">');
     expect(en).toContain('hreflang="ja" href="https://example.test/ja/pricing.html"');
     expect(en).toContain('<script type="module" crossorigin src="/assets/index-abc.js"></script>');
-    expect(file('/', 'ja')).toContain(`<title>YUHA — ${textIn('ja', 'footer.slogan')}</title>`);
+    // The home page names what YUHA is, in its language: a search for "yuha
+    // studio" also finds a digital-stationery shop of the same name.
+    expect(file('/', 'ja')).toContain('<title>YUHA｜AIでオリジナル曲・写真MVを作成</title>');
+    expect(file('/', 'en')).toContain('<title>YUHA — Create AI Songs &amp; Photo Music Videos</title>');
     // A link to the page previews as the page, not as the home page.
     expect(en).toContain(`<meta property="og:title" content="${textIn('en', 'title.pricing')} — YUHA"`);
     expect(en).toContain(`<meta property="og:description" content="${textIn('en', 'seo.desc.pricing')}"`);
