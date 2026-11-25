@@ -343,9 +343,20 @@ export interface VisitSources {
    * people who visited with it in the range; accounts made in the range that
    * arrived with it; and of those accounts, how many have a delivered song,
    * how many have paid, and what they paid (to date, refunds not deducted —
-   * the same rule as revenue above).
+   * the same rule as revenue above). Trials started with it in the range
+   * (docs/ITERATION_EN_JA_MV.md) are counted apart from sign-ups, and so are
+   * the accounts that made a video.
    */
-  campaigns: { source: string; visitors: number; signups: number; madeASong: number; paid: number; revenueJpy: number }[];
+  campaigns: {
+    source: string;
+    visitors: number;
+    trials: number;
+    signups: number;
+    madeASong: number;
+    madeAVideo: number;
+    paid: number;
+    revenueJpy: number;
+  }[];
 }
 
 const SOURCE_ROWS = 15;
@@ -354,7 +365,7 @@ const PAID_STATUSES = `('paid','refunded','partially_refunded')`;
 
 async function visitSources(fromUtc: Date, toUtc: Date): Promise<VisitSources> {
   const where = `name = 'page_view' AND is_internal = 0 AND ${PEOPLE} AND occurred_at >= ? AND occurred_at < ?`;
-  const [referrers, paths, campaignVisits, campaignSignups] = await Promise.all([
+  const [referrers, paths, campaignVisits, campaignSignups, campaignTrials] = await Promise.all([
     query<{ host: string | null; visitors: number }>(
       `SELECT host, COUNT(*) AS visitors FROM (
          SELECT user_ref,
@@ -387,13 +398,22 @@ async function visitSources(fromUtc: Date, toUtc: Date): Promise<VisitSources> {
         GROUP BY source`,
       [fromUtc, toUtc],
     ),
-    query<{ source: string; signups: number; made: number; paid: number; revenue: number }>(
+    query<{ source: string; signups: number; made: number; video: number; paid: number; revenue: number }>(
       `SELECT u.acquisition_source AS source, COUNT(*) AS signups,
               SUM(EXISTS (SELECT 1 FROM generation_jobs j WHERE j.user_id = u.id AND j.state = 'DELIVERED')) AS made,
+              SUM(EXISTS (SELECT 1 FROM analytics_events e WHERE e.name = 'video_made' AND e.user_ref = u.id)) AS video,
               SUM(EXISTS (SELECT 1 FROM orders o WHERE o.user_id = u.id AND o.status IN ${PAID_STATUSES})) AS paid,
               COALESCE(SUM((SELECT SUM(o.amount_minor) FROM orders o WHERE o.user_id = u.id AND o.status IN ${PAID_STATUSES})), 0) AS revenue
          FROM users u
-        WHERE u.acquisition_source IS NOT NULL AND u.created_at >= ? AND u.created_at < ?
+        WHERE u.acquisition_source IS NOT NULL AND u.role <> 'guest' AND u.created_at >= ? AND u.created_at < ?
+        GROUP BY u.acquisition_source`,
+      [fromUtc, toUtc],
+    ),
+    // A trial is a guest row; its source is the one the visitor arrived with.
+    query<{ source: string; trials: number }>(
+      `SELECT u.acquisition_source AS source, COUNT(*) AS trials
+         FROM users u JOIN guest_trials g ON g.user_id = u.id
+        WHERE u.acquisition_source IS NOT NULL AND g.created_at >= ? AND g.created_at < ?
         GROUP BY u.acquisition_source`,
       [fromUtc, toUtc],
     ),
@@ -401,13 +421,14 @@ async function visitSources(fromUtc: Date, toUtc: Date): Promise<VisitSources> {
   const campaigns = new Map<string, VisitSources['campaigns'][number]>();
   const row = (source: string) => {
     let r = campaigns.get(source);
-    if (!r) campaigns.set(source, (r = { source, visitors: 0, signups: 0, madeASong: 0, paid: 0, revenueJpy: 0 }));
+    if (!r) campaigns.set(source, (r = { source, visitors: 0, trials: 0, signups: 0, madeASong: 0, madeAVideo: 0, paid: 0, revenueJpy: 0 }));
     return r;
   };
   for (const v of campaignVisits) row(v.source).visitors = n(v.visitors);
   for (const s of campaignSignups) {
-    Object.assign(row(s.source), { signups: n(s.signups), madeASong: n(s.made), paid: n(s.paid), revenueJpy: n(s.revenue) });
+    Object.assign(row(s.source), { signups: n(s.signups), madeASong: n(s.made), madeAVideo: n(s.video), paid: n(s.paid), revenueJpy: n(s.revenue) });
   }
+  for (const t of campaignTrials) row(t.source).trials = n(t.trials);
   const all = referrers.map((r) => ({ host: r.host, visitors: n(r.visitors) }));
   return {
     arrivals: {

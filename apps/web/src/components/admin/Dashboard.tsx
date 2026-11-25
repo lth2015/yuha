@@ -4,6 +4,7 @@ import { useI18n } from '../../lib/i18n';
 import { LOCALES, formatMoney } from '../../lib/money';
 import { ErrorNotice, Loading } from '../common';
 import { BarChart, compact } from './BarChart';
+import { rollup, type FunnelRow } from '../../lib/funnel';
 
 /**
  * The numbers an operator checks first: visits, sign-ups, songs made, money
@@ -40,7 +41,7 @@ interface Report {
     arrivals: { visitors: number; fromOtherSites: number };
     referrers: { host: string | null; visitors: number }[];
     paths: { path: string; views: number; visitors: number }[];
-    campaigns: { source: string; visitors: number; signups: number; madeASong: number; paid: number; revenueJpy: number }[];
+    campaigns: Array<FunnelRow & { source: string }>;
   };
   /** Songs without an account (docs/GROWTH_SPEC.md, part three). */
   trials: { opened: number; made: number; claimed: number };
@@ -286,28 +287,42 @@ export function Dashboard() {
                   <thead>
                     <tr>
                       <th>{t('admin.dash.campaigns.source')}</th>
-                      <th className="num">{t('admin.dash.visitors')}</th>
-                      <th className="num">{t('admin.dash.signups')}</th>
-                      <th className="num">{t('admin.dash.campaigns.madeASong')}</th>
-                      <th className="num">{t('admin.dash.campaigns.paid')}</th>
-                      <th className="num">{t('admin.dash.revenue')}</th>
+                      <FunnelHead />
                     </tr>
                   </thead>
                   <tbody>
                     {report.sources.campaigns.map((r) => (
                       <tr key={r.source}>
                         <td className="dash__sourcename">{r.source}</td>
-                        <td className="num">{num(r.visitors)}</td>
-                        <td className="num">{num(r.signups)}</td>
-                        <td className="num">{num(r.madeASong)}</td>
-                        <td className="num">{num(r.paid)}</td>
-                        <td className="num">{yen(r.revenueJpy)}</td>
+                        <FunnelCells r={r} />
                       </tr>
                     ))}
                   </tbody>
                 </table>
               </div>
             )}
+            {/* Totals by language and by scene, from names written <channel>-<scene>-<lang>-<n>. */}
+            {report.sources.campaigns.length > 0 &&
+              (['lang', 'scene'] as const).map((by) => (
+                <div className="table-wrap" key={by}>
+                  <table className="small">
+                    <thead>
+                      <tr>
+                        <th>{t(by === 'lang' ? 'admin.dash.campaigns.byLang' : 'admin.dash.campaigns.byScene')}</th>
+                        <FunnelHead />
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {rollup(report.sources.campaigns, by).map((r) => (
+                        <tr key={r.key ?? '-'}>
+                          <td className="dash__sourcename">{r.key ?? t('admin.dash.campaigns.unnamed')}</td>
+                          <FunnelCells r={r} />
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              ))}
 
             <h3 className="dash__subhead">{t('admin.dash.trials.h')}</h3>
             <p className="small">
@@ -432,5 +447,37 @@ export function Dashboard() {
         </>
       )}
     </section>
+  );
+}
+
+/** The funnel's columns, in its order: visit → trial → sign-up → song → video → paid. */
+function FunnelHead() {
+  const { t } = useI18n();
+  return (
+    <>
+      <th className="num">{t('admin.dash.visitors')}</th>
+      <th className="num">{t('admin.dash.campaigns.trials')}</th>
+      <th className="num">{t('admin.dash.signups')}</th>
+      <th className="num">{t('admin.dash.campaigns.madeASong')}</th>
+      <th className="num">{t('admin.dash.campaigns.madeAVideo')}</th>
+      <th className="num">{t('admin.dash.campaigns.paid')}</th>
+      <th className="num">{t('admin.dash.revenue')}</th>
+    </>
+  );
+}
+
+function FunnelCells({ r }: { r: FunnelRow }) {
+  const { lang } = useI18n();
+  const num = (n: number) => n.toLocaleString(LOCALES[lang]);
+  return (
+    <>
+      <td className="num">{num(r.visitors)}</td>
+      <td className="num">{num(r.trials ?? 0)}</td>
+      <td className="num">{num(r.signups)}</td>
+      <td className="num">{num(r.madeASong)}</td>
+      <td className="num">{num(r.madeAVideo ?? 0)}</td>
+      <td className="num">{num(r.paid)}</td>
+      <td className="num">{formatMoney(r.revenueJpy, 'jpy', LOCALES[lang])}</td>
+    </>
   );
 }
