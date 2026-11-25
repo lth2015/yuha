@@ -30,12 +30,12 @@ afterAll(async () => {
   await teardown();
 });
 
-async function song(h: Harness, user: TestUser): Promise<string> {
+async function song(h: Harness, user: TestUser, durationSeconds = 30): Promise<string> {
   const res = await h.app.inject({
     method: 'POST',
     url: '/v1/generations',
     headers: { ...user.authHeader, 'idempotency-key': `photo-${randomUUID()}` },
-    payload: { mode: 'simple', prompt: '海边的傍晚', instrumental: false, durationSeconds: 30 } as never,
+    payload: { mode: 'simple', prompt: '海边的傍晚', instrumental: false, durationSeconds } as never,
   });
   expect(res.statusCode).toBe(202);
   const jobId = res.json().jobId as string;
@@ -119,6 +119,18 @@ describe('the photo video', () => {
     for (const r of rows) expect(JSON.stringify(r.props)).not.toMatch(/jpeg|frames|\/9j\//);
   }, 60_000);
 
+  it('takes the whole of a two-minute song', async () => {
+    const user = await on.createUser({ credits: 3 });
+    const trackId = await song(on, user, 120);
+    const durationMs = (await queryOne<{ duration_ms: number }>('SELECT duration_ms FROM tracks WHERE id = ?', [trackId]))!.duration_ms;
+    const seconds = Math.floor(durationMs / 1000);
+    const one = jpeg('0x336699');
+    const frames = Array.from({ length: 60 }, (_, i) => ({ at: Number(((i * seconds) / 60).toFixed(2)), jpeg: one }));
+    const res = await post(on, user, trackId, { start: 0, duration: seconds, frames });
+    expect(res.statusCode).toBe(200);
+    expect(Number(probe(res.rawPayload).format.duration)).toBeGreaterThan(seconds - 0.6);
+  }, 60_000);
+
   it('is refused while the switch is off', async () => {
     const user = await off.createUser({ credits: 3 });
     const trackId = await song(off, user);
@@ -134,11 +146,12 @@ describe('the photo video', () => {
     const frame = { at: 0, jpeg: jpeg('black') };
     expect((await post(on, other, trackId, { start: 0, duration: 10, frames: [frame] })).statusCode).toBe(404);
     expect((await post(on, user, trackId, { start: 0, duration: 10, frames: [{ at: 0, jpeg: 'aGVsbG8=' }] })).statusCode).toBe(400);
-    // 30 seconds at most, and inside the song.
+    // Inside the song (this one is 30 seconds), and never more than a four-minute song's length.
     expect((await post(on, user, trackId, { start: 0, duration: 31, frames: [frame] })).statusCode).toBe(400);
     expect((await post(on, user, trackId, { start: 25, duration: 10, frames: [frame] })).statusCode).toBe(400);
-    // 40 frames at most.
-    const many = Array.from({ length: 41 }, (_, i) => ({ at: i * 0.5, jpeg: frame.jpeg }));
+    expect((await post(on, user, trackId, { start: 0, duration: 246, frames: [frame] })).statusCode).toBe(400);
+    // 200 frames at most (a whole song with a frame per photo change and per sung line).
+    const many = Array.from({ length: 201 }, (_, i) => ({ at: i * 0.1, jpeg: frame.jpeg }));
     expect((await post(on, user, trackId, { start: 0, duration: 25, frames: many })).statusCode).toBe(400);
   }, 60_000);
 
@@ -224,9 +237,26 @@ describe('the plan of a photo video', () => {
     expect(plan.frames.every((f) => f.at <= 28)).toBe(true);
   });
 
+  it('runs a minute or the whole song when asked, the photos taking turns rather than one holding for forty seconds', () => {
+    const minute = planPhotoClip(lines, 90, 3, 60);
+    expect(minute.duration).toBe(60);
+    const whole = planPhotoClip(lines, 120, 3, 120);
+    expect(whole).toMatchObject({ start: 0, duration: 120 });
+    // No photo stays on screen longer than ten seconds at a stretch.
+    const cuts = whole.frames.map((f, i) => ({ ...f, until: whole.frames[i + 1]?.at ?? whole.duration }));
+    let run = 0;
+    for (let i = 0; i < cuts.length; i += 1) {
+      run = i > 0 && cuts[i]!.photo === cuts[i - 1]!.photo ? run + (cuts[i]!.until - cuts[i]!.at) : cuts[i]!.until - cuts[i]!.at;
+      expect(run).toBeLessThanOrEqual(10.01);
+    }
+    expect(new Set(whole.frames.map((f) => f.photo))).toEqual(new Set([0, 1, 2]));
+    expect(whole.frames.at(-1)).toMatchObject({ at: 118, ending: true });
+  });
+
   it('works for a short instrumental and keeps every frame inside the clip', () => {
     const plan = planPhotoClip([], 20, 5);
-    expect(plan.duration).toBe(15);
+    // The whole of a song shorter than the clip.
+    expect(plan.duration).toBe(20);
     expect(new Set(plan.frames.map((f) => f.photo))).toEqual(new Set([0, 1, 2, 3, 4]));
     for (const f of plan.frames) expect(f.at).toBeLessThan(plan.duration);
     expect(plan.frames.length).toBeLessThanOrEqual(40);

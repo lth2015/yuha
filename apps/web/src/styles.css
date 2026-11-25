@@ -3009,3 +3009,4 @@ textarea.is-full { border-color: var(--danger); }
 
 /* On the home page the strip follows the hero score, which already leaves room. */
 .home__recent { margin-top: var(--s6); }
+.photo-video__length { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s2); }

@@ -165,17 +165,17 @@ export default async function shareRoutes(app: FastifyInstance, opts: { ctx: App
    */
   app.post(
     '/v1/tracks/:id/share-video',
-    { preHandler: app.requireAuth, bodyLimit: 12_000_000, config: { guestAllowed: true } },
+    { preHandler: app.requireAuth, bodyLimit: 40_000_000, config: { guestAllowed: true } },
     async (req, reply) => {
       const { id } = idParam.parse(req.params);
       const body = z
         .object({
           start: z.number().min(0),
-          duration: z.number().min(3).max(30),
+          duration: z.number().min(3).max(245),
           frames: z
             .array(z.object({ at: z.number().min(0), jpeg: z.string().min(4).max(950_000) }))
             .min(1)
-            .max(24),
+            .max(200),
         })
         .parse(req.body);
       return encodeForOwner(reply, id, req.user!.id, body, 'cover');
@@ -191,7 +191,7 @@ export default async function shareRoutes(app: FastifyInstance, opts: { ctx: App
    */
   app.post(
     '/v1/tracks/:id/photo-video',
-    { preHandler: app.requireAuth, bodyLimit: 16_000_000 },
+    { preHandler: app.requireAuth, bodyLimit: 40_000_000 },
     async (req, reply) => {
       // Staff may use it while the public switch is off: the preview, on real
       // songs, before counsel signs off the text (docs/PHOTO_MV_SPEC.md).
@@ -203,11 +203,11 @@ export default async function shareRoutes(app: FastifyInstance, opts: { ctx: App
       const body = z
         .object({
           start: z.number().min(0),
-          duration: z.number().min(3).max(30),
+          duration: z.number().min(3).max(245),
           frames: z
             .array(z.object({ at: z.number().min(0), jpeg: z.string().min(4).max(600_000) }))
             .min(1)
-            .max(40),
+            .max(200),
           // The owner confirmed the right to use the photos and the people in
           // them (docs/legal/COUNSEL_RESPONSE_2026-11.md, 2). Required here, not
           // only on the page, so no client can skip it.

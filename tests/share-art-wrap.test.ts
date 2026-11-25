@@ -57,6 +57,17 @@ describe('planShareClip', () => {
     expect(mid.frames[0]).toEqual({ at: 0, line: 'held' });
   });
 
+  it('runs as long as asked, a line per frame, and starts earlier rather than ending short', () => {
+    const minute = planShareClip(lines, 120, 200, 60);
+    expect(minute).toMatchObject({ start: 38.5, duration: 60 });
+    expect(minute.frames.map((f) => f.line)).toEqual([null, 'chorus a', 'chorus b', 'after']);
+    // A chorus near the end: the minute is kept, moved back to fit.
+    const late = planShareClip([{ text: 'late', section: 'Chorus', start: 100, end: 104 }], 120, 200, 60);
+    expect(late).toMatchObject({ start: 60, duration: 60 });
+    // The whole song.
+    expect(planShareClip(lines, 120, 200, 120)).toMatchObject({ start: 0, duration: 120 });
+  });
+
   it('stays inside a short song, and takes an instrumental from past its intro', () => {
     const short = planShareClip([{ text: 'x', section: 'Chorus', start: 25, end: 28 }], 30);
     expect(short.start + short.duration).toBeLessThanOrEqual(30);

@@ -353,13 +353,15 @@ function clipWindow(lines: TimedLine[], songSeconds: number, seconds: number): {
   const chorus = lines.find((l) => CHORUS.test(l.section));
   const anchor = chorus ?? lines[0];
   let start = anchor ? Math.max(0, anchor.start - 1.5) : songSeconds * 0.25;
-  const duration = Math.max(3, Math.min(seconds, songSeconds - start));
+  // As long as asked (or the whole song), moved back to fit rather than cut
+  // short: a chorus near the end used to give a minute's request twenty seconds.
+  const duration = Math.max(3, Math.min(seconds, songSeconds));
   if (start + duration > songSeconds) start = Math.max(0, songSeconds - duration);
   return { start, duration };
 }
 
-export function planShareClip(lines: TimedLine[], songSeconds: number, maxFrames = 24): ClipPlan {
-  const { start, duration } = clipWindow(lines, songSeconds, CLIP_SECONDS);
+export function planShareClip(lines: TimedLine[], songSeconds: number, maxFrames = 24, seconds = CLIP_SECONDS): ClipPlan {
+  const { start, duration } = clipWindow(lines, songSeconds, seconds);
   const end = start + duration;
 
   const frames: ClipPlan['frames'] = [];
@@ -376,7 +378,9 @@ export function planShareClip(lines: TimedLine[], songSeconds: number, maxFrames
 
 const PHOTO_CLIP_SECONDS = 30;
 /** What the server takes (apps/api/src/routes/share.ts, photo-video). */
-const PHOTO_MAX_FRAMES = 40;
+const PHOTO_MAX_FRAMES = 200;
+/** Longer than this on one photo and a long video becomes a slideshow of three stills. */
+const PHOTO_MAX_HOLD = 8;
 const ENDING_SECONDS = 2;
 
 export interface PhotoClipPlan {
@@ -396,14 +400,17 @@ export interface PhotoClipPlan {
  * picked, and a new frame wherever the photo or the sung line changes. A line
  * leaves the screen when it ends rather than hanging over the next photo.
  */
-export function planPhotoClip(lines: TimedLine[], songSeconds: number, photos: number): PhotoClipPlan {
-  const { start, duration } = clipWindow(lines, songSeconds, PHOTO_CLIP_SECONDS);
+export function planPhotoClip(lines: TimedLine[], songSeconds: number, photos: number, seconds = PHOTO_CLIP_SECONDS): PhotoClipPlan {
+  const { start, duration } = clipWindow(lines, songSeconds, seconds);
   const end = start + duration;
   const count = Math.max(1, photos);
-  const slot = duration / count;
+  // Each photo once in a short clip; in a long one they take turns, so none
+  // holds the screen for long (a minute of three photos was twenty seconds each).
+  const slots = duration <= PHOTO_CLIP_SECONDS ? count : Math.max(count, Math.ceil(duration / PHOTO_MAX_HOLD));
+  const slot = duration / slots;
   const round = (n: number) => Number(n.toFixed(2));
   const cuts = new Set<number>([0]);
-  for (let i = 1; i < count; i += 1) cuts.add(round(i * slot));
+  for (let i = 1; i < slots; i += 1) cuts.add(round(i * slot));
   for (const l of lines) {
     if (l.end <= start || l.start >= end) continue;
     if (l.start > start) cuts.add(round(l.start - start));
@@ -413,7 +420,7 @@ export function planPhotoClip(lines: TimedLine[], songSeconds: number, photos: n
   const frames: PhotoClipPlan['frames'] = times.map((at) => {
     const t = start + at;
     const sung = lines.find((l) => l.start <= t + 0.001 && l.end > t + 0.001);
-    return { at, photo: Math.min(count - 1, Math.floor((at + 0.001) / slot)), line: sung?.text ?? null };
+    return { at, photo: Math.min(slots - 1, Math.floor((at + 0.001) / slot)) % count, line: sung?.text ?? null };
   });
   // Every photo keeps its cut; lyric cuts give way first when there are too many.
   while (frames.length > PHOTO_MAX_FRAMES) {
@@ -425,7 +432,7 @@ export function planPhotoClip(lines: TimedLine[], songSeconds: number, photos: n
   if (duration >= 8) {
     const endAt = round(duration - ENDING_SECONDS);
     const kept = frames.filter((f) => f.at < endAt);
-    kept.push({ at: endAt, photo: count - 1, line: null, ending: true });
+    kept.push({ at: endAt, photo: (slots - 1) % count, line: null, ending: true });
     return { start: round(start), duration: round(duration), frames: kept };
   }
   return { start: round(start), duration: round(duration), frames };
