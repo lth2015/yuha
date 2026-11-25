@@ -14,7 +14,7 @@ import { useSession } from '../lib/session';
  * any kind: no plays, no likes (CLAUDE.md, Scope decisions).
  */
 export default function ScenePage({ slug }: { slug: SceneSlug }) {
-  const { t } = useI18n();
+  const { t, lang } = useI18n();
   const { runtime, me } = useSession();
   const navigate = useNavigate();
   /*
@@ -43,7 +43,7 @@ export default function ScenePage({ slug }: { slug: SceneSlug }) {
         <span className="scene__kicker">{t(scene.kicker)}</span>
         <h1 id="scene-title">{t(scene.title)}</h1>
         <p className="scene__body">{t(scene.body)}</p>
-        <Link className="btn btn--primary btn--lg" to={sceneCreateHref(scene)}>
+        <Link className="btn btn--primary btn--lg" to={sceneCreateHref(scene, undefined, lang)}>
           {t(scene.cta)}
         </Link>
         {canTry && (
@@ -59,7 +59,7 @@ export default function ScenePage({ slug }: { slug: SceneSlug }) {
         <h2 id="scene-starters">{t('scene.starters.title')}</h2>
         <div className="scene__starters">
           {scene.starters.map((key) => (
-            <Link key={key} className="chip chip--btn" to={sceneCreateHref(scene, key)}>
+            <Link key={key} className="chip chip--btn" to={sceneCreateHref(scene, key, lang)}>
               {t(key)}
             </Link>
           ))}
@@ -74,6 +74,56 @@ export default function ScenePage({ slug }: { slug: SceneSlug }) {
           <li>{t('scene.how.3')}</li>
         </ol>
       </section>
+
+      {scene.mv && (
+        <section className="scene__section scene__mv" aria-labelledby="scene-mv">
+          <h2 id="scene-mv">{t('scene.mv.title')}</h2>
+          <p>{t(scene.slug === 'travel' ? 'scene.mv.lead.travel' : 'scene.mv.lead.birthday')}</p>
+          {scene.video?.filter((v) => v.lang === lang).map((v) => (
+            <video key={v.src} className="scene__video" src={v.src} poster={v.poster} controls playsInline preload="none" />
+          ))}
+          <ol className="scene__steps">
+            <li>{t('scene.mv.step1')}</li>
+            <li>{t('scene.mv.step2')}</li>
+            <li>{t('scene.mv.step3')}</li>
+            <li>{t('scene.mv.step4')}</li>
+          </ol>
+          <ul className="scene__facts">
+            <li>{t('scene.mv.fact.length')}</li>
+            <li>{t('scene.mv.fact.photos')}</li>
+            <li>{t('scene.mv.fact.save')}</li>
+            <li>{t('scene.mv.fact.cost')}</li>
+          </ul>
+        </section>
+      )}
+
+      {scene.mv && (
+        <section className="scene__section scene__faq" aria-labelledby="scene-faq">
+          <h2 id="scene-faq">{t('scene.faq.title')}</h2>
+          <dl>
+            {(['time', 'free', 'photos', 'formats', 'use'] as const).map((k) => (
+              <div key={k}>
+                <dt>{t(`scene.faq.${k}.q`)}</dt>
+                <dd>
+                  {t(`scene.faq.${k}.a`)}
+                  {k === 'use' && (
+                    <>
+                      {' '}
+                      <Link to="/legal/terms">{t('scene.faq.use.link')}</Link>
+                    </>
+                  )}
+                  {k === 'free' && (
+                    <>
+                      {' '}
+                      <Link to="/pricing">{t('scene.faq.free.link')}</Link>
+                    </>
+                  )}
+                </dd>
+              </div>
+            ))}
+          </dl>
+        </section>
+      )}
 
       {scene.examples.length > 0 && (
         <section className="scene__section" aria-labelledby="scene-examples">

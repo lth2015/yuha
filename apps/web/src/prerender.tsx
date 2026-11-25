@@ -49,6 +49,7 @@ const COMPONENTS: Record<string, () => ReactElement> = {
   '/thanks': () => <ScenePage slug="thanks" />,
   '/miss': () => <ScenePage slug="miss" />,
   '/memory': () => <ScenePage slug="memory" />,
+  '/travel': () => <ScenePage slug="travel" />,
   '/cheer': () => <ScenePage slug="cheer" />,
 };
 

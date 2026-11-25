@@ -32,6 +32,7 @@ export const PUBLIC_PAGES: ReadonlyArray<{ path: string; description: string; pr
   { path: '/thanks', description: 'seo.desc.scene.thanks', prerender: true },
   { path: '/miss', description: 'seo.desc.scene.miss', prerender: true },
   { path: '/memory', description: 'seo.desc.scene.memory', prerender: true },
+  { path: '/travel', description: 'seo.desc.scene.travel', prerender: true },
   { path: '/cheer', description: 'seo.desc.scene.cheer', prerender: true },
   { path: '/legal', description: 'seo.desc.legal', prerender: true },
   { path: '/legal/terms', description: 'seo.desc.terms', prerender: false },
