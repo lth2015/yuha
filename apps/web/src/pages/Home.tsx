@@ -1,7 +1,7 @@
 import { JobOutcome, OpenGenerations, QueueStatus, UnfinishedGenerations, WaitLyrics, etaText } from '../components/GenerationQueue';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { PROMPT_MAX_CODEPOINTS, type JobView, type Season } from '@yuha/contracts';
+import { PROMPT_MAX_CODEPOINTS, type JobView, type Season, type TrackView } from '@yuha/contracts';
 import { clampToCodePoints, codePointLength } from '../lib/codepoints';
 import { ApiError, apiFetch, newIdempotencyKey } from '../lib/api';
 import { messageFor } from '../lib/messages';
@@ -9,6 +9,7 @@ import { useI18n } from '../lib/i18n';
 import { useSession } from '../lib/session';
 import { guestSongId, rememberGuestSong, startGuestTrial } from '../lib/guest';
 import { TrialAsk } from '../components/TrialAsk';
+import { SongCard } from '../components/SongCard';
 import { Score } from '../components/Score';
 import { NewYearCountdown } from '../components/HolidayMoments';
 import { styleLabel } from '../lib/style-label';
@@ -219,6 +220,26 @@ export default function Home() {
    * on), and a song already made is offered at the top.
    */
   const [trialSong, setTrialSong] = useState<string | null>(null);
+
+  /*
+   * The person's own latest songs, so the way back to one — to send it, make
+   * a video of it, listen again — is on the page they land on, not behind
+   * 「我的作品」. Their own, private ones: this is not a feed (CLAUDE.md).
+   * A failure is swallowed, like the studio's strip: context, not the task.
+   */
+  const [recent, setRecent] = useState<TrackView[] | null>(null);
+  useEffect(() => {
+    if (!me || me.role === 'guest') return;
+    let gone = false;
+    apiFetch<{ items: TrackView[] }>('/v1/tracks?limit=4')
+      .then((r) => {
+        if (!gone) setRecent(r.items);
+      })
+      .catch(() => undefined);
+    return () => {
+      gone = true;
+    };
+  }, [me?.userId, me?.role]);
   useEffect(() => {
     if (!isGuest || job) return;
     setTrialSong(guestSongId());
@@ -625,6 +646,22 @@ export default function Home() {
         it. Not in the iOS build, which cannot generate. In a holiday season
         it moves above the hero instead (docs/HOLIDAY_SPEC.md).
       */}
+      {recent && recent.length > 0 && (
+        <section className="studio__recent home__recent" aria-labelledby="home-recent-heading">
+          <div className="studio__recent-head">
+            <h2 id="home-recent-heading">{t('create.recent.title')}</h2>
+            <Link to="/library" className="studio__recent-all">
+              {t('create.recent.all')}
+            </Link>
+          </div>
+          <div className="studio__recent-row">
+            {recent.map((song, i) => (
+              <SongCard key={song.trackId} song={song} queue={recent} index={i} onRemove={(id) => setRecent((r) => r?.filter((x) => x.trackId !== id) ?? null)} />
+            ))}
+          </div>
+        </section>
+      )}
+
       {!IOS_BUILD && !season && <GiftEntry season={null} />}
 
       {/* Air composition: a static page beside this app (apps/air), so a plain

@@ -261,6 +261,13 @@ export function SongCard({
                       {t('card.share')}
                     </Link>
                   )}
+                  {/* The song page's video card, opened (「做一段视频」 was only on the song page). */}
+                  {onRemove && song.state === 'deliverable' && (
+                    <Link role="menuitem" to={`/song/${song.trackId}?video=1`} onClick={closeMenu}>
+                      <span className="icon icon--note" aria-hidden="true" />
+                      {t('card.video')}
+                    </Link>
+                  )}
                   {canDownload && (
                     <a
                       role="menuitem"

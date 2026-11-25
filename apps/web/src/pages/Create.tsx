@@ -893,15 +893,28 @@ export default function Create() {
           </>
         ) : (
           <>
+            {/* A song written for somebody is finished when it reaches them: for a
+                gift, sending it is the primary action and opening it the second.
+                The song page's own `?share=1` asks before making it public. */}
+            {result && result.previewUrl && result.dedication && (
+              <Link to={`/song/${result.trackId}?share=1`} className="btn btn--primary">
+                {t('create.job.sendGift', { to: result.dedication.to })}
+              </Link>
+            )}
             {/* The finished song first: it is what the page was waiting for. */}
             {result && result.previewUrl && (
-              <Link to={`/song/${result.trackId}`} className="btn btn--primary">
+              <Link to={`/song/${result.trackId}`} className={`btn${result.dedication ? '' : ' btn--primary'}`}>
                 {t('create.job.open', { title: result.title })}
               </Link>
             )}
-            {/* Straight to sharing (docs/GROWTH_SPEC.md, part two): the song page's
-                own `?share=1` asks before making a private song public. */}
+            {/* The song as a video, straight from here (it was only on the song page). */}
             {result && result.previewUrl && (
+              <Link to={`/song/${result.trackId}?video=1`} className="btn">
+                {t('video.title')}
+              </Link>
+            )}
+            {/* Straight to sharing (docs/GROWTH_SPEC.md, part two). */}
+            {result && result.previewUrl && !result.dedication && (
               <Link to={`/song/${result.trackId}?share=1`} className="btn">
                 {t('create.job.share')}
               </Link>

@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto';
 import type { FastifyInstance, FastifyReply } from 'fastify';
 import { z } from 'zod';
 import { AppError, type Dedication } from '@yuha/contracts';
-import { getMasterAsset, getShareCard, getTrack, upsertShareCard, type TrackRow } from '@yuha/db';
+import { getMasterAsset, getShareCard, getTrack, trackEvent, upsertShareCard, type TrackRow } from '@yuha/db';
 import { VideoBusyError, isJpeg, renderShareVideo, sweepStaleVideoDirs } from '../services/share-video.js';
 import type { AppContext } from '../context.js';
 
@@ -128,6 +128,7 @@ export default async function shareRoutes(app: FastifyInstance, opts: { ctx: App
     id: string,
     userId: string,
     body: { start: number; duration: number; frames: Array<{ at: number; jpeg: string }> },
+    kind: 'cover' | 'photo',
   ) {
     const track = await getTrack(id);
     if (!track || track.deleted_at || track.owner_id !== userId) throw new AppError('NOT_FOUND', 'no such song');
@@ -145,6 +146,10 @@ export default async function shareRoutes(app: FastifyInstance, opts: { ctx: App
     const audio = await ctx.storage.get('delivery', master.storage_key);
     try {
       const mp4 = await renderShareVideo({ audio, start: body.start, duration: body.duration, frames });
+      // Counted for the dashboard: which way, and nothing of what was in it.
+      await trackEvent({ name: 'video_made', userRef: userId, props: { kind }, runMode: ctx.config.mode, isInternal: ctx.config.isDemo }).catch(
+        () => undefined,
+      );
       return reply.header('content-type', 'video/mp4').header('cache-control', 'no-store').send(mp4);
     } catch (err) {
       if (err instanceof VideoBusyError) {
@@ -173,7 +178,7 @@ export default async function shareRoutes(app: FastifyInstance, opts: { ctx: App
             .max(24),
         })
         .parse(req.body);
-      return encodeForOwner(reply, id, req.user!.id, body);
+      return encodeForOwner(reply, id, req.user!.id, body, 'cover');
     },
   );
 
@@ -209,7 +214,7 @@ export default async function shareRoutes(app: FastifyInstance, opts: { ctx: App
           rightsConfirmed: z.literal(true),
         })
         .parse(req.body);
-      return encodeForOwner(reply, id, req.user!.id, body);
+      return encodeForOwner(reply, id, req.user!.id, body, 'photo');
     },
   );
 
