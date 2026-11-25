@@ -20,6 +20,8 @@ const KEY = 'yuha.visitor';
 let memoryId: string | null = null;
 let referrerSent = false;
 let landingSeen = false;
+/** The source found on this page load, for when storage will not keep it. */
+let thisLoad: string | null = null;
 
 function visitorId(): string {
   try {
@@ -77,8 +79,22 @@ function keptSource(): { source: string; at: number; sent?: boolean } | null {
   }
 }
 
-/** Hosts whose referral is a search, not a campaign: what brought the visit is the page it landed on. */
-const SEARCH = /(^|\.)(google|bing|yahoo|duckduckgo|yandex|baidu|naver|ecosia|brave)\.[a-z.]+$/;
+/**
+ * Search engines' results pages, not every site their companies run: a link
+ * in a Google Doc, Gmail or a Naver blog is someone sharing, and counting it
+ * as a search credited organic search with signups it never brought.
+ */
+const SEARCH = [
+  /^(www\.)?google\.[a-z.]+$/,
+  /^(www\.|cn\.)?bing\.com$/,
+  /^([a-z]+\.)?search\.yahoo\.[a-z.]+$/,
+  /^(www\.|html\.)?duckduckgo\.com$/,
+  /^(www\.)?yandex\.[a-z.]+$/,
+  /^(www\.|m\.)?baidu\.com$/,
+  /^(m\.)?search\.naver\.com$/,
+  /^(www\.)?ecosia\.org$/,
+  /^search\.brave\.com$/,
+];
 
 /**
  * A visit from a search engine with no tag of its own is named after the page
@@ -86,8 +102,9 @@ const SEARCH = /(^|\.)(google|bing|yahoo|duckduckgo|yandex|baidu|naver|ecosia|br
  * prerendered page, in which language, a search brought somebody to.
  */
 export function organicSource(path: string, search: string, refHost: string | undefined, docLang: string): string | null {
-  if (!refHost || !SEARCH.test(refHost)) return null;
-  const m = /^\/(?:(zh|ja|en)\/)?([a-z-]*?)(?:\.html)?\/?$/.exec(path);
+  if (!refHost || !SEARCH.some((r) => r.test(refHost))) return null;
+  // `/ja` as well as `/ja/`: a language root with no slash is that language's home.
+  const m = /^\/(?:(zh|ja|en)(?:\/|$))?([a-z-]*?)(?:\.html)?\/?$/.exec(path);
   if (!m) return null;
   const page = !m[2] || m[2] === 'index' ? 'home' : m[2];
   const lang = m[1] ?? new URLSearchParams(search).get('lang') ?? (docLang.startsWith('zh') ? 'zh' : docLang.slice(0, 2));
@@ -102,6 +119,7 @@ function captureSource(): string | null {
   const atLanding = !landingSeen;
   landingSeen = true;
   if (kept) return kept.source;
+  if (thisLoad) return thisLoad;
   try {
     const q = new URLSearchParams(window.location.search);
     const source =
@@ -110,10 +128,13 @@ function captureSource(): string | null {
         ? organicSource(window.location.pathname, window.location.search, landingReferrerHost(), document.documentElement.lang || 'zh')
         : null);
     if (!source) return null;
+    // Held for this page load first: with storage blocked, the setItem below
+    // throws, and the landing (read only once) would otherwise be lost.
+    thisLoad = source;
     localStorage.setItem(SOURCE_KEY, JSON.stringify({ source, at: Date.now() }));
     return source;
   } catch {
-    return null;
+    return thisLoad;
   }
 }
 
