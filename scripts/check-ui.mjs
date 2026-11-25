@@ -134,6 +134,7 @@ const PAGES = [
   { name: 'home-trial-ask', path: '/', as: null, needs: 'guestTrialEnabled', prepare: openTrialAsk },
   { name: 'song-guest-owner', path: '/song/:guestTrack', as: 'guest', needs: 'guestTrialEnabled' },
   { name: 'song-photo-video', path: '/song/:track', as: 'creator', needs: 'photoVideoEnabled', prepare: openPhotoVideo },
+  { name: 'song-lyric-sync', path: '/song/:track', as: 'creator', prepare: openLyricSync },
   // Three versions of the lyrics (docs/LYRIC_COWRITE_SPEC.md).
   { name: 'create-cowrite', path: '/create', as: 'creator', prepare: writeThreeVersions },
   { name: 'create-linefix', path: '/create', as: 'creator', prepare: rewriteOneLine },
@@ -179,6 +180,17 @@ async function openTrialAsk(page) {
 async function openPhotoVideo(page) {
   await page.click('.photo-video__open');
   await page.waitForSelector('.photo-video', { timeout: 10_000 });
+}
+
+// The lyric timing workspace inside the video card (components/LyricSyncStudio.tsx).
+async function openLyricSync(page) {
+  await page.click('.photo-video__open');
+  // Only a sung song has lyrics to time; the seed's creator song is one (a gift with vocals).
+  if (!(await page.locator('.photo-video__sync > .btn').count())) {
+    throw new Error('song-lyric-sync: the fixture song has no sung lyrics, so there is no timing workspace to check');
+  }
+  await page.click('.photo-video__sync > .btn');
+  await page.waitForSelector('.sync-studio__block', { timeout: 10_000 });
 }
 
 async function writeThreeVersions(page) {

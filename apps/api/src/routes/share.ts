@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { AppError, type Dedication } from '@yuha/contracts';
 import { getMasterAsset, getShareCard, getTrack, trackEvent, upsertShareCard, type TrackRow } from '@yuha/db';
 import { VideoBusyError, isJpeg, renderShareVideo, sweepStaleVideoDirs } from '../services/share-video.js';
+import { WaveformBusyError, songPeaks } from '../services/waveform.js';
 import type { AppContext } from '../context.js';
 
 /**
@@ -217,6 +218,29 @@ export default async function shareRoutes(app: FastifyInstance, opts: { ctx: App
       return encodeForOwner(reply, id, req.user!.id, body, 'photo');
     },
   );
+
+  /**
+   * GET /v1/tracks/:id/waveform — the song's loudness over time, for the lyric
+   * timing workspace (services/waveform.ts). The owner's, like the audio.
+   */
+  app.get('/v1/tracks/:id/waveform', { preHandler: app.requireAuth }, async (req, reply) => {
+    const { id } = idParam.parse(req.params);
+    const track = await getTrack(id);
+    if (!track || track.deleted_at || track.owner_id !== req.user!.id) throw new AppError('NOT_FOUND', 'no such song');
+    if (track.state !== 'deliverable') throw new AppError('TRACK_NOT_DELIVERABLE', 'the song is not playable');
+    const master = await getMasterAsset(track.id);
+    if (!master) throw new AppError('TRACK_NOT_DELIVERABLE', 'the song has no audio');
+    try {
+      const wave = await songPeaks(() => ctx.storage.get('delivery', master.storage_key));
+      // The audio of a finished song does not change; the owner's browser may keep this.
+      return reply.header('cache-control', 'private, max-age=3600').send(wave);
+    } catch (err) {
+      if (err instanceof WaveformBusyError) {
+        throw new AppError('RATE_LIMITED', 'try again in a moment', { retryAfterSeconds: 5 });
+      }
+      throw err;
+    }
+  });
 
   /** GET /v1/share/songs/:id — the link people post. */
   app.get('/v1/share/songs/:id', async (req, reply) => {

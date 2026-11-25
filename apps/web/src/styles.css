@@ -2917,6 +2917,55 @@ textarea.is-full { border-color: var(--danger); }
 /* At most half the screen tall, so Download and Share are on screen with it on a phone (they were under the tab bar). */
 .photo-video__preview { height: min(52vh, 568px); width: auto; max-width: 100%; aspect-ratio: 9 / 16; border-radius: var(--r-control); background: #000; }
 .photo-video__result { display: grid; gap: var(--s3); justify-items: start; }
+/* The cover video, folded beneath the photo MV (product owner, 2026-11-25). */
+.photo-video__alt { padding-top: var(--s4); border-top: 1px solid var(--line); display: grid; gap: var(--s3); }
+.photo-video__alt summary { cursor: pointer; min-height: 44px; display: flex; align-items: center; color: var(--link); font-size: var(--t-body); }
+.photo-video__alt[open] { gap: var(--s3); }
+.photo-video__sync { display: grid; gap: var(--s3); justify-items: start; min-width: 0; }
+/* Lyric timing inside the video card (components/LyricSyncStudio.tsx). */
+.sync-studio { display: grid; gap: var(--s3); width: 100%; min-width: 0; padding: var(--s4); border: 1px solid var(--line); border-radius: var(--r-control); background: var(--surface-solid); }
+.sync-studio__lead { margin: 0; color: var(--muted); font-size: var(--t-body); line-height: 1.7; }
+.sync-studio__top { display: grid; grid-template-columns: 96px minmax(0, 1fr); gap: var(--s3); align-items: start; }
+.sync-studio__preview {
+  aspect-ratio: 9 / 16; border-radius: 10px; background: #1d1f1c center / cover no-repeat; display: flex; align-items: flex-end; overflow: hidden;
+}
+.sync-studio__preview.is-cover { background-image: linear-gradient(160deg, var(--violet), var(--petal-deep)); }
+.sync-studio__preview-line {
+  width: 100%; padding: 6px; font-size: 10px; line-height: 1.35; color: #fff; text-align: center; text-wrap: balance; overflow-wrap: anywhere;
+  background: linear-gradient(to top, rgb(0 0 0 / 70%), transparent);
+}
+.sync-studio__transport { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s2); min-width: 0; }
+.sync-studio__clock { font-size: var(--t-body); color: var(--ink); }
+.sync-studio__zoom { display: flex; flex-wrap: wrap; gap: var(--s2); }
+.sync-studio__timeline {
+  position: relative; height: 88px; border-radius: 10px; background: var(--surface-soft); overflow: hidden; touch-action: pan-y; cursor: pointer; color: rgba(var(--score-neutral), 0.28);
+}
+.sync-studio__wave { position: absolute; inset: 0; width: 100%; height: 100%; }
+.sync-studio__block {
+  position: absolute; bottom: 6px; height: 30px; min-width: 0; padding: 0; box-sizing: border-box; border: 1px solid var(--line-strong); border-radius: 6px;
+  background: var(--glass-strong); color: var(--ink); font: inherit; font-size: 11px; text-align: left; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; cursor: pointer;
+}
+/* Padding on the text, not the block: two lines 0.4 s apart give a block narrower than any padding, which pushed it onto its neighbour. */
+.sync-studio__block span { pointer-events: none; display: block; padding: 0 4px; overflow: hidden; text-overflow: ellipsis; }
+.sync-studio__block.is-current { border-color: var(--petal); }
+.sync-studio__block.is-selected { background: var(--petal-soft); border-color: var(--petal-deep); box-shadow: inset 0 0 0 1px var(--petal-deep); cursor: grab; touch-action: none; z-index: 1; }
+.sync-studio__cursor { position: absolute; top: 0; bottom: 0; width: 2px; margin-left: -1px; background: var(--petal-deep); pointer-events: none; z-index: 2; }
+.sync-studio__wavenote { margin: 0; }
+.sync-studio__lines { list-style: none; margin: 0; padding: 0; max-height: 11rem; overflow: auto; display: grid; gap: 2px; }
+.sync-studio__line {
+  width: 100%; min-height: 36px; padding: 4px var(--s2); border: 0; border-radius: 8px; background: none; color: var(--muted);
+  font: inherit; font-size: var(--t-body); text-align: left; cursor: pointer; overflow-wrap: anywhere;
+}
+.sync-studio__line .num { color: var(--faint); margin-right: var(--s2); }
+.sync-studio__line.is-current { color: var(--ink); }
+.sync-studio__line.is-selected { background: var(--petal-soft); color: var(--ink); }
+.sync-studio__fix { margin: 0; padding: var(--s3); border: 1px solid var(--line); border-radius: var(--r-control); display: grid; gap: var(--s2); min-width: 0; }
+.sync-studio__fix legend { padding: 0 4px; font-size: var(--t-body); font-weight: 600; }
+.sync-studio__fix p { margin: 0; }
+.sync-studio__quote { font-size: var(--t-body); color: var(--ink); overflow-wrap: anywhere; }
+.sync-studio__row { display: flex; flex-wrap: wrap; gap: var(--s2); }
+.sync-studio .btn { white-space: normal; text-align: center; max-width: 100%; }
+.sync-studio__bar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--s2); font-size: var(--t-body); }
 
 /* Trying without an account (components/TrialAsk.tsx; the keep panel on the song page). */
 .trial-ask, .trial-keep, .trial-claim { margin-top: var(--s4); padding: var(--s6); border: 1px solid var(--line); border-radius: var(--r-card); background: var(--surface); display: grid; gap: var(--s3); }
