@@ -1,6 +1,6 @@
 import { useState } from 'react';
-import { Link } from 'react-router-dom';
-import { TRIAL_CLAIMED_EVENT, claimPendingTrial, declinePendingTrial, hasPendingTrial } from '../lib/guest';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { TRIAL_CLAIMED_EVENT, claimPendingTrial, declinePendingTrial, guestSongId, hasPendingTrial } from '../lib/guest';
 import { useI18n } from '../lib/i18n';
 import { useSession } from '../lib/session';
 
@@ -18,7 +18,9 @@ import { useSession } from '../lib/session';
 export function TrialClaimAsk() {
   const { t } = useI18n();
   const { me, refreshMe, refreshEntitlements } = useSession();
-  const [state, setState] = useState<'ask' | 'adding' | 'done' | 'gone' | 'closed' | 'confirmNo'>('ask');
+  const navigate = useNavigate();
+  const location = useLocation();
+  const [state, setState] = useState<'ask' | 'adding' | 'done' | 'gone' | 'closed' | 'confirmNo' | 'declined'>('ask');
 
   if (state === 'closed' || !me || me.role === 'guest' || !me.ageConfirmed) return null;
   // Read each render, not once: the trial is usually started on this very page load, after mount.
@@ -46,6 +48,13 @@ export function TrialClaimAsk() {
           <Link to="/library" onClick={() => setState('closed')}>
             {t('trial.claim.open')}
           </Link>
+        </p>
+      ) : state === 'declined' ? (
+        <p className="trial-claim__body" id="trial-claim-title">
+          {t('trial.claim.declined')}{' '}
+          <button type="button" className="text-action" onClick={() => setState('closed')}>
+            {t('photo.close')}
+          </button>
         </p>
       ) : state === 'gone' ? (
         <p className="trial-claim__body" id="trial-claim-title">
@@ -75,8 +84,12 @@ export function TrialClaimAsk() {
                   type="button"
                   className="btn btn--sm"
                   onClick={() => {
+                    // Standing on the song just declined would leave "not found"
+                    // under the person's own choice (Codex audit UX-02): go home.
+                    const onIt = location.pathname === `/song/${guestSongId() ?? ''}`;
                     declinePendingTrial();
-                    setState('closed');
+                    setState('declined');
+                    if (onIt) navigate('/', { replace: true });
                   }}
                 >
                   {t('trial.claim.noSure')}

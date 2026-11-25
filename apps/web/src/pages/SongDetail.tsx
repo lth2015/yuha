@@ -479,7 +479,7 @@ export default function SongDetail() {
             className={`song-spread__play${active ? ' is-active' : ''}`}
             onClick={active ? player.toggle : play}
             disabled={!song.previewUrl}
-            aria-label={active ? t('song.pause') : t('song.play')}
+            aria-label={playing ? t('song.pause') : t('song.play')}
           >
             <span className={playing ? 'icon icon--pause' : 'icon icon--play'} aria-hidden="true" />
             {playing ? t('song.pause') : t('song.play')}
@@ -755,6 +755,14 @@ export default function SongDetail() {
               and only where the switch is on. */}
           {manages && song.state === 'deliverable' && runtime?.features.photoVideoEnabled && (
             <PhotoVideo song={song} labels={shareLabels()} lyrics={song.lyrics} lyricTimings={song.lyricTimings} />
+          )}
+          {/* A trial's song cannot be made into a video yet; say that it can, once kept. */}
+          {isOwner && !manages && song.state === 'deliverable' && runtime?.features.photoVideoEnabled && (
+            <section className="photo-video photo-video--closed" aria-labelledby="photo-video-title">
+              <h2 id="photo-video-title">{t('photo.title')}</h2>
+              <p className="photo-video__lead">{t('photo.lead')}</p>
+              <p className="photo-video__lead">{t('photo.afterSignup')}</p>
+            </section>
           )}
 
           {/* Beside the buttons that caused it, not in place of the page. */}

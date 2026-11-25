@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { isSungLine, type LyricLineResponse } from '@yuha/contracts';
 import { apiFetch } from '../lib/api';
 import { useI18n } from '../lib/i18n';
-import { ErrorNotice } from './common';
+import { LyricDraftError } from './common';
 
 /**
  * One line said three other ways (docs/LYRIC_LINE_SPEC.md), under the lyrics
@@ -84,7 +84,7 @@ export function LineRewrite({
           </span>
         )}
       </div>
-      <ErrorNotice error={error} />
+      <LyricDraftError error={error} />
       {current && current.lines.length > 0 && (
         <ul className="line-rewrite__list">
           {current.lines.map((alt) => (
