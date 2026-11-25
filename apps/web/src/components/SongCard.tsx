@@ -5,6 +5,7 @@ import { apiFetch } from '../lib/api';
 import { TRACK_STATE_KEY } from '../lib/messages';
 import { styleLabel } from '../lib/style-label';
 import { useI18n } from '../lib/i18n';
+import { useConfirm } from './ConfirmDialog';
 import { formatTime, usePlayer } from '../lib/player';
 import { useSession } from '../lib/session';
 import { useDismiss } from '../lib/dismiss';
@@ -55,6 +56,7 @@ export function SongCard({
   disambiguator?: string;
 }) {
   const { t } = useI18n();
+  const [confirm, confirmDialog] = useConfirm();
   const spoken = disambiguator ? `${song.title} ${disambiguator}` : song.title;
   const player = usePlayer();
   const [busy, setBusy] = useState(false);
@@ -152,7 +154,7 @@ export function SongCard({
   };
 
   const remove = async () => {
-    if (!window.confirm(t('song.confirmDelete', { title: song.title }))) return;
+    if (!(await confirm({ message: t('song.confirmDelete', { title: song.title }), confirmLabel: t('song.delete'), danger: true }))) return;
     setBusy(true);
     setFailed(false);
     try {
@@ -318,6 +320,7 @@ export function SongCard({
         )}
       </div>
 
+      {confirmDialog}
     </article>
   );
 }

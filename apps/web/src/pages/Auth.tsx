@@ -83,7 +83,10 @@ export default function Auth() {
     safeInternalPath(params.get('next')) ??
     (googleError ? safeInternalPath(readStoredNext()) : null) ??
     '/';
-  const canSubmit = email.includes('@') && ageConfirmed && termsAccepted && !submitting;
+  // A shape check, not a verifier: `creator@` used to enable the button (UX audit #34).
+  const emailOk = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
+  const emailShowWrong = email.trim().length > 0 && email.includes('@') && !emailOk;
+  const canSubmit = emailOk && ageConfirmed && termsAccepted && !submitting;
 
   // Retry starts a second request without cancelling the first. A slow first
   // attempt that fails after a fast retry succeeded would otherwise put the page
@@ -223,8 +226,14 @@ export default function Auth() {
                   onChange={(e) => setEmail(e.target.value)}
                   placeholder={config.devLoginDomains?.length ? `you@${config.devLoginDomains[0]}` : 'you@example.com'}
                   required
-                  aria-describedby={config.devLoginRestricted ? 'email-allow' : undefined}
+                  aria-describedby={[config.devLoginRestricted ? 'email-allow' : '', emailShowWrong ? 'email-shape' : ''].filter(Boolean).join(' ') || undefined}
+                  aria-invalid={emailShowWrong || undefined}
                 />
+                {emailShowWrong && (
+                  <p id="email-shape" className="small muted" style={{ margin: '6px 0 0' }}>
+                    {t('auth.emailShape')}
+                  </p>
+                )}
                 {config.devLoginRestricted && (
                   <p id="email-allow" className="small muted" style={{ margin: '6px 0 0' }}>
                     {config.devLoginDomains?.length
