@@ -1,0 +1,777 @@
+[
+  {
+    "name": "static-head",
+    "lang": "zh",
+    "scene": "birthday",
+    "title": "生日歌和照片 MV：用照片和原创歌曲做生日视频 — YUHA",
+    "canonical": "https://yuha.studio/zh/birthday.html",
+    "alternates": [
+      {
+        "lang": "zh-Hans",
+        "href": "https://yuha.studio/zh/birthday.html"
+      },
+      {
+        "lang": "ja",
+        "href": "https://yuha.studio/ja/birthday.html"
+      },
+      {
+        "lang": "en",
+        "href": "https://yuha.studio/en/birthday.html"
+      },
+      {
+        "lang": "x-default",
+        "href": "https://yuha.studio/birthday"
+      }
+    ],
+    "faq": 5,
+    "pass": true
+  },
+  {
+    "name": "static-head",
+    "lang": "zh",
+    "scene": "travel",
+    "title": "旅行回忆做成歌和照片 MV — YUHA",
+    "canonical": "https://yuha.studio/zh/travel.html",
+    "alternates": [
+      {
+        "lang": "zh-Hans",
+        "href": "https://yuha.studio/zh/travel.html"
+      },
+      {
+        "lang": "ja",
+        "href": "https://yuha.studio/ja/travel.html"
+      },
+      {
+        "lang": "en",
+        "href": "https://yuha.studio/en/travel.html"
+      },
+      {
+        "lang": "x-default",
+        "href": "https://yuha.studio/travel"
+      }
+    ],
+    "faq": 5,
+    "pass": true
+  },
+  {
+    "name": "static-head",
+    "lang": "ja",
+    "scene": "birthday",
+    "title": "誕生日ソングと写真MV｜写真とオリジナル曲で誕生日の思い出をMVに — YUHA",
+    "canonical": "https://yuha.studio/ja/birthday.html",
+    "alternates": [
+      {
+        "lang": "zh-Hans",
+        "href": "https://yuha.studio/zh/birthday.html"
+      },
+      {
+        "lang": "ja",
+        "href": "https://yuha.studio/ja/birthday.html"
+      },
+      {
+        "lang": "en",
+        "href": "https://yuha.studio/en/birthday.html"
+      },
+      {
+        "lang": "x-default",
+        "href": "https://yuha.studio/birthday"
+      }
+    ],
+    "faq": 5,
+    "pass": true
+  },
+  {
+    "name": "static-head",
+    "lang": "ja",
+    "scene": "travel",
+    "title": "旅の思い出を、オリジナル曲と写真MVに — YUHA",
+    "canonical": "https://yuha.studio/ja/travel.html",
+    "alternates": [
+      {
+        "lang": "zh-Hans",
+        "href": "https://yuha.studio/zh/travel.html"
+      },
+      {
+        "lang": "ja",
+        "href": "https://yuha.studio/ja/travel.html"
+      },
+      {
+        "lang": "en",
+        "href": "https://yuha.studio/en/travel.html"
+      },
+      {
+        "lang": "x-default",
+        "href": "https://yuha.studio/travel"
+      }
+    ],
+    "faq": 5,
+    "pass": true
+  },
+  {
+    "name": "static-head",
+    "lang": "en",
+    "scene": "birthday",
+    "title": "Birthday Music Video Maker: Your Photos and an Original Song — YUHA",
+    "canonical": "https://yuha.studio/en/birthday.html",
+    "alternates": [
+      {
+        "lang": "zh-Hans",
+        "href": "https://yuha.studio/zh/birthday.html"
+      },
+      {
+        "lang": "ja",
+        "href": "https://yuha.studio/ja/birthday.html"
+      },
+      {
+        "lang": "en",
+        "href": "https://yuha.studio/en/birthday.html"
+      },
+      {
+        "lang": "x-default",
+        "href": "https://yuha.studio/birthday"
+      }
+    ],
+    "faq": 5,
+    "pass": true
+  },
+  {
+    "name": "static-head",
+    "lang": "en",
+    "scene": "travel",
+    "title": "Travel Memory Music Video: Your Photos and an Original Song — YUHA",
+    "canonical": "https://yuha.studio/en/travel.html",
+    "alternates": [
+      {
+        "lang": "zh-Hans",
+        "href": "https://yuha.studio/zh/travel.html"
+      },
+      {
+        "lang": "ja",
+        "href": "https://yuha.studio/ja/travel.html"
+      },
+      {
+        "lang": "en",
+        "href": "https://yuha.studio/en/travel.html"
+      },
+      {
+        "lang": "x-default",
+        "href": "https://yuha.studio/travel"
+      }
+    ],
+    "faq": 5,
+    "pass": true
+  },
+  {
+    "name": "layout",
+    "lang": "zh-CN",
+    "scene": "birthday",
+    "width": 360,
+    "faq": 5,
+    "overflow": false,
+    "cta": "/create?gift=1&occasion=birthday&src=scene-birthday-zh",
+    "starters": [
+      "/create?gift=1&occasion=birthday&starter=scene.birthday.starter1&src=scene-birthday-zh",
+      "/create?gift=1&occasion=birthday&starter=scene.birthday.starter2&src=scene-birthday-zh",
+      "/create?gift=1&occasion=birthday&starter=scene.birthday.starter3&src=scene-birthday-zh"
+    ],
+    "videos": 0,
+    "pass": true
+  },
+  {
+    "name": "layout",
+    "lang": "zh-CN",
+    "scene": "birthday",
+    "width": 390,
+    "faq": 5,
+    "overflow": false,
+    "cta": "/create?gift=1&occasion=birthday&src=scene-birthday-zh",
+    "starters": [
+      "/create?gift=1&occasion=birthday&starter=scene.birthday.starter1&src=scene-birthday-zh",
+      "/create?gift=1&occasion=birthday&starter=scene.birthday.starter2&src=scene-birthday-zh",
+      "/create?gift=1&occasion=birthday&starter=scene.birthday.starter3&src=scene-birthday-zh"
+    ],
+    "videos": 0,
+    "pass": true
+  },
+  {
+    "name": "actual-link-click",
+    "lang": "zh",
+    "scene": "birthday",
+    "starter": 0,
+    "next": "/create?gift=1&occasion=birthday&src=scene-birthday-zh",
+    "language": "zh",
+    "pass": true
+  },
+  {
+    "name": "actual-link-click",
+    "lang": "zh",
+    "scene": "birthday",
+    "starter": 1,
+    "next": "/create?gift=1&occasion=birthday&starter=scene.birthday.starter1&src=scene-birthday-zh",
+    "language": "zh",
+    "pass": true
+  },
+  {
+    "name": "actual-link-click",
+    "lang": "zh",
+    "scene": "birthday",
+    "starter": 2,
+    "next": "/create?gift=1&occasion=birthday&starter=scene.birthday.starter2&src=scene-birthday-zh",
+    "language": "zh",
+    "pass": true
+  },
+  {
+    "name": "actual-link-click",
+    "lang": "zh",
+    "scene": "birthday",
+    "starter": 3,
+    "next": "/create?gift=1&occasion=birthday&starter=scene.birthday.starter3&src=scene-birthday-zh",
+    "language": "zh",
+    "pass": true
+  },
+  {
+    "name": "layout",
+    "lang": "zh-CN",
+    "scene": "birthday",
+    "width": 768,
+    "faq": 5,
+    "overflow": false,
+    "cta": "/create?gift=1&occasion=birthday&src=scene-birthday-zh",
+    "starters": [
+      "/create?gift=1&occasion=birthday&starter=scene.birthday.starter1&src=scene-birthday-zh",
+      "/create?gift=1&occasion=birthday&starter=scene.birthday.starter2&src=scene-birthday-zh",
+      "/create?gift=1&occasion=birthday&starter=scene.birthday.starter3&src=scene-birthday-zh"
+    ],
+    "videos": 0,
+    "pass": true
+  },
+  {
+    "name": "layout",
+    "lang": "zh-CN",
+    "scene": "birthday",
+    "width": 1280,
+    "faq": 5,
+    "overflow": false,
+    "cta": "/create?gift=1&occasion=birthday&src=scene-birthday-zh",
+    "starters": [
+      "/create?gift=1&occasion=birthday&starter=scene.birthday.starter1&src=scene-birthday-zh",
+      "/create?gift=1&occasion=birthday&starter=scene.birthday.starter2&src=scene-birthday-zh",
+      "/create?gift=1&occasion=birthday&starter=scene.birthday.starter3&src=scene-birthday-zh"
+    ],
+    "videos": 0,
+    "pass": true
+  },
+  {
+    "name": "layout",
+    "lang": "zh-CN",
+    "scene": "travel",
+    "width": 360,
+    "faq": 5,
+    "overflow": false,
+    "cta": "/create?src=scene-travel-zh",
+    "starters": [
+      "/create?starter=scene.travel.starter1&src=scene-travel-zh",
+      "/create?starter=scene.travel.starter2&src=scene-travel-zh",
+      "/create?starter=scene.travel.starter3&src=scene-travel-zh"
+    ],
+    "videos": 0,
+    "pass": true
+  },
+  {
+    "name": "layout",
+    "lang": "zh-CN",
+    "scene": "travel",
+    "width": 390,
+    "faq": 5,
+    "overflow": false,
+    "cta": "/create?src=scene-travel-zh",
+    "starters": [
+      "/create?starter=scene.travel.starter1&src=scene-travel-zh",
+      "/create?starter=scene.travel.starter2&src=scene-travel-zh",
+      "/create?starter=scene.travel.starter3&src=scene-travel-zh"
+    ],
+    "videos": 0,
+    "pass": true
+  },
+  {
+    "name": "actual-link-click",
+    "lang": "zh",
+    "scene": "travel",
+    "starter": 0,
+    "next": "/create?src=scene-travel-zh",
+    "language": "zh",
+    "pass": true
+  },
+  {
+    "name": "actual-link-click",
+    "lang": "zh",
+    "scene": "travel",
+    "starter": 1,
+    "next": "/create?starter=scene.travel.starter1&src=scene-travel-zh",
+    "language": "zh",
+    "pass": true
+  },
+  {
+    "name": "actual-link-click",
+    "lang": "zh",
+    "scene": "travel",
+    "starter": 2,
+    "next": "/create?starter=scene.travel.starter2&src=scene-travel-zh",
+    "language": "zh",
+    "pass": true
+  },
+  {
+    "name": "actual-link-click",
+    "lang": "zh",
+    "scene": "travel",
+    "starter": 3,
+    "next": "/create?starter=scene.travel.starter3&src=scene-travel-zh",
+    "language": "zh",
+    "pass": true
+  },
+  {
+    "name": "layout",
+    "lang": "zh-CN",
+    "scene": "travel",
+    "width": 768,
+    "faq": 5,
+    "overflow": false,
+    "cta": "/create?src=scene-travel-zh",
+    "starters": [
+      "/create?starter=scene.travel.starter1&src=scene-travel-zh",
+      "/create?starter=scene.travel.starter2&src=scene-travel-zh",
+      "/create?starter=scene.travel.starter3&src=scene-travel-zh"
+    ],
+    "videos": 0,
+    "pass": true
+  },
+  {
+    "name": "layout",
+    "lang": "zh-CN",
+    "scene": "travel",
+    "width": 1280,
+    "faq": 5,
+    "overflow": false,
+    "cta": "/create?src=scene-travel-zh",
+    "starters": [
+      "/create?starter=scene.travel.starter1&src=scene-travel-zh",
+      "/create?starter=scene.travel.starter2&src=scene-travel-zh",
+      "/create?starter=scene.travel.starter3&src=scene-travel-zh"
+    ],
+    "videos": 0,
+    "pass": true
+  },
+  {
+    "name": "layout",
+    "lang": "ja",
+    "scene": "birthday",
+    "width": 360,
+    "faq": 5,
+    "overflow": false,
+    "cta": "/create?gift=1&occasion=birthday&src=scene-birthday-ja",
+    "starters": [
+      "/create?gift=1&occasion=birthday&starter=scene.birthday.starter1&src=scene-birthday-ja",
+      "/create?gift=1&occasion=birthday&starter=scene.birthday.starter2&src=scene-birthday-ja",
+      "/create?gift=1&occasion=birthday&starter=scene.birthday.starter3&src=scene-birthday-ja"
+    ],
+    "videos": 0,
+    "pass": true
+  },
+  {
+    "name": "layout",
+    "lang": "ja",
+    "scene": "birthday",
+    "width": 390,
+    "faq": 5,
+    "overflow": false,
+    "cta": "/create?gift=1&occasion=birthday&src=scene-birthday-ja",
+    "starters": [
+      "/create?gift=1&occasion=birthday&starter=scene.birthday.starter1&src=scene-birthday-ja",
+      "/create?gift=1&occasion=birthday&starter=scene.birthday.starter2&src=scene-birthday-ja",
+      "/create?gift=1&occasion=birthday&starter=scene.birthday.starter3&src=scene-birthday-ja"
+    ],
+    "videos": 0,
+    "pass": true
+  },
+  {
+    "name": "actual-link-click",
+    "lang": "ja",
+    "scene": "birthday",
+    "starter": 0,
+    "next": "/create?gift=1&occasion=birthday&src=scene-birthday-ja",
+    "language": "ja",
+    "pass": true
+  },
+  {
+    "name": "actual-link-click",
+    "lang": "ja",
+    "scene": "birthday",
+    "starter": 1,
+    "next": "/create?gift=1&occasion=birthday&starter=scene.birthday.starter1&src=scene-birthday-ja",
+    "language": "ja",
+    "pass": true
+  },
+  {
+    "name": "actual-link-click",
+    "lang": "ja",
+    "scene": "birthday",
+    "starter": 2,
+    "next": "/create?gift=1&occasion=birthday&starter=scene.birthday.starter2&src=scene-birthday-ja",
+    "language": "ja",
+    "pass": true
+  },
+  {
+    "name": "actual-link-click",
+    "lang": "ja",
+    "scene": "birthday",
+    "starter": 3,
+    "next": "/create?gift=1&occasion=birthday&starter=scene.birthday.starter3&src=scene-birthday-ja",
+    "language": "ja",
+    "pass": true
+  },
+  {
+    "name": "layout",
+    "lang": "ja",
+    "scene": "birthday",
+    "width": 768,
+    "faq": 5,
+    "overflow": false,
+    "cta": "/create?gift=1&occasion=birthday&src=scene-birthday-ja",
+    "starters": [
+      "/create?gift=1&occasion=birthday&starter=scene.birthday.starter1&src=scene-birthday-ja",
+      "/create?gift=1&occasion=birthday&starter=scene.birthday.starter2&src=scene-birthday-ja",
+      "/create?gift=1&occasion=birthday&starter=scene.birthday.starter3&src=scene-birthday-ja"
+    ],
+    "videos": 0,
+    "pass": true
+  },
+  {
+    "name": "layout",
+    "lang": "ja",
+    "scene": "birthday",
+    "width": 1280,
+    "faq": 5,
+    "overflow": false,
+    "cta": "/create?gift=1&occasion=birthday&src=scene-birthday-ja",
+    "starters": [
+      "/create?gift=1&occasion=birthday&starter=scene.birthday.starter1&src=scene-birthday-ja",
+      "/create?gift=1&occasion=birthday&starter=scene.birthday.starter2&src=scene-birthday-ja",
+      "/create?gift=1&occasion=birthday&starter=scene.birthday.starter3&src=scene-birthday-ja"
+    ],
+    "videos": 0,
+    "pass": true
+  },
+  {
+    "name": "layout",
+    "lang": "ja",
+    "scene": "travel",
+    "width": 360,
+    "faq": 5,
+    "overflow": false,
+    "cta": "/create?src=scene-travel-ja",
+    "starters": [
+      "/create?starter=scene.travel.starter1&src=scene-travel-ja",
+      "/create?starter=scene.travel.starter2&src=scene-travel-ja",
+      "/create?starter=scene.travel.starter3&src=scene-travel-ja"
+    ],
+    "videos": 0,
+    "pass": true
+  },
+  {
+    "name": "layout",
+    "lang": "ja",
+    "scene": "travel",
+    "width": 390,
+    "faq": 5,
+    "overflow": false,
+    "cta": "/create?src=scene-travel-ja",
+    "starters": [
+      "/create?starter=scene.travel.starter1&src=scene-travel-ja",
+      "/create?starter=scene.travel.starter2&src=scene-travel-ja",
+      "/create?starter=scene.travel.starter3&src=scene-travel-ja"
+    ],
+    "videos": 0,
+    "pass": true
+  },
+  {
+    "name": "actual-link-click",
+    "lang": "ja",
+    "scene": "travel",
+    "starter": 0,
+    "next": "/create?src=scene-travel-ja",
+    "language": "ja",
+    "pass": true
+  },
+  {
+    "name": "actual-link-click",
+    "lang": "ja",
+    "scene": "travel",
+    "starter": 1,
+    "next": "/create?starter=scene.travel.starter1&src=scene-travel-ja",
+    "language": "ja",
+    "pass": true
+  },
+  {
+    "name": "actual-link-click",
+    "lang": "ja",
+    "scene": "travel",
+    "starter": 2,
+    "next": "/create?starter=scene.travel.starter2&src=scene-travel-ja",
+    "language": "ja",
+    "pass": true
+  },
+  {
+    "name": "actual-link-click",
+    "lang": "ja",
+    "scene": "travel",
+    "starter": 3,
+    "next": "/create?starter=scene.travel.starter3&src=scene-travel-ja",
+    "language": "ja",
+    "pass": true
+  },
+  {
+    "name": "layout",
+    "lang": "ja",
+    "scene": "travel",
+    "width": 768,
+    "faq": 5,
+    "overflow": false,
+    "cta": "/create?src=scene-travel-ja",
+    "starters": [
+      "/create?starter=scene.travel.starter1&src=scene-travel-ja",
+      "/create?starter=scene.travel.starter2&src=scene-travel-ja",
+      "/create?starter=scene.travel.starter3&src=scene-travel-ja"
+    ],
+    "videos": 0,
+    "pass": true
+  },
+  {
+    "name": "layout",
+    "lang": "ja",
+    "scene": "travel",
+    "width": 1280,
+    "faq": 5,
+    "overflow": false,
+    "cta": "/create?src=scene-travel-ja",
+    "starters": [
+      "/create?starter=scene.travel.starter1&src=scene-travel-ja",
+      "/create?starter=scene.travel.starter2&src=scene-travel-ja",
+      "/create?starter=scene.travel.starter3&src=scene-travel-ja"
+    ],
+    "videos": 0,
+    "pass": true
+  },
+  {
+    "name": "layout",
+    "lang": "en",
+    "scene": "birthday",
+    "width": 360,
+    "faq": 5,
+    "overflow": false,
+    "cta": "/create?gift=1&occasion=birthday&src=scene-birthday-en",
+    "starters": [
+      "/create?gift=1&occasion=birthday&starter=scene.birthday.starter1&src=scene-birthday-en",
+      "/create?gift=1&occasion=birthday&starter=scene.birthday.starter2&src=scene-birthday-en",
+      "/create?gift=1&occasion=birthday&starter=scene.birthday.starter3&src=scene-birthday-en"
+    ],
+    "videos": 0,
+    "pass": true
+  },
+  {
+    "name": "layout",
+    "lang": "en",
+    "scene": "birthday",
+    "width": 390,
+    "faq": 5,
+    "overflow": false,
+    "cta": "/create?gift=1&occasion=birthday&src=scene-birthday-en",
+    "starters": [
+      "/create?gift=1&occasion=birthday&starter=scene.birthday.starter1&src=scene-birthday-en",
+      "/create?gift=1&occasion=birthday&starter=scene.birthday.starter2&src=scene-birthday-en",
+      "/create?gift=1&occasion=birthday&starter=scene.birthday.starter3&src=scene-birthday-en"
+    ],
+    "videos": 0,
+    "pass": true
+  },
+  {
+    "name": "actual-link-click",
+    "lang": "en",
+    "scene": "birthday",
+    "starter": 0,
+    "next": "/create?gift=1&occasion=birthday&src=scene-birthday-en",
+    "language": "en",
+    "pass": true
+  },
+  {
+    "name": "actual-link-click",
+    "lang": "en",
+    "scene": "birthday",
+    "starter": 1,
+    "next": "/create?gift=1&occasion=birthday&starter=scene.birthday.starter1&src=scene-birthday-en",
+    "language": "en",
+    "pass": true
+  },
+  {
+    "name": "actual-link-click",
+    "lang": "en",
+    "scene": "birthday",
+    "starter": 2,
+    "next": "/create?gift=1&occasion=birthday&starter=scene.birthday.starter2&src=scene-birthday-en",
+    "language": "en",
+    "pass": true
+  },
+  {
+    "name": "actual-link-click",
+    "lang": "en",
+    "scene": "birthday",
+    "starter": 3,
+    "next": "/create?gift=1&occasion=birthday&starter=scene.birthday.starter3&src=scene-birthday-en",
+    "language": "en",
+    "pass": true
+  },
+  {
+    "name": "layout",
+    "lang": "en",
+    "scene": "birthday",
+    "width": 768,
+    "faq": 5,
+    "overflow": false,
+    "cta": "/create?gift=1&occasion=birthday&src=scene-birthday-en",
+    "starters": [
+      "/create?gift=1&occasion=birthday&starter=scene.birthday.starter1&src=scene-birthday-en",
+      "/create?gift=1&occasion=birthday&starter=scene.birthday.starter2&src=scene-birthday-en",
+      "/create?gift=1&occasion=birthday&starter=scene.birthday.starter3&src=scene-birthday-en"
+    ],
+    "videos": 0,
+    "pass": true
+  },
+  {
+    "name": "layout",
+    "lang": "en",
+    "scene": "birthday",
+    "width": 1280,
+    "faq": 5,
+    "overflow": false,
+    "cta": "/create?gift=1&occasion=birthday&src=scene-birthday-en",
+    "starters": [
+      "/create?gift=1&occasion=birthday&starter=scene.birthday.starter1&src=scene-birthday-en",
+      "/create?gift=1&occasion=birthday&starter=scene.birthday.starter2&src=scene-birthday-en",
+      "/create?gift=1&occasion=birthday&starter=scene.birthday.starter3&src=scene-birthday-en"
+    ],
+    "videos": 0,
+    "pass": true
+  },
+  {
+    "name": "layout",
+    "lang": "en",
+    "scene": "travel",
+    "width": 360,
+    "faq": 5,
+    "overflow": false,
+    "cta": "/create?src=scene-travel-en",
+    "starters": [
+      "/create?starter=scene.travel.starter1&src=scene-travel-en",
+      "/create?starter=scene.travel.starter2&src=scene-travel-en",
+      "/create?starter=scene.travel.starter3&src=scene-travel-en"
+    ],
+    "videos": 0,
+    "pass": true
+  },
+  {
+    "name": "layout",
+    "lang": "en",
+    "scene": "travel",
+    "width": 390,
+    "faq": 5,
+    "overflow": false,
+    "cta": "/create?src=scene-travel-en",
+    "starters": [
+      "/create?starter=scene.travel.starter1&src=scene-travel-en",
+      "/create?starter=scene.travel.starter2&src=scene-travel-en",
+      "/create?starter=scene.travel.starter3&src=scene-travel-en"
+    ],
+    "videos": 0,
+    "pass": true
+  },
+  {
+    "name": "actual-link-click",
+    "lang": "en",
+    "scene": "travel",
+    "starter": 0,
+    "next": "/create?src=scene-travel-en",
+    "language": "en",
+    "pass": true
+  },
+  {
+    "name": "actual-link-click",
+    "lang": "en",
+    "scene": "travel",
+    "starter": 1,
+    "next": "/create?starter=scene.travel.starter1&src=scene-travel-en",
+    "language": "en",
+    "pass": true
+  },
+  {
+    "name": "actual-link-click",
+    "lang": "en",
+    "scene": "travel",
+    "starter": 2,
+    "next": "/create?starter=scene.travel.starter2&src=scene-travel-en",
+    "language": "en",
+    "pass": true
+  },
+  {
+    "name": "actual-link-click",
+    "lang": "en",
+    "scene": "travel",
+    "starter": 3,
+    "next": "/create?starter=scene.travel.starter3&src=scene-travel-en",
+    "language": "en",
+    "pass": true
+  },
+  {
+    "name": "layout",
+    "lang": "en",
+    "scene": "travel",
+    "width": 768,
+    "faq": 5,
+    "overflow": false,
+    "cta": "/create?src=scene-travel-en",
+    "starters": [
+      "/create?starter=scene.travel.starter1&src=scene-travel-en",
+      "/create?starter=scene.travel.starter2&src=scene-travel-en",
+      "/create?starter=scene.travel.starter3&src=scene-travel-en"
+    ],
+    "videos": 0,
+    "pass": true
+  },
+  {
+    "name": "layout",
+    "lang": "en",
+    "scene": "travel",
+    "width": 1280,
+    "faq": 5,
+    "overflow": false,
+    "cta": "/create?src=scene-travel-en",
+    "starters": [
+      "/create?starter=scene.travel.starter1&src=scene-travel-en",
+      "/create?starter=scene.travel.starter2&src=scene-travel-en",
+      "/create?starter=scene.travel.starter3&src=scene-travel-en"
+    ],
+    "videos": 0,
+    "pass": true
+  },
+  {
+    "name": "flags-off",
+    "trialButton": 0,
+    "faqFree": "New accounts get free songs, and you can try one song without signing up. A song that fails, and making a video, use no credit. See prices and free songs",
+    "mvSection": 1
+  },
+  {
+    "name": "scene-trial-entry",
+    "url": "/",
+    "source": null,
+    "draft": "友だちと見た海辺の夕方……",
+    "lang": "ja"
+  }
+]

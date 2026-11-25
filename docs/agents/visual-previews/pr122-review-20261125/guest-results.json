@@ -1,0 +1,16 @@
+{
+  "exportStatus": 403,
+  "exportError": "FORBIDDEN",
+  "source": null,
+  "trialRequestHasSource": false,
+  "trialRequestKeys": [
+    "deviceId",
+    "ageConfirmed",
+    "termsAccepted"
+  ],
+  "downloadButtons": 0,
+  "photoInputs": 0,
+  "signupHint": "動画にする\n\nこの曲を縦型の短い動画にします。歌詞が歌に合わせて出ます。ジャケットのままでも、写真を入れても作れます。\n\n登録してこの曲を保存すると、動画にできます。",
+  "signupCTA": "登録してこの曲を残す\n\nお試しでつくった曲は 7 日後に削除されます。登録後、この曲をアカウントに追加するか選べます。追加するとダウンロードもできます。\n\n登録すると、さらに 1 曲無料でつくれます。\n\n登録して保存",
+  "language": "ja"
+}

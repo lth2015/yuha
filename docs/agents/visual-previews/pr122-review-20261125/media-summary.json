@@ -1,0 +1,22 @@
+{
+  "sourceCommit": "36c36dd35c518104065bd471685bc8ff9796b47e",
+  "mode": "local demo, synthetic song and QA images",
+  "wholeSongExport": {
+    "songSeconds": 120.033,
+    "elapsedSeconds": 8.25,
+    "status": 200,
+    "creditsBefore": 1,
+    "creditsAfter": 1,
+    "durationSeconds": 120,
+    "bytes": 18655046,
+    "width": 720,
+    "height": 1280,
+    "codecs": [
+      "h264",
+      "aac"
+    ],
+    "downloaded": true,
+    "saveShareButton": 0
+  },
+  "deviceLimit": "Linux Chromium mobile viewport emulation; not a physical iPhone/Android; no proof of Photos integration or typical production time"
+}

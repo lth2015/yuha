@@ -1,0 +1,170 @@
+[
+  {
+    "lang": "zh",
+    "scene": "birthday",
+    "width": 360,
+    "problems": [],
+    "warnings": []
+  },
+  {
+    "lang": "zh",
+    "scene": "birthday",
+    "width": 393,
+    "problems": [],
+    "warnings": []
+  },
+  {
+    "lang": "zh",
+    "scene": "birthday",
+    "width": 768,
+    "problems": [],
+    "warnings": []
+  },
+  {
+    "lang": "zh",
+    "scene": "birthday",
+    "width": 1280,
+    "problems": [],
+    "warnings": []
+  },
+  {
+    "lang": "zh",
+    "scene": "travel",
+    "width": 360,
+    "problems": [],
+    "warnings": []
+  },
+  {
+    "lang": "zh",
+    "scene": "travel",
+    "width": 393,
+    "problems": [],
+    "warnings": []
+  },
+  {
+    "lang": "zh",
+    "scene": "travel",
+    "width": 768,
+    "problems": [],
+    "warnings": []
+  },
+  {
+    "lang": "zh",
+    "scene": "travel",
+    "width": 1280,
+    "problems": [],
+    "warnings": []
+  },
+  {
+    "lang": "ja",
+    "scene": "birthday",
+    "width": 360,
+    "problems": [],
+    "warnings": []
+  },
+  {
+    "lang": "ja",
+    "scene": "birthday",
+    "width": 393,
+    "problems": [],
+    "warnings": []
+  },
+  {
+    "lang": "ja",
+    "scene": "birthday",
+    "width": 768,
+    "problems": [],
+    "warnings": []
+  },
+  {
+    "lang": "ja",
+    "scene": "birthday",
+    "width": 1280,
+    "problems": [],
+    "warnings": []
+  },
+  {
+    "lang": "ja",
+    "scene": "travel",
+    "width": 360,
+    "problems": [],
+    "warnings": []
+  },
+  {
+    "lang": "ja",
+    "scene": "travel",
+    "width": 393,
+    "problems": [],
+    "warnings": []
+  },
+  {
+    "lang": "ja",
+    "scene": "travel",
+    "width": 768,
+    "problems": [],
+    "warnings": []
+  },
+  {
+    "lang": "ja",
+    "scene": "travel",
+    "width": 1280,
+    "problems": [],
+    "warnings": []
+  },
+  {
+    "lang": "en",
+    "scene": "birthday",
+    "width": 360,
+    "problems": [],
+    "warnings": []
+  },
+  {
+    "lang": "en",
+    "scene": "birthday",
+    "width": 393,
+    "problems": [],
+    "warnings": []
+  },
+  {
+    "lang": "en",
+    "scene": "birthday",
+    "width": 768,
+    "problems": [],
+    "warnings": []
+  },
+  {
+    "lang": "en",
+    "scene": "birthday",
+    "width": 1280,
+    "problems": [],
+    "warnings": []
+  },
+  {
+    "lang": "en",
+    "scene": "travel",
+    "width": 360,
+    "problems": [],
+    "warnings": []
+  },
+  {
+    "lang": "en",
+    "scene": "travel",
+    "width": 393,
+    "problems": [],
+    "warnings": []
+  },
+  {
+    "lang": "en",
+    "scene": "travel",
+    "width": 768,
+    "problems": [],
+    "warnings": []
+  },
+  {
+    "lang": "en",
+    "scene": "travel",
+    "width": 1280,
+    "problems": [],
+    "warnings": []
+  }
+]
