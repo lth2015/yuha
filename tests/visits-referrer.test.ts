@@ -90,3 +90,18 @@ it('a search landing on a page that is not public names nothing, and a later pub
   await flush();
   expect(sent[1]!.source).toBeUndefined();
 });
+
+it('with storage blocked, the search landing still reaches the visit report', async () => {
+  // The sign-in check can read the source before the first visit is reported;
+  // with nowhere to keep it, that first read must not use it up.
+  document.documentElement.lang = 'en';
+  const v = await land('/en/birthday.html', 'https://www.google.com/');
+  vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
+    throw new Error('blocked');
+  });
+  expect(v.currentSource()).toBe('seo-birthday-en');
+  v.reportVisit('/birthday');
+  await flush();
+  expect(sent[0]).toMatchObject({ source: 'seo-birthday-en' });
+  vi.restoreAllMocks();
+});
