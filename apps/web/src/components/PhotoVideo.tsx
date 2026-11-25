@@ -260,15 +260,20 @@ export function PhotoVideo({
         <div className="photo-video__result" ref={resultRef}>
           <video src={result.url} controls playsInline className="photo-video__preview" />
           <div className="photo-video__actions">
+            {/* A web page cannot write to the phone's photo library: a download
+                lands in Files (iOS) or Downloads. The share sheet can — its
+                「存储视频」 is how a video reaches Photos — so where files can be
+                shared, that is the first button, and it says how. */}
             {canShareFiles && (
               <button type="button" className="btn btn--primary" onClick={() => void share(result.file)}>
-                {t('photo.share')}
+                {t('video.saveOrShare')}
               </button>
             )}
-            <a className="btn" href={result.url} download={result.file.name}>
-              {t('photo.download')}
+            <a className={`btn${canShareFiles ? '' : ' btn--primary'}`} href={result.url} download={result.file.name}>
+              {t(canShareFiles ? 'video.downloadFile' : 'photo.download')}
             </a>
           </div>
+          {canShareFiles && <p className="small muted">{t('video.saveHint')}</p>}
           <p className="small muted">{t('photo.notKept')}</p>
         </div>
       )}

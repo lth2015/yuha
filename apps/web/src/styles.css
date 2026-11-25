@@ -2267,6 +2267,10 @@ textarea.is-full { border-color: var(--danger); }
     align-items: center;
     min-height: var(--tap);
   }
+  /* A flex link takes no ellipsis, so a long title was cut off mid-word
+     ("Golden Hour Lo") with nothing to say it went on. On a phone the title
+     may take a second line instead. */
+  .song-card__title { white-space: normal; overflow-wrap: anywhere; }
 }
 
 /*
@@ -3002,3 +3006,6 @@ textarea.is-full { border-color: var(--danger); }
 .confirm-dialog::backdrop { background: rgb(0 0 0 / 35%); }
 .confirm-dialog p { margin: 0 0 var(--s4); line-height: 1.6; }
 .confirm-dialog__actions { display: flex; justify-content: flex-end; gap: var(--s3); flex-wrap: wrap; }
+
+/* On the home page the strip follows the hero score, which already leaves room. */
+.home__recent { margin-top: var(--s6); }
