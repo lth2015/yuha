@@ -140,6 +140,10 @@ const PAGES = [
   ...['setup', 'draft', 'progress', 'ready', 'failed'].map((state) => ({
     name: `song-scene-mv-${state}`, path: '/song/:track', as: 'creator', allLanguages: true, prepare: (page) => openSceneMv(page, state),
   })),
+  // AI BGM (docs/BGM_STUDIO_PLAN.md): the form, and a job's three ends, from synthetic fixtures that spend nothing.
+  ...['form', 'making', 'ready', 'failed'].map((state) => ({
+    name: `bgm-${state}`, path: '/bgm', as: 'creator', allLanguages: true, prepare: (page) => openBgm(page, state),
+  })),
   { name: 'song-lyric-sync', path: '/song/:sungTrack', as: 'creator', prepare: openLyricSync },
   { name: 'song-lyric-sync-auto', path: '/song/:sungTrack', as: 'creator', prepare: openLyricSyncAuto },
   // Three versions of the lyrics (docs/LYRIC_COWRITE_SPEC.md).
@@ -188,6 +192,44 @@ async function openTrialAsk(page) {
 async function openPhotoVideo(page) {
   await page.click('.photo-video__open');
   await page.waitForSelector('.photo-video', { timeout: 10_000 });
+}
+
+async function openBgm(page, state) {
+  await page.unroute('**/v1/runtime*');
+  await page.route('**/v1/runtime*', async (route) => {
+    const response = await route.fetch();
+    const body = await response.json();
+    body.features.bgmStudio = true;
+    await route.fulfill({ response, json: body });
+  });
+  await page.reload({ waitUntil: 'networkidle' });
+  await page.waitForSelector('.bgm__form .chip');
+  if (state === 'form') return;
+  const trackId = await page.evaluate(async () => {
+    const auth = { authorization: `Bearer ${localStorage.getItem('loopscene.token')}` };
+    const list = await (await fetch('/v1/tracks?limit=1', { headers: auth })).json().catch(() => null);
+    return list?.items?.[0]?.trackId ?? null;
+  });
+  const job = {
+    jobId: '00000000-0000-4000-8000-00000000b6e0', projectId: '00000000-0000-4000-8000-00000000b6e1', trackId: state === 'ready' ? trackId : null,
+    mode: 'simple', prompt: '', styles: ['japanese healing'], energy: 0.5, visibility: 'private', instrumental: true, title: null, lyrics: null,
+    errorCode: state === 'failed' ? 'output_check_failed' : null, failureReason: null, queuePosition: null, queueDeadlineAt: null, phase: state === 'making' ? 'generating' : state === 'ready' ? 'done' : 'failed',
+    state: state === 'failed' ? 'FAILED' : state === 'ready' ? 'DELIVERED' : 'SUBMITTED', durationSeconds: 30,
+    estimate: { minSeconds: 60, maxSeconds: 180 }, createdAt: '2026-11-27T09:00:00Z', updatedAt: '2026-11-27T09:00:00Z',
+    demo: true, credit: state === 'failed' ? 'refunded' : 'reserved', failure: state === 'failed' ? 'technical' : null,
+  };
+  await page.route('**/v1/generations', (route) => route.fulfill({ status: 202, json: { ...job, deduplicated: false } }));
+  await page.route('**/v1/jobs/00000000-0000-4000-8000-00000000b6e0', (route) => route.fulfill({ json: job }));
+  if (state === 'ready' && trackId) {
+    await page.route(`**/v1/tracks/${trackId}`, async (route) => {
+      const response = await route.fetch();
+      const body = await response.json();
+      await route.fulfill({ response, json: { ...body, kind: 'bgm', title: 'Vlog BGM · Healing', durationSeconds: 30,
+        bgm: { scenario: 'vlog', genre: 'japanese_healing', mood: 'warm', durationSeconds: 30, tempo: 'medium', note: '' } } });
+    });
+  }
+  await page.locator('.bgm__form .btn--primary').click();
+  await page.waitForSelector(state === 'ready' ? '.bgm__actions' : '.bgm__job h2', { timeout: 15_000 });
 }
 
 async function openSceneMv(page, state) {

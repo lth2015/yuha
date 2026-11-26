@@ -325,6 +325,8 @@ export function Layout({ children }: { children: ReactNode }) {
         ? [{ to: `/song/${trialSong}`, key: 'nav.trialSong', end: true }]
         : []
       : [{ to: '/library', key: 'nav.library', end: false }]),
+    // AI BGM, where it is open to this viewer (docs/BGM_STUDIO_PLAN.md).
+    ...(runtime?.features?.bgmStudio && me && me.role !== 'guest' ? [{ to: '/bgm', key: 'nav.bgm', end: false }] : []),
   ];
 
   return (
