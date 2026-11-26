@@ -329,3 +329,8 @@ export async function stopAndScrubSceneMvs(trackId: string): Promise<void> {
 export async function deleteSceneMvs(trackId: string): Promise<void> {
   await execute(`DELETE FROM scene_mvs WHERE track_id = ?`, [trackId]);
 }
+
+/** A shot's file has been deleted: its record no longer points at it. */
+export async function forgetShotClips(sceneMvId: string, shotId: string): Promise<void> {
+  await execute(`UPDATE scene_mv_shots SET clip_key = NULL WHERE id = ? AND scene_mv_id = ?`, [shotId, sceneMvId]);
+}
