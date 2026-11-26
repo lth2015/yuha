@@ -17,10 +17,10 @@ export interface GiftInvitationRow {
   revoked_at: Date | null;
 }
 
-export const giftTokenHash = (token: string) => createHash('sha256').update(token, 'utf8').digest('hex');
+const giftTokenHash = (token: string) => createHash('sha256').update(token, 'utf8').digest('hex');
 
 /** 32 random bytes, base64url: 43 characters, never derived from any id. */
-export function newGiftToken(): string {
+function newGiftToken(): string {
   return randomBytes(32).toString('base64url');
 }
 
@@ -44,7 +44,7 @@ export async function insertGiftInvitation(params: {
   return { row: (await getGiftInvitation(id))!, token };
 }
 
-export async function getGiftInvitation(id: string): Promise<GiftInvitationRow | null> {
+async function getGiftInvitation(id: string): Promise<GiftInvitationRow | null> {
   return (await queryOne<GiftInvitationRow>(`SELECT ${COLUMNS} FROM gift_invitations WHERE id = ?`, [id])) ?? null;
 }
 
