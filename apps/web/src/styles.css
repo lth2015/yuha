@@ -2922,6 +2922,21 @@ textarea.is-full { border-color: var(--danger); }
 .photo-video__alt summary { cursor: pointer; min-height: 44px; display: flex; align-items: center; color: var(--link); font-size: var(--t-body); }
 .photo-video__alt[open] { gap: var(--s3); }
 .photo-video__sync { display: grid; gap: var(--s3); justify-items: start; min-width: 0; }
+/* Videos made on this device, in My songs (components/LocalVideos.tsx). */
+.local-videos { display: grid; gap: var(--s3); }
+.local-videos h2 { margin: 0; font-size: var(--t-title); font-weight: 600; }
+.local-videos__note { margin: 0; font-size: var(--t-caption); color: var(--muted); line-height: 1.6; }
+.local-videos__list { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--s3); grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); }
+.local-videos__item { display: grid; gap: var(--s2); align-content: start; min-width: 0; }
+.local-videos__poster, .local-videos__player {
+  width: 100%; aspect-ratio: 9 / 16; border-radius: var(--r-control); background: #1d1f1c center / cover no-repeat; border: 0; display: block;
+}
+.local-videos__poster { cursor: pointer; display: grid; place-items: center; background-image: linear-gradient(160deg, var(--violet), var(--petal-deep)); color: #fff; }
+.local-videos__poster .icon { width: 36px; height: 36px; filter: drop-shadow(0 1px 3px rgb(0 0 0 / 50%)); }
+.local-videos__meta { display: grid; gap: 4px; min-width: 0; }
+.local-videos__title { font-size: var(--t-body); font-weight: 600; color: var(--ink); text-decoration: none; overflow-wrap: anywhere; }
+.local-videos__actions { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s2); }
+.local-videos .btn { white-space: normal; text-align: center; max-width: 100%; }
 /* Lyric timing inside the video card (components/LyricSyncStudio.tsx). */
 .sync-studio { display: grid; gap: var(--s3); width: 100%; min-width: 0; padding: var(--s4); border: 1px solid var(--line); border-radius: var(--r-control); background: var(--surface-solid); }
 .sync-studio__lead { margin: 0; color: var(--muted); font-size: var(--t-body); line-height: 1.7; }

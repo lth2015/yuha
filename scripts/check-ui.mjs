@@ -142,6 +142,7 @@ const PAGES = [
   // AI re-create: the song's lyrics in the editor, with the lyric tools.
   { name: 'create-edit', path: '/create?edit=:track', as: 'creator', prepare: openEditLyrics },
   { name: 'library-trial-claim', path: '/library', as: 'creator', prepare: offerTrialSong },
+  { name: 'library-device-videos', path: '/library', as: 'creator', prepare: keepDeviceVideos },
   { name: 'song', path: '/song/:track', as: 'creator' },
   { name: 'song-public-view', path: '/song/:track', as: null },
   // The holidays (docs/HOLIDAY_SPEC.md): seen early through the staff preview, and the gift a recipient opens.
@@ -192,6 +193,49 @@ async function openLyricSync(page) {
   }
   await page.click('.photo-video__sync > .btn');
   await page.waitForSelector('.sync-studio__block', { timeout: 10_000 });
+}
+
+/*
+ * Videos kept on this device (components/LocalVideos.tsx): three of them, put
+ * straight into the browser's storage, so My songs draws its section — which
+ * it never does with none, and the fixtures make none.
+ */
+async function keepDeviceVideos(page) {
+  await page.evaluate(async () => {
+    const auth = { headers: { authorization: `Bearer ${localStorage.getItem('loopscene.token')}` } };
+    const me = await (await fetch('/v1/me', auth)).json();
+    // A real song of this account, so each title links somewhere that exists.
+    const trackId = (await (await fetch('/v1/tracks', auth)).json()).items[0].trackId;
+    const db = await new Promise((resolve, reject) => {
+      const req = indexedDB.open('yuha-local', 1);
+      req.onupgradeneeded = () => req.result.createObjectStore('videos', { keyPath: 'id' });
+      req.onsuccess = () => resolve(req.result);
+      req.onerror = () => reject(req.error);
+    });
+    await new Promise((resolve, reject) => {
+      const tx = db.transaction('videos', 'readwrite');
+      const titles = ['和家人一起做早饭的冬天早晨', 'Kitchen Light', '夏の終わりの帰り道'];
+      titles.forEach((title, i) =>
+        tx.objectStore('videos').put({
+          id: `ui-check-${i}`,
+          ownerId: me.userId,
+          trackId,
+          title,
+          kind: i % 2 ? 'cover' : 'photo',
+          seconds: [60, 245, 30][i],
+          createdAt: Date.now() - i * 3_600_000,
+          bytes: 1000,
+          poster: null,
+          blob: new Blob([new Uint8Array(1000)], { type: 'video/mp4' }),
+        }),
+      );
+      tx.oncomplete = resolve;
+      tx.onerror = () => reject(tx.error);
+    });
+    db.close();
+  });
+  await page.reload({ waitUntil: 'networkidle' });
+  await page.waitForSelector('.local-videos__item', { timeout: 10_000 });
 }
 
 async function writeThreeVersions(page) {
