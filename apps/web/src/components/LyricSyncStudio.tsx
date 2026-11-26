@@ -3,8 +3,8 @@ import { markCorrected, setLineStart, shiftTimings, type LyricTimings } from '@y
 import { ApiError, apiFetch } from '../lib/api';
 import { useI18n } from '../lib/i18n';
 import { activeLineIndex, resolveLyricTimings } from '../lib/lyrics';
-import { usePlayer } from '../lib/player';
-import { lineRange, loopRange, moveLine, windowAround } from '../lib/sync-studio';
+import { formatTime, usePlayer } from '../lib/player';
+import { lineRange, loopRange, moveLine } from '../lib/sync-studio';
 import { ErrorNotice } from './common';
 
 /**
@@ -20,7 +20,18 @@ import { ErrorNotice } from './common';
  * Nothing here re-makes the song or the video. A nudge changes numbers on this
  * page at once; Save writes them; the next video made uses them.
  */
-const SPAN_LINE = 12;
+/** Pixels per second of song in the lane at least, at most before zooming, and the zoom's factor. */
+const PX_NORMAL = 36;
+const PX_MAX_BASE = 90;
+const ZOOM = 2.5;
+/** The height a line needs for one row of words. */
+const ROW_PX = 22;
+/** Room above the first second and below the last, so neither sits on the lane's edge. */
+const LANE_PAD = 12;
+/** A time mark every this many seconds. */
+const TICK_SECONDS = 5;
+/** The tallest canvas drawn, in device pixels (iOS Safari refuses much larger). */
+const MAX_CANVAS_PX = 16_000;
 const fmt = (s: number) => {
   const m = Math.floor(s / 60);
   const rest = s - m * 60;
@@ -122,28 +133,22 @@ export function LyricSyncStudio({
   };
   useEffect(() => setLoop(null), [sel]);
 
-  const [zoom, setZoom] = useState<'line' | 'song'>('line');
   /*
-   * Held still while a block is dragged: the window follows the chosen line,
-   * and following it mid-drag slid the waveform under a block that stayed put.
+   * The lane: time runs down the page, so on a phone each line's words sit
+   * beside its time at full width instead of squeezed into a sideways strip
+   * (product owner, 2026-11-26). `pxPerSecond` is the whole layout.
    */
-  const [frozen, setFrozen] = useState<{ from: number; to: number } | null>(null);
-  const view =
-    frozen ??
-    (zoom === 'song' ? { from: 0, to: duration } : windowAround(line ? (line.start + line.end) / 2 : 0, SPAN_LINE, duration));
-  const span = Math.max(0.1, view.to - view.from);
-  const pct = (s: number) => `${(((s - view.from) / span) * 100).toFixed(2)}%`;
+  const [zoomed, setZoomed] = useState(false);
   /*
-   * A block is drawn inside the window and short of the next line, with a
-   * hair of gap: a line that runs to the edge, or whose end overlaps the
-   * next start in the data, would otherwise spill past the timeline or sit
-   * on top of its neighbour.
+   * Enough pixels a second that the shortest line still has a row of words
+   * and a finger's worth of height: at a fixed scale a 0.4 s line was a
+   * wordless sliver nobody could pick. The zoom multiplies from there.
    */
-  const blockStyle = (from: number, to: number) => {
-    const a = Math.max(from, view.from);
-    const b = Math.min(to, view.to);
-    return { left: pct(a), width: `calc(${pct(b)} - ${pct(a)} - 2px)` };
-  };
+  const shortest = Math.max(0.3, Math.min(...lines.map((l, i) => Math.min(l.end, lines[i + 1]?.start ?? l.end) - l.start).filter((d) => d > 0), 99));
+  const base = Math.min(PX_MAX_BASE, Math.max(PX_NORMAL, ROW_PX / shortest));
+  const pxPerSecond = zoomed ? base * ZOOM : base;
+  const laneHeight = Math.ceil(duration * pxPerSecond) + LANE_PAD * 2;
+  const y = (seconds: number) => LANE_PAD + seconds * pxPerSecond;
 
   // The song's loudness (GET /v1/tracks/:id/waveform). A picture only; failing to get it changes nothing else.
   const [wave, setWave] = useState<{ peaks: number[]; seconds: number } | 'failed' | null>(null);
@@ -169,28 +174,74 @@ export function LyricSyncStudio({
   useEffect(() => {
     const c = canvas.current;
     if (!c || !wave || wave === 'failed') return;
-    const w = (c.width = c.clientWidth * (window.devicePixelRatio || 1));
-    const h = (c.height = c.clientHeight * (window.devicePixelRatio || 1));
+    // A whole song at the fine zoom is tall: keep the canvas under what
+    // iOS Safari will allocate, trading a little sharpness for drawing at all.
+    const scale = Math.min(window.devicePixelRatio || 1, MAX_CANVAS_PX / Math.max(1, laneHeight));
+    const w = (c.width = Math.round(c.clientWidth * scale));
+    const h = (c.height = Math.round(laneHeight * scale));
     const g = c.getContext('2d');
     if (!g) return;
     g.clearRect(0, 0, w, h);
     g.fillStyle = getComputedStyle(c).color;
     const perSecond = wave.peaks.length / Math.max(0.1, wave.seconds);
-    for (let x = 0; x < w; x += 2) {
-      const s = view.from + (x / w) * span;
-      const p = wave.peaks[Math.floor(s * perSecond)] ?? 0;
-      const bar = Math.max(1, p * h * 0.9);
-      g.fillRect(x, (h - bar) / 2, 1.5, bar);
+    const step = Math.max(1, Math.round(2 * scale));
+    for (let py = 0; py < h; py += step) {
+      const s = (py / scale - LANE_PAD) / pxPerSecond;
+      const p = s < 0 ? 0 : (wave.peaks[Math.floor(s * perSecond)] ?? 0);
+      const bar = Math.max(1, p * w * 0.9);
+      g.fillRect((w - bar) / 2, py, bar, Math.max(1, step * 0.75));
     }
-  }, [wave, view.from, span]);
+  }, [wave, laneHeight, pxPerSecond]);
+
+  /*
+   * The lane follows the playhead while the song plays, a third of the way
+   * down, unless the person has just scrolled it themselves: then it waits,
+   * so it never yanks away the line they went looking for.
+   */
+  const lane = useRef<HTMLDivElement>(null);
+  const handsOnUntil = useRef(0);
+  /** Where this component last scrolled the lane to: any other scroll is the person's. */
+  const ourScroll = useRef<number | null>(null);
+  const handsOn = () => {
+    handsOnUntil.current = Date.now() + 4000;
+  };
+  const scrollLane = (top: number) => {
+    const el = lane.current;
+    if (!el) return;
+    ourScroll.current = Math.max(0, Math.min(top, el.scrollHeight - el.clientHeight));
+    el.scrollTo({ top: ourScroll.current });
+  };
+  useEffect(() => {
+    const el = lane.current;
+    if (!el || !playing || Date.now() < handsOnUntil.current || drag.current) return;
+    const target = y(now) - el.clientHeight / 3;
+    if (Math.abs(el.scrollTop - target) > el.clientHeight / 4) scrollLane(target);
+  }, [now, playing]);
+  // A zoom change keeps the chosen line in view.
+  useEffect(() => {
+    const el = lane.current;
+    const l = lines[sel];
+    if (!el || !l) return;
+    const top = y(l.start);
+    if (top < el.scrollTop || top > el.scrollTop + el.clientHeight - 40) scrollLane(top - el.clientHeight / 3);
+  }, [zoomed]);
+  /*
+   * A tap on the lane plays from there; a touch that scrolls it does not.
+   * Seeking on pointerdown started the song every time a finger landed to
+   * scroll, so the decision waits for the click, which a scroll cancels,
+   * and checks the pointer barely moved.
+   */
+  const press = useRef<{ x: number; y: number; top: number } | null>(null);
 
   // Dragging the chosen line's block moves its start; one undo step per drag.
-  const track = useRef<HTMLDivElement>(null);
-  const drag = useRef<{ x: number; base: LyricTimings; start: number } | null>(null);
-  const timeAt = (clientX: number) => {
-    const box = track.current!.getBoundingClientRect();
-    return view.from + ((clientX - box.left) / Math.max(1, box.width)) * span;
+  const drag = useRef<{ y: number; base: LyricTimings; start: number } | null>(null);
+  /** Touch drags start on the grip, so the rest of a tall chosen block still scrolls the lane. */
+  const grabs = (e: React.PointerEvent) => e.pointerType === 'mouse' || !!(e.target as HTMLElement).closest('.sync-studio__grip');
+  const timeAt = (clientY: number) => {
+    const box = lane.current!.getBoundingClientRect();
+    return (clientY - box.top + lane.current!.scrollTop - LANE_PAD) / pxPerSecond;
   };
+  const ticks = Array.from({ length: Math.floor(duration / TICK_SECONDS) + 1 }, (_, i) => i * TICK_SECONDS);
 
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<unknown>(null);
@@ -246,71 +297,97 @@ export function LyricSyncStudio({
           <span className={`lyrics-sync__pill${shown.source === 'estimated' ? '' : ' is-aligned'}`}>
             {t(shown.source === 'corrected' ? 'lyrics.corrected' : shown.source === 'aligned' ? 'lyrics.aligned' : 'lyrics.estimated')}
           </span>
-          <span className="sync-studio__zoom" role="group" aria-label={t('sync.zoom')}>
-            <button type="button" className="chip chip--btn" aria-pressed={zoom === 'line'} onClick={() => setZoom('line')}>
-              {t('sync.zoom.line')}
-            </button>
-            <button type="button" className="chip chip--btn" aria-pressed={zoom === 'song'} onClick={() => setZoom('song')}>
-              {t('sync.zoom.song')}
-            </button>
-          </span>
+          <button type="button" className="chip chip--btn" aria-pressed={zoomed} onClick={() => setZoomed((z) => !z)}>
+            {t(zoomed ? 'sync.zoomOut' : 'sync.zoomIn')}
+          </button>
         </div>
       </div>
 
       <div
-        ref={track}
-        className="sync-studio__timeline"
+        ref={lane}
+        className="sync-studio__lane"
         aria-label={t('sync.timeline')}
-        onPointerDown={(e) => {
-          if ((e.target as HTMLElement).closest('.sync-studio__block')) return;
-          // Going somewhere else ends the loop; otherwise it would pull straight back.
-          setLoop(null);
-          seek(Math.max(0, Math.min(duration, timeAt(e.clientX))));
+        onScroll={(e) => {
+          const top = e.currentTarget.scrollTop;
+          if (ourScroll.current !== null && Math.abs(top - ourScroll.current) < 2) return;
+          ourScroll.current = null;
+          handsOn();
         }}
       >
-        <canvas ref={canvas} className="sync-studio__wave" aria-hidden="true" />
-        {lines.map((l, i) =>
-          l.end < view.from || l.start > view.to ? null : (
-            <button
-              key={i}
-              type="button"
-              className={`sync-studio__block${i === sel ? ' is-selected' : ''}${i === current ? ' is-current' : ''}`}
-              style={blockStyle(l.start, Math.min(l.end, lines[i + 1]?.start ?? l.end))}
-              aria-label={`${i + 1}. ${l.text} ${fmt(l.start)}`}
-              aria-pressed={i === sel}
-              onClick={() => setSelected(i)}
-              onPointerDown={(e) => {
-                if (i !== sel || saving) return;
-                e.currentTarget.setPointerCapture(e.pointerId);
-                drag.current = { x: e.clientX, base: draft ?? saved, start: l.start };
-                setFrozen(view);
-              }}
-              onPointerMove={(e) => {
-                const d = drag.current;
-                if (!d || !track.current) return;
-                const seconds = ((e.clientX - d.x) / Math.max(1, track.current.getBoundingClientRect().width)) * span;
-                if (Math.abs(seconds) < 0.02) return;
-                setDragging(setLineStart(d.base, sel, d.start + seconds, duration));
-              }}
-              onPointerUp={() => {
-                drag.current = null;
-                if (dragging) commit(dragging);
-                setDragging(null);
-                setFrozen(null);
-              }}
-              onPointerCancel={() => {
-                drag.current = null;
-                setDragging(null);
-                setFrozen(null);
-              }}
-            >
-              <span>{l.text}</span>
-            </button>
-          ),
-        )}
-        {active && now >= view.from && view.to >= now && <span className="sync-studio__cursor" style={{ left: pct(now) }} aria-hidden="true" />}
+        <div
+          className="sync-studio__track"
+          style={{ height: laneHeight }}
+          onPointerDown={(e) => {
+            press.current = { x: e.clientX, y: e.clientY, top: lane.current?.scrollTop ?? 0 };
+          }}
+          onClick={(e) => {
+            const pr = press.current;
+            press.current = null;
+            if ((e.target as HTMLElement).closest('.sync-studio__block')) return;
+            if (!pr || Math.abs(e.clientX - pr.x) > 8 || Math.abs(e.clientY - pr.y) > 8 || Math.abs((lane.current?.scrollTop ?? 0) - pr.top) > 2) return;
+            // Going somewhere else ends the loop; otherwise it would pull straight back.
+            setLoop(null);
+            handsOn();
+            seek(Math.max(0, Math.min(duration, timeAt(e.clientY))));
+          }}
+        >
+          <canvas ref={canvas} className="sync-studio__wave" style={{ height: laneHeight }} aria-hidden="true" />
+          {ticks.map((s) => (
+            <span key={s} className="sync-studio__tick num" style={{ top: y(s) }} aria-hidden="true">
+              {formatTime(s)}
+            </span>
+          ))}
+          {lines.map((l, i) => {
+            const end = Math.min(l.end, lines[i + 1]?.start ?? l.end);
+            const height = Math.max(4, (end - l.start) * pxPerSecond - 2);
+            return (
+              <button
+                key={i}
+                type="button"
+                className={`sync-studio__block${i === sel ? ' is-selected' : ''}${i === current ? ' is-current' : ''}`}
+                style={{ top: y(l.start), height }}
+                aria-label={`${i + 1}. ${l.text} ${fmt(l.start)}`}
+                aria-pressed={i === sel}
+                onClick={() => setSelected(i)}
+                onPointerDown={(e) => {
+                  if (i !== sel || saving || !grabs(e)) return;
+                  e.currentTarget.setPointerCapture(e.pointerId);
+                  drag.current = { y: e.clientY, base: draft ?? saved, start: l.start };
+                }}
+                onPointerMove={(e) => {
+                  const d = drag.current;
+                  if (!d) return;
+                  const seconds = (e.clientY - d.y) / pxPerSecond;
+                  if (Math.abs(seconds) < 0.02) return;
+                  setDragging(setLineStart(d.base, sel, d.start + seconds, duration));
+                }}
+                onPointerUp={() => {
+                  drag.current = null;
+                  if (dragging) commit(dragging);
+                  setDragging(null);
+                }}
+                onPointerCancel={() => {
+                  drag.current = null;
+                  setDragging(null);
+                }}
+              >
+                {/* One row, cut with an ellipsis, when the line is short; it
+                    wraps when there is room. The chosen line is written out
+                    in full below either way. */}
+                <span className={`sync-studio__label${height < ROW_PX * 2 ? ' is-short' : ''}`}>
+                  {i === sel && (
+                    <span className="sync-studio__grip" aria-hidden="true">
+                      ⇅
+                    </span>
+                  )}
+                  <span className="num sync-studio__at">{fmt(l.start)}</span> {l.text}
+                </span>
+              </button>
+            );
+          })}
+          {active && <span className="sync-studio__cursor" style={{ top: y(now) }} aria-hidden="true" />}
+        </div>
       </div>
-      <p className="small muted sync-studio__wavenote">{t(wave === 'failed' ? 'sync.wave.failed' : 'sync.wave.note')}</p>
 
       {line && range && (
         <fieldset className="sync-studio__fix">
@@ -345,21 +422,7 @@ export function LyricSyncStudio({
           <p className="small muted">{t('sync.range', { min: fmt(range.min), max: fmt(range.max) })}</p>
         </fieldset>
       )}
-
-      <ol className="sync-studio__lines">
-        {lines.map((l, i) => (
-          <li key={i}>
-            <button
-              type="button"
-              className={`sync-studio__line${i === sel ? ' is-selected' : ''}${i === current ? ' is-current' : ''}`}
-              aria-pressed={i === sel}
-              onClick={() => setSelected(i)}
-            >
-              <span className="num">{fmt(l.start)}</span> {l.text}
-            </button>
-          </li>
-        ))}
-      </ol>
+      <p className="small muted sync-studio__wavenote">{t(wave === 'failed' ? 'sync.wave.failed' : 'sync.wave.note')}</p>
 
       <fieldset className="sync-studio__fix">
         <legend>{t('sync.whole')}</legend>

@@ -4,8 +4,7 @@
  * The moving itself is `setLineStart` in @yuha/contracts, the one place that
  * keeps a timeline a timeline; these are the workspace's own decisions on top:
  * a step in seconds, how far a line may go, what "listen to this line" plays,
- * which slice of the song is on screen, and an undo that walks back as far as
- * what is saved.
+ * and an undo that walks back as far as what is saved.
  */
 import { MIN_LINE_SECONDS, setLineStart, type LyricTimings } from '@yuha/contracts';
 
@@ -33,13 +32,6 @@ export function loopRange(lines: Lines, index: number, duration: number): { from
   const line = lines[index];
   if (!line) return { from: 0, to: duration };
   return { from: r3(Math.max(0, line.start - 2)), to: r3(Math.min(duration, line.end + 1)) };
-}
-
-/** `span` seconds of the song around `centre`, never outside it. */
-export function windowAround(centre: number, span: number, duration: number): { from: number; to: number } {
-  if (span >= duration) return { from: 0, to: duration };
-  const from = Math.min(Math.max(0, centre - span / 2), duration - span);
-  return { from: r3(from), to: r3(from + span) };
 }
 
 /**

@@ -2,7 +2,7 @@
  * The lyric timing workspace's rules (docs/MV_LYRIC_SYNC_UX_SPEC.md, phase 1),
  * pure so they can be held to: one line moves without dragging the others,
  * undo and redo walk the edits, the loop is the line with a little either
- * side, and the visible window stays inside the song.
+ * side.
  */
 import { describe, expect, it } from 'vitest';
 import type { LyricTimings } from '@yuha/contracts';
@@ -14,7 +14,6 @@ import {
   record,
   redo,
   undo,
-  windowAround,
 } from '../apps/web/src/lib/sync-studio.js';
 
 const timings = (starts: number[]): LyricTimings => ({
@@ -65,14 +64,5 @@ describe('listening to one line', () => {
     expect(loopRange(lines, 1, 30)).toEqual({ from: 4, to: 10.9 });
     expect(loopRange(lines, 0, 30)).toEqual({ from: 0, to: 6.9 });
     expect(loopRange(timings([28]).lines, 0, 30)).toEqual({ from: 26, to: 30 });
-  });
-});
-
-describe('the visible window', () => {
-  it('is centred on the moment, kept inside the song, and the whole song when it is shorter', () => {
-    expect(windowAround(60, 12, 200)).toEqual({ from: 54, to: 66 });
-    expect(windowAround(2, 12, 200)).toEqual({ from: 0, to: 12 });
-    expect(windowAround(198, 12, 200)).toEqual({ from: 188, to: 200 });
-    expect(windowAround(5, 12, 8)).toEqual({ from: 0, to: 8 });
   });
 });

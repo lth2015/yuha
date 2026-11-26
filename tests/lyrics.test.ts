@@ -3,7 +3,7 @@
  * These are the properties the karaoke display depends on.
  */
 import { describe, expect, it } from 'vitest';
-import { activeLineIndex, buildLyricTimeline, lineProgress, resolveLyricTimings } from '../apps/web/src/lib/lyrics.js';
+import { activeLineIndex, buildLyricTimeline, lineProgress, resolveLyricTimings, sungLyrics } from '../apps/web/src/lib/lyrics.js';
 
 const LYRICS = `[Verse]
 City lights blur into gold
@@ -148,5 +148,19 @@ describe('lineProgress with aligned words', () => {
   });
   it('falls back to time when the line has no words', () => {
     expect(lineProgress([{ ...line, words: undefined }], 0, 15)).toBeCloseTo(0.5);
+  });
+});
+
+describe('sungLyrics: whether a song has words to sync', () => {
+  it('is the lyrics of a sung song', () => {
+    expect(sungLyrics({ vocalMode: 'with_vocals', lyrics: '[verse]\nhello' })).toBe('[verse]\nhello');
+  });
+  it('is nothing for an instrumental, even one that carries text', () => {
+    expect(sungLyrics({ vocalMode: 'instrumental', lyrics: '[verse]\nhello' })).toBeNull();
+  });
+  it('is nothing for a song sung without words, or with only section tags', () => {
+    expect(sungLyrics({ vocalMode: 'with_vocals', lyrics: null })).toBeNull();
+    expect(sungLyrics({ vocalMode: 'with_vocals', lyrics: '  \n ' })).toBeNull();
+    expect(sungLyrics({ vocalMode: 'with_vocals', lyrics: '[intro]\n[outro]' })).toBeNull();
   });
 });
