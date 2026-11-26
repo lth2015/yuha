@@ -10,7 +10,9 @@ services:
     restart: unless-stopped
     env_file: .env
     ports:
-      - "${HOST_PORT:-8100}:8100"
+      # Loopback only: the public side is the TLS proxy on 443. Docker's published
+      # ports bypass ufw, so a 0.0.0.0 bind here would be open whatever the firewall says.
+      - "${BIND_ADDR:-127.0.0.1}:${HOST_PORT:-8100}:8100"
     volumes:
       - ${HOME}/.cache/huggingface:/root/.cache/huggingface   # weights, downloaded on first start
       - ./data:/data                                         # jobs + clips, swept after RETENTION_HOURS
