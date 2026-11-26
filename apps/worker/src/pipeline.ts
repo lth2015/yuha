@@ -14,6 +14,9 @@ import {
   recordCostEvent,
   releaseLease,
   releaseReservation,
+  enqueueLyricSync,
+  getMasterAsset,
+  getUser,
   storeDeliveredLyricTimings,
   transitionJob,
   updateAttempt,
@@ -568,6 +571,28 @@ async function processAudio(
     await recordMusicCost(ctx, { job: processing, attemptId, eventType: 'success' });
     log('info', 'delivered', { jobId: job.id, trackId: delivered.trackId });
 
+    // Automatic sync: a durable job aligns the song after delivery and
+    // applies the result itself (lyric-sync.ts), so delivery does not wait
+    // for the aligner and a pod roll does not lose the alignment. If the job
+    // cannot be queued, the song is aligned here as before: the song is
+    // already delivered, and nothing about its sync may undo that.
+    if (intent.lyrics && intent.vocalMode === 'with_vocals' && (await autoSyncFor(ctx, job.user_id))) {
+      const queued = await (async () => {
+        const master = await getMasterAsset(delivered.trackId);
+        if (!master) return false;
+        await enqueueLyricSync({ trackId: delivered.trackId, masterSha: master.sha256, lyrics: intent.lyrics!, trigger: 'delivery' });
+        return true;
+      })().catch((err) => {
+        log('warn', 'lyric sync could not be queued', { jobId: job.id, error: (err as Error).message });
+        return false;
+      });
+      if (queued) {
+        log('info', 'lyric sync queued', { jobId: job.id, trackId: delivered.trackId });
+        return;
+      }
+      log('warn', 'aligning during delivery instead', { jobId: job.id, trackId: delivered.trackId });
+    }
+
     // Synced lyrics: line timings for songs with lyrics. With no real
     // vocal-sync model configured this is the estimator, labelled as such;
     // failure never affects delivery itself.
@@ -620,4 +645,14 @@ async function processAudio(
       }
     }
   }
+}
+
+/** Whether this owner's new songs go through the automatic sync queue (LYRIC_AUTO_SYNC). */
+async function autoSyncFor(ctx: AppContext, ownerId: string): Promise<boolean> {
+  const mode = ctx.config.LYRIC_AUTO_SYNC;
+  if (mode === 'all') return true;
+  if (mode !== 'staff') return false;
+  const role = (await getUser(ownerId).catch(() => undefined))?.role;
+  // Unknown (the lookup failed) is not staff: the song is aligned during delivery, as for anyone.
+  return role === 'admin' || role === 'support';
 }

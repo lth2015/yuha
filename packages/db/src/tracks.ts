@@ -118,14 +118,22 @@ export async function storeDeliveredLyricTimings(params: {
   /** The lyrics the timeline was made from. */
   lyrics: string;
   timings: StoredLyricTimings;
+  /**
+   * The delivered audio the timeline was made from. When given, the write is
+   * refused unless the song's master is still that file.
+   */
+  masterSha?: string;
 }): Promise<boolean> {
   const estimate = params.timings.source !== 'aligned';
+  const audio = params.masterSha
+    ? ` AND EXISTS (SELECT 1 FROM asset_versions av WHERE av.track_id = tracks.id AND av.kind = 'master' AND av.sha256 = ?)`
+    : '';
   const r = await execute(
     `UPDATE tracks SET lyric_timings = ?, updated_at = UTC_TIMESTAMP(3)
       WHERE id = ? AND deleted_at IS NULL AND lyrics = ?
         AND (lyric_timings IS NULL
-             OR JSON_UNQUOTE(JSON_EXTRACT(lyric_timings, '$.source')) IN (${estimate ? "'estimated'" : "'estimated', 'aligned'"}))`,
-    [JSON.stringify(params.timings), params.trackId, params.lyrics],
+             OR JSON_UNQUOTE(JSON_EXTRACT(lyric_timings, '$.source')) IN (${estimate ? "'estimated'" : "'estimated', 'aligned'"}))${audio}`,
+    [JSON.stringify(params.timings), params.trackId, params.lyrics, ...(params.masterSha ? [params.masterSha] : [])],
   );
   return r.affectedRows > 0;
 }

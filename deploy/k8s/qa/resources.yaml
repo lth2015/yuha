@@ -252,6 +252,12 @@ spec:
               value: "true"
             - name: FEATURE_GUEST_TRIAL_ENABLED
               value: "true"
+            # Automatic lyric sync (docs/AUTOMATIC_LYRIC_SYNC_TICKETS.md L4a):
+            # staff members' new songs only, the small production check before
+            # widening. "all" for everyone; "off" goes back to aligning during
+            # delivery. Read by the worker, which is where delivery happens.
+            - name: LYRIC_AUTO_SYNC
+              value: "staff"
           envFrom:
             - configMapRef:
                 name: qa-music-worker-config

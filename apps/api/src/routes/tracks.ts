@@ -37,6 +37,7 @@ import { LICENSE_DISCLAIMER } from '../services/delivery.js';
 import { screenDedication } from '../services/generation.js';
 import { toPublicTrackView } from './explore.js';
 import { removeSceneMvsOfTrack } from '../services/scene-mv-cleanup.js';
+import { lyricSyncStateFor } from '../services/lyric-sync-state.js';
 
 async function toTrackView(
   ctx: AppContext,
@@ -73,6 +74,7 @@ async function toTrackView(
     durationSeconds: row.duration_ms / 1000,
     coverSeed: row.cover_seed,
     lyricTimings: clientTimings(row.lyric_timings),
+    lyricSync: await lyricSyncStateFor(row),
     dedication: row.dedication ?? null,
     licenseCount: await countLicenses(row.id),
     licensedByMe: viewerId === row.owner_id ? false : await hasLicense(row.id, viewerId),
@@ -159,6 +161,7 @@ export default async function trackRoutes(app: FastifyInstance, opts: { ctx: App
         previewUrl,
         licenseCount: lic.licenseCount,
         licensedByMe: lic.licensedByMe,
+        lyricSync: await lyricSyncStateFor(publicRow),
       }),
       lyrics: publicRow.lyrics,
       exports: [],

@@ -458,6 +458,12 @@ const envSchema = z.object({
    */
   FEATURE_LYRIC_AUTO_ALIGN_ENABLED: bool(false),
   /**
+   * Automatic lyric sync for new sung songs (docs/AUTOMATIC_LYRIC_SYNC_TICKETS.md L4a).
+   * off: aligned during delivery, as before. staff: only staff members' songs
+   * go through the durable sync queue. all: every new sung song does.
+   */
+  LYRIC_AUTO_SYNC: z.enum(['off', 'staff', 'all']).default('off'),
+  /**
    * The AI scene MV (docs/AI_SCENE_MV_SPEC.md). Off: staff only, for the
    * internal test. It also needs a video service (VIDEO_ADAPTER), without
    * which it is off for everyone.

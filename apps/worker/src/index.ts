@@ -4,6 +4,7 @@ import { ConfigError, createContext, loadConfig, removeSceneMv, sceneMvBudget } 
 import { closeDb, expiredSceneMvs } from '@yuha/db';
 import { sceneMvLoop } from './scene-mv.js';
 import { composeNextSceneMv } from './scene-mv-compose.js';
+import { lyricSyncLoop } from './lyric-sync.js';
 import {
   generationLoop,
   maintenanceLoop,
@@ -57,6 +58,8 @@ async function main(): Promise<void> {
     webhookLoop(deps),
     maintenanceLoop(deps),
     stablecoinScanLoop(deps),
+    // Automatic lyric sync (docs/AUTOMATIC_LYRIC_SYNC_TICKETS.md L4a); idles while the queue is empty.
+    lyricSyncLoop(deps),
     // The AI scene MV (docs/AI_SCENE_MV_SPEC.md); returns at once without a video service.
     sceneMvLoop({
       video: ctx.video,
