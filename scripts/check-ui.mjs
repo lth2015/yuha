@@ -135,6 +135,11 @@ const PAGES = [
   { name: 'home-trial-ask', path: '/', as: null, needs: 'guestTrialEnabled', prepare: openTrialAsk },
   { name: 'song-guest-owner', path: '/song/:guestTrack', as: 'guest', needs: 'guestTrialEnabled' },
   { name: 'song-photo-video', path: '/song/:track', as: 'creator', needs: 'photoVideoEnabled', prepare: openPhotoVideo },
+  // Synthetic HTTP fixtures measure every scene-MV state even while its production switch is off.
+  // They never submit GPU work; actual demo lifecycle acceptance is recorded separately.
+  ...['setup', 'draft', 'progress', 'ready', 'failed'].map((state) => ({
+    name: `song-scene-mv-${state}`, path: '/song/:track', as: 'creator', allLanguages: true, prepare: (page) => openSceneMv(page, state),
+  })),
   { name: 'song-lyric-sync', path: '/song/:sungTrack', as: 'creator', prepare: openLyricSync },
   { name: 'song-lyric-sync-auto', path: '/song/:sungTrack', as: 'creator', prepare: openLyricSyncAuto },
   // Three versions of the lyrics (docs/LYRIC_COWRITE_SPEC.md).
@@ -183,6 +188,36 @@ async function openTrialAsk(page) {
 async function openPhotoVideo(page) {
   await page.click('.photo-video__open');
   await page.waitForSelector('.photo-video', { timeout: 10_000 });
+}
+
+async function openSceneMv(page, state) {
+  await page.unroute('**/v1/runtime*');
+  await page.unroute('**/v1/tracks/*/scene-mvs');
+  await page.unroute('**/v1/scene-mvs/ui-scene-*');
+  await page.route('**/v1/runtime*', async (route) => {
+    const response = await route.fetch();
+    const body = await response.json();
+    body.features.sceneMv = true;
+    await route.fulfill({ response, json: body });
+  });
+  const trackId = new URL(page.url()).pathname.split('/').pop();
+  const fixture = {
+    id: `ui-scene-${state}`, trackId, status: state === 'progress' ? 'generating' : state,
+    style: 'seaside_sunset', clipStart: 15, clipEnd: 45, drawn: state === 'ready' ? 4 : 1, total: 4,
+    othersInProgress: 2, failure: state === 'failed' ? 'shot_failed' : null,
+    expiresAt: state === 'ready' ? '2099-12-03T09:00:00Z' : null, createdAt: '2026-11-26T09:00:00Z',
+    shots: [0, 1, 2, 3].map((idx) => ({ idx, status: idx === 0 ? 'succeeded' : 'pending',
+      ...(state === 'draft' ? { prompt: 'A quiet beach at sunset. Gentle waves and warm light, a slow pan along the shore. Vertical composition, no text, no people in close-up.' } : {}),
+    })),
+  };
+  await page.route('**/v1/tracks/*/scene-mvs', (route) => route.fulfill({ json: { items: state === 'setup' ? [] : [fixture] } }));
+  await page.route('**/v1/scene-mvs/ui-scene-*', (route) => route.fulfill({ json: fixture }));
+  await page.reload({ waitUntil: 'networkidle' });
+  await openPhotoVideo(page);
+  await page.locator('.scene-mv-entry > summary').click();
+  await page.waitForSelector('.scene-mv', { timeout: 10_000 });
+  if (state === 'setup') await page.waitForSelector('.scene-mv__styles img');
+  else await page.waitForSelector(state === 'draft' ? '.scene-mv__shots' : state === 'progress' ? '.scene-mv__progress' : state === 'ready' ? '.scene-mv__result' : '.scene-mv [role="status"]');
 }
 
 // The lyric timing workspace inside the video card (components/LyricSyncStudio.tsx).
@@ -749,11 +784,11 @@ let checked = 0;
 const CONCURRENCY = Number(process.env.UI_CONCURRENCY ?? 3);
 const lanes = [];
 for (const vp of VIEWPORTS) {
-  // Every language at phone widths, where length decides the layout;
-  // Chinese alone above that.
-  for (const lang of vp.width < 600 ? LANGS : ['zh']) {
+  // Phone layouts cover all languages; individual features may require the
+  // same full matrix at larger widths (the scene-MV brief does).
+  for (const lang of LANGS) {
     for (const as of [null, 'creator', 'admin', 'guest']) {
-      const pages = PAGES.filter((p) => p.as === as && (!only || p.name.includes(only)));
+      const pages = PAGES.filter((p) => p.as === as && (vp.width < 600 || lang === 'zh' || p.allLanguages) && (!only || p.name.includes(only)));
       if (pages.length) lanes.push({ vp, lang, as, pages, lines: [] });
     }
   }

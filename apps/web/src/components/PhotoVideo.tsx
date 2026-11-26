@@ -48,6 +48,7 @@ export function PhotoVideo({
   startOpen = false,
   studio,
   timingsUnsaved = false,
+  sceneMv,
 }: {
   song: ShareSong & { trackId: string; title: string; durationSeconds: number };
   labels: ShareLabels;
@@ -66,12 +67,18 @@ export function PhotoVideo({
   studio?: (photos: string[]) => ReactNode;
   /** Timing edits are waiting to be saved: a video now would not have them. */
   timingsUnsaved?: boolean;
+  /** The separately gated, asynchronous scene MV; photo processing is unchanged. */
+  sceneMv?: (visible: boolean) => ReactNode;
 }) {
   const { t } = useI18n();
   const { runtime, me } = useSession();
   const preview = runtime?.features.photoVideoPreview === true;
   const [open, setOpen] = useState(startOpen);
+  const [sceneOpen, setSceneOpen] = useState(false);
+  const [sceneVisited, setSceneVisited] = useState(false);
   const sectionRef = useRef<HTMLElement>(null);
+  const previewRef = useRef<HTMLVideoElement>(null);
+  useEffect(() => { if (!open) previewRef.current?.pause(); }, [open]);
   useEffect(() => {
     if (startOpen) sectionRef.current?.scrollIntoView({ block: 'start', behavior: 'smooth' });
   }, [startOpen]);
@@ -216,21 +223,22 @@ export function PhotoVideo({
   const canShareFiles =
     result.state === 'ready' && typeof navigator.canShare === 'function' && navigator.canShare({ files: [result.file] });
 
-  if (!open) {
-    // A card, not a line of link text: as a text link under the actions it was
-    // on the page and still not found by the person it was built for.
-    return (
-      <section className="photo-video photo-video--closed" aria-labelledby="photo-video-title">
-        <h2 id="photo-video-title">{t('video.title')}</h2>
+  const closed = (
+      <section className="photo-video photo-video--closed" aria-labelledby="photo-video-closed-title">
+        <h2 id="photo-video-closed-title">{t('video.title')}</h2>
         <p className="photo-video__lead">{t(photosEnabled ? 'video.lead' : 'video.leadCover')}</p>
         <button type="button" className="btn btn--primary btn--sm photo-video__open" onClick={() => setOpen(true)}>
           {t('video.open')}
         </button>
       </section>
-    );
-  }
+  );
 
   return (
+    <>
+    {!open && closed}
+    {/* Keep in-tab storyboard edits on either fold; display:none also keeps
+        closed details descendants out of layout and accessibility geometry. */}
+    <div hidden={!open}>
     <section className="photo-video" aria-labelledby="photo-video-title" ref={sectionRef}>
       <div className="photo-video__head">
         <h2 id="photo-video-title">{t('video.title')}</h2>
@@ -238,6 +246,11 @@ export function PhotoVideo({
           {t('photo.close')}
         </button>
       </div>
+
+      {sceneMv && <details className="scene-mv-entry" open={sceneOpen} onToggle={(e) => { setSceneOpen(e.currentTarget.open); if (e.currentTarget.open) setSceneVisited(true); }}>
+        <summary>{t('sceneMv.title')}</summary>
+        <div hidden={!sceneOpen}>{sceneVisited && sceneMv(open && sceneOpen)}</div>
+      </details>}
 
       <div className="photo-video__length" role="group" aria-label={t('video.length')}>
         <span className="small muted">{t('video.length')}</span>
@@ -395,7 +408,7 @@ export function PhotoVideo({
 
       {result.state === 'ready' && (
         <div className="photo-video__result" ref={resultRef}>
-          <video src={result.url} controls playsInline className="photo-video__preview" />
+          <video ref={previewRef} src={result.url} controls playsInline className="photo-video__preview" />
           <div className="photo-video__actions">
             {/* A web page cannot write to the phone's photo library: a download
                 lands in Files (iOS) or Downloads. The share sheet can — its
@@ -432,5 +445,7 @@ export function PhotoVideo({
         </div>
       )}
     </section>
+    </div>
+    </>
   );
 }
