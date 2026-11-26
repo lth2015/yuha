@@ -105,6 +105,26 @@ async function roomFor(b: SceneMvBudget, extra: number, conn: mysql.PoolConnecti
   return Number(row?.total ?? 0) + extra <= b.totalMicros && Number(row?.today ?? 0) + extra <= b.dailyMicros;
 }
 
+/**
+ * The budget lock held around a whole transaction, from a connection of its
+ * own, and released only after `work` has committed.
+ *
+ * Taken inside the transaction instead, it was released before the COMMIT:
+ * the next start acquired it while the first one's reservation was still
+ * uncommitted and invisible, read the old total, and both of two people
+ * racing for the last of the budget started (tests/scene-mv-budget.test.ts
+ * failed 5 runs in 6).
+ */
+async function holdingBudgetLock<T>(work: () => Promise<T>): Promise<T | 'locked'> {
+  const conn: mysql.PoolConnection = await db().getConnection();
+  try {
+    return await withBudgetLock(conn, work);
+  } finally {
+    conn.release();
+  }
+}
+
+/** For statements on an autocommit connection, where each write is committed before the lock is released. */
 async function withBudgetLock<T>(conn: mysql.PoolConnection, work: () => Promise<T>): Promise<T | 'locked'> {
   const got = await queryOne<{ ok: number | null }>(`SELECT GET_LOCK(?, 10) AS ok`, [BUDGET_LOCK], conn);
   if (Number(got?.ok) !== 1) return 'locked';
@@ -188,14 +208,13 @@ export async function queueSceneMv(
   budget?: SceneMvBudget | null,
 ): Promise<{ ok: true } | { ok: false; reason: 'not_found' | 'not_draft' | 'busy' | SceneMvBudgetRefusal }> {
   type Out = { ok: true } | { ok: false; reason: 'not_found' | 'not_draft' | 'busy' | SceneMvBudgetRefusal };
-  try {
-    return await withTx(async (tx): Promise<Out> => {
+  const run = () =>
+    withTx(async (tx): Promise<Out> => {
       const row = await queryOne<{ status: SceneMvStatus }>(`SELECT status FROM scene_mvs WHERE id = ? AND owner_id = ? FOR UPDATE`, [id, ownerId], tx);
       if (!row) return { ok: false, reason: 'not_found' };
       if (row.status !== 'draft') return { ok: false, reason: 'not_draft' };
       const start = async (): Promise<Out> => {
         if (budget) {
-          // Every start reserves what its shots may cost, against both caps, under one lock.
           const mine = await queryOne<{ n: number }>(`SELECT COUNT(*) AS n FROM scene_mvs WHERE owner_id = ? AND queued_at >= ${JST_DAY_START_UTC}`, [ownerId], tx);
           if (Number(mine?.n ?? 0) >= budget.perUserDaily) return { ok: false, reason: 'user_daily_limit' };
           const site = await queryOne<{ n: number }>(`SELECT COUNT(*) AS n FROM scene_mvs WHERE queued_at >= ${JST_DAY_START_UTC}`, [], tx);
@@ -216,10 +235,13 @@ export async function queueSceneMv(
         await execute(`UPDATE scene_mvs SET status = 'queued', queued_at = UTC_TIMESTAMP(3) WHERE id = ?`, [id], tx);
         return { ok: true };
       };
-      if (!budget) return start();
-      const out = await withBudgetLock(tx, start);
-      return out === 'locked' ? { ok: false, reason: 'budget' } : out;
+      return start();
     });
+  try {
+    if (!budget) return await run();
+    // Every start reserves what its shots may cost, against both caps, under one lock held past the commit.
+    const out = await holdingBudgetLock(run);
+    return out === 'locked' ? { ok: false, reason: 'budget' } : out;
   } catch (err) {
     if ((err as { errno?: number }).errno === ER_DUP_ENTRY) return { ok: false, reason: 'busy' };
     throw err;
