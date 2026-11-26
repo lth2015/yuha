@@ -1,5 +1,6 @@
 import { createHash, randomUUID } from 'node:crypto';
-import { execute, query, queryOne, withTx } from './pool.js';
+import type mysql from 'mysql2/promise';
+import { db, execute, query, queryOne, withTx } from './pool.js';
 
 /**
  * The automatic lyric sync queue (migration 0039; docs/AUTOMATIC_LYRIC_SYNC_TICKETS.md L4a).
@@ -30,6 +31,7 @@ export async function enqueueLyricSync(params: {
 
 export interface ClaimedLyricSync {
   id: string;
+  trigger_kind: LyricSyncTrigger;
   track_id: string;
   master_sha256: string;
   lyrics_sha: string;
@@ -50,7 +52,8 @@ export async function claimNextLyricSync(worker: string): Promise<ClaimedLyricSy
       `SELECT id FROM lyric_sync_jobs
         WHERE (status = 'queued' AND next_attempt_at <= UTC_TIMESTAMP(3))
            OR (status = 'running' AND claimed_at < UTC_TIMESTAMP(3) - INTERVAL ${CLAIM_STALE_MINUTES} MINUTE)
-        ORDER BY next_attempt_at, created_at
+        -- A new song's sync goes before an older song's backfill.
+        ORDER BY trigger_kind = 'backfill', next_attempt_at, created_at
         LIMIT 1 FOR UPDATE SKIP LOCKED`,
       [],
       tx,
@@ -64,7 +67,7 @@ export async function claimNextLyricSync(worker: string): Promise<ClaimedLyricSy
       tx,
     );
     const job = await queryOne<ClaimedLyricSync>(
-      `SELECT j.id, j.track_id, j.master_sha256, j.lyrics_sha, j.attempts, t.lyrics, t.duration_ms,
+      `SELECT j.id, j.trigger_kind, j.track_id, j.master_sha256, j.lyrics_sha, j.attempts, t.lyrics, t.duration_ms,
               (SELECT a.provider_request_id FROM generation_attempts a
                 WHERE a.job_id = t.job_id AND a.status = 'succeeded' AND a.provider_request_id IS NOT NULL
                 ORDER BY a.attempt_no DESC LIMIT 1) AS provider_request_id
@@ -111,4 +114,77 @@ export async function latestLyricSync(trackId: string): Promise<{ status: LyricS
       [trackId],
     )) ?? null
   );
+}
+
+/** Midnight in Japan, as UTC: the backfill quota is a JST day. */
+const JST_DAY_START_UTC = `(TIMESTAMP(DATE(UTC_TIMESTAMP(3) + INTERVAL 9 HOUR)) - INTERVAL 9 HOUR)`;
+const BACKFILL_LOCK = 'yuha_lyric_backfill';
+
+/**
+ * An older song's owner opened it with no heard timeline (L4b). Queues its
+ * backfill unless the day's quota is spent:
+ *   syncing   queued now, or already on its way
+ *   deferred  the quota is spent today; asked again the next time it is opened
+ *   busy      the queue's lock was held this instant: nothing queued, nothing
+ *             measured; the next open asks again
+ *   none      nothing to do today (this version already ended; a failure is
+ *             tried again on a later day, not again today)
+ * One job per song, master and words, so tabs take one slot. Count and insert
+ * run under one lock on an autocommit connection, so the quota holds against
+ * owners opening songs at the same moment.
+ */
+export async function requestLyricBackfill(params: {
+  trackId: string;
+  masterSha: string;
+  lyrics: string;
+  dailyQuota: number;
+}): Promise<'syncing' | 'deferred' | 'none' | 'busy'> {
+  const sha = lyricsSha(params.lyrics);
+  const conn: mysql.PoolConnection = await db().getConnection();
+  try {
+    // Briefly: an owner is waiting on this page load. Not getting the lock is
+    // a busy moment, not a measured quota — 'busy', and the next open tries
+    // again. Calling it 'deferred' told the page "today's limit is reached"
+    // when nothing had counted anything (Codex review of PR #157).
+    const got = await queryOne<{ ok: number | null }>(`SELECT GET_LOCK(?, 1) AS ok`, [BACKFILL_LOCK], conn);
+    if (Number(got?.ok) !== 1) return 'busy';
+    try {
+      const existing = await queryOne<{ id: string; status: LyricSyncStatus; before_today: number | null }>(
+        `SELECT id, status, finished_at < ${JST_DAY_START_UTC} AS before_today
+           FROM lyric_sync_jobs WHERE track_id = ? AND master_sha256 = ? AND lyrics_sha = ?`,
+        [params.trackId, params.masterSha, sha],
+        conn,
+      );
+      if (existing && (existing.status === 'queued' || existing.status === 'running')) return 'syncing';
+      if (existing && !(existing.status === 'failed' && Number(existing.before_today) === 1)) return 'none';
+      const today = await queryOne<{ n: number }>(
+        `SELECT COUNT(*) AS n FROM lyric_sync_jobs WHERE trigger_kind = 'backfill' AND created_at >= ${JST_DAY_START_UTC}`,
+        [],
+        conn,
+      );
+      if (Number(today?.n ?? 0) >= params.dailyQuota) return 'deferred';
+      if (existing) {
+        // A failure from an earlier day: a fresh set of attempts, counted against today's quota.
+        await execute(
+          `UPDATE lyric_sync_jobs
+              SET status = 'queued', trigger_kind = 'backfill', attempts = 0, failure = NULL, claimed_by = NULL,
+                  next_attempt_at = UTC_TIMESTAMP(3), created_at = UTC_TIMESTAMP(3), finished_at = NULL
+            WHERE id = ?`,
+          [existing.id],
+          conn,
+        );
+      } else {
+        await execute(
+          `INSERT IGNORE INTO lyric_sync_jobs (id, track_id, master_sha256, lyrics_sha, trigger_kind) VALUES (?, ?, ?, ?, 'backfill')`,
+          [randomUUID(), params.trackId, params.masterSha, sha],
+          conn,
+        );
+      }
+      return 'syncing';
+    } finally {
+      await queryOne(`SELECT RELEASE_LOCK(?)`, [BACKFILL_LOCK], conn);
+    }
+  } finally {
+    conn.release();
+  }
 }

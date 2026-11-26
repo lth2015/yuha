@@ -45,6 +45,7 @@ export function SyncedLyrics({
   onSaveTimings,
   compact = false,
   live = true,
+  still = false,
   draft: sharedDraft,
   onDraft,
 }: {
@@ -71,6 +72,12 @@ export function SyncedLyrics({
    * not follow it.
    */
   live?: boolean;
+  /**
+   * The platform is still syncing this song and nothing heard it yet: show
+   * the words as they are, with no line lit. A highlight from an estimate
+   * would look like a sync that has not happened.
+   */
+  still?: boolean;
 }) {
   const { t } = useI18n();
   /*
@@ -142,7 +149,7 @@ export function SyncedLyrics({
   useEffect(() => (live ? player.onTime(setFrameTime) : undefined), [player, live]);
   const liveTime = live ? frameTime : currentTime;
 
-  const active = activeLineIndex(lines, liveTime);
+  const active = still ? -1 : activeLineIndex(lines, liveTime);
   /*
    * In a holiday season, a line about snow brings a little snow while it is
    * sung (docs/HOLIDAY_SPEC.md). Once per line, and only while playing.

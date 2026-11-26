@@ -1738,6 +1738,7 @@ textarea.is-full { border-color: var(--danger); }
 .studio__dial-hint { font-size: var(--t-caption); color: var(--muted); }
 .lyrics-sync__head { display: flex; align-items: center; justify-content: space-between; gap: var(--s2); flex-wrap: wrap; }
 .lyrics-sync__note { font-size: var(--t-caption); line-height: 1.6; color: var(--muted); margin: var(--s2) 0 0; max-width: 56ch; }
+.lyrics-sync__status { font-size: var(--t-caption); line-height: 1.6; color: var(--muted); margin: 0 0 var(--s2); max-width: 56ch; }
 .lyrics-sync__actions { display: flex; align-items: center; gap: var(--s2); flex-wrap: wrap; }
 .lyrics-sync__offset { font-size: var(--t-caption); color: var(--muted); min-width: 4ch; text-align: center; }
 .lyrics-sync__bar { display: flex; align-items: center; gap: var(--s2); flex-wrap: wrap; margin-top: var(--s2); font-size: var(--t-caption); color: var(--ink); }

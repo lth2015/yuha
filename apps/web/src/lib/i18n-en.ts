@@ -264,6 +264,7 @@ const en: Dict = {
   'song.notFound': 'Page not found',
   'cover.aria': 'Cover for “{title}”',
   'lyrics.instrumental': 'Instrumental — no lyrics to show.',
+  'lyrics.sync.syncing': 'Syncing the lyrics. The words are here in the meantime.', 'lyrics.sync.deferred': "Couldn't sync today. It will try again automatically the next time you open this song.", 'lyrics.sync.partial': "Some lines aren't synced yet.",
   'lyrics.tune.open': "Adjust lyric timing", 'lyrics.tune.close': "Hide timing tools", 'lyrics.section.prechorus': "Pre-chorus", 'lyrics.section.outro': "Outro", 'lyrics.section.solo': "Solo", 'lyrics.section.instrumental': "Instrumental", 'lyrics.estimated': 'Estimated sync', 'lyrics.aligned': 'Word-synced',
   'lyrics.download': 'Download .lrc',
   'lyrics.corrected': 'Corrected',
