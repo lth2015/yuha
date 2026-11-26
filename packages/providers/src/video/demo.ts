@@ -67,6 +67,10 @@ export class DemoVideoProvider implements VideoProvider {
   /** Every clip let go of, for tests to inspect. */
   readonly discarded: string[] = [];
 
+  async health(): Promise<{ ok: boolean; queued: number | null }> {
+    return { ok: true, queued: [...this.jobs.values()].filter((j) => j.state.status === 'queued' || j.state.status === 'running').length };
+  }
+
   async discard(id: string): Promise<void> {
     const job = this.jobs.get(id);
     if (!job) return;
