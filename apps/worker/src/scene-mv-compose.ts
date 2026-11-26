@@ -107,7 +107,8 @@ async function composeOne(d: ComposeDeps, id: string): Promise<void> {
     d.log('info', 'scene mv composed', { sceneMvId: id, seconds: span, subtitles: withSubs });
   } catch (err) {
     await advanceSceneMv(id, 'composing', 'failed', { failure: 'compose_failed' });
-    d.log('error', 'scene mv could not be composed', { sceneMvId: id, err: (err as Error).message.slice(0, 300) });
+    // Only how ffmpeg ended, not what it printed: libass can echo a subtitle line, which is a lyric.
+    d.log('error', 'scene mv could not be composed', { sceneMvId: id, err: (err as Error).message.split(':')[0]!.slice(0, 80) });
   } finally {
     await rm(dir, { recursive: true, force: true });
     await dropShots(d, id);
