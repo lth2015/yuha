@@ -1195,17 +1195,23 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
 
   const alignment = e.ALIGNMENT_ADAPTER ?? 'estimated';
   if (alignment === 'http') {
-    const alignmentDeps = [e.ALIGNMENT_PROVIDER_ID, e.ALIGNMENT_BASE_URL, e.ALIGNMENT_API_KEY, e.ALIGNMENT_SUBMIT_PATH,
-      e.ALIGNMENT_LINES_FIELD, e.ALIGNMENT_LINE_TEXT_FIELD, e.ALIGNMENT_LINE_START_FIELD, e.ALIGNMENT_LINE_END_FIELD];
-    for (const [i, value] of alignmentDeps.entries()) {
-      if (!value) {
-        problems.push(
-          `ALIGNMENT_* field ${i + 1} is required for the http alignment adapter (fill in from the model documentation)`,
-        );
-        break;
-      }
+    const required = {
+      ALIGNMENT_PROVIDER_ID: e.ALIGNMENT_PROVIDER_ID,
+      ALIGNMENT_BASE_URL: e.ALIGNMENT_BASE_URL,
+      ALIGNMENT_API_KEY: e.ALIGNMENT_API_KEY,
+      ALIGNMENT_SUBMIT_PATH: e.ALIGNMENT_SUBMIT_PATH,
+      ALIGNMENT_LINES_FIELD: e.ALIGNMENT_LINES_FIELD,
+      ALIGNMENT_LINE_TEXT_FIELD: e.ALIGNMENT_LINE_TEXT_FIELD,
+      ALIGNMENT_LINE_START_FIELD: e.ALIGNMENT_LINE_START_FIELD,
+      ALIGNMENT_LINE_END_FIELD: e.ALIGNMENT_LINE_END_FIELD,
+    };
+    const missing = Object.entries(required).filter(([, v]) => !v).map(([k]) => k);
+    if (missing.length) {
+      problems.push(`${missing.join(', ')} required for the http alignment adapter (fill in from the model documentation)`);
     }
   }
+
+  if (problems.length) throw new ConfigError(problems);
 
   return {
     ...e,
