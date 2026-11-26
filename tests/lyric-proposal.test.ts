@@ -11,7 +11,7 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { createHash, randomUUID } from 'node:crypto';
 import type { LyricTimings } from '@yuha/contracts';
-import { claimOutboxBatch, insertLyricProposal, queryOne, withTx } from '@yuha/db';
+import { claimOutboxBatch, insertLyricProposal, qualityReport, queryOne, withTx } from '@yuha/db';
 import type { AlignmentProvider, AlignmentRequest, AlignmentResult } from '@yuha/providers';
 import { runJobStep } from '@yuha/worker/pipeline';
 import { balanceOf, createHarness, resetData, teardown, type Harness, type TestUser } from './helpers/harness.js';
@@ -204,6 +204,24 @@ describe('aligning one song again', () => {
     const ask = await off.app.inject({ method: 'POST', url: `/v1/tracks/${randomUUID()}/lyric-proposal`, headers: user.authHeader });
     expect(ask.statusCode).toBe(503);
   });
+
+  it('is counted in the console: asked, answered, heard too little, failed otherwise', async () => {
+    const user = await h.createUser({ credits: 10 });
+    const a = await song(user);
+    const b = await song(user);
+    const c = await song(user);
+    setAligner(answering({ status: 'ok', timings: { source: 'aligned', aligner: 'spark-whisper', lines: LINES } }));
+    await ask(user, a);
+    await settled(user, a);
+    setAligner(answering({ status: 'ok', timings: { source: 'estimated', aligner: 'estimated-v1', lines: LINES }, fallbackReason: 'aligner_http_422 low_coverage coverage=0.2' }));
+    await ask(user, b);
+    await settled(user, b);
+    setAligner(answering({ status: 'failed', reason: 'aligner_timeout' }));
+    await ask(user, c);
+    await settled(user, c);
+    const report = await qualityReport({ hours: 24 });
+    expect(report.lyricProposals).toEqual({ asked: 3, aligned: 1, heardTooLittle: 1, failed: 1 });
+  }, 60_000);
 
   it('is offered by the runtime only where a real aligner is configured', async () => {
     setAligner(original); // the test stack's estimator
