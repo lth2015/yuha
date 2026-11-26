@@ -47,7 +47,7 @@ export interface PublicGiftView {
   };
 }
 
-export const GIFT_EVENTS = ['view', 'play_start', 'play_complete', 'cta_click', 'share'] as const;
+export const GIFT_EVENTS = ['view', 'play_start', 'play_complete', 'cta_click', 'share', 'create_entered', 'song_completed'] as const;
 export const giftEventRequest = z.object({
   name: z.enum(GIFT_EVENTS),
   /** A random id the browser keeps, so one visitor's refreshes count once a day. Hashed before it is stored. */

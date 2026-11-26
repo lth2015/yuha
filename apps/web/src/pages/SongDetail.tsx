@@ -26,6 +26,7 @@ import { SceneMv } from '../components/SceneMv';
 import { useConfirm } from '../components/ConfirmDialog';
 import { SyncedLyrics } from '../components/SyncedLyrics';
 import { LyricSyncStudio } from '../components/LyricSyncStudio';
+import { GiftInvitations } from '../components/GiftInvitations';
 import { emptyHistory, record, redo, undo, type EditHistory } from '../lib/sync-studio';
 import { scoreFromSeed } from '../lib/score';
 import { usePageTitle } from '../lib/title';
@@ -821,6 +822,10 @@ export default function SongDetail() {
               </Link>
             </div>
           )}
+
+          {/* A music gift invitation (docs/GIFT_INVITATION_PLAN.md): a link of its
+              own, revocable, and no need to make the song public. */}
+          {manages && song.state === 'deliverable' && <GiftInvitations trackId={song.trackId} title={song.title} />}
 
           {/* The photo MV (docs/PHOTO_MV_SPEC.md): the owner's, once the song plays,
               and only where the switch is on. */}

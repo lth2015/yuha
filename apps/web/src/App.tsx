@@ -32,6 +32,7 @@ const Export = lazy(() => import('./pages/Export'));
 const GoogleCallback = lazy(() => import('./pages/GoogleCallback'));
 const MfaChallenge = lazy(() => import('./pages/MfaChallenge'));
 const Library = lazy(() => import('./pages/Library'));
+const Gift = lazy(() => import('./pages/Gift'));
 const LegalIndex = lazy(() => import('./pages/Legal').then((m) => ({ default: m.LegalIndex })));
 const Terms = lazy(() => import('./pages/Legal').then((m) => ({ default: m.Terms })));
 const Privacy = lazy(() => import('./pages/Legal').then((m) => ({ default: m.Privacy })));
@@ -93,6 +94,8 @@ export default function App() {
               <Route path="/auth/google/callback" element={<GoogleCallback />} />
               <Route path="/auth/mfa" element={<MfaChallenge />} />
               <Route path="/song/:id" element={<SongDetail />} />
+              {/* A music gift invitation: no account, the link is the key (docs/GIFT_INVITATION_PLAN.md). */}
+              <Route path="/gift/:token" element={<Gift />} />
               <Route path="/pricing" element={<Pricing />} />
 
               <Route

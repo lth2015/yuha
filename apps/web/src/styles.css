@@ -3106,3 +3106,41 @@ textarea.is-full { border-color: var(--danger); }
 .scene__faq dl { margin: 0; display: grid; gap: var(--s4); }
 .scene__faq dt { font-weight: 600; }
 .scene__faq dd { margin: var(--s1) 0 0; color: var(--muted); }
+
+/* Music gift invitation (pages/Gift.tsx, components/GiftInvitations.tsx). Warm, not a product page;
+   three themes as colour; a gentle rise on arrival, none under reduced motion. */
+.gift { --gift-a: #f6e3d3; --gift-b: #fdf7f1; --gift-accent: var(--petal); display: grid; gap: var(--s4); max-width: 560px; margin: 0 auto; text-align: center; background: linear-gradient(180deg, var(--gift-a), var(--gift-b) 60%); border-radius: 24px; padding: var(--s5) var(--s3); }
+.gift--romantic { --gift-a: #f7dde4; --gift-b: #fdf4f6; }
+.gift--celebration { --gift-a: #f6eccb; --gift-b: #fdfaf0; }
+.gift__eyebrow { font-size: var(--t-caption); letter-spacing: 0.06em; color: var(--muted); margin: 0; }
+.gift__to { font-size: clamp(26px, 7vw, 36px); line-height: 1.25; margin: var(--s1) 0 0; overflow-wrap: anywhere; }
+.gift__cover { width: min(72vw, 280px); margin: var(--s3) auto var(--s2); }
+.gift__title { font-size: 20px; margin: 0; overflow-wrap: anywhere; }
+.gift__from { color: var(--muted); margin: var(--s1) 0 0; overflow-wrap: anywhere; }
+.gift__player { display: grid; gap: var(--s2); justify-items: center; }
+.gift__play { min-width: 160px; }
+.gift__seek { width: 100%; accent-color: var(--gift-accent); }
+.gift__time { display: flex; gap: var(--s3); justify-content: center; align-items: center; font-size: var(--t-caption); color: var(--muted); }
+.gift__letter { text-align: left; background: rgba(255, 255, 255, 0.7); border-radius: 16px; padding: var(--s3); line-height: 1.8; overflow-wrap: anywhere; }
+.gift__letter p { margin: 0 0 var(--s1); }
+.gift__onward { display: grid; gap: var(--s2); justify-items: center; }
+.gift__onward .btn { white-space: normal; max-width: 100%; }
+.gift__made { margin: 0; color: var(--muted); }
+.gift--missing { text-align: center; }
+@media (prefers-reduced-motion: no-preference) {
+  .gift__opening { animation: gift-rise 700ms ease-out both; }
+  .gift__letter { animation: gift-rise 700ms 250ms ease-out both; }
+}
+@keyframes gift-rise { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+.gift-make { display: grid; gap: var(--s2); }
+.gift-make input[type="text"], .gift-make textarea { width: 100%; }
+.gift-preview { border-radius: 16px; padding: var(--s3); text-align: center; background: linear-gradient(180deg, var(--gift-a, #f6e3d3), var(--gift-b, #fdf7f1)); --gift-a: #f6e3d3; --gift-b: #fdf7f1; }
+.gift-preview.gift--romantic { --gift-a: #f7dde4; --gift-b: #fdf4f6; }
+.gift-preview.gift--celebration { --gift-a: #f6eccb; --gift-b: #fdfaf0; }
+.gift-preview .gift__to { font-size: 22px; }
+.gift-preview__letter { white-space: pre-line; text-align: left; overflow-wrap: anywhere; }
+.gift-made { display: grid; gap: var(--s2); }
+.gift-made__actions { display: flex; flex-wrap: wrap; gap: var(--s2); }
+.gift-list ul { list-style: none; padding: 0; margin: 0; display: grid; gap: var(--s1); }
+.gift-list__item { display: flex; flex-wrap: wrap; gap: var(--s2); align-items: baseline; justify-content: space-between; }
+.gift-list__item.is-revoked { color: var(--muted); }
