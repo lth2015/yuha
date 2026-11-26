@@ -1,7 +1,9 @@
 import { hostname } from 'node:os';
 import { randomUUID } from 'node:crypto';
-import { ConfigError, createContext, loadConfig } from '@yuha/api';
-import { closeDb } from '@yuha/db';
+import { ConfigError, createContext, loadConfig, removeSceneMv } from '@yuha/api';
+import { closeDb, expiredSceneMvs } from '@yuha/db';
+import { sceneMvLoop } from './scene-mv.js';
+import { composeNextSceneMv } from './scene-mv-compose.js';
 import {
   generationLoop,
   maintenanceLoop,
@@ -45,6 +47,7 @@ async function main(): Promise<void> {
     mode: config.mode,
     music: ctx.music.capabilities().providerId,
     queue: ctx.queue.kind,
+    video: ctx.video?.kind ?? 'none',
   });
 
   const loops = [
@@ -54,6 +57,18 @@ async function main(): Promise<void> {
     webhookLoop(deps),
     maintenanceLoop(deps),
     stablecoinScanLoop(deps),
+    // The AI scene MV (docs/AI_SCENE_MV_SPEC.md); returns at once without a video service.
+    sceneMvLoop({
+      video: ctx.video,
+      storage: ctx.storage,
+      owner,
+      log,
+      stopped: () => stopping,
+      compose: () => composeNextSceneMv({ storage: ctx.storage, owner, log }),
+      sweep: async () => {
+        for (const id of await expiredSceneMvs()) await removeSceneMv(ctx.storage, id, undefined, ctx.video);
+      },
+    }),
   ];
 
   const shutdown = async (signal: string) => {

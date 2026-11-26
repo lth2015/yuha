@@ -32,6 +32,9 @@ import {
   readCoinbaseUsdJpy,
   readFrankfurterUsdJpy,
   type RateObservation,
+  DemoVideoProvider,
+  HttpVideoProvider,
+  type VideoProvider,
 } from '@yuha/providers';
 import { getSetting, initDb } from '@yuha/db';
 import { baseFeatures, type AppConfig, type FeatureFlags } from './config.js';
@@ -56,6 +59,8 @@ export interface AppContext {
   config: AppConfig;
   music: MusicProvider;
   alignment: AlignmentProvider;
+  /** Draws the AI scene MV's shots; null when no video service is configured (the feature is then off for everyone). */
+  video: VideoProvider | null;
   text: TextProvider;
   storage: StorageAdapter;
   queue: QueueAdapter;
@@ -186,6 +191,19 @@ function buildMusic(cfg: AppConfig): MusicProvider {
     maxAudioBytes: cfg.MUSIC_MAX_AUDIO_BYTES,
     allowedAudioHosts: cfg.MUSIC_ALLOWED_AUDIO_HOSTS!.split(',').map((h) => h.trim()).filter(Boolean),
   });
+}
+
+function buildVideo(cfg: AppConfig): VideoProvider | null {
+  if (cfg.video === 'demo') return new DemoVideoProvider();
+  if (cfg.video === 'http') {
+    return new HttpVideoProvider({
+      baseUrl: cfg.LTX_API_BASE_URL!,
+      apiKey: cfg.LTX_API_KEY!,
+      allowInsecureSelfHosted: cfg.VIDEO_ALLOW_INSECURE_SELF_HOSTED,
+      allowInsecureLocal: cfg.mode !== 'production',
+    });
+  }
+  return null;
 }
 
 function buildAlignment(cfg: AppConfig): AlignmentProvider {
@@ -365,6 +383,7 @@ export function createContext(config: AppConfig): AppContext {
     config,
     music: buildMusic(config),
     alignment: buildAlignment(config),
+    video: buildVideo(config),
     text: buildText(config),
     storage: buildStorage(config),
     queue: buildQueue(config),
@@ -394,6 +413,7 @@ export function createContext(config: AppConfig): AppContext {
         wavExportEnabled: statics.wavExportEnabled && overrides.wavExportEnabled !== false,
         photoVideoEnabled: statics.photoVideoEnabled && overrides.photoVideoEnabled !== false,
         lyricAutoAlignEnabled: statics.lyricAutoAlignEnabled && overrides.lyricAutoAlignEnabled !== false,
+        sceneMvEnabled: statics.sceneMvEnabled && overrides.sceneMvEnabled !== false,
         guestTrialEnabled: statics.guestTrialEnabled && overrides.guestTrialEnabled !== false,
         commercialDeliveryEnabled:
           statics.commercialDeliveryEnabled && overrides.commercialDeliveryEnabled !== false,

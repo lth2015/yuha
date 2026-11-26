@@ -150,7 +150,7 @@ export async function executeAccountDeletion(
       // Its "align it again" proposals hold lines of the lyrics: they go with them.
       await deleteLyricProposals(track.id);
       // Its scene MVs: what the owner wrote about the pictures, and the files.
-      if (!(await removeSceneMvsOfTrack(ctx.storage, track.id, log))) {
+      if (!(await removeSceneMvsOfTrack(ctx.storage, track.id, log, ctx.video))) {
         allGone = false;
         outcome.objectsFailed += 1;
       }

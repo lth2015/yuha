@@ -56,6 +56,8 @@ export const runtimeInfo = z.object({
      * aligner is configured (an estimator asked again only estimates again).
      */
     lyricAutoAlign: z.boolean().optional(),
+    /** The AI scene MV (docs/AI_SCENE_MV_SPEC.md): may this person start one. */
+    sceneMv: z.boolean().optional(),
     /** A song without an account (docs/GROWTH_SPEC.md, part three). */
     guestTrialEnabled: z.boolean(),
     commercialDeliveryEnabled: z.boolean(),

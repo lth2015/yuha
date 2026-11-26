@@ -6,7 +6,7 @@
 
 | # | 票 | 依赖 | 谁 | 完成标准 |
 | --- | --- | --- | --- | --- |
-| T1 | **dgxv 视频服务 + 测速**（`deploy/dgx/video/`）——代码已写、假后端已测；**dgxv 上未跑** | — | Claude 写；负责人在 dgxv 上跑 `./deploy.sh` 和 `bench.py` | 服务：提交／查询／取片段，一次一个 GPU 任务，不带模型音轨，鉴权，过期清理。测速：冷启动 1 次 + 每配置暖启动 5 次，竖／横、4／8 秒，P50/P95、峰值显存、失败／OOM 全部记录，输出 Markdown 表填回规格第 8 节 |
+| T1 | dgxv 视频服务 + 测速——**由负责人在 dgxv 上部署**（2026-11-26）；Claude 在 T1 写的 `deploy/dgx/video/` 不是线上那个，已按负责人决定删除 | — | 负责人 | 服务可用；测速数字待补进规格第 8 节 |
 | T2 | 模型与许可核实 | — | 负责人 + 法务 | 实际模型、权重版本、许可证原文（商用、营收限制、输出使用）；推理代码有无遥测外发。结论写进规格 |
 | T3 | 视频 provider 接口——**已完成**：`DemoVideoProvider` 与 `HttpVideoProvider`（只认 HTTPS），同一套契约测试，HTTP 一半直接跑 T1 的 Python 服务 | — | Claude | `packages/providers/src/video/`：`submit / status / fetch` 契约；`demo`（本地 ffmpeg 生成色块片段，供开发和 CI）与 `http`（T1 的服务）两种实现；契约测试 |
 | T4 | 任务与镜头的数据层——**已完成**（迁移 0036；删歌／注销／试用清理时一并清除） | — | Claude | 新迁移：`scene_mvs`（所有者、歌曲、选段起止、风格、提示词、状态、版本快照、过期时间）与 `scene_mv_shots`（序号、描述、状态、尝试次数、片段存储键）。状态机：Draft→Queued→Generating→Composing→Ready / Failed / Cancelled；行为测试 |
