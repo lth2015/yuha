@@ -28,6 +28,9 @@ load. The first start downloads the weights into `~/.cache/huggingface`.
 To finish, it checks that a well-formed submit with no key is refused with 401. A 200 or a 422 there
 means something else is answering.
 
+The port is bound to 127.0.0.1 only (`BIND_ADDR` in `.env` changes that). Reach it from outside
+through a TLS proxy on 443, never directly: Docker's published ports bypass ufw.
+
 The script refuses `DGX=dgxa`, the music box, unless you also set `SHARED=1`. The spec puts video on its
 own machine, and on a single DGX Spark both models would share one pool of memory.
 
