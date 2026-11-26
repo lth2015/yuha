@@ -401,8 +401,14 @@ const envSchema = z.object({
   ALIGNMENT_TIMEOUT_MS: int(60_000),
 
   // --- video clips for the AI scene MV (packages/providers/src/video/) -------
-  /** none = no scene MV anywhere; demo = ffmpeg test pattern; http = the dgxv service. */
-  VIDEO_ADAPTER: z.enum(['none', 'demo', 'http']).optional(),
+  /**
+   * none = no scene MV anywhere; demo = ffmpeg test pattern; http = the
+   * self-hosted LTX service on dgxv; tokenstars = Google Veo 3.1 through
+   * TokenStars (docs/VEO_VIA_TOKENSTARS.md), with the TOKENSTARS_* key.
+   */
+  VIDEO_ADAPTER: z.enum(['none', 'demo', 'http', 'tokenstars']).optional(),
+  /** Which Veo model (product owner, 2026-11-26: Lite first, Fast to compare). Only these two are enabled on the key. */
+  VEO_MODEL: z.enum(['veo-3.1-lite-generate-001', 'veo-3.1-fast-generate-001']).default('veo-3.1-lite-generate-001'),
   LTX_API_BASE_URL: z.string().optional(),
   LTX_API_KEY: secret(),
   /**
@@ -634,7 +640,7 @@ export interface AppConfig extends RawEnv {
   };
   alignment: 'estimated' | 'http';
   /** The scene MV's video service; `none` means the feature is off for everyone. */
-  video: 'none' | 'demo' | 'http';
+  video: 'none' | 'demo' | 'http' | 'tokenstars';
   legalEntityConfigured: boolean;
 }
 
@@ -1175,6 +1181,10 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
   // Development and the demo draw test-pattern clips; production needs the real service or nothing.
   const video = e.VIDEO_ADAPTER ?? (mode === 'production' ? 'none' : 'demo');
   if (mode === 'production' && video === 'demo') problems.push('production mode cannot use the demo video adapter');
+  if (video === 'tokenstars') {
+    if (!e.TOKENSTARS_BASE_URL || !e.TOKENSTARS_API_KEY) problems.push('TOKENSTARS_BASE_URL and TOKENSTARS_API_KEY are required for the tokenstars video adapter');
+    else if (!e.TOKENSTARS_BASE_URL.startsWith('https://') && mode === 'production') problems.push('TOKENSTARS_BASE_URL must use https for the tokenstars video adapter');
+  }
   if (video === 'http') {
     if (!e.LTX_API_BASE_URL || !e.LTX_API_KEY) problems.push('LTX_API_BASE_URL and LTX_API_KEY are required for the http video adapter');
     else {

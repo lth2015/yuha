@@ -42,9 +42,15 @@ export interface SceneMvDeps {
 
 export type TickOutcome = 'idle' | 'submitted' | 'waiting' | 'stored' | 'failed' | 'released';
 
-/** How long each shot is: the span shared out, at most what the service draws. */
-export function shotSeconds(clipStart: number, clipEnd: number, shots: number): number {
-  return Math.max(1, Math.min(CLIP_MAX_SECONDS, Math.ceil((clipEnd - clipStart) / Math.max(1, shots))));
+/**
+ * How long each shot is: the span shared out, at most what the service draws,
+ * and — for a service that draws only some lengths (Veo: 4/6/8) — the shortest
+ * of those that covers it, since a shot is billed by the second.
+ */
+export function shotSeconds(clipStart: number, clipEnd: number, shots: number, durations?: readonly number[]): number {
+  const need = Math.max(1, Math.min(CLIP_MAX_SECONDS, Math.ceil((clipEnd - clipStart) / Math.max(1, shots))));
+  if (!durations?.length) return need;
+  return [...durations].sort((a, b) => a - b).find((d) => d >= need) ?? Math.max(...durations);
 }
 
 export async function sceneMvTick(d: SceneMvDeps): Promise<TickOutcome> {
@@ -76,14 +82,20 @@ export async function sceneMvTick(d: SceneMvDeps): Promise<TickOutcome> {
     }
     const sub = await d.video.submit({
       prompt: shot.prompt,
-      seconds: shotSeconds(shot.clip_start, shot.clip_end, shot.shot_count),
+      seconds: shotSeconds(shot.clip_start, shot.clip_end, shot.shot_count, d.video.durations),
       // The first version is vertical only (docs/AI_SCENE_MV_SPEC.md).
       orientation: 'portrait',
     });
     if (sub.status === 'accepted') {
-      await recordShotSubmitted(shot.id, sub.id);
+      await recordShotSubmitted(shot.id, sub.id, d.video.kind);
       d.log('info', 'scene mv shot submitted', { shotId: shot.id, sceneMvId: shot.scene_mv_id, attempt: shot.attempts });
       return 'submitted';
+    }
+    if (sub.reason === 'uncertain') {
+      // It may be running, and billed: never sent again (docs/AI_SCENE_MV_VEO_SPEC.md §3).
+      await finishShot(shot.id, { status: 'failed', failure: 'uncertain', final: true });
+      d.log('error', 'scene mv shot submit uncertain; not resubmitted', { shotId: shot.id });
+      return 'failed';
     }
     if (sub.retryable) {
       // Busy or unreachable is the platform's; the shot keeps its tries.
@@ -96,6 +108,12 @@ export async function sceneMvTick(d: SceneMvDeps): Promise<TickOutcome> {
     return 'failed';
   }
 
+  if (shot.provider && shot.provider !== d.video.kind) {
+    // Its id belongs to another service; asking this one, or asking again, would be wrong.
+    await finishShot(shot.id, { status: 'failed', failure: 'provider_changed', final: true });
+    d.log('warn', 'scene mv shot belongs to another video service', { shotId: shot.id, provider: shot.provider });
+    return 'failed';
+  }
   const state = await d.video.status(shot.provider_clip_id);
   if (state.status === 'queued' || state.status === 'running' || (state.status === 'unknown' && state.reason !== 'not_found')) {
     if (age > (d.shotTimeoutMs ?? 60 * 60_000)) {

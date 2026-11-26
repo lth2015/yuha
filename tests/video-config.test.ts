@@ -24,7 +24,7 @@ function videoProblems(env: Record<string, string>): string[] {
     return [];
   } catch (err) {
     if (!(err instanceof ConfigError)) throw err;
-    return err.problems.filter((p) => /video|LTX_API/i.test(p));
+    return err.problems.filter((p) => /video|LTX_API|VEO_MODEL/i.test(p));
   }
 }
 
@@ -46,5 +46,13 @@ describe('the video service in production', () => {
     // A private address is a development convenience, not something production may reach over http.
     expect(videoProblems({ ...http, LTX_API_BASE_URL: 'http://10.0.0.5:8100', VIDEO_ALLOW_INSECURE_SELF_HOSTED: 'true' })[0]).toMatch(/must use https/);
     expect(videoProblems({ ...http, LTX_API_BASE_URL: 'https://video.example.com' })).toEqual([]);
+  });
+
+  it('takes Veo through TokenStars with the TokenStars key, Lite unless told otherwise, and only the enabled models', () => {
+    expect(videoProblems({ VIDEO_ADAPTER: 'tokenstars' })[0]).toMatch(/TOKENSTARS_BASE_URL and TOKENSTARS_API_KEY/);
+    const ok = { VIDEO_ADAPTER: 'tokenstars', TOKENSTARS_BASE_URL: 'https://www.tokenstars.ai', TOKENSTARS_API_KEY: 'sk-x' };
+    expect(videoProblems(ok)).toEqual([]);
+    expect(videoProblems({ ...ok, TOKENSTARS_BASE_URL: 'http://www.tokenstars.ai' })[0]).toMatch(/https/);
+    expect(videoProblems({ ...ok, VEO_MODEL: 'veo-3.1-generate-001' })[0]).toMatch(/VEO_MODEL/);
   });
 });

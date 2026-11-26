@@ -32,7 +32,13 @@ export type ClipRejection =
   | 'queue_full' // retryable: the service is busy
   | 'unavailable' // retryable: could not be reached, timed out, or failed
   | 'invalid_request'
-  | 'unauthorized';
+  | 'unauthorized'
+  /**
+   * The submit may or may not have been accepted (it timed out, or the
+   * connection broke after the request was sent). It may be running, and
+   * billed: never resubmitted automatically (docs/AI_SCENE_MV_VEO_SPEC.md §3).
+   */
+  | 'uncertain';
 
 export type ClipSubmit =
   | { status: 'accepted'; id: string }
@@ -47,6 +53,8 @@ export type ClipState =
 
 export interface VideoProvider {
   readonly kind: string;
+  /** The clip lengths it draws, when it only draws some (Veo: 4, 6, 8); any 1–8 otherwise. */
+  readonly durations?: readonly number[];
   submit(req: ClipRequest): Promise<ClipSubmit>;
   status(id: string): Promise<ClipState>;
   /** The finished clip's bytes. Throws unless the clip succeeded and its bytes could be fetched safely. */
