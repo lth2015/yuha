@@ -747,6 +747,7 @@ const zh: Dict = {
   'admin.quality.lyricsAligned': '· 歌词对齐（人声）',
   'admin.quality.lyricsFallback': "歌词未对齐的原因（近 7 天）",
   'admin.quality.lyricProposals': "重新自动对齐（近 7 天）：请求 {asked} · 对上了 {aligned} · 听不清 {heard} · 其他失败 {failed}",
+  'admin.quality.sceneMvs': "AI 场景 MV（近 7 天）：开始 {started} · 完成 {ready} · 失败 {failed} · 取消 {cancelled} · 完成用时中位数 {minutes} 分钟",
   'admin.quality.approval': '用户认可度（交付满 24 小时）',
   'admin.quality.noteBuild': '「当前版本」只算由正在运行的 {sha} 生成的任务。用户自己取消的不计入。认可度 = 交付满 24 小时后仍保留、没被报告问题的歌。',
   'admin.quality.noteNoBuild': '这个进程没有 build SHA，只能显示全部。用户自己取消的不计入。',
