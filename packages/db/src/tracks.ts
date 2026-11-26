@@ -101,6 +101,35 @@ export async function setTrackLyricTimings(
   );
 }
 
+/**
+ * Stores the timeline the worker made right after delivery — only if nothing
+ * more trustworthy landed while the aligner was busy (it can take a minute).
+ *
+ * One conditional UPDATE, so there is no window between the check and the
+ * write. It is refused when the song was deleted, when its lyrics are no
+ * longer the ones the timeline was made from, when the owner has saved a
+ * correction, and when the new timeline is an estimate and the stored one was
+ * heard by the aligner. The WHERE clause is the whole decision, so a matched
+ * row is a written row (CLIENT_FOUND_ROWS counts matches, and that is what is
+ * wanted here).
+ */
+export async function storeDeliveredLyricTimings(params: {
+  trackId: string;
+  /** The lyrics the timeline was made from. */
+  lyrics: string;
+  timings: StoredLyricTimings;
+}): Promise<boolean> {
+  const estimate = params.timings.source !== 'aligned';
+  const r = await execute(
+    `UPDATE tracks SET lyric_timings = ?, updated_at = UTC_TIMESTAMP(3)
+      WHERE id = ? AND deleted_at IS NULL AND lyrics = ?
+        AND (lyric_timings IS NULL
+             OR JSON_UNQUOTE(JSON_EXTRACT(lyric_timings, '$.source')) IN (${estimate ? "'estimated'" : "'estimated', 'aligned'"}))`,
+    [JSON.stringify(params.timings), params.trackId, params.lyrics],
+  );
+  return r.affectedRows > 0;
+}
+
 export async function insertTrack(
   params: {
     /** Supplied by the caller so the storage key can be derived before insert. */

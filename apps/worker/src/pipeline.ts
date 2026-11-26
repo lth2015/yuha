@@ -14,7 +14,7 @@ import {
   recordCostEvent,
   releaseLease,
   releaseReservation,
-  setTrackLyricTimings,
+  storeDeliveredLyricTimings,
   transitionJob,
   updateAttempt,
   withTx,
@@ -601,9 +601,17 @@ async function processAudio(
         const timings = alignment.fallbackReason
           ? { ...alignment.timings, fallbackReason: alignment.fallbackReason.slice(0, 200) }
           : alignment.timings;
-        await setTrackLyricTimings({ trackId: delivered.trackId, timings }).catch((err) =>
-          log('warn', 'lyric timing storage failed', { jobId: job.id, error: (err as Error).message }),
+        // Not unconditional: the owner may have saved a correction, or deleted
+        // the song, while the aligner was busy (storeDeliveredLyricTimings).
+        const written = await storeDeliveredLyricTimings({ trackId: delivered.trackId, lyrics: intent.lyrics, timings }).catch(
+          (err) => {
+            log('warn', 'lyric timing storage failed', { jobId: job.id, error: (err as Error).message });
+            return null;
+          },
         );
+        if (written === false) {
+          log('info', 'lyric timing kept: the song changed while it was aligned', { jobId: job.id, trackId: delivered.trackId });
+        }
       } else {
         log('warn', 'lyric alignment failed; lyrics will display unsynced', {
           jobId: job.id,
