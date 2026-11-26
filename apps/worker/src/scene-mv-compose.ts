@@ -1,3 +1,4 @@
+import { trustedTimeline } from '@yuha/contracts';
 import { spawn } from 'node:child_process';
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -73,7 +74,8 @@ async function composeOne(d: ComposeDeps, id: string): Promise<void> {
     for (const s of shots) await writeFile(join(dir, `shot-${s.idx}.mp4`), await d.storage.get('delivery', s.clip_key!));
     await writeFile(join(dir, 'song'), await d.storage.get('delivery', master.storage_key));
     const timings = track.vocal_mode !== 'instrumental' ? (track.lyric_timings as LyricTimings | null) : null;
-    const subs = timings?.lines?.length ? buildAss(timings.lines, mv.clip_start, mv.clip_end) : null;
+    const trusted = subtitleLines(timings);
+    const subs = trusted.length ? buildAss(trusted, mv.clip_start, mv.clip_end) : null;
     if (subs && subs.includes('Dialogue:')) await writeFile(join(dir, 'subs.ass'), subs);
     const withSubs = !!subs && subs.includes('Dialogue:');
 
@@ -161,6 +163,15 @@ const clock = (s: number) => {
  * cut at its edges. A lyric is text, never markup: the characters ASS gives
  * meaning to are replaced by their full-width look-alikes.
  */
+/**
+ * The lines a scene MV may burn in: only trusted ones (isTrustedLine). An
+ * estimate burned into a video is the error a viewer keeps; a line the
+ * aligner was unsure of is left out rather than shown at a guessed time.
+ */
+export function subtitleLines(timings: LyricTimings | null | undefined): LyricTimings['lines'] {
+  return trustedTimeline(timings)?.lines ?? [];
+}
+
 export function buildAss(lines: LyricTimings['lines'], start: number, end: number): string {
   const events = lines
     .filter((l) => l.end > start && l.start < end && l.text.trim())

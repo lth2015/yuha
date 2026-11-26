@@ -25,7 +25,9 @@ export function lyricSyncStateOf(
     return t.lines.some((l) => typeof l.confidence === 'number' && l.confidence < LINE_CONFIDENT) ? 'partial' : 'synced';
   }
   if (job === 'queued' || job === 'running') return 'syncing';
-  return 'unavailable';
+  // Only an attempt that ended without a result is "could not sync"; a song
+  // nothing has tried (not in scope, or not yet) promises nothing.
+  return job === 'failed' ? 'unavailable' : 'idle';
 }
 
 export async function lyricSyncStateFor(row: {
@@ -51,7 +53,7 @@ export async function lyricSyncStateOnOpen(
   row: { id: string; owner_id: string; vocal_mode: string; lyrics: string | null; lyric_timings: StoredLyricTimings | null },
 ): Promise<LyricSyncState | null> {
   const state = await lyricSyncStateFor(row);
-  if (state !== 'unavailable' || !row.lyrics || !(await backfillFor(ctx, row.owner_id))) return state;
+  if ((state !== 'unavailable' && state !== 'idle') || !row.lyrics || !(await backfillFor(ctx, row.owner_id))) return state;
   const master = await getMasterAsset(row.id);
   if (!master) return state;
   const out = await requestLyricBackfill({
