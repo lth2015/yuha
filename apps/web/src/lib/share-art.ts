@@ -382,7 +382,7 @@ export function planShareClip(lines: TimedLine[], songSeconds: number, maxFrames
   const edges = new Set<number>([clipStart]);
   for (const l of lines) {
     for (const edge of [l.start, l.end]) {
-      if (edge > clipStart && edge < end - 0.5) edges.add(edge);
+      if (edge > clipStart && edge < end) edges.add(edge);
     }
   }
   const frames: ClipPlan['frames'] = [];
@@ -393,7 +393,9 @@ export function planShareClip(lines: TimedLine[], songSeconds: number, maxFrames
     frames.push({ at: t, line });
   };
   for (const edge of [...edges].sort((x, y) => x - y)) {
-    const line = at(edge);
+    // Nothing new opens in the last half second (too short to read), but a line that ends there is still cleared:
+    // dropping every edge in it left a line ending at 20.1 s on screen to the end of a clip ending at 20.5 s (Codex, PR #157).
+    const line = edge >= end - 0.5 ? null : at(edge);
     // To the hundredth, on the safe side: a line comes on no earlier than it is sung, and goes off no later.
     const exact = (edge - clipStart) * 100;
     const off = Math.max(0, Math.floor(exact + 1e-6)) / 100;

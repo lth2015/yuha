@@ -63,6 +63,23 @@ describe('the share video plan', () => {
     neverShownUnsung(plan, lines);
   });
 
+  it('clears a line that ends in the clip’s last half second (Codex, PR #157)', () => {
+    const lines = [line('first', 2, 4), line('tail', 19, 20.1)];
+    const plan = planShareClip(lines, 30, 200, 20);
+    expect(plan.start + plan.duration).toBeCloseTo(20.5);
+    expect(shownAt(plan, 19.5)).toBe('tail');
+    expect(shownAt(plan, 20.3)).toBeNull();
+    neverShownUnsung(plan, lines);
+  });
+
+  it('opens nothing in the last half second, and clears what is up when it gets there', () => {
+    const lines = [line('first', 2, 4), line('a', 17, 20.2), line('b', 20.2, 22)]; // clip 0.5-20.5 s
+    const plan = planShareClip(lines, 30, 200, 20);
+    expect(shownAt(plan, 20.1)).toBe('a');
+    expect(shownAt(plan, 20.3)).toBeNull(); // b starts 0.3 s before the end: not opened
+    neverShownUnsung(plan, lines);
+  });
+
   it('holds for random fractional timelines at any budget', () => {
     let seed = 7;
     const rand = () => ((seed = (seed * 1103515245 + 12345) % 2 ** 31) / 2 ** 31);
@@ -75,7 +92,7 @@ describe('the share video plan', () => {
         lines.push(line(`l${run}-${i}`, Number(start.toFixed(4)), Number(end.toFixed(4))));
         t = end;
       }
-      const plan = planShareClip(lines, 120, 2 + Math.floor(rand() * 60), 60);
+      const plan = planShareClip(lines, 120, 2 + Math.floor(rand() * 60), 30 + rand() * 30);
       expect(plan.frames.length).toBeLessThanOrEqual(62);
       neverShownUnsung(plan, lines);
     }
