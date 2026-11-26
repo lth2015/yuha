@@ -211,7 +211,7 @@ async function openBgm(page, state) {
     return list?.items?.[0]?.trackId ?? null;
   });
   const job = {
-    jobId: '00000000-0000-4000-8000-00000000b6e0', projectId: '00000000-0000-4000-8000-00000000b6e1', trackId: state === 'ready' ? trackId : null,
+    jobId: 'b6e0b6e0-b6e0-4b6e-ab6e-b6e0b6e0b6e0', projectId: 'b6e1b6e1-b6e1-4b6e-ab6e-b6e1b6e1b6e1', trackId: state === 'ready' ? trackId : null,
     mode: 'simple', prompt: '', styles: ['japanese healing'], energy: 0.5, visibility: 'private', instrumental: true, title: null, lyrics: null,
     errorCode: state === 'failed' ? 'output_check_failed' : null, failureReason: null, queuePosition: null, queueDeadlineAt: null, phase: state === 'making' ? 'generating' : state === 'ready' ? 'done' : 'failed',
     state: state === 'failed' ? 'FAILED' : state === 'ready' ? 'DELIVERED' : 'SUBMITTED', durationSeconds: 30,
@@ -219,7 +219,7 @@ async function openBgm(page, state) {
     demo: true, credit: state === 'failed' ? 'refunded' : 'reserved', failure: state === 'failed' ? 'technical' : null,
   };
   await page.route('**/v1/generations', (route) => route.fulfill({ status: 202, json: { ...job, deduplicated: false } }));
-  await page.route('**/v1/jobs/00000000-0000-4000-8000-00000000b6e0', (route) => route.fulfill({ json: job }));
+  await page.route('**/v1/jobs/b6e0b6e0-b6e0-4b6e-ab6e-b6e0b6e0b6e0', (route) => route.fulfill({ json: job }));
   if (state === 'ready' && trackId) {
     await page.route(`**/v1/tracks/${trackId}`, async (route) => {
       const response = await route.fetch();
