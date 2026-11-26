@@ -8,10 +8,11 @@ import {
   query,
   queueSceneMv,
   replaceDraftShots,
+  type SceneMvBudget,
   type SceneMvRow,
   type SceneMvShotRow,
 } from '@yuha/db';
-import { checkPrompt } from '@yuha/providers';
+import { checkPrompt, shotSecondsFor } from '@yuha/providers';
 import type { AppContext } from '../context.js';
 import { discardAtService } from './scene-mv-cleanup.js';
 
@@ -150,10 +151,38 @@ export async function editSceneMvShots(id: string, ownerId: string, shots: strin
   return (await viewSceneMv(id, ownerId))!;
 }
 
-export async function startSceneMv(id: string, ownerId: string): Promise<SceneMvView> {
-  await ownMv(id, ownerId);
-  const r = await queueSceneMv(id, ownerId);
+/**
+ * The caps and what a second costs, for a paid video service; null for a free
+ * one. `secondsPerShot` matters only when starting, where it prices the plan.
+ */
+export function sceneMvBudget(ctx: AppContext, secondsPerShot = 0): SceneMvBudget | null {
+  const price = ctx.video?.pricePerSecondUsd ?? 0;
+  if (!ctx.video || price <= 0) return null;
+  const micros = (usd: number | undefined) => (usd === undefined ? null : Math.round(usd * 1_000_000));
+  return {
+    perSecondMicros: Math.round(price * 1_000_000),
+    secondsPerShot,
+    totalMicros: micros(ctx.config.SCENE_MV_BUDGET_USD_TOTAL),
+    dailyMicros: micros(ctx.config.SCENE_MV_BUDGET_USD_DAILY ?? ctx.config.SCENE_MV_BUDGET_USD_TOTAL),
+    perUserDaily: ctx.config.SCENE_MV_PER_USER_DAILY,
+    siteDaily: ctx.config.SCENE_MV_SITE_DAILY,
+  };
+}
+
+const BUDGET_MESSAGES = {
+  budget: 'the AI scene MV budget is used up for now',
+  user_daily_limit: 'you have started today’s AI scene MVs already',
+  site_daily_limit: 'today’s AI scene MVs are used up',
+} as const;
+
+export async function startSceneMv(ctx: AppContext, id: string, ownerId: string): Promise<SceneMvView> {
+  const mv = await ownMv(id, ownerId);
+  const seconds = shotSecondsFor(mv.clip_end - mv.clip_start, mv.shots.length, ctx.video?.durations);
+  const r = await queueSceneMv(id, ownerId, sceneMvBudget(ctx, seconds));
   if (!r.ok) {
+    if (r.reason === 'budget' || r.reason === 'user_daily_limit' || r.reason === 'site_daily_limit') {
+      throw new AppError('RATE_LIMITED', BUDGET_MESSAGES[r.reason], { reason: r.reason });
+    }
     if (r.reason === 'busy') throw new AppError('CONFLICT', 'another scene MV is being made', { reason: 'busy', activeId: await activeSceneMvFor(ownerId) });
     if (r.reason === 'not_draft') throw new AppError('CONFLICT', 'this scene MV has already started', { reason: 'not_draft' });
     throw new AppError('NOT_FOUND', 'no such scene MV');

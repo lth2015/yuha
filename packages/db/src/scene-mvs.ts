@@ -73,6 +73,73 @@ const MOVES: Record<string, SceneMvStatus[]> = {
 
 const ER_DUP_ENTRY = 1062;
 
+/**
+ * What a paid video service may cost, and the caps (docs/AI_SCENE_MV_VEO_SPEC.md
+ * §3; migration 0038). Absent for a free one (the demo, the self-hosted LTX).
+ * Money is in millionths of a US dollar; days are Japan's.
+ */
+export interface SceneMvBudget {
+  perSecondMicros: number;
+  secondsPerShot: number;
+  /** null: no budget configured — a paid service then starts nothing (fails closed). */
+  totalMicros: number | null;
+  dailyMicros: number | null;
+  perUserDaily: number;
+  siteDaily: number;
+}
+export type SceneMvBudgetRefusal = 'budget' | 'user_daily_limit' | 'site_daily_limit';
+
+const JST_TODAY = `DATE(UTC_TIMESTAMP(3) + INTERVAL 9 HOUR)`;
+const JST_DAY_START_UTC = `(TIMESTAMP(DATE(UTC_TIMESTAMP(3) + INTERVAL 9 HOUR)) - INTERVAL 9 HOUR)`;
+const BUDGET_LOCK = 'yuha_scene_mv_budget';
+
+/** Whether `extra` more fits both money caps; call under BUDGET_LOCK. */
+async function roomFor(b: SceneMvBudget, extra: number, conn: mysql.PoolConnection): Promise<boolean> {
+  if (b.totalMicros === null || b.dailyMicros === null) return false;
+  const row = await queryOne<{ total: number; today: number }>(
+    `SELECT COALESCE(SUM(micros), 0) AS total, COALESCE(SUM(CASE WHEN day_jst = ${JST_TODAY} THEN micros ELSE 0 END), 0) AS today
+       FROM scene_mv_charges WHERE refunded = 0`,
+    [],
+    conn,
+  );
+  return Number(row?.total ?? 0) + extra <= b.totalMicros && Number(row?.today ?? 0) + extra <= b.dailyMicros;
+}
+
+async function withBudgetLock<T>(conn: mysql.PoolConnection, work: () => Promise<T>): Promise<T | 'locked'> {
+  const got = await queryOne<{ ok: number | null }>(`SELECT GET_LOCK(?, 10) AS ok`, [BUDGET_LOCK], conn);
+  if (Number(got?.ok) !== 1) return 'locked';
+  try {
+    return await work();
+  } finally {
+    await queryOne(`SELECT RELEASE_LOCK(?)`, [BUDGET_LOCK], conn);
+  }
+}
+
+/** The latest paid-for attempt of a shot is known to have cost nothing: never sent, or failed at the service. */
+export async function refundLatestCharge(shotId: string): Promise<void> {
+  await execute(`UPDATE scene_mv_charges SET refunded = 1 WHERE shot_id = ? AND refunded = 0 ORDER BY attempt DESC LIMIT 1`, [shotId]);
+}
+
+/** Shots of this MV that were reserved for but never sent. */
+async function refundUnsent(sceneMvId: string, tx: mysql.PoolConnection): Promise<void> {
+  await execute(
+    `UPDATE scene_mv_charges c JOIN scene_mv_shots s ON s.id = c.shot_id
+        SET c.refunded = 1
+      WHERE c.scene_mv_id = ? AND c.refunded = 0 AND s.status = 'pending' AND s.provider_clip_id IS NULL`,
+    [sceneMvId],
+    tx,
+  );
+}
+
+/** What this MV's attempts may have cost, refunds excluded (for the console and reconciliation). */
+export async function sceneMvSpendMicros(params: { sceneMvId?: string } = {}): Promise<number> {
+  const row = await queryOne<{ n: number }>(
+    `SELECT COALESCE(SUM(micros), 0) AS n FROM scene_mv_charges WHERE refunded = 0${params.sceneMvId ? ' AND scene_mv_id = ?' : ''}`,
+    params.sceneMvId ? [params.sceneMvId] : [],
+  );
+  return Number(row?.n ?? 0);
+}
+
 export async function createSceneMvDraft(p: {
   ownerId: string;
   trackId: string;
@@ -118,14 +185,40 @@ export async function getSceneMv(id: string): Promise<(SceneMvRow & { shots: Sce
 export async function queueSceneMv(
   id: string,
   ownerId: string,
-): Promise<{ ok: true } | { ok: false; reason: 'not_found' | 'not_draft' | 'busy' }> {
+  budget?: SceneMvBudget | null,
+): Promise<{ ok: true } | { ok: false; reason: 'not_found' | 'not_draft' | 'busy' | SceneMvBudgetRefusal }> {
+  type Out = { ok: true } | { ok: false; reason: 'not_found' | 'not_draft' | 'busy' | SceneMvBudgetRefusal };
   try {
-    return await withTx(async (tx) => {
+    return await withTx(async (tx): Promise<Out> => {
       const row = await queryOne<{ status: SceneMvStatus }>(`SELECT status FROM scene_mvs WHERE id = ? AND owner_id = ? FOR UPDATE`, [id, ownerId], tx);
-      if (!row) return { ok: false, reason: 'not_found' } as const;
-      if (row.status !== 'draft') return { ok: false, reason: 'not_draft' } as const;
-      await execute(`UPDATE scene_mvs SET status = 'queued', queued_at = UTC_TIMESTAMP(3) WHERE id = ?`, [id], tx);
-      return { ok: true } as const;
+      if (!row) return { ok: false, reason: 'not_found' };
+      if (row.status !== 'draft') return { ok: false, reason: 'not_draft' };
+      const start = async (): Promise<Out> => {
+        if (budget) {
+          // Every start reserves what its shots may cost, against both caps, under one lock.
+          const mine = await queryOne<{ n: number }>(`SELECT COUNT(*) AS n FROM scene_mvs WHERE owner_id = ? AND queued_at >= ${JST_DAY_START_UTC}`, [ownerId], tx);
+          if (Number(mine?.n ?? 0) >= budget.perUserDaily) return { ok: false, reason: 'user_daily_limit' };
+          const site = await queryOne<{ n: number }>(`SELECT COUNT(*) AS n FROM scene_mvs WHERE queued_at >= ${JST_DAY_START_UTC}`, [], tx);
+          if (Number(site?.n ?? 0) >= budget.siteDaily) return { ok: false, reason: 'site_daily_limit' };
+          const shots = await query<{ id: string }>(`SELECT id FROM scene_mv_shots WHERE scene_mv_id = ? ORDER BY idx`, [id], tx);
+          const each = budget.perSecondMicros * budget.secondsPerShot;
+          if (budget.perSecondMicros > 0) {
+            if (!(await roomFor(budget, each * shots.length, tx))) return { ok: false, reason: 'budget' };
+            for (const shot of shots) {
+              await execute(
+                `INSERT INTO scene_mv_charges (id, scene_mv_id, shot_id, owner_id, attempt, micros, day_jst) VALUES (?, ?, ?, ?, 1, ?, ${JST_TODAY})`,
+                [randomUUID(), id, shot.id, ownerId, each],
+                tx,
+              );
+            }
+          }
+        }
+        await execute(`UPDATE scene_mvs SET status = 'queued', queued_at = UTC_TIMESTAMP(3) WHERE id = ?`, [id], tx);
+        return { ok: true };
+      };
+      if (!budget) return start();
+      const out = await withBudgetLock(tx, start);
+      return out === 'locked' ? { ok: false, reason: 'budget' } : out;
     });
   } catch (err) {
     if ((err as { errno?: number }).errno === ER_DUP_ENTRY) return { ok: false, reason: 'busy' };
@@ -153,6 +246,7 @@ export async function advanceSceneMv(
       tx,
     );
     if (to === 'failed') {
+      await refundUnsent(id, tx);
       await execute(`UPDATE scene_mv_shots SET status = 'cancelled' WHERE scene_mv_id = ? AND status IN ('pending','running','failed')`, [id], tx);
     }
     return true;
@@ -164,6 +258,7 @@ export async function cancelSceneMv(id: string, ownerId: string): Promise<boolea
   return withTx(async (tx) => {
     const row = await queryOne<{ status: SceneMvStatus }>(`SELECT status FROM scene_mvs WHERE id = ? AND owner_id = ? FOR UPDATE`, [id, ownerId], tx);
     if (!row || !OPEN.includes(row.status)) return false;
+    await refundUnsent(id, tx);
     await execute(`UPDATE scene_mvs SET status = 'cancelled', finished_at = UTC_TIMESTAMP(3) WHERE id = ?`, [id], tx);
     await execute(`UPDATE scene_mv_shots SET status = 'cancelled' WHERE scene_mv_id = ? AND status IN ('pending','running','failed')`, [id], tx);
     return true;
@@ -178,7 +273,10 @@ export async function cancelSceneMv(id: string, ownerId: string): Promise<boolea
  * anywhere — one GPU, one shot. A named lock makes check-and-claim one step
  * across every worker.
  */
-export async function claimNextShot(worker: string, opts: { retryAfterSeconds?: number } = {}): Promise<SceneMvShotRow | null> {
+export async function claimNextShot(
+  worker: string,
+  opts: { retryAfterSeconds?: number; budget?: SceneMvBudget | null } = {},
+): Promise<SceneMvShotRow | null> {
   const conn: mysql.PoolConnection = await db().getConnection();
   try {
     const got = await queryOne<{ ok: number | null }>(`SELECT GET_LOCK('yuha_scene_mv_shot_claim', 10) AS ok`, [], conn);
@@ -208,7 +306,34 @@ export async function claimNextShot(worker: string, opts: { retryAfterSeconds?: 
       );
       const row = await queryOne<SceneMvShotRow>(`SELECT * FROM scene_mv_shots WHERE id = ?`, [next.id], conn);
       if (!row || row.status !== 'running' || row.claimed_by !== worker.slice(0, 64)) return null;
-      return { ...row, idx: Number(row.idx), attempts: Number(row.attempts) };
+      const claimed = { ...row, idx: Number(row.idx), attempts: Number(row.attempts) };
+      const b = opts.budget;
+      if (b && b.perSecondMicros > 0) {
+        // This attempt must be paid for: the start reserved attempt 1; a retry reserves its own.
+        const paid = await queryOne(`SELECT id FROM scene_mv_charges WHERE shot_id = ? AND attempt = ? AND refunded = 0`, [claimed.id, claimed.attempts], conn);
+        // A retry costs what the shot's first try was reserved at; no first reservation, nothing to pay (a free run).
+        const first = await queryOne<{ micros: number }>(`SELECT micros FROM scene_mv_charges WHERE shot_id = ? ORDER BY attempt LIMIT 1`, [claimed.id], conn);
+        if (!paid && first) {
+          const each = Number(first.micros);
+          const ok = await withBudgetLock(conn, async () => {
+            if (!(await roomFor(b, each, conn))) return false;
+            const owner = await queryOne<{ owner_id: string }>(`SELECT owner_id FROM scene_mvs WHERE id = ?`, [claimed.scene_mv_id], conn);
+            await execute(
+              `INSERT INTO scene_mv_charges (id, scene_mv_id, shot_id, owner_id, attempt, micros, day_jst) VALUES (?, ?, ?, ?, ?, ?, ${JST_TODAY})`,
+              [randomUUID(), claimed.scene_mv_id, claimed.id, owner?.owner_id ?? '', claimed.attempts, each],
+              conn,
+            );
+            return true;
+          });
+          if (ok !== true) {
+            // No money for this try: the MV ends here rather than spend past the cap.
+            await queryOne(`SELECT RELEASE_LOCK('yuha_scene_mv_shot_claim')`, [], conn);
+            await finishShot(claimed.id, { status: 'failed', failure: 'budget', final: true });
+            return null;
+          }
+        }
+      }
+      return claimed;
     } finally {
       await queryOne(`SELECT RELEASE_LOCK('yuha_scene_mv_shot_claim')`, [], conn);
     }
@@ -302,6 +427,7 @@ export async function finishShot(
     }
     await execute(`UPDATE scene_mv_shots SET status = 'failed', failure = ?, finished_at = UTC_TIMESTAMP(3) WHERE id = ?`, [outcome.failure.slice(0, 64), shotId], tx);
     if (Number(shot.attempts) >= SHOT_TRIES || outcome.final) {
+      await refundUnsent(ref.scene_mv_id, tx);
       await execute(`UPDATE scene_mvs SET status = 'failed', failure = 'shot_failed', finished_at = UTC_TIMESTAMP(3) WHERE id = ?`, [ref.scene_mv_id], tx);
       await execute(`UPDATE scene_mv_shots SET status = 'cancelled' WHERE scene_mv_id = ? AND status IN ('pending','failed') AND id <> ?`, [ref.scene_mv_id, shotId], tx);
     }
@@ -325,7 +451,8 @@ export async function sceneMvStorageKeys(trackId: string): Promise<string[]> {
  */
 export async function stopAndScrubSceneMvs(trackId: string): Promise<void> {
   await withTx(async (tx) => {
-    await query(`SELECT id FROM scene_mvs WHERE track_id = ? FOR UPDATE`, [trackId], tx);
+    const mvs = await query<{ id: string }>(`SELECT id FROM scene_mvs WHERE track_id = ? FOR UPDATE`, [trackId], tx);
+    for (const mv of mvs) await refundUnsent(mv.id, tx);
     await execute(
       `UPDATE scene_mvs SET status = IF(status IN ('draft','queued','generating','composing'), 'cancelled', status),
               finished_at = COALESCE(finished_at, UTC_TIMESTAMP(3)), description = NULL WHERE track_id = ?`,
@@ -394,6 +521,7 @@ export async function sceneMvKeys(id: string): Promise<string[]> {
 export async function stopAndScrubSceneMv(id: string): Promise<void> {
   await withTx(async (tx) => {
     await query(`SELECT id FROM scene_mvs WHERE id = ? FOR UPDATE`, [id], tx);
+    await refundUnsent(id, tx);
     await execute(
       `UPDATE scene_mvs SET status = IF(status IN ('draft','queued','generating','composing'), 'cancelled', status),
               finished_at = COALESCE(finished_at, UTC_TIMESTAMP(3)), description = NULL WHERE id = ?`,
