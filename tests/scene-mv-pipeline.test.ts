@@ -206,6 +206,54 @@ describe('drawing a scene MV', () => {
   }, 60_000);
 });
 
+describe('a provider that only draws some lengths, and a submit nobody can vouch for', () => {
+  it('asks for a length it draws, never one it refuses', async () => {
+    const user = await h.createUser({ credits: 10 });
+    const demo = new DemoVideoProvider({ delayMs: 5 });
+    const veoLike: VideoProvider = { ...demo, kind: 'veo-like', durations: [4, 6, 8], submit: (r) => demo.submit(r), status: (i) => demo.status(i), fetchClip: (i) => demo.fetchClip(i), discard: (i) => demo.discard(i), health: () => demo.health() };
+    // A span of 10 s over two shots needs 5 s each: Veo draws 4, 6 or 8, so 6 — never 5, never 8.
+    const id = await createSceneMvDraft({ ownerId: user.id, trackId: await song(user), style: 'neon_rain', description: null, clipStart: 0, clipEnd: 10, timingsSha: null, shots: ['a', 'b'] });
+    await queueSceneMv(id, user.id);
+    await run(veoLike);
+    expect(demo.submitted.map((r) => r.seconds)).toEqual([6, 6]);
+  }, 60_000);
+
+  it('never asks again after a submit that may have been accepted, and says so', async () => {
+    const user = await h.createUser({ credits: 10 });
+    let asks = 0;
+    const unsure: VideoProvider = {
+      kind: 'unsure',
+      submit: async () => {
+        asks += 1;
+        return { status: 'rejected', reason: 'uncertain', retryable: false };
+      },
+      status: async () => ({ status: 'unknown', reason: 'not_found' }),
+      fetchClip: async () => Buffer.alloc(0),
+      discard: async () => undefined,
+      health: async () => ({ ok: true, queued: 0 }),
+    };
+    const id = await queued(user, ['only']);
+    await run(unsure);
+    expect(asks).toBe(1); // not retried: it may be running, and paid for
+    const mv = await getSceneMv(id);
+    expect([mv?.status, mv?.failure, mv?.shots[0]?.failure]).toEqual(['failed', 'shot_failed', 'uncertain']);
+  }, 60_000);
+
+  it('does not ask one provider about a clip another one made', async () => {
+    const user = await h.createUser({ credits: 10 });
+    const a = new DemoVideoProvider({ delayMs: 200 });
+    const id = await queued(user, ['only']);
+    expect(await sceneMvTick(deps(a))).toBe('submitted');
+    // The deployment now points at another provider: the clip's id means nothing to it.
+    const b = new DemoVideoProvider({ delayMs: 5 });
+    const other: VideoProvider = { ...b, kind: 'another', submit: (r) => b.submit(r), status: (i) => b.status(i), fetchClip: (i) => b.fetchClip(i), discard: (i) => b.discard(i), health: () => b.health() };
+    await run(other);
+    expect(b.submitted).toHaveLength(0);
+    const mv = await getSceneMv(id);
+    expect([mv?.status, mv?.shots[0]?.failure]).toEqual(['failed', 'provider_changed']);
+  }, 60_000);
+});
+
 describe('shot length', () => {
   it('shares the span out, never past what the service draws', () => {
     expect(shotSeconds(30, 60, 4)).toBe(8);

@@ -32,6 +32,8 @@ export interface SceneMvShotRow {
   status: SceneMvShotStatus;
   attempts: number;
   provider_clip_id: string | null;
+  /** The video service that issued provider_clip_id (migration 0037). */
+  provider: string | null;
   clip_key: string | null;
   failure: string | null;
   claimed_by: string | null;
@@ -199,7 +201,7 @@ export async function claimNextShot(worker: string, opts: { retryAfterSeconds?: 
       await execute(
         `UPDATE scene_mv_shots SET status = 'running', attempts = attempts + 1, claimed_by = ?, started_at = UTC_TIMESTAMP(3), failure = NULL,
               -- A new try is a new clip: asking after the failed one again would spend every try on one failure.
-              provider_clip_id = NULL, clip_key = NULL
+              provider_clip_id = NULL, provider = NULL, clip_key = NULL
           WHERE id = ? AND status IN ('pending','failed')`,
         [worker.slice(0, 64), next.id],
         conn,
@@ -228,8 +230,12 @@ export async function runningShot(): Promise<(SceneMvShotRow & { owner_id: strin
 }
 
 /** The provider's id for the clip a running shot asked for, so a restarted worker asks after it rather than asking again. */
-export async function recordShotSubmitted(shotId: string, providerClipId: string): Promise<void> {
-  await execute(`UPDATE scene_mv_shots SET provider_clip_id = ? WHERE id = ? AND status = 'running'`, [providerClipId.slice(0, 64), shotId]);
+export async function recordShotSubmitted(shotId: string, providerClipId: string, provider: string): Promise<void> {
+  await execute(`UPDATE scene_mv_shots SET provider_clip_id = ?, provider = ? WHERE id = ? AND status = 'running'`, [
+    providerClipId.slice(0, 64),
+    provider.slice(0, 32),
+    shotId,
+  ]);
 }
 
 /**
@@ -269,7 +275,11 @@ export async function finishDrawnSceneMvs(): Promise<string[]> {
  */
 export async function finishShot(
   shotId: string,
-  outcome: { status: 'succeeded'; clipKey: string } | { status: 'failed'; failure: string },
+  /**
+   * `final`: no further try, whatever is left — a submit that may have been
+   * accepted (and billed) is never sent again (docs/AI_SCENE_MV_VEO_SPEC.md §3).
+   */
+  outcome: { status: 'succeeded'; clipKey: string } | { status: 'failed'; failure: string; final?: boolean },
 ): Promise<void> {
   const ref = await queryOne<{ scene_mv_id: string }>(`SELECT scene_mv_id FROM scene_mv_shots WHERE id = ?`, [shotId]);
   if (!ref) return;
@@ -291,7 +301,7 @@ export async function finishShot(
       return;
     }
     await execute(`UPDATE scene_mv_shots SET status = 'failed', failure = ?, finished_at = UTC_TIMESTAMP(3) WHERE id = ?`, [outcome.failure.slice(0, 64), shotId], tx);
-    if (Number(shot.attempts) >= SHOT_TRIES) {
+    if (Number(shot.attempts) >= SHOT_TRIES || outcome.final) {
       await execute(`UPDATE scene_mvs SET status = 'failed', failure = 'shot_failed', finished_at = UTC_TIMESTAMP(3) WHERE id = ?`, [ref.scene_mv_id], tx);
       await execute(`UPDATE scene_mv_shots SET status = 'cancelled' WHERE scene_mv_id = ? AND status IN ('pending','failed') AND id <> ?`, [ref.scene_mv_id, shotId], tx);
     }

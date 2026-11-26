@@ -16,6 +16,7 @@ export { HttpAlignmentProvider, type HttpAlignmentConfig } from './alignment/htt
 export * from './video/types.js';
 export { DemoVideoProvider, type DemoVideoOptions } from './video/demo.js';
 export { HttpVideoProvider, failureCode, type HttpVideoConfig } from './video/http.js';
+export { TokenStarsVeoProvider, VEO_MODELS, type TokenStarsVeoConfig, type VeoModel } from './video/tokenstars-veo.js';
 
 export * from './text/types.js';
 export { TokenStarsTextProvider, type TokenStarsConfig } from './text/tokenstars.js';

@@ -34,6 +34,7 @@ import {
   type RateObservation,
   DemoVideoProvider,
   HttpVideoProvider,
+  TokenStarsVeoProvider,
   type VideoProvider,
 } from '@yuha/providers';
 import { getSetting, initDb } from '@yuha/db';
@@ -195,6 +196,9 @@ function buildMusic(cfg: AppConfig): MusicProvider {
 
 function buildVideo(cfg: AppConfig): VideoProvider | null {
   if (cfg.video === 'demo') return new DemoVideoProvider();
+  if (cfg.video === 'tokenstars') {
+    return new TokenStarsVeoProvider({ baseUrl: cfg.TOKENSTARS_BASE_URL!, apiKey: cfg.TOKENSTARS_API_KEY!, model: cfg.VEO_MODEL });
+  }
   if (cfg.video === 'http') {
     return new HttpVideoProvider({
       baseUrl: cfg.LTX_API_BASE_URL!,
