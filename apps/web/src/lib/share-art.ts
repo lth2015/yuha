@@ -372,21 +372,52 @@ export function planShareClip(lines: TimedLine[], songSeconds: number, maxFrames
    * singing (Codex review, PR #157). The photo video already took a line off
    * when it ended; now both do.
    */
+  const round = (n: number) => Number(n.toFixed(2));
+  const clipStart = round(start); // what the renderer adds each frame's time to
   const at = (t: number) => lines.find((l) => l.start <= t && l.end > t)?.text ?? null;
-  const times = new Set<number>([0]);
+  // Which line is on screen is decided at the exact edge; only the frame's time
+  // is rounded. Rounding first and looking up after put a line that starts at
+  // 12.127 s on the frame at 12.12 s, where it is not yet sung, and kept a line
+  // ending at 15.127 s on the frame at 15.12 s (Codex, PR #157).
+  const edges = new Set<number>([clipStart]);
   for (const l of lines) {
     for (const edge of [l.start, l.end]) {
-      if (edge > start && edge < end - 0.5) times.add(Number((edge - start).toFixed(2)));
+      if (edge > clipStart && edge < end - 0.5) edges.add(edge);
     }
   }
   const frames: ClipPlan['frames'] = [];
-  for (const t of [...times].sort((a, b) => a - b)) {
-    if (frames.length >= maxFrames) break;
-    const line = at(start + t);
-    if (frames.length && frames[frames.length - 1]!.line === line) continue;
+  const put = (t: number, line: string | null) => {
+    // Edges a few milliseconds apart land on one frame time, or swap: what follows is what stays on screen.
+    while (frames.length && frames[frames.length - 1]!.at >= t) frames.pop();
+    if (frames.length && frames[frames.length - 1]!.line === line) return;
     frames.push({ at: t, line });
+  };
+  for (const edge of [...edges].sort((x, y) => x - y)) {
+    const line = at(edge);
+    // To the hundredth, on the safe side: a line comes on no earlier than it is sung, and goes off no later.
+    const exact = (edge - clipStart) * 100;
+    const off = Math.max(0, Math.floor(exact + 1e-6)) / 100;
+    const on = Math.max(0, Math.ceil(exact - 1e-6)) / 100;
+    // One line straight into the next between two frame times: off at the floor, the next on at the ceiling.
+    if (line !== null && on > off) put(off, null);
+    put(line === null ? off : on, line);
   }
-  return { start: Number(start.toFixed(2)), duration: Number(duration.toFixed(2)), frames };
+  /*
+   * More changes than the server takes: keep the clip's first ones and end on
+   * a blank, so the last line shown is cleared where it ends. Stopping at the
+   * cap used to leave a line's opening frame without its closing one, and the
+   * line stayed up to the end of the clip (Codex, PR #157). Words go missing
+   * from the end of a long clip; no line is shown when it is not sung.
+   */
+  if (frames.length > maxFrames) {
+    frames.length = maxFrames;
+    if (frames[frames.length - 1]!.line !== null) {
+      // The frame that would have opened a line closes the one before it instead (that line ended by then).
+      frames[frames.length - 1] = { at: frames[frames.length - 1]!.at, line: null };
+      if (frames.length > 1 && frames[frames.length - 2]!.line === null) frames.pop();
+    }
+  }
+  return { start: clipStart, duration: round(duration), frames };
 }
 
 const PHOTO_CLIP_SECONDS = 30;
