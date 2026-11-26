@@ -7,7 +7,9 @@
  *   2. a day's quota spent, it plays with static words, says it will try the
  *      next time it is opened, and does; tabs share one slot, and a visitor on
  *      a shared link never starts one;
- *   3. nobody saves anything (the page side is pinned in the web tests).
+ *   3. nobody saves anything. This file pins the server side; the page's
+ *      polling and swap are pinned in tests/lyric-sync-refresh.test.ts and
+ *      were checked in a browser (PR #156/#157).
  */
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { randomUUID } from 'node:crypto';
@@ -157,6 +159,27 @@ describe('an older song its owner opens', () => {
     await nightPasses();
     expect((await open(user, c)).lyricSync).toBe('syncing');
     expect(await jobs(c)).toMatchObject([{ status: 'queued', trigger_kind: 'backfill' }]);
+  }, 60_000);
+
+  it('does not call a busy moment a spent quota', async () => {
+    // Another request holds the queue's lock (an owner opening songs in another tab, at that instant).
+    const user = await h.createUser({ credits: 5 });
+    const id = await oldSong(user);
+    const { db } = await import('@yuha/db');
+    const holder = await db().getConnection();
+    try {
+      await holder.query(`SELECT GET_LOCK('yuha_lyric_backfill', 5)`);
+      const v = await open(user, id);
+      // Neither 'today's limit' (nothing measured it) nor 'syncing' (nothing was queued).
+      expect(v.lyricSync).not.toBe('deferred');
+      expect(v.lyricSync).not.toBe('syncing');
+      expect(await jobs(id)).toHaveLength(0);
+    } finally {
+      await holder.query(`SELECT RELEASE_LOCK('yuha_lyric_backfill')`);
+      holder.release();
+    }
+    // The next open, with the lock free, queues it as usual.
+    expect((await open(user, id)).lyricSync).toBe('syncing');
   }, 60_000);
 
   it('tries a failed sync again the next day, not the same day', async () => {

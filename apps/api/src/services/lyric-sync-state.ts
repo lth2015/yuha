@@ -62,7 +62,8 @@ export async function lyricSyncStateOnOpen(
     lyrics: row.lyrics,
     dailyQuota: ctx.config.LYRIC_BACKFILL_DAILY,
   }).catch(() => 'none' as const);
-  return out === 'none' ? state : out;
+  // Busy or nothing to do: the song's state as it is, never a claim about a quota.
+  return out === 'none' || out === 'busy' ? state : out;
 }
 
 async function backfillFor(ctx: AppContext, ownerId: string): Promise<boolean> {
