@@ -5,7 +5,7 @@
 #   ./05_try_v15.sh full       ... then the full bench (7 configs x 6 songs x 2 seeds, ~1h)
 set -euo pipefail
 cd "$(dirname "$0")"
-DGX="${DGX:-dgx}"
+DGX="${DGX:-dgxa}"
 echo "== upload service code"
 scp -q docker-compose.yml "$DGX:yuha-spark/"
 scp -q server/app.py server/align.py server/bench_vocals.py "$DGX:yuha-spark/server/"

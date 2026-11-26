@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Point the local dev stack at the ACE-Step service on the Spark box, when
-# `ssh dgx` is not available (off the office network).
+# `ssh dgxa` is not available (off the office network).
 #
 # 03_wire_yuha.sh does the same thing but reads the key and the base URL over
 # ssh from ~/yuha-spark/.env. From outside that network the host does not

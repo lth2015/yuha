@@ -9,7 +9,7 @@
 # go with them, which is how the last cause of this went unexplained.
 set -euo pipefail
 cd "$(dirname "$0")"
-DGX="${DGX:-dgx}"
+DGX="${DGX:-dgxa}"
 AR='~/yuha-app'
 MR='~/yuha-spark'
 ID="${1:-}"

@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
 # Ship the current commit to the DGX — both stacks — and prove it arrived.
 #
-# Run on the Mac that can `ssh dgx`:
+# Run on the Mac that can `ssh dgxa` (the music box; `dgxv` will be video):
 #     cd deploy/dgx && ./update.sh
 #
 # Options (env):
-#   DGX=dgx          ssh host
+#   DGX=dgxa         ssh host (the music box; was `dgx`)
 #   MUSIC=auto       auto | yes | no — whether to rebuild the music service
 #   ALLOW_DIRTY=1    deploy a working tree with uncommitted changes
 #   SKIP_APP=1       music service only
@@ -26,7 +26,7 @@
 set -euo pipefail
 cd "$(dirname "$0")"
 ROOT="$(cd ../.. && pwd)"
-DGX="${DGX:-dgx}"
+DGX="${DGX:-dgxa}"
 MUSIC_MODE="${MUSIC:-auto}"
 MR='~/yuha-spark'
 AR='~/yuha-app'

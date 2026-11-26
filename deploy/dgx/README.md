@@ -1,6 +1,11 @@
 # Deploying YUHA on the DGX Spark (intranet)
 
-Two stacks on one DGX, both driven from a Mac that can `ssh dgx`.
+Two stacks on one DGX, both driven from a Mac that can `ssh dgxa`.
+
+**Hosts (2026-11-26).** The box these stacks run on is `ssh dgxa` (it was
+`dgx`). Every script here defaults to it and takes `DGX=<host>` to point
+elsewhere. `ssh dgxv` is the box for the video work to come; nothing here
+uses it yet.
 These scripts used to live in a separate `~/workplace/yuha-spark` folder;
 they are tracked here now so a change to the service ships with the code
 that depends on it.
@@ -18,7 +23,7 @@ git checkout master && git pull
 cd deploy/dgx && ./update.sh
 ```
 
-One command for both stacks. It runs **on the Mac that can `ssh dgx`**;
+One command for both stacks. It runs **on the Mac that can `ssh dgxa`**;
 neither stack pulls from git on its own.
 
 What it does that doing it by hand did not:
@@ -85,9 +90,9 @@ nothing is half-deployed; paste the error rather than re-running.
 ### Checking the music service by hand
 
 ```bash
-ssh dgx 'P=$(sed -n "s/^HOST_PORT=//p" ~/yuha-spark/.env); curl -s http://127.0.0.1:${P:-8000}/healthz'
+ssh dgxa 'P=$(sed -n "s/^HOST_PORT=//p" ~/yuha-spark/.env); curl -s http://127.0.0.1:${P:-8000}/healthz'
 # expect "model_loaded":true   (update.sh already waits for this)
-cd deploy/dgx/music && ssh dgx 'cd ~/yuha-spark && python3 02_acceptance.py --quick'
+cd deploy/dgx/music && ssh dgxa 'cd ~/yuha-spark && python3 02_acceptance.py --quick'
 ```
 
 Since `b06b08f` the service masters every render: loudness normalised to
