@@ -23,6 +23,31 @@ report a song weeks after they made it. No client ever receives it
 (`clientTimings` in `packages/db/src/tracks.ts` strips it from every view), and
 a person's correction replaces the whole timeline, reason included.
 
+## Automatic sync of new songs (`LYRIC_AUTO_SYNC`)
+
+L4a in [AUTOMATIC_LYRIC_SYNC_TICKETS.md](AUTOMATIC_LYRIC_SYNC_TICKETS.md). With `LYRIC_AUTO_SYNC` set
+to `staff` (staff members' songs) or `all`, a new sung song is **not** aligned during delivery:
+
+1. Delivery queues one `lyric_sync_jobs` row per song, master audio and lyrics. The unique key
+   means a retried delivery, a refresh or a second tab never makes a second job. The song is
+   playable straight away. `lyricSync` is `syncing`, and the lyrics show as static text.
+2. The worker (`apps/worker/src/lyric-sync.ts`) claims a due job and asks the aligner, using the
+   DGX's own copy of the render while it still has one and otherwise the song's master.
+3. If the aligner heard the song, the timeline is **applied** through the guarded write
+   (`storeDeliveredLyricTimings` with `masterSha`). That write is refused when the song was
+   deleted or corrected, its words changed, or its master is another file; the job then ends
+   `kept`.
+4. A failure, or an estimate the aligner fell back to, is retried after 1, 5 and 30 minutes.
+   After the fourth attempt the job is `failed`: the song keeps a labelled estimate, `lyricSync`
+   is `unavailable`, and the song counts as **not synced**.
+5. A claim older than 10 minutes (a pod roll) is taken back, and that attempt counts.
+
+`lyricSync` in the track view is `synced` for a heard or corrected timeline, `partial` when a
+heard line's `confidence` is below 0.5, `syncing` while a job is queued or running, and
+`unavailable` otherwise. It is `null` for a song with nothing sung.
+
+`off` (the default) is the previous behaviour, so rolling back is one value.
+
 ## Diagnosing a song whose words do not match the voice
 
 **Across all songs**: admin console → 运营指标 → 生成质量. 「歌词对齐（人声）」 is the

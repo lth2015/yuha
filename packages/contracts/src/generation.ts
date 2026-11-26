@@ -413,6 +413,12 @@ export type JobView = z.infer<typeof jobView>;
  * (forced alignment over the audio), 'estimated' is our deterministic
  * weighting of lines across the song length. The UI shows which one it has.
  */
+/** Below this per-line confidence a line is not shown as synced (docs/quality/LYRIC_BENCH.md). */
+export const LINE_CONFIDENT = 0.5;
+
+export const LyricSyncState = z.enum(['syncing', 'synced', 'partial', 'unavailable']);
+export type LyricSyncState = z.infer<typeof LyricSyncState>;
+
 export const lyricTimings = z.object({
   /**
    * Where the numbers came from, best first.
@@ -480,6 +486,14 @@ export const trackView = z.object({
   coverSeed: z.number().int(),
   /** Timings for synced lyrics; null when the song has no lyrics. */
   lyricTimings: lyricTimings.nullable(),
+  /**
+   * Where the song's lyric sync stands; null for a song with nothing sung.
+   *   syncing      the platform is aligning it (static lyrics meanwhile)
+   *   synced       a heard or corrected timeline, every line confirmed
+   *   partial      heard, but some lines the aligner was not sure of
+   *   unavailable  no heard timeline (an estimate or nothing) and none on the way
+   */
+  lyricSync: LyricSyncState.nullable(),
   /** Who the song was written for; null for a song written for nobody in particular. */
   dedication: dedicationSchema.nullable(),
   /** How many people licensed this song on the Market. */

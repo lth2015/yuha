@@ -1,3 +1,4 @@
+import { lyricSyncStateOf } from '../services/lyric-sync-state.js';
 import type { FastifyInstance } from 'fastify';
 import { AppError, setVisibilityRequest, type TrackView } from '@yuha/contracts';
 import {
@@ -23,6 +24,7 @@ export function toPublicTrackView(
     previewUrl: string | null;
     licenseCount?: number;
     licensedByMe?: boolean | null;
+    lyricSync?: TrackView['lyricSync'];
   },
 ): TrackView {
   return {
@@ -41,6 +43,7 @@ export function toPublicTrackView(
     durationSeconds: row.duration_ms / 1000,
     coverSeed: row.cover_seed,
     lyricTimings: clientTimings(row.lyric_timings),
+    lyricSync: opts.lyricSync !== undefined ? opts.lyricSync : lyricSyncStateOf(row, null),
     dedication: row.dedication ?? null,
     licenseCount: opts.licenseCount ?? 0,
     licensedByMe: opts.licensedByMe ?? null,

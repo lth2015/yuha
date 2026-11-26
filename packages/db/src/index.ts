@@ -19,6 +19,7 @@ export * from './lyric-drafts.js';
 export * from './credit-resets.js';
 export * from './lyric-realignments.js';
 export * from './lyric-proposals.js';
+export * from './lyric-sync.js';
 export * from './scene-mvs.js';
 export * from './share-cards.js';
 export * from './customer-notices.js';

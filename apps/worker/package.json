@@ -25,6 +25,10 @@
     "./reconcile": {
       "types": "./dist/reconcile.d.ts",
       "default": "./dist/reconcile.js"
+    },
+    "./lyric-sync": {
+      "types": "./dist/lyric-sync.d.ts",
+      "default": "./dist/lyric-sync.js"
     }
   },
   "scripts": {
