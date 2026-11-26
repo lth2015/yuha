@@ -1,0 +1,92 @@
+[
+  {
+    "name": "flag-off",
+    "visible": false,
+    "sceneRequests": 0
+  },
+  {
+    "name": "original-style-art",
+    "images": [
+      {
+        "loaded": true,
+        "width": 320,
+        "height": 240
+      },
+      {
+        "loaded": true,
+        "width": 320,
+        "height": 240
+      },
+      {
+        "loaded": true,
+        "width": 320,
+        "height": 240
+      }
+    ]
+  },
+  {
+    "name": "selection-preview",
+    "chosenStart": 56,
+    "seekTime": 57.3
+  },
+  {
+    "name": "selection-auto-stop",
+    "stopped": true
+  },
+  {
+    "name": "draft-tab-return",
+    "localEditsPreserved": true
+  },
+  {
+    "name": "explicit-confirmation",
+    "createBody": {
+      "clipStart": 56,
+      "clipEnd": 60,
+      "style": "neon_rain",
+      "description": "雨夜，空无一人的街道，暖色灯光，缓慢前移。"
+    },
+    "patchBeforeStart": true,
+    "editedPrompt": "雨滴映着暖色霓虹，镜头沿空街缓缓前进。",
+    "startCalls": 1
+  },
+  {
+    "name": "leave-and-return",
+    "restoredStatus": "generating",
+    "drawn": 2,
+    "newJobs": 1
+  },
+  {
+    "name": "cancel",
+    "status": "cancelled",
+    "cancelCalls": 1,
+    "note": "contract fixture only; GPU not called"
+  },
+  {
+    "name": "safe-failure",
+    "rawErrorVisible": false,
+    "retryAvailable": true
+  },
+  {
+    "name": "actual-fixture-playback",
+    "time": 0.288625,
+    "duration": 1.046468,
+    "ready": 4
+  },
+  {
+    "name": "preview-download",
+    "videoSrcIsBlob": true,
+    "expiryVisible": true,
+    "downloaded": true,
+    "fixtureSeconds": 1,
+    "notARealGeneratedMv": true
+  },
+  {
+    "name": "delete",
+    "recordRemoved": true,
+    "deleteCalls": 1
+  },
+  {
+    "name": "reduced-motion",
+    "animatedElements": 0
+  }
+]

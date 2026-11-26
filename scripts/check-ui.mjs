@@ -52,6 +52,7 @@
 import { chromium } from 'playwright';
 import { mkdirSync } from 'node:fs';
 import { join } from 'node:path';
+import { prepareSceneMv } from './ui-scene-mv-fixture.mjs';
 
 const BASE = process.env.UI_BASE ?? 'http://localhost:5173';
 
@@ -145,6 +146,11 @@ const PAGES = [
   { name: 'library-trial-claim', path: '/library', as: 'creator', prepare: offerTrialSong },
   { name: 'library-device-videos', path: '/library', as: 'creator', prepare: keepDeviceVideos },
   { name: 'song', path: '/song/:track', as: 'creator' },
+  // T8 uses the agreed API contract until T7 is integrated. These are layout
+  // fixtures, not claims about real model generation or server retention.
+  ...['config', 'draft', 'progress', 'ready', 'failed', 'cancelled', 'history'].map((state) => ({
+    name: `song-scene-mv-${state}`, path: '/song/:track', as: 'creator', prepare: (page) => prepareSceneMv(page, state),
+  })),
   { name: 'song-public-view', path: '/song/:track', as: null },
   // The holidays (docs/HOLIDAY_SPEC.md): seen early through the staff preview, and the gift a recipient opens.
   { name: 'home-xmas', path: '/?preview-season=xmas', as: 'admin' },
@@ -751,9 +757,10 @@ const lanes = [];
 for (const vp of VIEWPORTS) {
   // Every language at phone widths, where length decides the layout;
   // Chinese alone above that.
-  for (const lang of vp.width < 600 ? LANGS : ['zh']) {
+  for (const lang of LANGS) {
     for (const as of [null, 'creator', 'admin', 'guest']) {
-      const pages = PAGES.filter((p) => p.as === as && (!only || p.name.includes(only)));
+      const pages = PAGES.filter((p) => p.as === as && (!only || p.name.includes(only)) &&
+        (vp.width < 600 || lang === 'zh' || p.name.startsWith('song-scene-mv-')));
       if (pages.length) lanes.push({ vp, lang, as, pages, lines: [] });
     }
   }
@@ -780,11 +787,12 @@ async function runLane(lane) {
     await page.goto(`${BASE}${pageDef.path}`, { waitUntil: 'networkidle' });
     await page.waitForTimeout(400); // web fonts and the first paint of charts
     const results = [];
+    let prepareCleanup;
     // The page as it lands, then — for pages with a second state, like a
     // customer opened from the list — that state too, at both ends.
     if (pageDef.prepare) {
       results.push(await page.evaluate(audit, { phone: vp.width < 600, phase: 'top' }));
-      await pageDef.prepare(page);
+      prepareCleanup = await pageDef.prepare(page);
       await page.waitForTimeout(300);
     }
     for (const phase of ['top', 'bottom']) {
@@ -828,6 +836,7 @@ async function runLane(lane) {
       lane.lines.push(`✓ ${where}`);
     }
     if (process.env.UI_WARN) for (const w of warns) lane.lines.push(`    warn ${w.rule} ${w.what} — ${w.detail}`);
+    await prepareCleanup?.();
   }
   await ctx.close();
   console.log(lane.lines.join('\n'));

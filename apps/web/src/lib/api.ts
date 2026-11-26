@@ -208,8 +208,12 @@ function errorFrom(res: Response, text: string, requestToken: string | null): Ap
   } catch {
     json = null;
   }
-  const body = json as { error?: { code?: ErrorCode; message?: string; details?: unknown; requestId?: string } } | null;
-  const code = body?.error?.code ?? 'INTERNAL_ERROR';
+  // T7 also specifies a flat busy response. Keep its active id so the person
+  // can return to the existing video instead of repeatedly creating another.
+  const body = json as { error?: { code?: ErrorCode; message?: string; details?: unknown; requestId?: string } | string; activeId?: unknown } | null;
+  const detail = body?.error && typeof body.error === 'object' ? body.error : null;
+  const busy = res.status === 409 && body?.error === 'busy';
+  const code = busy ? 'CONFLICT' : detail?.code ?? 'INTERNAL_ERROR';
   /*
    * An expired or revoked session drops the stale token — and says so.
    *
@@ -229,7 +233,8 @@ function errorFrom(res: Response, text: string, requestToken: string | null): Ap
       /* no window: nothing is rendering, so nothing needs telling */
     }
   }
-  return new ApiError(code, body?.error?.message ?? res.statusText, res.status, body?.error?.details, body?.error?.requestId ?? null);
+  return new ApiError(code, detail?.message ?? res.statusText, res.status,
+    busy && typeof body?.activeId === 'string' ? { activeId: body.activeId } : detail?.details, detail?.requestId ?? null);
 }
 
 /**

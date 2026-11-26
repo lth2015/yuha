@@ -3,6 +3,13 @@ import { ApiError, NetworkError, SESSION_EXPIRED_EVENT, apiFetch, apiFetchText, 
 
 afterEach(() => { vi.unstubAllGlobals(); vi.useRealTimers(); });
 
+it('retains the T7 active task id from a flat busy response without exposing its raw message', async () => {
+  vi.stubGlobal('fetch', async () => Response.json({ error: 'busy', activeId: 'existing-video' }, { status: 409 }));
+  await expect(apiFetch('/v1/scene-mvs/new/start', { method: 'POST' })).rejects.toMatchObject({
+    code: 'CONFLICT', status: 409, details: { activeId: 'existing-video' },
+  });
+});
+
 it('reports a proxy HTML response as a request failure instead of successful null data', async () => {
   vi.stubGlobal('fetch', vi.fn(async () => new Response('<!doctype html><title>YUHA</title>', {
     status: 200, headers: { 'content-type': 'text/html' },

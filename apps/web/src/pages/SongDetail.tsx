@@ -22,6 +22,8 @@ import { ErrorNotice } from '../components/common';
 import { Score } from '../components/Score';
 import { ShareMenu } from '../components/ShareMenu';
 import { PhotoVideo } from '../components/PhotoVideo';
+import { SceneMv } from '../components/SceneMv';
+import { sceneMvAvailable } from '../lib/scene-mv';
 import { useConfirm } from '../components/ConfirmDialog';
 import { SyncedLyrics } from '../components/SyncedLyrics';
 import { LyricSyncStudio } from '../components/LyricSyncStudio';
@@ -848,6 +850,9 @@ export default function SongDetail() {
               }
               photosEnabled={runtime?.features.photoVideoEnabled === true || runtime?.features.photoVideoPreview === true}
             />
+          )}
+          {manages && song.state === 'deliverable' && sceneMvAvailable(runtime) && (
+            <SceneMv key={song.trackId} song={song} />
           )}
           {/* A trial's song cannot be made into a video yet; say that it can, once kept. */}
           {isOwner && !manages && song.state === 'deliverable' && (

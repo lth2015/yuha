@@ -1,0 +1,56 @@
+{
+  "baseline": "df61255",
+  "handoff": "0d82fe9",
+  "T7ReadOnly": "21dd4fd",
+  "realGpuUsed": false,
+  "files": [
+    {
+      "path": "apps/web/public/scene-mv/neon_rain.svg",
+      "bytes": 1476,
+      "sha256": "380fa70364e9b07ff56b1759ea2d318b70dc6225812d5ce40e3776eba11dfa95",
+      "original": true,
+      "containsText": false,
+      "purpose": "style illustration, not model output"
+    },
+    {
+      "path": "apps/web/public/scene-mv/seaside_sunset.svg",
+      "bytes": 1287,
+      "sha256": "f2d95b01eeb1eb35ec12e62d2a97a06354bfdcabc7c44710898a74b3db9a5285",
+      "original": true,
+      "containsText": false,
+      "purpose": "style illustration, not model output"
+    },
+    {
+      "path": "apps/web/public/scene-mv/soft_watercolor.svg",
+      "bytes": 1379,
+      "sha256": "6a51d6cdc64e3c351ece8764904e64bb5d9a72bf652aab46a44ddd15259b054b",
+      "original": true,
+      "containsText": false,
+      "purpose": "style illustration, not model output"
+    },
+    {
+      "path": "docs/agents/visual-previews/scene-mv-ui/config-zh-1280.png",
+      "bytes": 439396,
+      "sha256": "ad35e5083ad39b7c88016229ef05a6e1d79cefe861fc65b2668056ddccf49bbf",
+      "data": "synthetic local demo and T7 contract fixture"
+    },
+    {
+      "path": "docs/agents/visual-previews/scene-mv-ui/config-zh-390.png",
+      "bytes": 116342,
+      "sha256": "a029a1cc3ae9f53d02f978bbec7a3eb2a36f25675cbef2bc0fde9c0061cb6cff",
+      "data": "synthetic local demo and T7 contract fixture"
+    },
+    {
+      "path": "docs/agents/visual-previews/scene-mv-ui/progress-zh-390.png",
+      "bytes": 130097,
+      "sha256": "cb45c9cefce65ed16cc2eeba793c89fc7475a3803cdee852cfb47f412251ac85",
+      "data": "synthetic local demo and T7 contract fixture"
+    },
+    {
+      "path": "docs/agents/visual-previews/scene-mv-ui/ready-zh-390.png",
+      "bytes": 70323,
+      "sha256": "d7cb020e786e808f41048c76f303962f467af88009765558fb8691363344317c",
+      "data": "synthetic local demo and T7 contract fixture"
+    }
+  ]
+}
