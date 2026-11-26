@@ -36,6 +36,7 @@ import { createExport, issueDownloadUrl } from '../services/exports.js';
 import { LICENSE_DISCLAIMER } from '../services/delivery.js';
 import { screenDedication } from '../services/generation.js';
 import { toPublicTrackView } from './explore.js';
+import { removeSceneMvsOfTrack } from '../services/scene-mv-cleanup.js';
 
 async function toTrackView(
   ctx: AppContext,
@@ -248,6 +249,8 @@ export default async function trackRoutes(app: FastifyInstance, opts: { ctx: App
         .then(() => forgetShareCard(id))
         .catch((err) => req.log.error({ err, key: card.storage_key }, 'could not remove a share card'));
     }
+    // Its scene MVs go now too: the words written about the pictures, and the files.
+    await removeSceneMvsOfTrack(ctx.storage, id, req.log);
     await trackEvent({
       name: 'track_deleted',
       userRef: req.user!.id,
