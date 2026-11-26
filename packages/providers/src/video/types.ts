@@ -71,7 +71,7 @@ export interface VideoProvider {
   health(): Promise<{ ok: boolean; queued: number | null }>;
 }
 
-export const CLIP_MAX_SECONDS = 8;
+const CLIP_MAX_SECONDS = 8;
 
 /** The rules both providers apply, so the demo refuses what the real service refuses. */
 export function clipRequestProblem(req: ClipRequest): string | null {
