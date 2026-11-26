@@ -403,7 +403,8 @@ const envSchema = z.object({
   // --- video clips for the AI scene MV (packages/providers/src/video/) -------
   /** none = no scene MV anywhere; demo = ffmpeg test pattern; http = the dgxv service. */
   VIDEO_ADAPTER: z.enum(['none', 'demo', 'http']).optional(),
-  LTX_API_BASE_URL: z.string().optional(),
+  /** From the secret store in production (the deploy files are public); trimmed like a secret. */
+  LTX_API_BASE_URL: secret(),
   LTX_API_KEY: secret(),
   /**
    * Plain http to the video box's public IP (product owner, 2026-11-26, for
