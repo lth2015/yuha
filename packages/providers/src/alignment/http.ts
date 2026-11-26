@@ -45,8 +45,11 @@ export class HttpAlignmentProvider implements AlignmentProvider {
   }
 
   async align(req: AlignmentRequest): Promise<AlignmentResult> {
-    const audioUrl = this.cfg.audioUrlResolver({ providerRequestId: req.providerRequestId });
-    if (!audioUrl) return { status: 'failed', reason: 'no_audio_url: ALIGNMENT_AUDIO_URL_TEMPLATE is not set' };
+    // The song itself when it was given (deploy/dgx/music/server/app.py takes
+    // `audio_b64`); otherwise a link to the aligner's own copy of the render.
+    const audioUrl = req.audio ? null : this.cfg.audioUrlResolver({ providerRequestId: req.providerRequestId });
+    if (!req.audio && !audioUrl) return { status: 'failed', reason: 'no_audio_url: ALIGNMENT_AUDIO_URL_TEMPLATE is not set' };
+    const source = req.audio ? { audio_b64: req.audio.toString('base64') } : { audio_url: audioUrl };
 
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), this.cfg.timeoutMs ?? 60_000);
@@ -54,7 +57,7 @@ export class HttpAlignmentProvider implements AlignmentProvider {
       const res = await fetch(new URL(this.cfg.submitPath, this.cfg.baseUrl), {
         method: 'POST',
         headers: { authorization: `Bearer ${this.cfg.apiKey}`, 'content-type': 'application/json' },
-        body: JSON.stringify({ lyrics: req.lyrics, audio_url: audioUrl, duration_seconds: req.durationSeconds }),
+        body: JSON.stringify({ lyrics: req.lyrics, ...source, duration_seconds: req.durationSeconds }),
         signal: controller.signal,
         redirect: 'error',
       });

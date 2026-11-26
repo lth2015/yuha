@@ -58,4 +58,22 @@ describe('HTTP alignment coverage', () => {
     });
     expect(await provider.align(request)).toMatchObject({ status: 'failed', reason: 'aligner_timeout' });
   });
+
+  it('sends the song itself when it is given one, instead of a link to the render', async () => {
+    let sent: Record<string, unknown> = {};
+    vi.stubGlobal('fetch', async (_url: string, init: { body: string }) => {
+      sent = JSON.parse(init.body);
+      return Response.json({ lines: complete });
+    });
+    const audio = Buffer.from('ID3 pretend song');
+    const result = await new HttpAlignmentProvider({
+      providerId: 'test-aligner', baseUrl: 'https://aligner.invalid', apiKey: 'test-only', submitPath: '/align',
+      linesField: 'lines', lineTextField: 'text', lineStartField: 'start', lineEndField: 'end',
+      // A render the aligner no longer has: no link to give.
+      audioUrlResolver: () => null,
+    }).align({ ...request, audio });
+    expect(result.status).toBe('ok');
+    expect(sent.audio_b64).toBe(audio.toString('base64'));
+    expect(sent).not.toHaveProperty('audio_url');
+  });
 });

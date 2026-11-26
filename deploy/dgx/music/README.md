@@ -138,6 +138,26 @@ This runs on the DGX, so merging changes nothing here: `./update.sh` rebuilds
 the music service when `server/` changed. Songs already made keep the timings
 they were given — an admin re-aligns them from the console (docs/LYRIC_ALIGNMENT.md).
 
+**The song itself, sent (`audio_b64`, 2026-11-26).** `/v1/align` also takes the
+audio in the request, base64, instead of `audio_url`: YUHA keeps every song,
+this server keeps renders `RETENTION_DAYS`, so "align it again" on an older
+song — or one this server did not render — sends the song. It is written to
+`$DATA_DIR/tmp/align-*.mp3` for the length of the request and removed when the
+answer is back; one left by a crash mid-request goes in the hourly retention
+sweep, whatever `RETENTION_DAYS` is. `audio_url` works as before.
+
+Check after `./update.sh` (from anywhere that reaches the service):
+
+```bash
+curl -s -X POST "$BASE/v1/align" -H "authorization: Bearer $KEY" -H 'content-type: application/json' \
+  -d '{"lyrics":"x","audio_b64":"!!!!!!!!","duration_seconds":10}'
+```
+
+The updated service answers `{"detail":"audio_b64 is not base64"}`. The old one
+answers a validation error about `audio_url` (it does not know the field).
+Only after the first answer is `FEATURE_LYRIC_AUTO_ALIGN_ENABLED` set to
+`"true"` in `deploy/k8s/qa/resources.yaml`.
+
 ## Still to confirm (§3)
 
 - License / output rights: read the model card + LICENSE text directly — https://huggingface.co/ACE-Step/ACE-Step-v1-3.5B and https://github.com/ace-step/ACE-Step — and quote the relevant lines, not just "commercial OK".

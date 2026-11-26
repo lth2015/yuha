@@ -12,7 +12,7 @@
  * evidence in an open rights case, cannot be undone.
  */
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
-import { getUser, insertOrder, query } from '@yuha/db';
+import { insertLyricProposal, getUser, insertOrder, query } from '@yuha/db';
 import { createHarness, resetData, teardown, type Harness, type TestUser } from './helpers/harness.js';
 
 let h: Harness;
@@ -179,6 +179,8 @@ describe('executing deletion', () => {
       payload: { kind: 'other', note: 'words about my own song', audioConsent: true } as never,
     });
     expect(report.statusCode).toBe(201);
+    // An "align it again" proposal holds lines of the lyrics (migration 0035).
+    await insertLyricProposal({ trackId, ownerId: user.id, lyricsSha: 'x'.repeat(64) });
     await requestDeletion(user);
 
     const res = await verifyAndExecute(admin, await deletionId(user.id));
@@ -200,6 +202,7 @@ describe('executing deletion', () => {
     expect(after!.marketing_opt_in).toBe(false);
     // What they wrote about their songs, and the permission to listen, go too.
     expect(await query(`SELECT id FROM issue_reports WHERE user_id = ?`, [user.id])).toHaveLength(0);
+    expect(await query(`SELECT id FROM lyric_proposals WHERE track_id = ?`, [trackId])).toHaveLength(0);
   });
 
   /*

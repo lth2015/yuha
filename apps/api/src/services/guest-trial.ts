@@ -1,6 +1,6 @@
 import { createHmac } from 'node:crypto';
 import { AppError, CONSENT_VERSION } from '@yuha/contracts';
-import {
+import { deleteLyricProposals,
   anonymiseUser,
   execute,
   findByExternalId,
@@ -226,6 +226,8 @@ export async function purgeExpiredGuestTrials(
                            lyric_timings = NULL, dedication = NULL, updated_at = UTC_TIMESTAMP(3) WHERE id = ?`,
         [track.id],
       );
+      // Its "align it again" proposals hold lines of the lyrics: they go with them.
+      await deleteLyricProposals(track.id);
     }
     for (const a of await query<{ job_id: string; attempt_no: number }>(
       `SELECT a.job_id, a.attempt_no FROM generation_attempts a JOIN generation_jobs j ON j.id = a.job_id WHERE j.user_id = ?`,

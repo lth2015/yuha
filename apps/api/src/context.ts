@@ -393,6 +393,7 @@ export function createContext(config: AppConfig): AppContext {
         freeTrialEnabled: statics.freeTrialEnabled && overrides.freeTrialEnabled !== false,
         wavExportEnabled: statics.wavExportEnabled && overrides.wavExportEnabled !== false,
         photoVideoEnabled: statics.photoVideoEnabled && overrides.photoVideoEnabled !== false,
+        lyricAutoAlignEnabled: statics.lyricAutoAlignEnabled && overrides.lyricAutoAlignEnabled !== false,
         guestTrialEnabled: statics.guestTrialEnabled && overrides.guestTrialEnabled !== false,
         commercialDeliveryEnabled:
           statics.commercialDeliveryEnabled && overrides.commercialDeliveryEnabled !== false,

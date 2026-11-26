@@ -144,5 +144,59 @@ class AlignRouteTests(unittest.TestCase):
         self.assertFalse(out["voice_activity"])
 
 
+class AlignSentAudioTests(unittest.TestCase):
+    """The audio sent with the request, for a song this server no longer has
+    (renders are kept RETENTION_DAYS) or never made: YUHA keeps every song."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.data = tempfile.TemporaryDirectory()
+        cls.environment = patch.dict(os.environ, {"DATA_DIR": cls.data.name})
+        cls.environment.start()
+        import importlib
+        import app
+        cls.app = importlib.reload(app)
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.environment.stop()
+        cls.data.cleanup()
+
+    def call(self, **fields):
+        import base64
+        heard_paths = []
+
+        def transcribe(audio, lyrics):
+            heard_paths.append(audio)
+            return MIX_WORDS
+
+        body = self.app.AlignRequest(lyrics=LYRICS, duration_seconds=20, **fields)
+        with patch.dict(sys.modules, {"separate": fake_separate(stem=False), "forced": fake_forced(error=True)}), \
+                patch.object(self.app, "API_KEY", "k"), \
+                patch.object(self.app, "transcribe_words", transcribe):
+            out = self.app.align(body, authorization="Bearer k")
+        return out, heard_paths
+
+    def test_aligns_audio_sent_with_the_request_and_keeps_none_of_it(self):
+        import base64
+        out, heard = self.call(audio_b64=base64.b64encode(b"ID3 pretend mp3").decode())
+        self.assertEqual(out["lines"][1]["start"], 10.4)
+        # The file it listened to is gone once the answer is back.
+        self.assertEqual(len(heard), 1)
+        self.assertFalse(os.path.exists(str(heard[0])))
+
+    def test_needs_the_audio_one_way_or_the_other(self):
+        from fastapi import HTTPException
+        with self.assertRaises(HTTPException) as e:
+            self.call()
+        self.assertEqual(e.exception.status_code, 422)
+
+    def test_refuses_what_is_not_base64(self):
+        from fastapi import HTTPException
+        with self.assertRaises(HTTPException) as e:
+            self.call(audio_b64="not base64 at all!!")
+        self.assertEqual(e.exception.status_code, 422)
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import {
+import { deleteLyricProposals,
   anonymiseUser,
   claimAccountDeletion,
   completeAccountDeletion,
@@ -146,6 +146,8 @@ export async function executeAccountDeletion(
           WHERE id = ?`,
         [track.id],
       );
+      // Its "align it again" proposals hold lines of the lyrics: they go with them.
+      await deleteLyricProposals(track.id);
       if (allGone) outcome.tracksErased += 1;
     }
 

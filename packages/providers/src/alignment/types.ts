@@ -14,6 +14,11 @@ export interface AlignmentRequest {
   durationSeconds: number;
   /** Provider request id of the generation, for provenance. */
   providerRequestId: string;
+  /**
+   * The song itself. Sent when the aligner cannot be pointed at its own copy
+   * of the render — it keeps those only for days, and YUHA keeps every song.
+   */
+  audio?: Buffer;
 }
 
 export type AlignmentResult =

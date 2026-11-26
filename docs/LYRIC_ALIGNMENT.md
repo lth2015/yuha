@@ -62,6 +62,38 @@ The DGX keeps a render for six days (`RETENTION_DAYS`). A song older than that
 cannot be re-aligned, because the aligner fetches the audio from the DGX
 (`ALIGNMENT_AUDIO_URL_TEMPLATE`), and the run below leaves it as it was.
 
+## Aligning one song again (the owner's button)
+
+In the timing workspace (song page → 做视频 → 检查歌词同步), the owner can press
+「重新自动对齐（免费）」. `POST /v1/tracks/:id/lyric-proposal` queues it;
+`GET` reads it (`services/lyric-proposal.ts`, migration 0035).
+
+- **The song itself goes to the aligner** (`audio_b64`), not a link to the
+  DGX's copy, so a song of any age can be aligned: the DGX keeps renders
+  six days, YUHA keeps every song.
+- **The answer is a proposal.** The workspace loads it as an unsaved edit;
+  the owner listens and saves it (as a correction) or discards it. Nothing
+  here writes a song's timing, and a correction the owner saved stays until
+  they replace it.
+- **Only what the aligner heard is offered.** An estimate is reported as a
+  failure — `low_coverage` (heard too little), `timeout`, `unreachable` or
+  `error` — and the page says so in words; the song keeps its timing.
+- **Free, and bounded.** No credit. Three requests per song per day; asking
+  again while one waits returns that one. One at a time per API process,
+  because each is a GPU job on the box that renders customers' songs; a
+  request left running by a stopped process is reported `interrupted` after
+  15 minutes.
+- **Words changed meanwhile** (`lyrics_changed`): an answer for words the song
+  no longer has is not offered.
+- **The proposal holds lines of the lyrics**, so it is deleted with the song's
+  words (account deletion, an unclaimed trial's expiry) and by the cascade.
+- **Off until the DGX takes sent audio.** `FEATURE_LYRIC_AUTO_ALIGN_ENABLED`
+  (default off, `"false"` in `deploy/k8s/qa/resources.yaml`). Turn it on only
+  after `deploy/dgx/update.sh` and the check in `deploy/dgx/music/README.md`
+  ("The song itself, sent"). It can be switched off at runtime like the other
+  features (`feature_overrides` → `lyricAutoAlignEnabled: false`). The button
+  is also hidden wherever the only aligner is the estimator.
+
 ## How the aligner listens
 
 `deploy/dgx/music/README.md` → "Lyric alignment" has the detail. In short,

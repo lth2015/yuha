@@ -104,6 +104,11 @@ RETENTION_DAYS = float(os.environ.get("RETENTION_DAYS", "6"))
 
 JOBS_DIR = DATA_DIR / "jobs"
 AUDIO_DIR = DATA_DIR / "audio"
+# Songs sent to /v1/align, each for the length of its request (see align()).
+TMP_DIR = DATA_DIR / "tmp"
+TMP_DIR.mkdir(parents=True, exist_ok=True)
+# A whole four-minute song at 320 kbps is under 10 MB; base64 adds a third.
+MAX_ALIGN_AUDIO_B64 = 20_000_000
 for d in (JOBS_DIR, AUDIO_DIR):
     d.mkdir(parents=True, exist_ok=True)
 
@@ -187,6 +192,15 @@ def purge_old(now: Optional[float] = None) -> int:
     old. Audio files are judged by their own age, so an upload or a take that
     no job record names still goes.
     """
+    # A song sent to /v1/align is removed when its request ends; one left by a
+    # crash mid-request goes here, within the hour, whatever the retention.
+    tmp_cutoff = (now if now is not None else time.time()) - 3600
+    for t in TMP_DIR.glob("align-*"):
+        try:
+            if t.stat().st_mtime < tmp_cutoff:
+                t.unlink()
+        except FileNotFoundError:
+            pass
     if RETENTION_DAYS <= 0:
         return 0
     cutoff = (now if now is not None else time.time()) - RETENTION_DAYS * 86400
@@ -812,22 +826,47 @@ def poll(job_id: str, authorization: Optional[str] = Header(None)):
 class AlignRequest(BaseModel):
     model_config = ConfigDict(extra="ignore")
     lyrics: str = Field(..., min_length=1, max_length=6000)
-    audio_url: str = Field(..., min_length=1, max_length=2000)
+    # One of the two: a render this server made (kept RETENTION_DAYS), or the
+    # song itself, sent by YUHA — which keeps every song, so a song older than
+    # the retention, or made elsewhere, can still be aligned.
+    audio_url: Optional[str] = Field(None, min_length=1, max_length=2000)
+    audio_b64: Optional[str] = Field(None, min_length=4, max_length=MAX_ALIGN_AUDIO_B64)
     duration_seconds: float = Field(..., gt=0, le=600)
 
 
 @app.post("/v1/align")
 def align(body: AlignRequest, authorization: Optional[str] = Header(None)):
-    """YUHA's alignment contract: {lyrics, audio_url, duration_seconds} -> lines[]."""
+    """YUHA's alignment contract: {lyrics, audio_url | audio_b64, duration_seconds} -> lines[]."""
     check_auth(authorization)
+    import base64
+    import binascii
     import re
-    from align import align_lines
+    if body.audio_b64:
+        try:
+            raw = base64.b64decode(body.audio_b64, validate=True)
+        except (binascii.Error, ValueError):
+            raise HTTPException(422, "audio_b64 is not base64")
+        # Written for the length of this request only, then removed whatever happens.
+        tmp = TMP_DIR / f"align-{uuid.uuid4().hex}.mp3"
+        tmp.write_bytes(raw)
+        try:
+            return _align_path(body, tmp, "sent")
+        finally:
+            tmp.unlink(missing_ok=True)
+    if not body.audio_url:
+        raise HTTPException(422, "audio_url or audio_b64 is required")
     m = re.search(r"([0-9a-f]{32})(?:\.mp3)?(?:\?|$)", body.audio_url)
     if not m:
         raise HTTPException(422, "audio_url does not name a job on this server")
     path = AUDIO_DIR / f"{m.group(1)}.mp3"
     if not path.exists():
         raise HTTPException(404, "audio not found")
+    return _align_path(body, path, m.group(1))
+
+
+def _align_path(body: AlignRequest, path: Path, label: str):
+    """The alignment itself, on a file on this server."""
+    from align import align_lines
     t0 = time.time()
     # Listen to the singer, not the band: Whisper on the separated vocal, and
     # the stem's loudness as the record of where singing is (see separate.py).
@@ -856,7 +895,7 @@ def align(body: AlignRequest, authorization: Optional[str] = Header(None)):
             import forced
             with _gpu_lock:
                 fa = forced.force_align(body.lyrics, stem16, body.duration_seconds, device="cuda")
-            log.info("forced alignment %s coverage=%.2f", m.group(1), fa["coverage"])
+            log.info("forced alignment %s coverage=%.2f", label, fa["coverage"])
             if fa["coverage"] >= ALIGN_FORCED_MIN_COVERAGE:
                 out = {**fa, "heard": "vocal_stem", "method": "forced"}
         except Exception:
@@ -884,7 +923,7 @@ def align(body: AlignRequest, authorization: Optional[str] = Header(None)):
     out.setdefault("method", "whisper")
     out["model"] = "mms-fa" if forced_ok else f"whisper-{WHISPER_MODEL}"
     out["voice_activity"] = voiced is not None
-    log.info("aligned %s coverage=%.2f heard=%s voiced=%s in %.1fs", m.group(1), out["coverage"],
+    log.info("aligned %s coverage=%.2f heard=%s voiced=%s in %.1fs", label, out["coverage"],
              out["heard"], out["voice_activity"], out["seconds"])
     if not forced_ok and out["coverage"] < ALIGN_MIN_COVERAGE:
         # Too little of the lyrics was heard to trust the timings; YUHA keeps
