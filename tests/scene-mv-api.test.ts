@@ -10,6 +10,7 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { randomUUID } from 'node:crypto';
 import { claimOutboxBatch, queryOne, withTx } from '@yuha/db';
+import type { DemoVideoProvider } from '@yuha/providers';
 import { runJobStep } from '@yuha/worker/pipeline';
 import { sceneMvTick } from '@yuha/worker/scene-mv';
 import { composeNextSceneMv } from '@yuha/worker/scene-mv-compose';
@@ -152,7 +153,12 @@ describe('making one', () => {
     const track = await song(on, user);
     const a = (await draft(on, user, track)).json().id as string;
     await call(on, user, 'POST', `/v1/scene-mvs/${a}/start`);
+    // Its first shot is already waiting at the video service when the owner cancels.
+    expect(await sceneMvTick({ video: on.ctx.video!, storage: on.ctx.storage, owner: 'w', log: () => undefined })).toBe('submitted');
+    const clip = (await queryOne<{ p: string }>(`SELECT provider_clip_id AS p FROM scene_mv_shots s JOIN scene_mvs m ON m.id = s.scene_mv_id WHERE m.id = ? AND s.idx = 0`, [a]))!.p;
     expect((await call(on, user, 'POST', `/v1/scene-mvs/${a}/cancel`)).statusCode).toBe(200);
+    // …and is taken out of the service's queue, not drawn for nobody.
+    expect((on.ctx.video as DemoVideoProvider).discarded).toContain(clip);
     expect((await call(on, user, 'GET', `/v1/scene-mvs/${a}`)).json().status).toBe('cancelled');
 
     const b = (await draft(on, user, track)).json().id as string;
