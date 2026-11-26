@@ -31,8 +31,10 @@ export interface SceneMvDeps {
   storage: StorageAdapter;
   owner: string;
   log: (level: 'info' | 'warn' | 'error', msg: string, extra?: Record<string, unknown>) => void;
-  /** A shot on the machine longer than this has failed (the service takes 1.5–3 minutes, more when queued). */
+  /** A shot on the machine longer than this has failed (1.5–2 minutes each, but queueing and cooling can take far longer). */
   shotTimeoutMs?: number;
+  /** How long a failed shot waits before its one retry (the service asks for five minutes). */
+  retryAfterSeconds?: number;
   /** A shot claimed by another worker that has not recorded an id by then is handed back (that worker stopped). */
   claimStaleMs?: number;
   ffprobePath?: string;
@@ -49,7 +51,7 @@ export async function sceneMvTick(d: SceneMvDeps): Promise<TickOutcome> {
   await startQueuedSceneMvs();
   let shot = await runningShot();
   if (!shot) {
-    if (!(await claimNextShot(d.owner))) {
+    if (!(await claimNextShot(d.owner, { retryAfterSeconds: d.retryAfterSeconds }))) {
       await finishDrawnSceneMvs();
       return 'idle';
     }
@@ -96,7 +98,8 @@ export async function sceneMvTick(d: SceneMvDeps): Promise<TickOutcome> {
 
   const state = await d.video.status(shot.provider_clip_id);
   if (state.status === 'queued' || state.status === 'running' || (state.status === 'unknown' && state.reason !== 'not_found')) {
-    if (age > (d.shotTimeoutMs ?? 30 * 60_000)) {
+    if (age > (d.shotTimeoutMs ?? 60 * 60_000)) {
+      await d.video.discard(shot.provider_clip_id).catch(() => undefined);
       await finishShot(shot.id, { status: 'failed', failure: 'timeout' });
       d.log('error', 'scene mv shot timed out', { shotId: shot.id, state: state.status });
       return 'failed';
@@ -106,6 +109,8 @@ export async function sceneMvTick(d: SceneMvDeps): Promise<TickOutcome> {
   }
   if (state.status === 'failed' || state.status === 'unknown') {
     const failure = state.status === 'failed' ? state.reason : 'lost';
+    // The service keeps a job, prompt and all, for seven days unless told otherwise: tell it.
+    await d.video.discard(shot.provider_clip_id).catch(() => undefined);
     await finishShot(shot.id, { status: 'failed', failure });
     d.log('warn', 'scene mv shot failed', { shotId: shot.id, failure, attempt: shot.attempts });
     return 'failed';
@@ -122,6 +127,8 @@ export async function sceneMvTick(d: SceneMvDeps): Promise<TickOutcome> {
       const key = `scene-mv/${shot.owner_id}/${shot.scene_mv_id}/shot-${shot.idx}.mp4`;
       await d.storage.put({ zone: 'delivery', key, body: bytes, contentType: 'video/mp4' });
       await finishShot(shot.id, { status: 'succeeded', clipKey: key });
+      // Kept here now: the service's copy is let go of (its note asks for this, to free space).
+      await d.video.discard(shot.provider_clip_id).catch(() => undefined);
       await finishDrawnSceneMvs();
       return 'stored';
     }
@@ -129,6 +136,7 @@ export async function sceneMvTick(d: SceneMvDeps): Promise<TickOutcome> {
     failure = 'fetch_failed';
     d.log('warn', 'scene mv clip could not be collected', { shotId: shot.id, err: (err as Error).message.slice(0, 120) });
   }
+  await d.video.discard(shot.provider_clip_id).catch(() => undefined);
   await finishShot(shot.id, { status: 'failed', failure });
   return 'failed';
 }
@@ -148,4 +156,94 @@ async function streamKinds(bytes: Buffer, ffprobe = 'ffprobe'): Promise<string[]
   } finally {
     await rm(dir, { recursive: true, force: true });
   }
+}
+
+/**
+ * The scene MV's own loop, in every worker: shots every few seconds while
+ * there is work, composing when a job is drawn, and an hourly sweep of MVs
+ * past their keeping date. Not started at all without a video service.
+ */
+export async function sceneMvLoop(
+  d: Omit<SceneMvDeps, 'video'> & {
+    video: VideoProvider | null;
+    stopped: () => boolean;
+    compose: () => Promise<unknown>;
+    sweep: () => Promise<unknown>;
+    idleMs?: number;
+    busyMs?: number;
+  },
+): Promise<void> {
+  if (!d.video) return;
+  const video = d.video;
+  let lastSweep = 0;
+  let lastProbe = 0;
+  let health: HealthState = { downSince: null, alerted: false, crowded: false };
+  while (!d.stopped()) {
+    let outcome: TickOutcome = 'idle';
+    try {
+      if (Date.now() - lastProbe >= 60_000) {
+        lastProbe = Date.now();
+        const h = await video.health();
+        const r = nextHealthState(health, { at: lastProbe, ...h });
+        health = r.state;
+        for (const e of r.events) {
+          // Fixed messages, so a log-based alert can match them.
+          const level = e === 'unreachable_5m' ? 'error' : e === 'queue_over_15' ? 'warn' : 'info';
+          d.log(level, `video service health: ${e}`, { queued: h.queued });
+        }
+      }
+      outcome = await sceneMvTick({ ...d, video });
+      await d.compose();
+      if (Date.now() - lastSweep > 3_600_000) {
+        lastSweep = Date.now();
+        await d.sweep();
+      }
+    } catch (err) {
+      d.log('error', 'scene mv loop step failed', { err: (err as Error).message.slice(0, 200) });
+    }
+    // The service takes minutes per shot: asking every 12 s is plenty, and more often only right after a change.
+    const wait = outcome === 'waiting' || outcome === 'idle' ? (outcome === 'idle' ? d.idleMs ?? 15_000 : d.busyMs ?? 12_000) : 500;
+    await new Promise((r) => setTimeout(r, wait));
+  }
+}
+
+/**
+ * The alert rule from the SRE checklist: unreachable five minutes running, or
+ * more than fifteen clips queued. One event when a condition starts and one
+ * when it ends, never one per probe.
+ */
+export interface HealthState {
+  downSince: number | null;
+  alerted: boolean;
+  crowded: boolean;
+}
+export type HealthEvent = 'unreachable_5m' | 'recovered' | 'queue_over_15' | 'queue_normal';
+
+export function nextHealthState(
+  s: HealthState,
+  probe: { at: number; ok: boolean; queued: number | null },
+): { state: HealthState; events: HealthEvent[] } {
+  const events: HealthEvent[] = [];
+  const next = { ...s };
+  if (!probe.ok) {
+    next.downSince = s.downSince ?? probe.at;
+    if (!s.alerted && probe.at - next.downSince >= 5 * 60_000) {
+      next.alerted = true;
+      events.push('unreachable_5m');
+    }
+  } else {
+    if (s.alerted) events.push('recovered');
+    next.downSince = null;
+    next.alerted = false;
+    if (probe.queued !== null) {
+      if (!s.crowded && probe.queued > 15) {
+        next.crowded = true;
+        events.push('queue_over_15');
+      } else if (s.crowded && probe.queued <= 15) {
+        next.crowded = false;
+        events.push('queue_normal');
+      }
+    }
+  }
+  return { state: next, events };
 }

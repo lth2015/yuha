@@ -229,7 +229,7 @@ export async function purgeExpiredGuestTrials(
       );
       // Its "align it again" proposals hold lines of the lyrics: they go with them.
       await deleteLyricProposals(track.id);
-      if (!(await removeSceneMvsOfTrack(ctx.storage, track.id, opts.log))) allGone = false;
+      if (!(await removeSceneMvsOfTrack(ctx.storage, track.id, opts.log, ctx.video))) allGone = false;
     }
     for (const a of await query<{ job_id: string; attempt_no: number }>(
       `SELECT a.job_id, a.attempt_no FROM generation_attempts a JOIN generation_jobs j ON j.id = a.job_id WHERE j.user_id = ?`,

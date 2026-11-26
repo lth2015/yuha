@@ -21,6 +21,7 @@ import rightsRoutes from './routes/rights.js';
 import issueRoutes from './routes/issues.js';
 import shareRoutes from './routes/share.js';
 import lyricProposalRoutes from './routes/lyric-proposals.js';
+import sceneMvRoutes from './routes/scene-mvs.js';
 import telemetryRoutes from './routes/telemetry.js';
 import trackRoutes from './routes/tracks.js';
 import trialRoutes from './routes/trial.js';
@@ -167,6 +168,7 @@ export async function buildServer(ctx: AppContext): Promise<FastifyInstance> {
   await app.register(trialRoutes, { ctx });
   await app.register(shareRoutes, { ctx });
   await app.register(lyricProposalRoutes, { ctx });
+  await app.register(sceneMvRoutes, { ctx });
   await app.register(fileRoutes, { ctx });
   await app.register(billingRoutes, { ctx });
   await app.register(stablecoinRoutes, { ctx });

@@ -4,7 +4,7 @@ import { isIP } from 'node:net';
 import { z } from 'zod';
 import { GOOGLE_CALLBACK_PATH, GOOGLE_WEB_RETURN_PATH } from './auth/google-paths.js';
 import { RunMode } from '@yuha/contracts';
-import { isPublicAddress } from '@yuha/providers';
+import { HttpVideoProvider, isPublicAddress } from '@yuha/providers';
 
 /**
  * Configuration and mode validation (PROJECT_TASK.md §3).
@@ -399,6 +399,18 @@ const envSchema = z.object({
   ALIGNMENT_WORD_END_FIELD: z.string().optional(),
   ALIGNMENT_SECTION_FIELD: z.string().optional(),
   ALIGNMENT_TIMEOUT_MS: int(60_000),
+
+  // --- video clips for the AI scene MV (packages/providers/src/video/) -------
+  /** none = no scene MV anywhere; demo = ffmpeg test pattern; http = the dgxv service. */
+  VIDEO_ADAPTER: z.enum(['none', 'demo', 'http']).optional(),
+  LTX_API_BASE_URL: z.string().optional(),
+  LTX_API_KEY: secret(),
+  /**
+   * Plain http to the video box's public IP (product owner, 2026-11-26, for
+   * the proof of concept). An IP literal only; see video/http.ts for what it
+   * gives up.
+   */
+  VIDEO_ALLOW_INSECURE_SELF_HOSTED: bool(false),
   /**
    * Where the aligner can find a song's audio, with `{id}` standing for the
    * music provider's request id — e.g. http://10.5.0.7:8583/v1/audio/{id}.mp3
@@ -423,6 +435,12 @@ const envSchema = z.object({
    * before that, every request would fail.
    */
   FEATURE_LYRIC_AUTO_ALIGN_ENABLED: bool(false),
+  /**
+   * The AI scene MV (docs/AI_SCENE_MV_SPEC.md). Off: staff only, for the
+   * internal test. It also needs a video service (VIDEO_ADAPTER), without
+   * which it is off for everyone.
+   */
+  FEATURE_SCENE_MV_ENABLED: bool(false),
   // Trying YUHA without an account (docs/GROWTH_SPEC.md, part three). Off
   // until the privacy text that describes it is reviewed.
   FEATURE_GUEST_TRIAL_ENABLED: bool(false),
@@ -615,6 +633,8 @@ export interface AppConfig extends RawEnv {
     email: 'log' | 'smtp' | 'ses';
   };
   alignment: 'estimated' | 'http';
+  /** The scene MV's video service; `none` means the feature is off for everyone. */
+  video: 'none' | 'demo' | 'http';
   legalEntityConfigured: boolean;
 }
 
@@ -1152,8 +1172,27 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     problems.push('FREE_TRIAL_UNITS must not exceed 2 (§7)');
   }
 
-  // Before the throw below, not after it: appended after, these problems were
-  // never reported, and an incomplete mapping started and failed song by song.
+  // Development and the demo draw test-pattern clips; production needs the real service or nothing.
+  const video = e.VIDEO_ADAPTER ?? (mode === 'production' ? 'none' : 'demo');
+  if (mode === 'production' && video === 'demo') problems.push('production mode cannot use the demo video adapter');
+  if (video === 'http') {
+    if (!e.LTX_API_BASE_URL || !e.LTX_API_KEY) problems.push('LTX_API_BASE_URL and LTX_API_KEY are required for the http video adapter');
+    else {
+      try {
+        new HttpVideoProvider({
+          baseUrl: e.LTX_API_BASE_URL,
+          apiKey: e.LTX_API_KEY,
+          allowInsecureSelfHosted: e.VIDEO_ALLOW_INSECURE_SELF_HOSTED,
+          allowInsecureLocal: mode !== 'production',
+        });
+      } catch (err) {
+        problems.push((err as Error).message);
+      }
+    }
+  }
+
+  if (problems.length) throw new ConfigError(problems);
+
   const alignment = e.ALIGNMENT_ADAPTER ?? 'estimated';
   if (alignment === 'http') {
     const required = {
@@ -1180,6 +1219,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     isDemo: mode === 'demo',
     adapters,
     alignment,
+    video,
     legalEntityConfigured: !!(e.LEGAL_ENTITY_NAME && e.LEGAL_ENTITY_CONTACT),
   };
 }
@@ -1196,6 +1236,8 @@ export interface FeatureFlags {
   /** The photo MV (docs/PHOTO_MV_SPEC.md). */
   photoVideoEnabled: boolean;
   lyricAutoAlignEnabled: boolean;
+  /** The AI scene MV (docs/AI_SCENE_MV_SPEC.md); staff see it regardless, while a video service is configured. */
+  sceneMvEnabled: boolean;
   /** A song without an account (docs/GROWTH_SPEC.md, part three). */
   guestTrialEnabled: boolean;
   commercialDeliveryEnabled: boolean;
@@ -1226,6 +1268,7 @@ export function baseFeatures(cfg: AppConfig): FeatureFlags {
     wavExportEnabled: cfg.FEATURE_WAV_EXPORT_ENABLED,
     photoVideoEnabled: cfg.FEATURE_PHOTO_VIDEO_ENABLED,
     lyricAutoAlignEnabled: cfg.FEATURE_LYRIC_AUTO_ALIGN_ENABLED,
+    sceneMvEnabled: cfg.FEATURE_SCENE_MV_ENABLED,
     guestTrialEnabled: cfg.FEATURE_GUEST_TRIAL_ENABLED,
     // SEC-09: no signed agreement means no commercial delivery, regardless of
     // what anyone sets in the environment.

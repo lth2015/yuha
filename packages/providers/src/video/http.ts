@@ -3,18 +3,18 @@ import { fetchAudio, isPublicAddress } from '../net/fetch-audio.js';
 import { clipRequestProblem, type ClipRequest, type ClipState, type ClipSubmit, type VideoProvider } from './types.js';
 
 /**
- * The video service on dgxv, as the product owner described it (2026-11-26):
+ * The LTX video service on dgxv, per its API note (2026-11-26):
  *
- *   POST /v1/videos                {prompt, duration, orientation, mute} → id
- *   GET  /v1/videos/{id}           queued | running | succeeded | failed
- *   GET  /v1/videos/{id}/content   the MP4
- *   GET  /health                   no key
- *   every other request: header X-API-Key
+ *   POST   /v1/videos                {prompt, duration ≤ 8, orientation, mute} → 202 + the job
+ *   GET    /v1/videos/{id}           queued | running | succeeded | failed | cancelled
+ *   GET    /v1/videos/{id}/content   the MP4 (409 until it has succeeded)
+ *   DELETE /v1/videos/{id}           cancels a queued job, deletes a finished one
+ *   GET    /health                   no key
+ *   every other request: header X-API-Key; 429 when its queue (20) is full
  *
- * Unverified until a real call: the names of the response fields. The id is
- * read from `id` (or `job_id`), the failure from `error` (or `detail`), the
- * queue position from `queue_position` when present. The first request
- * against the real box should be checked against this.
+ * The job's `error` is a Chinese sentence for a person; it is mapped to a
+ * code here and not kept. Not yet exercised against the real box: the first
+ * request from production is the check.
  *
  * HTTPS by default, with two narrow exceptions, each off unless configured:
  *   - `allowInsecureLocal`: plain http to this machine or network, for
@@ -54,7 +54,7 @@ export class HttpVideoProvider implements VideoProvider {
     try {
       base = new URL(cfg.baseUrl);
     } catch {
-      throw new Error('VIDEO_BASE_URL is not a valid URL');
+      throw new Error('LTX_API_BASE_URL is not a valid URL');
     }
     const host = base.hostname.replace(/^\[|\]$/g, '');
     this.local = host === 'localhost' || (isIP(host) !== 0 && !isPublicAddress(host));
@@ -63,16 +63,16 @@ export class HttpVideoProvider implements VideoProvider {
     const allowed = (cfg.allowInsecureLocal && this.local) || (cfg.allowInsecureSelfHosted && publicIp);
     if (base.protocol !== 'https:' && !(this.insecure && allowed)) {
       throw new Error(
-        'VIDEO_BASE_URL must use https; plain http is allowed only to a local address in development, ' +
+        'LTX_API_BASE_URL must use https; plain http is allowed only to a local address in development, ' +
           'or to a public IP literal with VIDEO_ALLOW_INSECURE_SELF_HOSTED',
       );
     }
-    if (!cfg.apiKey) throw new Error('VIDEO_API_KEY is required');
+    if (!cfg.apiKey) throw new Error('LTX_API_KEY is required');
     this.base = base;
     this.cfg = cfg;
   }
 
-  private async call(method: 'GET' | 'POST', path: string, body?: unknown): Promise<{ code: number; json: Raw } | null> {
+  private async call(method: 'GET' | 'POST' | 'DELETE', path: string, body?: unknown): Promise<{ code: number; json: Raw } | null> {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), this.cfg.timeoutMs ?? 15_000);
     try {
@@ -119,6 +119,9 @@ export class HttpVideoProvider implements VideoProvider {
     if (r.code !== 200) return { status: 'unknown', reason: 'unreachable' };
     const j = r.json;
     switch (j.status) {
+      case 'cancelled':
+        // Not by YUHA unless discarded; a service maintainer's cancel is a failure of this shot.
+        return { status: 'failed', reason: 'cancelled_by_service' };
       case 'queued':
       case 'running':
         return { status: j.status, queuePosition: typeof j.queue_position === 'number' ? j.queue_position : null };
@@ -132,6 +135,21 @@ export class HttpVideoProvider implements VideoProvider {
       default:
         return { status: 'unknown', reason: 'unreachable' };
     }
+  }
+
+  async health(): Promise<{ ok: boolean; queued: number | null }> {
+    // GET /health needs no key; its field names for the queue are read leniently.
+    const r = await this.call('GET', '/health');
+    if (!r || r.code !== 200) return { ok: false, queued: null };
+    const j = r.json;
+    const q = [j.queue_length, j.queued, j.queue, j.queue_size].find((v) => typeof v === 'number' && Number.isFinite(v));
+    return { ok: j.status === undefined || j.status === 'ok', queued: typeof q === 'number' ? q : null };
+  }
+
+  async discard(id: string): Promise<void> {
+    if (!ID.test(id)) return;
+    // 409 while it is on the GPU: nothing more can be done, and it is swept in seven days.
+    await this.call('DELETE', `/v1/videos/${id}`);
   }
 
   async fetchClip(id: string): Promise<Buffer> {
@@ -150,9 +168,9 @@ export class HttpVideoProvider implements VideoProvider {
 
 /** What the service said went wrong, as one of a few codes; its words are not kept. */
 export function failureCode(message: string): string {
-  if (/out of memory|\boom\b|cuda.*memory/i.test(message)) return 'out_of_memory';
-  if (/time ?out|timed out/i.test(message)) return 'timeout';
-  if (/thermal|temperature|too hot/i.test(message)) return 'thermal';
-  if (/safety|nsfw|blocked|refus/i.test(message)) return 'refused_by_model';
+  if (/out of memory|\boom\b|cuda.*memory|显存|内存不足/i.test(message)) return 'out_of_memory';
+  if (/time ?out|timed out|超时/i.test(message)) return 'timeout';
+  if (/thermal|temperature|too hot|温度|过热/i.test(message)) return 'thermal';
+  if (/safety|nsfw|blocked|refus|违规|拒绝|安全/i.test(message)) return 'refused_by_model';
   return 'service_failed';
 }

@@ -63,6 +63,7 @@ export {
 
 export { sweepExpiredTrackAudio, type RetentionSweepResult } from './services/retention.js';
 export { purgeExpiredGuestTrials } from './services/guest-trial.js';
+export { removeSceneMv } from './services/scene-mv-cleanup.js';
 export { executeAccountDeletion, type DeletionOutcome } from './services/deletion.js';
 
 export {
