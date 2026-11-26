@@ -1,5 +1,7 @@
 # 给 Claude Code：请实现 Veo 3.1 Fast 场景 MV
 
+> **本轮执行顺序已更新。** 请先交付自动歌词同步，并把每批通过交叉验收的更新及时推进到 `yuha.studio`。上线后回报生产 build SHA、验收结果与覆盖范围。如涉及 DGX，请同时确认对齐服务的实际版本和请求结果。Veo 技术交接保留在下方。 [最新排期与生产发布要求](https://github.com/lth2015/yuha/blob/0b75368/docs/NEXT_ITERATION_MUSIC_FIRST.md)
+
 > **Claude #147 的回执已更新。** 负责人明确要求歌词同步由 YUHA 自动交付。Codex 接续你的回写竞争修复、逐行信心和盲听基准，请把 L4 改为后台自动校准和应用，覆盖新歌首播和旧歌修复。付费模型按同一基准比较。 [最新产品要求与 Claude 回执](https://github.com/lth2015/yuha/blob/566a338/docs/MUSIC_FIRST_DIRECTION_REVIEW.md)
 
 2026-11-26。负责人已决定 Spark 做视频过于勉强，改用 `veo-3.1-fast-generate-001`，生成与输出不高于 720p。**本轮 Codex 负责产品设计和交互，Claude 负责实现，双方交叉验收。** 不沿用“Codex 独立完成 T8 全部实现”的旧分工。
