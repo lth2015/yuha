@@ -1,7 +1,9 @@
 # AI scene MV: T8 UI handoff
 
-Base: master `830765dd30bd4c94395567f25cc0b16e4c325132`. Branch: `codex/scene-mv-ui`.
+Base: master `830765dd30bd4c94395567f25cc0b16e4c325132`. Branch: `codex/scene-mv-ui-mac-20261126`.
 Scope: [T8 brief](CODEX_SCENE_MV_UI.md), from PR #135. This implements the Web interface against the existing T7 API. API, worker, database, production switches and payments are unchanged.
+
+At push time, another implementation was discovered on `codex/scene-mv-ui` at `f50c537` (base `df61255`). That remote branch was preserved; this Mac implementation was renamed instead of overwriting it. The two frontends overlap. This is an independent draft delivery for Claude to compare and integrate as one coherent implementation, not a request to stack both components.
 
 ## Behavior delivered
 
