@@ -25,6 +25,7 @@ type QualityMetric = { numerator: number; denominator: number; misses: string[] 
 type QualityReport = Record<'completion' | 'playable' | 'complete' | 'length' | 'lyricsAligned' | 'approval', QualityMetric> & {
   /** Why sung songs missed lyricsAligned, by the reason's first word (packages/db/src/quality.ts). */
   lyricsFallback?: Array<{ reason: string; n: number }>;
+  lyricProposals?: { asked: number; aligned: number; heardTooLittle: number; failed: number };
 };
 const QUALITY_ROWS = ['completion', 'playable', 'complete', 'length', 'lyricsAligned', 'approval'] as const;
 
@@ -193,6 +194,17 @@ function QualityCard({ q }: { q: NonNullable<Overview['quality']> }) {
       {(q.all.week.lyricsFallback?.length ?? 0) > 0 && (
         <p className="small muted num" style={{ margin: 0, overflowWrap: 'anywhere' }}>
           {t('admin.quality.lyricsFallback')}: {q.all.week.lyricsFallback!.map((r) => `${r.reason} × ${r.n}`).join(' · ')}
+        </p>
+      )}
+      {/* "Align it again" (docs/LYRIC_ALIGNMENT.md): only once anyone has asked. */}
+      {(q.all.week.lyricProposals?.asked ?? 0) > 0 && (
+        <p className="small muted num" style={{ margin: 0 }}>
+          {t('admin.quality.lyricProposals', {
+            asked: q.all.week.lyricProposals!.asked,
+            aligned: q.all.week.lyricProposals!.aligned,
+            heard: q.all.week.lyricProposals!.heardTooLittle,
+            failed: q.all.week.lyricProposals!.failed,
+          })}
         </p>
       )}
       <p className="small muted" style={{ margin: 0 }}>

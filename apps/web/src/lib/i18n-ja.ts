@@ -728,6 +728,7 @@ const ja: Dict = {
   'admin.quality.length': '· 長さが基準以上',
   'admin.quality.lyricsAligned': '· 歌詞の同期（ボーカル）',
   'admin.quality.lyricsFallback': "歌詞が同期できなかった理由（直近 7 日）",
+  'admin.quality.lyricProposals': "自動で合わせ直し（直近 7 日）：依頼 {asked} · 成功 {aligned} · 聞き取れず {heard} · その他の失敗 {failed}",
   'admin.quality.approval': '利用者の評価（納品から 24 時間以上）',
   'admin.quality.noteBuild': '「現行版」は稼働中の {sha} が作成したタスクだけを数えます。利用者のキャンセルは含みません。評価 = 納品から 24 時間後も残っていて、問題報告のない曲。',
   'admin.quality.noteNoBuild': 'このプロセスには build SHA がないため、全体のみ表示します。利用者のキャンセルは含みません。',

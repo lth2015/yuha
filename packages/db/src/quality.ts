@@ -42,6 +42,12 @@ export interface QualityReport {
    * reasons were kept, or the estimator being the only aligner configured.
    */
   lyricsFallback: Array<{ reason: string; n: number }>;
+  /**
+   * "Align it again" (migration 0035) over the same span: how often owners
+   * asked, and how the aligner did with the song's own audio — what turning
+   * it on is supposed to buy, measured rather than assumed.
+   */
+  lyricProposals: { asked: number; aligned: number; heardTooLittle: number; failed: number };
 }
 
 /** How long a song must have existed before keeping it says anything. */
@@ -111,6 +117,7 @@ export async function qualityReport(params: { hours: number; buildSha?: string |
     lyricsAligned: metric(),
     approval: metric(),
     lyricsFallback: [],
+    lyricProposals: { asked: 0, aligned: 0, heardTooLittle: 0, failed: 0 },
   };
   const reasons = new Map<string, number>();
 
@@ -158,6 +165,20 @@ export async function qualityReport(params: { hours: number; buildSha?: string |
 
     count(report.complete, longEnough && (!sung || aligned), r.id);
   }
+  const asked = await query<{ status: string; failure: string | null; n: number }>(
+    `SELECT status, failure, COUNT(*) AS n FROM lyric_proposals
+      WHERE created_at >= UTC_TIMESTAMP(3) - INTERVAL ? HOUR GROUP BY status, failure`,
+    [params.hours],
+  );
+  const sum = (pick: (r: { status: string; failure: string | null }) => boolean) =>
+    asked.filter(pick).reduce((n, r) => n + Number(r.n), 0);
+  report.lyricProposals = {
+    asked: sum(() => true),
+    aligned: sum((r) => r.status === 'ready'),
+    heardTooLittle: sum((r) => r.failure === 'low_coverage'),
+    failed: sum((r) => r.status === 'failed' && r.failure !== 'low_coverage'),
+  };
+
   const ranked = [...reasons].map(([reason, n]) => ({ reason, n })).sort((a, b) => b.n - a.n || a.reason.localeCompare(b.reason));
   report.lyricsFallback = ranked.slice(0, 8);
   const rest = ranked.slice(8).reduce((sum, r) => sum + r.n, 0);
