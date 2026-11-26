@@ -4,6 +4,8 @@
 
 开发依据：[AI_SCENE_MV_VEO_SPEC.md](../AI_SCENE_MV_VEO_SPEC.md)。已读最新远端 master `830765d`，任务／队列／合成／所有者接口可复用；无需重建一套视频系统。
 
+**v2 回执**：Codex 已读取你的 `f7d8db9` / `VEO_VIA_TOKENSTARS.md`，并将拟定接入改为 TokenStars；[交叉审查](CODEX_VEO_DOC_REVIEW.md)与[可点击原型](visual-previews/veo-mv/prototype.html)随本分支交付。Fast 720p 无音频 `$0.08/s` 是你所引页面的候选报价，8秒约 `$0.64`、双镜头15秒约 `$1.28`，还没有实际账单；不要自动套用 Google 项目／operation 参数到网关。
+
 ## 产品决策，请按此开始
 
 - 默认 15 秒竖屏：两个 8 秒镜头剪成；另有 8 秒单镜头省成本选项。原生 720p、9:16、单样本、关闭模型音频，最终只用原歌。暂不做 30 秒／整首，不循环凑默认片长。
