@@ -103,5 +103,7 @@ export function setLineStart(
  * sat and listened.
  */
 export function markCorrected(timings: LyricTimings): LyricTimings {
-  return { ...timings, source: 'corrected', aligner: 'human' };
+  // A person heard the song: the model's per-line confidence no longer describes it.
+  const lines = timings.lines.map(({ confidence: _model, ...line }) => line);
+  return { ...timings, lines, source: 'corrected', aligner: 'human' };
 }

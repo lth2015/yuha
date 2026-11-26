@@ -29,6 +29,8 @@ export interface HttpAlignmentConfig {
   wordStartField?: string;
   wordEndField?: string;
   sectionField?: string;
+  /** Per-line confidence (0–1), when the aligner reports one. */
+  lineConfidenceField?: string;
   timeoutMs?: number;
   /** Where the rendered audio can be fetched by the aligner. */
   audioUrlResolver: (params: { providerRequestId: string }) => string | null;
@@ -87,6 +89,8 @@ export class HttpAlignmentProvider implements AlignmentProvider {
           return { status: 'failed', reason: 'aligner_bad_line: missing text/start/end' };
         }
         const section = this.cfg.sectionField ? read(raw, this.cfg.sectionField) : undefined;
+        const conf = this.cfg.lineConfidenceField ? read(raw, this.cfg.lineConfidenceField) : undefined;
+        const confidence = typeof conf === 'number' && conf >= 0 && conf <= 1 ? conf : undefined;
         const rawWords = this.cfg.wordsField ? read(raw, this.cfg.wordsField) : undefined;
         const words =
           Array.isArray(rawWords) && this.cfg.wordTextField && this.cfg.wordStartField && this.cfg.wordEndField
@@ -106,6 +110,7 @@ export class HttpAlignmentProvider implements AlignmentProvider {
           section: typeof section === 'string' ? section : '',
           start,
           end,
+          ...(confidence !== undefined ? { confidence } : {}),
           ...(words && words.length ? { words } : {}),
         });
       }
