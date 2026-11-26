@@ -55,6 +55,8 @@ export interface VideoProvider {
   readonly kind: string;
   /** The clip lengths it draws, when it only draws some (Veo: 4, 6, 8); any 1–8 otherwise. */
   readonly durations?: readonly number[];
+  /** US dollars per second of video drawn, as published; absent or 0 for a free service (the demo, our own server). */
+  readonly pricePerSecondUsd?: number;
   submit(req: ClipRequest): Promise<ClipSubmit>;
   status(id: string): Promise<ClipState>;
   /** The finished clip's bytes. Throws unless the clip succeeded and its bytes could be fetched safely. */
@@ -69,7 +71,7 @@ export interface VideoProvider {
   health(): Promise<{ ok: boolean; queued: number | null }>;
 }
 
-export const CLIP_MAX_SECONDS = 8;
+const CLIP_MAX_SECONDS = 8;
 
 /** The rules both providers apply, so the demo refuses what the real service refuses. */
 export function clipRequestProblem(req: ClipRequest): string | null {
@@ -77,4 +79,15 @@ export function clipRequestProblem(req: ClipRequest): string | null {
   if (req.orientation !== 'portrait' && req.orientation !== 'landscape') return 'orientation must be portrait or landscape';
   if (!req.prompt.trim() || req.prompt.length > 1500) return 'prompt must be 1–1500 characters';
   return null;
+}
+
+/**
+ * How long each shot is: the span shared out, at most what a clip can be,
+ * and — for a service that draws only some lengths (Veo: 4/6/8) — the shortest
+ * of those that covers it, since a clip is billed by the second.
+ */
+export function shotSecondsFor(span: number, shots: number, durations?: readonly number[]): number {
+  const need = Math.max(1, Math.min(CLIP_MAX_SECONDS, Math.ceil(span / Math.max(1, shots))));
+  if (!durations?.length) return need;
+  return [...durations].sort((a, b) => a - b).find((d) => d >= need) ?? Math.max(...durations);
 }

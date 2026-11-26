@@ -68,7 +68,7 @@ export default async function sceneMvRoutes(app: FastifyInstance, opts: { ctx: A
   app.post('/v1/scene-mvs/:id/start', { preHandler: app.requireAuth }, async (req, reply) => {
     await guard(req);
     const { id } = idParam.parse(req.params);
-    return reply.code(202).send(await startSceneMv(id, req.user!.id));
+    return reply.code(202).send(await startSceneMv(ctx, id, req.user!.id));
   });
 
   app.post('/v1/scene-mvs/:id/cancel', { preHandler: app.requireAuth }, async (req) => {

@@ -409,6 +409,16 @@ const envSchema = z.object({
   VIDEO_ADAPTER: z.enum(['none', 'demo', 'http', 'tokenstars']).optional(),
   /** Which Veo model (product owner, 2026-11-26: Lite first, Fast to compare). Only these two are enabled on the key. */
   VEO_MODEL: z.enum(['veo-3.1-lite-generate-001', 'veo-3.1-fast-generate-001']).default('veo-3.1-lite-generate-001'),
+  /**
+   * The money a paid video service may spend, in US dollars, all time and per
+   * Japan day (docs/AI_SCENE_MV_VEO_SPEC.md §3). Unset, a paid service starts
+   * nothing: it fails closed. The product owner's first cap: $10 in total.
+   */
+  SCENE_MV_BUDGET_USD_TOTAL: z.coerce.number().positive().optional(),
+  SCENE_MV_BUDGET_USD_DAILY: z.coerce.number().positive().optional(),
+  /** Scene MVs one person, and the whole site, may start per Japan day. */
+  SCENE_MV_PER_USER_DAILY: int(2),
+  SCENE_MV_SITE_DAILY: int(10),
   LTX_API_BASE_URL: z.string().optional(),
   LTX_API_KEY: secret(),
   /**
@@ -1200,8 +1210,6 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
       }
     }
   }
-
-  if (problems.length) throw new ConfigError(problems);
 
   const alignment = e.ALIGNMENT_ADAPTER ?? 'estimated';
   if (alignment === 'http') {

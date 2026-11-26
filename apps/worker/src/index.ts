@@ -1,6 +1,6 @@
 import { hostname } from 'node:os';
 import { randomUUID } from 'node:crypto';
-import { ConfigError, createContext, loadConfig, removeSceneMv } from '@yuha/api';
+import { ConfigError, createContext, loadConfig, removeSceneMv, sceneMvBudget } from '@yuha/api';
 import { closeDb, expiredSceneMvs } from '@yuha/db';
 import { sceneMvLoop } from './scene-mv.js';
 import { composeNextSceneMv } from './scene-mv-compose.js';
@@ -63,6 +63,8 @@ async function main(): Promise<void> {
       storage: ctx.storage,
       owner,
       log,
+      // A retry reserves its own share against the same caps the start did.
+      budget: sceneMvBudget(ctx),
       stopped: () => stopping,
       compose: () => composeNextSceneMv({ storage: ctx.storage, owner, log }),
       sweep: async () => {
