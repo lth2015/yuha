@@ -13,4 +13,11 @@ describe('resolveNowPlayingLyrics', () => {
   it('only calls a track instrumental when that is confirmed by its mode', () => {
     expect(resolveNowPlayingLyrics(undefined, undefined, 'instrumental')).toBeNull();
   });
+  it('shows no words for an instrumental, even when its record carries text', () => {
+    expect(resolveNowPlayingLyrics('[verse]\nhello', undefined, 'instrumental')).toBeNull();
+    expect(resolveNowPlayingLyrics(undefined, '[verse]\nhello', 'instrumental')).toBeNull();
+  });
+  it('shows no words for a song whose lyrics are only section tags', () => {
+    expect(resolveNowPlayingLyrics('[intro]\n[outro]', undefined, 'with_vocals')).toBeNull();
+  });
 });

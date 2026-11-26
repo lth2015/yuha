@@ -2925,7 +2925,7 @@ textarea.is-full { border-color: var(--danger); }
 /* Lyric timing inside the video card (components/LyricSyncStudio.tsx). */
 .sync-studio { display: grid; gap: var(--s3); width: 100%; min-width: 0; padding: var(--s4); border: 1px solid var(--line); border-radius: var(--r-control); background: var(--surface-solid); }
 .sync-studio__lead { margin: 0; color: var(--muted); font-size: var(--t-body); line-height: 1.7; }
-.sync-studio__top { display: grid; grid-template-columns: 96px minmax(0, 1fr); gap: var(--s3); align-items: start; }
+.sync-studio__top { display: grid; grid-template-columns: 64px minmax(0, 1fr); gap: var(--s3); align-items: start; }
 .sync-studio__preview {
   aspect-ratio: 9 / 16; border-radius: 10px; background: #1d1f1c center / cover no-repeat; display: flex; align-items: flex-end; overflow: hidden;
 }
@@ -2936,29 +2936,40 @@ textarea.is-full { border-color: var(--danger); }
 }
 .sync-studio__transport { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s2); min-width: 0; }
 .sync-studio__clock { font-size: var(--t-body); color: var(--ink); }
-.sync-studio__zoom { display: flex; flex-wrap: wrap; gap: var(--s2); }
-.sync-studio__timeline {
-  position: relative; height: 88px; border-radius: 10px; background: var(--surface-soft); overflow: hidden; touch-action: pan-y; cursor: pointer; color: rgba(var(--score-neutral), 0.28);
+/* The lane: time runs down, waveform on the left, a block per line beside it at its real start and length. */
+.sync-studio__lane {
+  position: relative; height: min(40vh, 420px); overflow-y: auto; overscroll-behavior: contain; border-radius: 10px;
+  background: var(--surface-soft); cursor: pointer; -webkit-overflow-scrolling: touch;
 }
-.sync-studio__wave { position: absolute; inset: 0; width: 100%; height: 100%; }
+.sync-studio__track { position: relative; color: rgba(var(--score-neutral), 0.3); }
+.sync-studio__wave { position: absolute; top: 0; left: 40px; width: 44px; }
+.sync-studio__tick {
+  position: absolute; left: 4px; width: 34px; transform: translateY(-50%); font-size: var(--t-caption); line-height: 1;
+  color: var(--faint); pointer-events: none;
+}
+.sync-studio__tick::after { content: ''; position: absolute; left: 36px; top: 50%; width: 46px; border-top: 1px solid var(--line); }
 .sync-studio__block {
-  position: absolute; bottom: 6px; height: 30px; min-width: 0; padding: 0; box-sizing: border-box; border: 1px solid var(--line-strong); border-radius: 6px;
-  background: var(--glass-strong); color: var(--ink); font: inherit; font-size: var(--t-caption); text-align: left; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; cursor: pointer;
+  position: absolute; left: 92px; right: 8px; min-height: 0; padding: 0; box-sizing: border-box; overflow: clip;
+  border: 1px solid var(--line-strong); border-radius: 6px; background: var(--glass-strong); color: var(--ink);
+  font: inherit; font-size: var(--t-caption); line-height: 1.35; text-align: left; cursor: pointer;
 }
-/* Padding on the text, not the block: two lines 0.4 s apart give a block narrower than any padding, which pushed it onto its neighbour. */
-.sync-studio__block span { pointer-events: none; display: block; padding: 0 4px; overflow: hidden; text-overflow: ellipsis; }
+.sync-studio__block { display: flex; flex-direction: column; justify-content: flex-start; align-items: stretch; }
+/* The text at the block's top edge, which is the line's start. */
+/* Sticky, so a line taller than the lane keeps its words in sight while
+   any of it is; `overflow: clip` above (not hidden) is what lets it stick. */
+.sync-studio__label { display: block; position: sticky; top: 0; padding: 2px 6px; pointer-events: none; overflow-wrap: anywhere; }
+/* A short line: one row, ended with an ellipsis rather than sliced through a second. */
+.sync-studio__label.is-short { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* The grip a finger drags the chosen line by; the rest of a tall block still scrolls the lane. */
+.sync-studio__grip {
+  float: right; pointer-events: auto; touch-action: none; cursor: grab; min-width: 32px; min-height: 22px; margin: -2px -4px 0 4px;
+  display: inline-grid; place-items: center; border-radius: 6px; background: var(--petal-deep); color: #fff; font-size: var(--t-caption); line-height: 1;
+}
+.sync-studio__at { color: var(--faint); margin-right: 4px; }
 .sync-studio__block.is-current { border-color: var(--petal); }
-.sync-studio__block.is-selected { background: var(--petal-soft); border-color: var(--petal-deep); box-shadow: inset 0 0 0 1px var(--petal-deep); cursor: grab; touch-action: none; z-index: 1; }
-.sync-studio__cursor { position: absolute; top: 0; bottom: 0; width: 2px; margin-left: -1px; background: var(--petal-deep); pointer-events: none; z-index: 2; }
+.sync-studio__block.is-selected { background: var(--petal-soft); border-color: var(--petal-deep); box-shadow: inset 0 0 0 1px var(--petal-deep); cursor: grab; touch-action: pan-y; z-index: 1; }
+.sync-studio__cursor { position: absolute; left: 0; right: 0; height: 2px; margin-top: -1px; background: var(--petal-deep); pointer-events: none; z-index: 2; }
 .sync-studio__wavenote { margin: 0; }
-.sync-studio__lines { list-style: none; margin: 0; padding: 0; max-height: 11rem; overflow: auto; display: grid; gap: 2px; }
-.sync-studio__line {
-  width: 100%; min-height: 36px; padding: 4px var(--s2); border: 0; border-radius: 8px; background: none; color: var(--muted);
-  font: inherit; font-size: var(--t-body); text-align: left; cursor: pointer; overflow-wrap: anywhere;
-}
-.sync-studio__line .num { color: var(--faint); margin-right: var(--s2); }
-.sync-studio__line.is-current { color: var(--ink); }
-.sync-studio__line.is-selected { background: var(--petal-soft); color: var(--ink); }
 .sync-studio__fix { margin: 0; padding: var(--s3); border: 1px solid var(--line); border-radius: var(--r-control); display: grid; gap: var(--s2); min-width: 0; }
 .sync-studio__fix legend { padding: 0 4px; font-size: var(--t-body); font-weight: 600; }
 .sync-studio__fix p { margin: 0; }

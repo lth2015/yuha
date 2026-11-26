@@ -132,3 +132,21 @@ export function lineProgress(lines: LyricLine[], index: number, seconds: number)
   const span = Math.max(0.001, line.end - line.start);
   return Math.min(1, Math.max(0, (seconds - line.start) / span));
 }
+
+/**
+ * The words a song sings, or nothing.
+ *
+ * Every place that times lyrics to the voice asks this one question first —
+ * the timing workspace, the "estimated" notice, the lyrics on the song page and
+ * the lyrics drawn into either video. An instrumental has no voice to follow,
+ * and a song sung without words (or with only section tags) has nothing to
+ * place; neither shows any lyric sync at all (product owner, 2026-11-26).
+ */
+export function sungLyrics(song: { vocalMode: string; lyrics: string | null | undefined }): string | null {
+  if (song.vocalMode === 'instrumental' || !song.lyrics) return null;
+  const sung = song.lyrics.split('\n').some((l) => {
+    const t = l.trim();
+    return t !== '' && !/^\[[^\]]*\]$/.test(t);
+  });
+  return sung ? song.lyrics : null;
+}

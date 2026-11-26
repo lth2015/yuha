@@ -4,7 +4,7 @@ import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { TITLE_MAX_CODEPOINTS, markCorrected, seasonOfOccasion, type LyricTimings, type Occasion, type ProductView, type TrackView } from '@yuha/contracts';
 import { API_BASE, ApiError, apiFetch, apiPostForBlob } from '../lib/api';
 import { drawVideoFrame, frameJpeg, planShareClip, shareCardPng } from '../lib/share-art';
-import { resolveLyricTimings } from '../lib/lyrics';
+import { resolveLyricTimings, sungLyrics } from '../lib/lyrics';
 import { clampToCodePoints } from '../lib/codepoints';
 import { createInFlightGuard, PENDING_AFTER_MS } from '../lib/in-flight';
 import { formatTime, usePlayer } from '../lib/player';
@@ -257,6 +257,9 @@ export default function SongDetail() {
    */
   const manages = isOwner && me?.role !== 'guest';
   const active = player.activeId === song.trackId;
+  // The words this song sings, or null: an instrumental, or a song sung
+  // without words, has no lyric sync anywhere on this page (lib/lyrics.ts).
+  const sung = sungLyrics(song);
   const playing = active && player.status === 'playing';
 
   const saveTimings = async (timings: LyricTimings) => {
@@ -388,7 +391,7 @@ export default function SongDetail() {
    * audio by the API. Returned as a file for the phone's share sheet.
    */
   const makeVideo = async (seconds: number): Promise<File> => {
-    const lines = song.lyrics ? resolveLyricTimings(song.lyrics, song.durationSeconds, song.lyricTimings).lines : [];
+    const lines = sung ? resolveLyricTimings(sung, song.durationSeconds, song.lyricTimings).lines : [];
     const plan = planShareClip(lines, song.durationSeconds, 200, seconds);
     const labels = shareLabels();
     const frames = [];
@@ -816,17 +819,17 @@ export default function SongDetail() {
             <PhotoVideo
               song={song}
               labels={shareLabels()}
-              lyrics={song.lyrics}
+              lyrics={sung}
               lyricTimings={song.lyricTimings}
               makeCoverVideo={makeVideo}
               startOpen={params.get('video') === '1'}
               timingsUnsaved={edits.present !== null}
               studio={
-                song.lyrics && song.vocalMode !== 'instrumental'
+                sung
                   ? (photos) => (
                       <LyricSyncStudio
                         trackId={song.trackId}
-                        lyrics={song.lyrics!}
+                        lyrics={sung}
                         savedTimings={song.lyricTimings}
                         duration={song.durationSeconds}
                         draft={edits.present}
@@ -934,7 +937,7 @@ export default function SongDetail() {
         </div>
       </div>
 
-      {song.lyrics && (
+      {sung && (
         <section className="song-page__lyrics panel" aria-labelledby="lyrics-heading">
           <h2 id="lyrics-heading">{t('song.lyrics')}</h2>
           {/*
@@ -944,7 +947,7 @@ export default function SongDetail() {
             * lines in time with A.
             */}
           <SyncedLyrics
-            lyrics={song.lyrics}
+            lyrics={sung}
             duration={active ? player.duration || song.durationSeconds : song.durationSeconds}
             currentTime={active ? player.currentTime : 0}
             live={active}
@@ -961,7 +964,7 @@ export default function SongDetail() {
 
       {/* After the lyrics, where a listener ends up: the same way in again.
           Only after lyrics: with none, it sat right under the first button. */}
-      {!isOwner && song.visibility === 'public' && song.lyrics && (
+      {!isOwner && song.visibility === 'public' && sung && (
         <section className="song-again" aria-labelledby="song-again-heading">
           <h2 id="song-again-heading">{t(song.dedication ? 'song.again.lead' : 'song.again.lead.plain')}</h2>
           <WriteOneToo occasion={song.dedication?.occasion} />
