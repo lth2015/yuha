@@ -125,6 +125,8 @@ const BACKFILL_LOCK = 'yuha_lyric_backfill';
  * backfill unless the day's quota is spent:
  *   syncing   queued now, or already on its way
  *   deferred  the quota is spent today; asked again the next time it is opened
+ *   busy      the queue's lock was held this instant: nothing queued, nothing
+ *             measured; the next open asks again
  *   none      nothing to do today (this version already ended; a failure is
  *             tried again on a later day, not again today)
  * One job per song, master and words, so tabs take one slot. Count and insert
@@ -136,12 +138,16 @@ export async function requestLyricBackfill(params: {
   masterSha: string;
   lyrics: string;
   dailyQuota: number;
-}): Promise<'syncing' | 'deferred' | 'none'> {
+}): Promise<'syncing' | 'deferred' | 'none' | 'busy'> {
   const sha = lyricsSha(params.lyrics);
   const conn: mysql.PoolConnection = await db().getConnection();
   try {
-    const got = await queryOne<{ ok: number | null }>(`SELECT GET_LOCK(?, 5) AS ok`, [BACKFILL_LOCK], conn);
-    if (Number(got?.ok) !== 1) return 'deferred';
+    // Briefly: an owner is waiting on this page load. Not getting the lock is
+    // a busy moment, not a measured quota — 'busy', and the next open tries
+    // again. Calling it 'deferred' told the page "today's limit is reached"
+    // when nothing had counted anything (Codex review of PR #157).
+    const got = await queryOne<{ ok: number | null }>(`SELECT GET_LOCK(?, 1) AS ok`, [BACKFILL_LOCK], conn);
+    if (Number(got?.ok) !== 1) return 'busy';
     try {
       const existing = await queryOne<{ id: string; status: LyricSyncStatus; before_today: number | null }>(
         `SELECT id, status, finished_at < ${JST_DAY_START_UTC} AS before_today
