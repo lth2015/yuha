@@ -137,6 +137,15 @@ export class HttpVideoProvider implements VideoProvider {
     }
   }
 
+  async health(): Promise<{ ok: boolean; queued: number | null }> {
+    // GET /health needs no key; its field names for the queue are read leniently.
+    const r = await this.call('GET', '/health');
+    if (!r || r.code !== 200) return { ok: false, queued: null };
+    const j = r.json;
+    const q = [j.queue_length, j.queued, j.queue, j.queue_size].find((v) => typeof v === 'number' && Number.isFinite(v));
+    return { ok: j.status === undefined || j.status === 'ok', queued: typeof q === 'number' ? q : null };
+  }
+
   async discard(id: string): Promise<void> {
     if (!ID.test(id)) return;
     // 409 while it is on the GPU: nothing more can be done, and it is swept in seven days.

@@ -57,6 +57,8 @@ export interface VideoProvider {
    * the service keeps finished clips seven days anyway.
    */
   discard(id: string): Promise<void>;
+  /** Whether the service answers, and how many clips it has waiting when it says. Never throws. */
+  health(): Promise<{ ok: boolean; queued: number | null }>;
 }
 
 export const CLIP_MAX_SECONDS = 8;

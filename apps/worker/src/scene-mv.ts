@@ -173,9 +173,22 @@ export async function sceneMvLoop(
   if (!d.video) return;
   const video = d.video;
   let lastSweep = 0;
+  let lastProbe = 0;
+  let health: HealthState = { downSince: null, alerted: false, crowded: false };
   while (!d.stopped()) {
     let outcome: TickOutcome = 'idle';
     try {
+      if (Date.now() - lastProbe >= 60_000) {
+        lastProbe = Date.now();
+        const h = await video.health();
+        const r = nextHealthState(health, { at: lastProbe, ...h });
+        health = r.state;
+        for (const e of r.events) {
+          // Fixed messages, so a log-based alert can match them.
+          const level = e === 'unreachable_5m' ? 'error' : e === 'queue_over_15' ? 'warn' : 'info';
+          d.log(level, `video service health: ${e}`, { queued: h.queued });
+        }
+      }
       outcome = await sceneMvTick({ ...d, video });
       await d.compose();
       if (Date.now() - lastSweep > 3_600_000) {
@@ -189,4 +202,45 @@ export async function sceneMvLoop(
     const wait = outcome === 'waiting' || outcome === 'idle' ? (outcome === 'idle' ? d.idleMs ?? 15_000 : d.busyMs ?? 12_000) : 500;
     await new Promise((r) => setTimeout(r, wait));
   }
+}
+
+/**
+ * The alert rule from the SRE checklist: unreachable five minutes running, or
+ * more than fifteen clips queued. One event when a condition starts and one
+ * when it ends, never one per probe.
+ */
+export interface HealthState {
+  downSince: number | null;
+  alerted: boolean;
+  crowded: boolean;
+}
+export type HealthEvent = 'unreachable_5m' | 'recovered' | 'queue_over_15' | 'queue_normal';
+
+export function nextHealthState(
+  s: HealthState,
+  probe: { at: number; ok: boolean; queued: number | null },
+): { state: HealthState; events: HealthEvent[] } {
+  const events: HealthEvent[] = [];
+  const next = { ...s };
+  if (!probe.ok) {
+    next.downSince = s.downSince ?? probe.at;
+    if (!s.alerted && probe.at - next.downSince >= 5 * 60_000) {
+      next.alerted = true;
+      events.push('unreachable_5m');
+    }
+  } else {
+    if (s.alerted) events.push('recovered');
+    next.downSince = null;
+    next.alerted = false;
+    if (probe.queued !== null) {
+      if (!s.crowded && probe.queued > 15) {
+        next.crowded = true;
+        events.push('queue_over_15');
+      } else if (s.crowded && probe.queued <= 15) {
+        next.crowded = false;
+        events.push('queue_normal');
+      }
+    }
+  }
+  return { state: next, events };
 }
