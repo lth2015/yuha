@@ -6,6 +6,8 @@
 
 本文件是当前排期与线上交接入口。产品取舍、实验设计和独立评审见 [方向复盘](MUSIC_FIRST_DIRECTION_REVIEW.md) 与 [Claude #147](https://github.com/lth2015/yuha/pull/147)。
 
+自动同步达标后退役所有用户手动歌词对齐功能。实施任务、兼容性和切换顺序见 [自动歌词同步下一阶段任务](AUTOMATIC_LYRIC_SYNC_NEXT_PHASE.md)。
+
 ## 按可验证的小批次推进
 
 | 顺序 | Claude 实现和推进发布 | Codex 交互与交叉验收 | 该批完成条件 |
