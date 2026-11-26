@@ -8,7 +8,7 @@
 | --- | --- | --- | --- | --- |
 | T1 | **dgxv 视频服务 + 测速**（`deploy/dgx/video/`）——代码已写、假后端已测；**dgxv 上未跑** | — | Claude 写；负责人在 dgxv 上跑 `./deploy.sh` 和 `bench.py` | 服务：提交／查询／取片段，一次一个 GPU 任务，不带模型音轨，鉴权，过期清理。测速：冷启动 1 次 + 每配置暖启动 5 次，竖／横、4／8 秒，P50/P95、峰值显存、失败／OOM 全部记录，输出 Markdown 表填回规格第 8 节 |
 | T2 | 模型与许可核实 | — | 负责人 + 法务 | 实际模型、权重版本、许可证原文（商用、营收限制、输出使用）；推理代码有无遥测外发。结论写进规格 |
-| T3 | 视频 provider 接口 | — | Claude | `packages/providers/src/video/`：`submit / status / fetch` 契约；`demo`（本地 ffmpeg 生成色块片段，供开发和 CI）与 `http`（T1 的服务）两种实现；契约测试 |
+| T3 | 视频 provider 接口——**已完成**：`DemoVideoProvider` 与 `HttpVideoProvider`（只认 HTTPS），同一套契约测试，HTTP 一半直接跑 T1 的 Python 服务 | — | Claude | `packages/providers/src/video/`：`submit / status / fetch` 契约；`demo`（本地 ffmpeg 生成色块片段，供开发和 CI）与 `http`（T1 的服务）两种实现；契约测试 |
 | T4 | 任务与镜头的数据层 | — | Claude | 新迁移：`scene_mvs`（所有者、歌曲、选段起止、风格、提示词、状态、版本快照、过期时间）与 `scene_mv_shots`（序号、描述、状态、尝试次数、片段存储键）。状态机：Draft→Queued→Generating→Composing→Ready / Failed / Cancelled；行为测试 |
 | T5 | 生成队列（worker） | T3 T4 | Claude | 全局一次一个镜头；每用户最多一个活跃任务；镜头有限重试，只补失败镜头；重启后恢复；取消阻止后续镜头。测试：重复提交、重启恢复、取消、失败返还 |
 | T6 | 合成 | T5 | Claude | 4 个镜头按段落／固定长度切点复用剪成选段长度；只用歌曲原音轨；竖屏 720×1280；歌词字幕（与现有视频相同的时间版本）；成片存私有存储，7 天过期（拟议，待 T2/运维确认后才对外承诺） |

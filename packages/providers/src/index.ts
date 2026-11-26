@@ -13,6 +13,10 @@ export { EstimatedAlignmentProvider } from './alignment/estimated.js';
 export { FallbackAlignmentProvider } from './alignment/fallback.js';
 export { HttpAlignmentProvider, type HttpAlignmentConfig } from './alignment/http.js';
 
+export * from './video/types.js';
+export { DemoVideoProvider, type DemoVideoOptions } from './video/demo.js';
+export { HttpVideoProvider, type HttpVideoConfig } from './video/http.js';
+
 export * from './text/types.js';
 export { TokenStarsTextProvider, type TokenStarsConfig } from './text/tokenstars.js';
 export { LocalTextProvider } from './text/local.js';
