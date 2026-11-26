@@ -22,6 +22,7 @@ import { ErrorNotice } from '../components/common';
 import { Score } from '../components/Score';
 import { ShareMenu } from '../components/ShareMenu';
 import { PhotoVideo } from '../components/PhotoVideo';
+import { SceneMv } from '../components/SceneMv';
 import { useConfirm } from '../components/ConfirmDialog';
 import { SyncedLyrics } from '../components/SyncedLyrics';
 import { LyricSyncStudio } from '../components/LyricSyncStudio';
@@ -54,6 +55,14 @@ export default function SongDetail() {
   const navigate = useNavigate();
   const { me, runtime } = useSession();
   const player = usePlayer();
+  const sceneSeek = useRef<number | null>(null);
+  useEffect(() => { sceneSeek.current = null; }, [id]);
+  useEffect(() => {
+    if (player.activeId === id && player.duration > 0 && sceneSeek.current !== null) {
+      player.seek(sceneSeek.current);
+      sceneSeek.current = null;
+    }
+  }, [id, player.activeId, player.duration, player.seek]);
   const [confirm, confirmDialog] = useConfirm();
   /*
    * Unsaved lyric timing edits, held here so the video card's workspace and
@@ -847,6 +856,19 @@ export default function SongDetail() {
                   : undefined
               }
               photosEnabled={runtime?.features.photoVideoEnabled === true || runtime?.features.photoVideoPreview === true}
+              sceneMv={runtime?.features.sceneMv === true ? (visible) => (
+                <SceneMv key={song.trackId} trackId={song.trackId} title={song.title} duration={song.durationSeconds}
+                  visible={visible}
+                  timings={song.lyricTimings ?? null} timingsUnsaved={edits.present !== null}
+                  onListen={(start) => {
+                    if (active && player.duration > 0) {
+                      player.seek(start);
+                      if (player.status !== 'playing') player.toggle();
+                    } else { sceneSeek.current = start; play(); }
+                  }}
+                  onVideoPlay={() => { if (player.status === 'playing') player.toggle(); }}
+                />
+              ) : undefined}
             />
           )}
           {/* A trial's song cannot be made into a video yet; say that it can, once kept. */}
