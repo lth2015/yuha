@@ -47,9 +47,9 @@ const BEATS: Record<SceneMvStyle, string[]> = {
 const TAIL = 'cinematic, vertical composition, no text, no people in close-up';
 
 /** At most four shots of at most eight seconds: the service draws 1–8 s. */
-export const MAX_SPAN_SECONDS = 32;
+const MAX_SPAN_SECONDS = 32;
 
-export function buildStoryboard(style: SceneMvStyle, description: string | null): string[] {
+function buildStoryboard(style: SceneMvStyle, description: string | null): string[] {
   return BEATS[style].map((beat) => [description?.trim(), beat, TAIL].filter(Boolean).join('. '));
 }
 
