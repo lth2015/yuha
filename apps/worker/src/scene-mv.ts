@@ -99,7 +99,7 @@ export async function sceneMvTick(d: SceneMvDeps): Promise<TickOutcome> {
   const state = await d.video.status(shot.provider_clip_id);
   if (state.status === 'queued' || state.status === 'running' || (state.status === 'unknown' && state.reason !== 'not_found')) {
     if (age > (d.shotTimeoutMs ?? 60 * 60_000)) {
-      await d.video.discard(shot.provider_clip_id);
+      await d.video.discard(shot.provider_clip_id).catch(() => undefined);
       await finishShot(shot.id, { status: 'failed', failure: 'timeout' });
       d.log('error', 'scene mv shot timed out', { shotId: shot.id, state: state.status });
       return 'failed';
@@ -109,6 +109,8 @@ export async function sceneMvTick(d: SceneMvDeps): Promise<TickOutcome> {
   }
   if (state.status === 'failed' || state.status === 'unknown') {
     const failure = state.status === 'failed' ? state.reason : 'lost';
+    // The service keeps a job, prompt and all, for seven days unless told otherwise: tell it.
+    await d.video.discard(shot.provider_clip_id).catch(() => undefined);
     await finishShot(shot.id, { status: 'failed', failure });
     d.log('warn', 'scene mv shot failed', { shotId: shot.id, failure, attempt: shot.attempts });
     return 'failed';
@@ -134,6 +136,7 @@ export async function sceneMvTick(d: SceneMvDeps): Promise<TickOutcome> {
     failure = 'fetch_failed';
     d.log('warn', 'scene mv clip could not be collected', { shotId: shot.id, err: (err as Error).message.slice(0, 120) });
   }
+  await d.video.discard(shot.provider_clip_id).catch(() => undefined);
   await finishShot(shot.id, { status: 'failed', failure });
   return 'failed';
 }

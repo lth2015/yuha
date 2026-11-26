@@ -118,6 +118,9 @@ describe('drawing a scene MV', () => {
     const mv = await getSceneMv(bad);
     expect([mv?.status, mv?.failure]).toEqual(['failed', 'shot_failed']);
     expect(video.submitted.filter((r) => r.prompt === 'x1')).toHaveLength(0);
+    // Every clip asked for — drawn or failed — is let go of at the service, prompt and all,
+    // rather than left there for its seven days (docs/legal/PRIVACY_CHANGES_SCENE_MV.md).
+    expect(video.discarded).toHaveLength(video.submitted.length);
   }, 60_000);
 
   it('does not spend a try when the service is busy', async () => {
