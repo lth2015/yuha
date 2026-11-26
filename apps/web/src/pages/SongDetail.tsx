@@ -1011,6 +1011,7 @@ export default function SongDetail() {
             duration={active ? player.duration || song.durationSeconds : song.durationSeconds}
             currentTime={active ? player.currentTime : 0}
             live={active}
+            still={song.lyricSync === 'syncing' && !song.lyricTimings}
             timings={song.lyricTimings}
             draft={manages ? edits.present : undefined}
             onDraft={manages ? setTimingDraft : undefined}
