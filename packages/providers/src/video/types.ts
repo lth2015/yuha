@@ -5,30 +5,33 @@
  * one at a time, keeps the bytes in its own storage and cuts them to the song
  * itself; nothing behind this seam sees a song, its lyrics or its owner.
  *
+ * Shaped by the service actually running on dgxv (product owner, 2026-11-26):
+ * a clip is a duration and an orientation — the service decides the frame
+ * size — and the service has no cancel and no idempotency key. So:
+ *   - there is no `cancel` here: a person's cancel stops YUHA waiting and
+ *     asking for further shots; a shot already on the GPU finishes there, at
+ *     the platform's cost (docs/AI_SCENE_MV_SPEC.md allows this);
+ *   - a submit that timed out may still have been accepted; the caller must
+ *     not resubmit blindly (the pipeline records ids as soon as it has them).
+ *
  * Every outcome is a value, never a throw, except `fetchClip`: a clip that
  * cannot be fetched has no bytes to return, and the caller must not mistake
  * that for an empty one.
  */
+export type ClipOrientation = 'portrait' | 'landscape';
+
 export interface ClipRequest {
-  /** What the shot shows. Never logged by the provider, nor kept past the job. */
+  /** What the shot shows. Never logged by YUHA. */
   prompt: string;
-  negativePrompt?: string;
-  /** Multiples of 32; the longest edge at most 1280. */
-  width: number;
-  height: number;
-  /** At most 10. */
+  /** 1–8 seconds. */
   seconds: number;
-  fps?: number;
-  seed?: number;
-  /** The same key and the same request is the same clip; the same key for another request is refused. */
-  idempotencyKey: string;
+  orientation: ClipOrientation;
 }
 
 export type ClipRejection =
   | 'queue_full' // retryable: the service is busy
-  | 'unavailable' // retryable: the service could not be reached, or failed
+  | 'unavailable' // retryable: could not be reached, timed out, or failed
   | 'invalid_request'
-  | 'idempotency_key_reused'
   | 'unauthorized';
 
 export type ClipSubmit =
@@ -37,9 +40,8 @@ export type ClipSubmit =
 
 export type ClipState =
   | { status: 'queued' | 'running'; queuePosition: number | null }
-  | { status: 'succeeded'; clipSeconds: number; generationSeconds: number | null; model: string | null }
+  | { status: 'succeeded' }
   | { status: 'failed'; reason: string }
-  | { status: 'cancelled' }
   /** Not known to the service (never made, or swept), or the service could not be asked. */
   | { status: 'unknown'; reason: 'not_found' | 'unreachable' | 'unauthorized' };
 
@@ -47,20 +49,16 @@ export interface VideoProvider {
   readonly kind: string;
   submit(req: ClipRequest): Promise<ClipSubmit>;
   status(id: string): Promise<ClipState>;
-  /** Asks for a cancel; the clip may still take a moment to stop. Read `status` for the outcome. */
-  cancel(id: string): Promise<void>;
   /** The finished clip's bytes. Throws unless the clip succeeded and its bytes could be fetched safely. */
   fetchClip(id: string): Promise<Buffer>;
 }
 
-/** The shape rules both providers apply, so the demo refuses what the real service refuses. */
-export function clipShapeProblem(req: ClipRequest): string | null {
-  if (!Number.isInteger(req.width) || !Number.isInteger(req.height) || req.width % 32 || req.height % 32 || req.width < 64 || req.height < 64) {
-    return 'width and height must be multiples of 32, at least 64';
-  }
-  if (Math.max(req.width, req.height) > 1280) return 'longest edge is at most 1280';
-  if (!(req.seconds > 0) || req.seconds > 10) return 'seconds must be above 0 and at most 10';
-  if (req.fps !== undefined && (!Number.isInteger(req.fps) || req.fps < 8 || req.fps > 30)) return 'fps must be 8–30';
+export const CLIP_MAX_SECONDS = 8;
+
+/** The rules both providers apply, so the demo refuses what the real service refuses. */
+export function clipRequestProblem(req: ClipRequest): string | null {
+  if (!(req.seconds >= 1) || req.seconds > CLIP_MAX_SECONDS) return `seconds must be 1–${CLIP_MAX_SECONDS}`;
+  if (req.orientation !== 'portrait' && req.orientation !== 'landscape') return 'orientation must be portrait or landscape';
   if (!req.prompt.trim() || req.prompt.length > 1500) return 'prompt must be 1–1500 characters';
   return null;
 }

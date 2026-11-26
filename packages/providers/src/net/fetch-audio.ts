@@ -79,6 +79,8 @@ export interface FetchAudioOptions {
   allowInsecureSelfHosted?: boolean;
   /** Keep the private-address check even when HTTP is permitted. */
   allowPrivateAddresses?: boolean;
+  /** Sent with the request: a provider whose download needs its key (the dgxv video service). */
+  headers?: Record<string, string>;
 }
 
 export async function assertSafeUrl(rawUrl: string, opts: FetchAudioOptions): Promise<URL> {
@@ -128,7 +130,7 @@ export async function fetchAudio(rawUrl: string, opts: FetchAudioOptions): Promi
     const res = await fetch(url, {
       signal: controller.signal,
       redirect: 'error',
-      headers: { accept: 'audio/*' },
+      headers: { accept: opts.allowedContentTypes?.some((t) => t.startsWith('video/')) ? 'video/*' : 'audio/*', ...(opts.headers ?? {}) },
     });
     if (!res.ok) {
       throw new UnsafeUrlError('upstream_status', `audio fetch returned ${res.status}`);

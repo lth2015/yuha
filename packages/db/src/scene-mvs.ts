@@ -165,8 +165,10 @@ export async function cancelSceneMv(id: string, ownerId: string): Promise<boolea
 }
 
 /**
- * The next shot to draw, or none: the oldest generating job's lowest shot
- * that is waiting or may be tried again. None while any shot is running,
+ * The next shot to draw, or none: the lowest shot that is waiting or may be
+ * tried again, of the job that has waited longest since its last shot — a job
+ * that has had nothing yet first, then round the others in turn, so one long
+ * job cannot hold the machine while another waits (docs/AI_SCENE_MV_SPEC.md). None while any shot is running,
  * anywhere — one GPU, one shot. A named lock makes check-and-claim one step
  * across every worker.
  */
@@ -180,7 +182,10 @@ export async function claimNextShot(worker: string): Promise<SceneMvShotRow | nu
       const next = await queryOne<{ id: string }>(
         `SELECT s.id FROM scene_mv_shots s JOIN scene_mvs m ON m.id = s.scene_mv_id
           WHERE m.status = 'generating' AND (s.status = 'pending' OR (s.status = 'failed' AND s.attempts < ?))
-          ORDER BY m.queued_at, m.id, s.idx LIMIT 1`,
+          ORDER BY (SELECT MAX(x.started_at) FROM scene_mv_shots x WHERE x.scene_mv_id = m.id) IS NOT NULL,
+                   (SELECT MAX(x.started_at) FROM scene_mv_shots x WHERE x.scene_mv_id = m.id),
+                   m.queued_at, m.id, s.idx
+          LIMIT 1`,
         [SHOT_TRIES],
         conn,
       );
@@ -200,6 +205,54 @@ export async function claimNextShot(worker: string): Promise<SceneMvShotRow | nu
   } finally {
     conn.release();
   }
+}
+
+/** The running shot, if any (there is at most one), with the job it belongs to. */
+export async function runningShot(): Promise<(SceneMvShotRow & { owner_id: string; job_status: SceneMvStatus; clip_start: number; clip_end: number; shot_count: number }) | null> {
+  const row = await queryOne<SceneMvShotRow & { owner_id: string; job_status: SceneMvStatus; clip_start: number; clip_end: number; shot_count: number }>(
+    `SELECT s.*, m.owner_id, m.status AS job_status, m.clip_start, m.clip_end,
+            (SELECT COUNT(*) FROM scene_mv_shots c WHERE c.scene_mv_id = m.id) AS shot_count
+       FROM scene_mv_shots s JOIN scene_mvs m ON m.id = s.scene_mv_id
+      WHERE s.status = 'running' ORDER BY s.started_at LIMIT 1`,
+  );
+  if (!row) return null;
+  return { ...row, idx: Number(row.idx), attempts: Number(row.attempts), clip_start: Number(row.clip_start), clip_end: Number(row.clip_end), shot_count: Number(row.shot_count) };
+}
+
+/** The provider's id for the clip a running shot asked for, so a restarted worker asks after it rather than asking again. */
+export async function recordShotSubmitted(shotId: string, providerClipId: string): Promise<void> {
+  await execute(`UPDATE scene_mv_shots SET provider_clip_id = ? WHERE id = ? AND status = 'running'`, [providerClipId.slice(0, 64), shotId]);
+}
+
+/**
+ * Hands a running shot back to the queue without spending a try: the
+ * service was full or unreachable, which is the platform's, not the shot's.
+ */
+export async function releaseShot(shotId: string): Promise<void> {
+  await execute(
+    `UPDATE scene_mv_shots SET status = 'pending', attempts = GREATEST(attempts, 1) - 1, claimed_by = NULL, started_at = NULL, provider_clip_id = NULL
+      WHERE id = ? AND status = 'running' AND provider_clip_id IS NULL`,
+    [shotId],
+  );
+}
+
+/** Queued jobs start being made: every one of them, since shots, not jobs, take turns on the GPU. */
+export async function startQueuedSceneMvs(): Promise<number> {
+  const rows = await query<{ id: string }>(`SELECT id FROM scene_mvs WHERE status = 'queued' ORDER BY queued_at`);
+  let n = 0;
+  for (const r of rows) if (await advanceSceneMv(r.id, 'queued', 'generating')) n += 1;
+  return n;
+}
+
+/** Jobs whose every shot is drawn move on to composing. */
+export async function finishDrawnSceneMvs(): Promise<string[]> {
+  const rows = await query<{ id: string }>(
+    `SELECT m.id FROM scene_mvs m WHERE m.status = 'generating'
+        AND NOT EXISTS (SELECT 1 FROM scene_mv_shots s WHERE s.scene_mv_id = m.id AND s.status <> 'succeeded')`,
+  );
+  const moved: string[] = [];
+  for (const r of rows) if (await advanceSceneMv(r.id, 'generating', 'composing')) moved.push(r.id);
+  return moved;
 }
 
 /**
