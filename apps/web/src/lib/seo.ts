@@ -130,8 +130,14 @@ export function headFor(path: string, lang: SeoLang, origin: string): PageHead {
     canonical: pageUrl(origin, page, lang),
     alternates: [
       ...SEO_LANGS.map((l) => ({ hreflang: HREFLANG[l], href: pageUrl(origin, page, l) })),
-      // No language asked for: the page picks one from the browser.
-      { hreflang: 'x-default', href: new URL(page.path, origin).toString() },
+      /*
+       * For a reader whose language is none of these: the English version.
+       * It was the bare path (`/pricing`), which a crawler that runs no
+       * JavaScript receives as the app shell — no canonical, no hreflang,
+       * the home page's title — so the group's default pointed at a page
+       * that did not belong to it.
+       */
+      { hreflang: 'x-default', href: pageUrl(origin, page, 'en') },
     ],
     description: page.description,
   };

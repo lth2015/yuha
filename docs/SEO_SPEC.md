@@ -28,7 +28,7 @@
 
 1. **`?lang=zh|ja|en`**：URL 里的语言优先于浏览器里保存的语言，并保存下来。这样同一个页面有三个可收录的地址。
 2. **robots.txt**：允许公开页面，禁止私有区域，给出 sitemap 地址。
-3. **sitemap.xml**：每个公开页面 × 三种语言，带 `hreflang` 互指和 `x-default`。
+3. **sitemap.xml**：每个公开页面 × 三种语言，带 `hreflang` 互指和 `x-default`。`x-default` 指向该页的英文版（预渲染的 `/en/*.html`），不指向不带语言的路径——那个地址对不执行 JavaScript 的爬虫只返回应用外壳，没有 canonical 和 hreflang。
 4. **每个页面的 `<head>`**，在浏览器里随路由和语言更新：
    - 公开页面：`description`、`canonical`（带 `?lang=`）、三种语言和 `x-default` 的 `alternate`；
    - 其它页面：`<meta name="robots" content="noindex">`。

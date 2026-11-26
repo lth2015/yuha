@@ -71,8 +71,19 @@ describe('a public page in the browser', () => {
       { hreflang: 'zh-Hans', href: 'https://example.test/zh/pricing.html' },
       { hreflang: 'ja', href: 'https://example.test/ja/pricing.html' },
       { hreflang: 'en', href: 'https://example.test/en/pricing.html' },
-      { hreflang: 'x-default', href: 'https://example.test/pricing' },
+      // A page a crawler can read, not the bare path: that answers with the
+      // app shell, no canonical and no hreflang, so the group had no default.
+      { hreflang: 'x-default', href: 'https://example.test/en/pricing.html' },
     ]);
+  });
+
+  it('names, as the default for every public page, one of that page’s own language versions', () => {
+    for (const page of PUBLIC_PAGES) {
+      const head = headFor(page.path, 'ja', ORIGIN);
+      const langs = head.alternates.filter((a) => a.hreflang !== 'x-default').map((a) => a.href);
+      const fallback = head.alternates.find((a) => a.hreflang === 'x-default')!.href;
+      expect(langs).toContain(fallback);
+    }
   });
 
   it('keeps ?lang= for a page that names the operator, which is never written into a file', () => {

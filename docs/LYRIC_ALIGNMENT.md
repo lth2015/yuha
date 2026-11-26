@@ -25,7 +25,7 @@ a person's correction replaces the whole timeline, reason included.
 
 ## Diagnosing a song whose words do not match the voice
 
-**Across all songs**: admin console → 运营 → 生成质量. 「歌词对齐（人声）」 is the
+**Across all songs**: admin console → 运营指标 → 生成质量. 「歌词对齐（人声）」 is the
 share of sung songs with `aligned` or `corrected` timing. The line under the
 table, 「歌词未对齐的原因（近 7 天）」, counts the rest by the first word of the reason:
 
