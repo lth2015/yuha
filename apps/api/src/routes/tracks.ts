@@ -25,6 +25,7 @@ import {
   renameTrack,
   setTrackDedication,
   setTrackLyricTimings,
+  revokeGiftInvitationsOf,
   softDeleteTrack,
   trackEvent,
   type TrackRow,
@@ -233,6 +234,8 @@ export default async function trackRoutes(app: FastifyInstance, opts: { ctx: App
   app.delete('/v1/tracks/:id', { preHandler: app.requireAuth }, async (req, reply) => {
     const { id } = req.params as { id: string };
     const deleted = await softDeleteTrack({ trackId: id, userId: req.user!.id });
+    // Every invitation to it stops, and the words written for the recipient go (docs/GIFT_INVITATION_PLAN.md).
+    if (deleted) await revokeGiftInvitationsOf({ trackId: id });
     if (!deleted) {
       // Either it does not exist, or it is evidence in an open rights case and
       // must be preserved. The message says which without leaking other users' data.
