@@ -10,6 +10,10 @@
       "types": "./dist/pipeline.d.ts",
       "default": "./dist/pipeline.js"
     },
+    "./scene-mv": {
+      "types": "./dist/scene-mv.d.ts",
+      "default": "./dist/scene-mv.js"
+    },
     "./loops": {
       "types": "./dist/loops.d.ts",
       "default": "./dist/loops.js"

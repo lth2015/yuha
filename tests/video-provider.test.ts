@@ -2,44 +2,36 @@
  * The video clip contract (docs/AI_SCENE_MV_TICKETS.md, T3): what YUHA may
  * expect of whatever draws a scene MV's shots.
  *
- * One suite, two providers. The demo one is what development and CI use; the
- * HTTP one is run against the real clip service from deploy/dgx/video — the
- * Python app itself, on its fake backend — not against a TypeScript imitation
- * of it, so a change on either side that breaks the other fails here.
- *
- * That needs Python with fastapi/uvicorn. In CI their absence is a failure
- * (the workflow installs them); on a laptop without them the HTTP half is
- * skipped and says so, and the demo half still runs.
+ * One suite, two providers: the demo one development and CI use, and the
+ * HTTP one, run against a fake of the dgxv service as the product owner
+ * described its API on 2026-11-26 (POST /v1/videos, GET /v1/videos/{id},
+ * GET /v1/videos/{id}/content, X-API-Key). That fake is a description, not
+ * the service: the response field names in it are the ones the provider
+ * guesses, and the first call against the real box is what checks them.
  *
  * No database.
  */
-import { spawn, spawnSync, type ChildProcess } from 'node:child_process';
+import { spawnSync } from 'node:child_process';
 import { mkdtemp, rm, writeFile } from 'node:fs/promises';
-import { createServer, type Server } from 'node:http';
+import { createServer, type IncomingMessage, type Server } from 'node:http';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { DemoVideoProvider, HttpVideoProvider, type ClipState, type VideoProvider } from '@yuha/providers';
+import { DemoVideoProvider, HttpVideoProvider, failureCode, type ClipState, type VideoProvider } from '@yuha/providers';
 
-const PY = process.env.VIDEO_TEST_PYTHON ?? 'python3';
-const hasPython = spawnSync(PY, ['-c', 'import fastapi, uvicorn, httpx'], { stdio: 'ignore' }).status === 0;
-if (!hasPython && process.env.CI) throw new Error(`${PY} cannot import fastapi/uvicorn/httpx; the CI workflow installs them before the tests`);
-if (!hasPython) console.warn(`[video-provider] ${PY} lacks fastapi/uvicorn/httpx: the HTTP contract half is skipped`);
-
-const SHOT = { prompt: 'rain on a neon street, slow dolly', width: 256, height: 448, seconds: 1, fps: 8 };
-const key = () => `k-${Math.random().toString(36).slice(2)}`;
+const SHOT = { prompt: 'rain on a neon street, slow dolly', seconds: 1, orientation: 'portrait' as const };
 
 async function settle(p: VideoProvider, id: string): Promise<ClipState> {
   for (let i = 0; i < 200; i += 1) {
     const s = await p.status(id);
     if (s.status !== 'queued' && s.status !== 'running') return s;
-    await new Promise((r) => setTimeout(r, 50));
+    await new Promise((r) => setTimeout(r, 30));
   }
   throw new Error('the clip never settled');
 }
 
 function streams(file: string): string[] {
-  const out = spawnSync('ffprobe', ['-v', 'error', '-show_entries', 'stream=codec_type', '-of', 'csv=p=0', file], { encoding: 'utf8' });
+  const out = spawnSync('ffprobe', ['-v', 'error', '-show_entries', 'stream=codec_type:stream=width,height', '-of', 'csv=p=0', file], { encoding: 'utf8' });
   return out.stdout.split('\n').filter(Boolean);
 }
 
@@ -50,149 +42,158 @@ function contract(name: string, make: () => VideoProvider) {
       p = make();
     });
 
-    it('draws a silent clip of the shape asked for, and hands over its bytes', async () => {
-      const sub = await p.submit({ ...SHOT, idempotencyKey: key() });
-      expect(sub.status).toBe('accepted');
-      if (sub.status !== 'accepted') return;
-      const done = await settle(p, sub.id);
-      expect(done.status).toBe('succeeded');
-      if (done.status === 'succeeded') expect(done.clipSeconds).toBeGreaterThan(0);
+    it('draws a silent clip in the orientation asked for, and hands over its bytes', async () => {
+      const sub = await p.submit(SHOT);
+      if (sub.status !== 'accepted') throw new Error(sub.reason);
+      expect((await settle(p, sub.id)).status).toBe('succeeded');
       const bytes = await p.fetchClip(sub.id);
       expect(bytes.subarray(4, 8).toString('latin1')).toBe('ftyp');
       const dir = await mkdtemp(join(tmpdir(), 'yuha-clip-'));
       try {
         await writeFile(join(dir, 'c.mp4'), bytes);
-        expect(streams(join(dir, 'c.mp4'))).toEqual(['video']);
+        const s = streams(join(dir, 'c.mp4'));
+        expect(s).toHaveLength(1); // video only
+        const [w, h] = s[0]!.split(',').filter((x) => /^\d+$/.test(x)).map(Number);
+        expect(h!).toBeGreaterThan(w!);
       } finally {
         await rm(dir, { recursive: true, force: true });
       }
     }, 30_000);
 
-    it('takes a repeat with the same key as the same clip, and refuses the key for a different one', async () => {
-      const k = key();
-      const a = await p.submit({ ...SHOT, idempotencyKey: k });
-      const b = await p.submit({ ...SHOT, idempotencyKey: k });
-      expect(a.status === 'accepted' && b.status === 'accepted' && a.id === b.id).toBe(true);
-      const c = await p.submit({ ...SHOT, seed: 7, idempotencyKey: k });
-      expect(c).toMatchObject({ status: 'rejected', reason: 'idempotency_key_reused', retryable: false });
-      if (a.status === 'accepted') await settle(p, a.id);
-    }, 30_000);
-
-    it('refuses a shape it cannot draw, without retrying', async () => {
-      const r = await p.submit({ ...SHOT, width: 250, idempotencyKey: key() });
-      expect(r).toMatchObject({ status: 'rejected', reason: 'invalid_request', retryable: false });
+    it('refuses what the service cannot draw, without retrying', async () => {
+      for (const bad of [{ ...SHOT, seconds: 9 }, { ...SHOT, seconds: 0 }, { ...SHOT, orientation: 'square' as never }, { ...SHOT, prompt: ' ' }]) {
+        expect(await p.submit(bad)).toMatchObject({ status: 'rejected', reason: 'invalid_request', retryable: false });
+      }
     });
 
-    it('cancels a clip and never hands over bytes for it', async () => {
-      const sub = await p.submit({ ...SHOT, seconds: 2, idempotencyKey: key() });
-      if (sub.status !== 'accepted') throw new Error(sub.reason);
-      await p.cancel(sub.id);
-      expect((await settle(p, sub.id)).status).toBe('cancelled');
-      await expect(p.fetchClip(sub.id)).rejects.toThrow();
-    }, 30_000);
-
-    it('says it does not know a clip it never made', async () => {
-      expect((await p.status('0123456789abcdef0123456789abcdef')).status).toBe('unknown');
+    it('says it does not know a clip it never made, and hands over no bytes for it', async () => {
+      expect((await p.status('0123456789abcdef')).status).toBe('unknown');
+      await expect(p.fetchClip('0123456789abcdef')).rejects.toThrow();
     });
   });
 }
 
-contract('demo', () => new DemoVideoProvider());
+contract('demo', () => new DemoVideoProvider({ delayMs: 20 }));
 
-describe.skipIf(!hasPython)('http', () => {
-  let svc: ChildProcess;
-  let data: string;
-  const port = 18_100 + Math.floor(Math.random() * 500);
-  const base = `http://127.0.0.1:${port}`;
+/** The dgxv service as described: an X-API-Key, and its four routes. */
+function fakeDgxv(key: string, opts: { full?: boolean; failWith?: string } = {}) {
+  const clips = new Map<string, { polls: number; orientation: string; seconds: number }>();
+  const seen: { path: string; key: string | undefined; body?: Record<string, unknown> }[] = [];
+  let n = 0;
+  const body = (req: IncomingMessage) =>
+    new Promise<Record<string, unknown>>((resolve) => {
+      let raw = '';
+      req.on('data', (d) => (raw += d));
+      req.on('end', () => resolve(raw ? (JSON.parse(raw) as Record<string, unknown>) : {}));
+    });
+  const server: Server = createServer(async (req, res) => {
+    const json = (code: number, v: unknown) => {
+      res.statusCode = code;
+      res.setHeader('content-type', 'application/json');
+      res.end(JSON.stringify(v));
+    };
+    const url = req.url ?? '';
+    const entry: (typeof seen)[number] = { path: `${req.method} ${url}`, key: req.headers['x-api-key'] as string | undefined };
+    seen.push(entry);
+    if (url === '/health') return json(200, { ok: true, queue: clips.size });
+    if (req.headers['x-api-key'] !== key) return json(401, { detail: 'invalid api key' });
+    if (req.method === 'POST' && url === '/v1/videos') {
+      entry.body = await body(req);
+      if (opts.full) return json(429, { detail: 'queue full' });
+      const id = `v${(n += 1)}`;
+      clips.set(id, { polls: 0, orientation: String(entry.body.orientation), seconds: Number(entry.body.duration) });
+      return json(200, { id, status: 'queued' });
+    }
+    const m = /^\/v1\/videos\/([\w-]+)(\/content)?$/.exec(url);
+    const clip = m ? clips.get(m[1]!) : undefined;
+    if (!clip) return json(404, { detail: 'not found' });
+    if (m![2]) {
+      const [w, h] = clip.orientation === 'portrait' ? [288, 512] : [512, 288];
+      const out = spawnSync('ffmpeg', ['-loglevel', 'error', '-f', 'lavfi', '-i', `testsrc2=size=${w}x${h}:rate=24`, '-t', String(clip.seconds), '-pix_fmt', 'yuv420p', '-an', '-movflags', 'frag_keyframe+empty_moov', '-f', 'mp4', 'pipe:1']);
+      res.setHeader('content-type', 'video/mp4');
+      return res.end(out.stdout);
+    }
+    clip.polls += 1;
+    if (opts.failWith) return json(200, { id: m![1], status: 'failed', error: opts.failWith });
+    return json(200, { id: m![1], status: clip.polls < 2 ? 'queued' : clip.polls < 3 ? 'running' : 'succeeded' });
+  });
+  return { server, seen, start: () => new Promise<string>((r) => server.listen(0, '127.0.0.1', () => r(`http://127.0.0.1:${(server.address() as { port: number }).port}`))) };
+}
+
+describe('http → the dgxv service, as described', () => {
+  const svc = fakeDgxv('test-key');
+  let base = '';
+  beforeAll(async () => {
+    base = await svc.start();
+  });
+  afterAll(() => {
+    svc.server.close();
+  });
   const http = (over: Partial<ConstructorParameters<typeof HttpVideoProvider>[0]> = {}) =>
     new HttpVideoProvider({ baseUrl: base, apiKey: 'test-key', allowInsecureLocal: true, ...over });
 
-  beforeAll(async () => {
-    data = await mkdtemp(join(tmpdir(), 'yuha-video-svc-'));
-    svc = spawn(PY, ['-m', 'uvicorn', 'app:app', '--port', String(port), '--log-level', 'warning'], {
-      cwd: join(process.cwd(), 'deploy/dgx/video/server'),
-      env: { ...process.env, DATA_DIR: data, VIDEO_BACKEND: 'fake', FAKE_DELAY_SECONDS: '0.3', YUHA_API_KEY: 'test-key', CLIP_BASE_URL: base },
-      stdio: 'ignore',
-    });
-    for (let i = 0; i < 100; i += 1) {
-      try {
-        if ((await fetch(`${base}/healthz`)).ok) return;
-      } catch {
-        /* not up yet */
-      }
-      await new Promise((r) => setTimeout(r, 100));
-    }
-    throw new Error('the clip service did not start');
+  contract('http', () => http());
+
+  it('sends the key on every call, a muted request, and the duration in seconds', async () => {
+    const sub = await http().submit({ ...SHOT, seconds: 4, orientation: 'landscape' });
+    if (sub.status !== 'accepted') throw new Error(sub.reason);
+    await settle(http(), sub.id);
+    await http().fetchClip(sub.id);
+    const mine = svc.seen.filter((s) => s.path.includes('/v1/videos'));
+    expect(mine.every((s) => s.key === 'test-key')).toBe(true);
+    expect(mine.filter((s) => s.body).at(-1)?.body).toEqual({ prompt: SHOT.prompt, duration: 4, orientation: 'landscape', mute: true });
   }, 30_000);
-  afterAll(async () => {
-    svc?.kill();
-    await rm(data, { recursive: true, force: true });
-  });
 
-  contract('http → deploy/dgx/video', () => http());
-
-  it('is refused a plain-http base anywhere but this machine', () => {
+  it('is refused a plain-http base unless it is local in development, or the box’s public IP by explicit choice', () => {
     expect(() => new HttpVideoProvider({ baseUrl: 'http://video.example.com', apiKey: 'k' })).toThrow(/https/);
-    expect(() => new HttpVideoProvider({ baseUrl: 'http://203.0.113.9:8100', apiKey: 'k', allowInsecureLocal: true })).toThrow(/https/);
     expect(() => new HttpVideoProvider({ baseUrl: 'http://127.0.0.1:8100', apiKey: 'k' })).toThrow(/https/);
+    expect(() => new HttpVideoProvider({ baseUrl: 'http://203.0.113.9:8100', apiKey: 'k', allowInsecureLocal: true })).toThrow(/https/);
+    expect(() => new HttpVideoProvider({ baseUrl: 'http://203.0.113.9:8100', apiKey: 'k', allowInsecureSelfHosted: true })).not.toThrow();
+    // A name can be repointed by DNS; a private address is the other exception's.
+    expect(() => new HttpVideoProvider({ baseUrl: 'http://video.example.com', apiKey: 'k', allowInsecureSelfHosted: true })).toThrow(/https/);
+    expect(() => new HttpVideoProvider({ baseUrl: 'http://192.168.1.20:8100', apiKey: 'k', allowInsecureSelfHosted: true })).toThrow(/https/);
+    expect(() => new HttpVideoProvider({ baseUrl: 'https://video.example.com', apiKey: '' })).toThrow(/VIDEO_API_KEY/);
   });
 
-  it('names a wrong key, and an unreachable service, rather than throwing', async () => {
-    expect(await http({ apiKey: 'wrong' }).submit({ ...SHOT, idempotencyKey: key() })).toMatchObject({
-      status: 'rejected',
-      reason: 'unauthorized',
-      retryable: false,
-    });
+  it('names a wrong key, an unreachable service and a full queue, rather than throwing', async () => {
+    expect(await http({ apiKey: 'wrong' }).submit(SHOT)).toMatchObject({ status: 'rejected', reason: 'unauthorized', retryable: false });
+    expect(await http({ apiKey: 'wrong' }).status('v1')).toEqual({ status: 'unknown', reason: 'unauthorized' });
     const gone = new HttpVideoProvider({ baseUrl: 'http://127.0.0.1:9', apiKey: 'k', allowInsecureLocal: true });
-    expect(await gone.submit({ ...SHOT, idempotencyKey: key() })).toMatchObject({ status: 'rejected', reason: 'unavailable', retryable: true });
-    expect(await gone.status('0123456789abcdef0123456789abcdef')).toMatchObject({ status: 'unknown', reason: 'unreachable' });
-  });
-
-  it('fetches a clip only from the service it asked, whatever link comes back', async () => {
-    // A service that answers with a link somewhere else: the bytes are never fetched.
-    let hits = 0;
-    const elsewhere: Server = createServer((req, res) => {
-      hits += 1;
-      res.end('x');
-    });
-    await new Promise<void>((r) => elsewhere.listen(0, '127.0.0.1', r));
-    const other = (elsewhere.address() as { port: number }).port;
-    const liar: Server = createServer((req, res) => {
-      res.setHeader('content-type', 'application/json');
-      res.end(JSON.stringify({ id: 'a', status: 'succeeded', clip_url: `http://localhost:${other}/v1/files/a.mp4`, clip_seconds: 1 }));
-    });
-    await new Promise<void>((r) => liar.listen(0, '127.0.0.1', r));
-    const liarBase = `http://127.0.0.1:${(liar.address() as { port: number }).port}`;
+    expect(await gone.submit(SHOT)).toMatchObject({ status: 'rejected', reason: 'unavailable', retryable: true });
+    expect(await gone.status('v1')).toEqual({ status: 'unknown', reason: 'unreachable' });
+    const full = fakeDgxv('k', { full: true });
+    const fullBase = await full.start();
     try {
-      const p = new HttpVideoProvider({ baseUrl: liarBase, apiKey: 'k', allowInsecureLocal: true });
-      await expect(p.fetchClip('a')).rejects.toThrow(/allow-list|not allowed/);
-      expect(hits).toBe(0);
+      expect(await new HttpVideoProvider({ baseUrl: fullBase, apiKey: 'k', allowInsecureLocal: true }).submit(SHOT)).toMatchObject({
+        status: 'rejected',
+        reason: 'queue_full',
+        retryable: true,
+      });
     } finally {
-      liar.close();
-      elsewhere.close();
+      full.server.close();
     }
   });
 
-  it('tells the queue being full apart from a refusal', async () => {
-    const svcFull: Server = createServer((req, res) => {
-      res.statusCode = 429;
-      res.setHeader('content-type', 'application/json');
-      res.end(JSON.stringify({ status: 'rejected', error: 'queue_full', detail: '8 clips waiting' }));
-    });
-    await new Promise<void>((r) => svcFull.listen(0, '127.0.0.1', r));
+  it('keeps a failure as a code, never the service’s words, which may quote the prompt', async () => {
+    const failing = fakeDgxv('k', { failWith: 'CUDA out of memory while drawing "rain on a neon street"' });
+    const fBase = await failing.start();
     try {
-      const p = new HttpVideoProvider({ baseUrl: `http://127.0.0.1:${(svcFull.address() as { port: number }).port}`, apiKey: 'k', allowInsecureLocal: true });
-      expect(await p.submit({ ...SHOT, idempotencyKey: key() })).toMatchObject({ status: 'rejected', reason: 'queue_full', retryable: true });
+      const p = new HttpVideoProvider({ baseUrl: fBase, apiKey: 'k', allowInsecureLocal: true });
+      const sub = await p.submit(SHOT);
+      if (sub.status !== 'accepted') throw new Error(sub.reason);
+      expect(await p.status(sub.id)).toEqual({ status: 'failed', reason: 'out_of_memory' });
     } finally {
-      svcFull.close();
+      failing.server.close();
     }
+    expect(failureCode('refused: "rain on a neon street"')).toBe('refused_by_model');
+    expect(failureCode('something about rain on a neon street')).toBe('service_failed');
   });
 });
 
 describe('demo: limits', () => {
   it('has a bounded queue too, so the pipeline can be tested against a full one', async () => {
     const p = new DemoVideoProvider({ maxQueue: 1, delayMs: 300 });
-    expect((await p.submit({ ...SHOT, idempotencyKey: key() })).status).toBe('accepted');
-    expect(await p.submit({ ...SHOT, idempotencyKey: key() })).toMatchObject({ status: 'rejected', reason: 'queue_full', retryable: true });
+    expect((await p.submit(SHOT)).status).toBe('accepted');
+    expect(await p.submit(SHOT)).toMatchObject({ status: 'rejected', reason: 'queue_full', retryable: true });
   });
 });

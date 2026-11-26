@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { removeSceneMvsOfTrack } from './scene-mv-cleanup.js';
 import { deleteLyricProposals,
   anonymiseUser,
   claimAccountDeletion,
@@ -148,6 +149,11 @@ export async function executeAccountDeletion(
       );
       // Its "align it again" proposals hold lines of the lyrics: they go with them.
       await deleteLyricProposals(track.id);
+      // Its scene MVs: what the owner wrote about the pictures, and the files.
+      if (!(await removeSceneMvsOfTrack(ctx.storage, track.id, log))) {
+        allGone = false;
+        outcome.objectsFailed += 1;
+      }
       if (allGone) outcome.tracksErased += 1;
     }
 
