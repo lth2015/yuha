@@ -429,6 +429,12 @@ export const lyricTimings = z.object({
         section: z.string(),
         start: z.number().nonnegative(),
         end: z.number().nonnegative(),
+        /**
+         * How much of this line the aligner heard, 0–1 (the share of its
+         * lettered units placed with some confidence). Absent when the source
+         * gives no such figure — an estimate, a correction, an older song.
+         */
+        confidence: z.number().min(0).max(1).optional(),
         /** Word-level segments, when the alignment model provides them. */
         words: z
           .array(z.object({ w: z.string(), start: z.number().nonnegative(), end: z.number().nonnegative() }))

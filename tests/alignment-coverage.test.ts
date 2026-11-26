@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { markCorrected } from '@yuha/contracts';
 import { HttpAlignmentProvider } from '@yuha/providers';
 
 const provider = new HttpAlignmentProvider({
@@ -37,6 +38,35 @@ describe('HTTP alignment coverage', () => {
   ])('refuses replaced or reordered words even with the same line count', async (...lines) => {
     vi.stubGlobal('fetch', async () => Response.json({ lines }));
     expect(await provider.align(request)).toMatchObject({ status: 'failed' });
+  });
+
+  /*
+   * The DGX's forced aligner says, per line, how much of it it heard
+   * (forced.py build_result). An unsung line is still forced somewhere, so
+   * the song-level pass hides it; the line's own figure is the signal.
+   */
+  it('keeps how much of each line the aligner heard, and only a figure that is one', async () => {
+    const withConfidence = new HttpAlignmentProvider({
+      providerId: 'test-aligner', baseUrl: 'https://aligner.invalid', apiKey: 'test-only', submitPath: '/align',
+      linesField: 'lines', lineTextField: 'text', lineStartField: 'start', lineEndField: 'end',
+      lineConfidenceField: 'confidence',
+      audioUrlResolver: () => 'https://audio.invalid/test.mp3',
+    });
+    vi.stubGlobal('fetch', async () =>
+      Response.json({ lines: [{ ...complete[0], confidence: 1 }, { ...complete[1], confidence: 'high' }, { ...complete[2], confidence: 0.25 }] }),
+    );
+    const result = await withConfidence.align(request);
+    expect(result.status).toBe('ok');
+    if (result.status === 'ok') expect(result.timings.lines.map((l) => l.confidence)).toEqual([1, undefined, 0.25]);
+
+    vi.stubGlobal('fetch', async () => Response.json({ lines: complete.map((l) => ({ ...l, confidence: 1.5 })) }));
+    const out = await withConfidence.align(request);
+    if (out.status === 'ok') expect(out.timings.lines.every((l) => l.confidence === undefined)).toBe(true);
+  });
+
+  it('a person’s correction carries no model confidence', () => {
+    const t = markCorrected({ source: 'aligned', aligner: 'mms-fa', lines: [{ ...complete[0], section: '', confidence: 0.2 }] });
+    expect(t.lines[0]).not.toHaveProperty('confidence');
   });
 
   /*

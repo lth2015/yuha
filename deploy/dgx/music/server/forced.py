@@ -300,7 +300,15 @@ def build_result(parsed: Sequence[Tuple[str, str]], units: Sequence[Unit],
         if 0 < nxt - e < 1.5:
             e = nxt  # hold through a breath so the line does not blink off
         e = max(e, s + min_line)
-        lines.append({"text": text, "section": section, "start": round(s, 3), "end": round(min(e, duration), 3)})
+        line = {"text": text, "section": section, "start": round(s, 3), "end": round(min(e, duration), 3)}
+        # The share of this line's lettered units the model placed with some
+        # confidence. `coverage` above can pass while one line was barely
+        # heard (an unsung line is still forced somewhere); this says which.
+        # A line with nothing lettered is no evidence either way: no figure.
+        own = [k for k in by_line.get(i, []) if units[k].letters != STAR]
+        if own:
+            line["confidence"] = round(sum(1 for k in own if unit_spans[k][2] >= UNIT_MIN_SCORE) / len(own), 3)
+        lines.append(line)
 
     for li, line in enumerate(lines):
         text = line["text"]

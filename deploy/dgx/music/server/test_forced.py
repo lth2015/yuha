@@ -104,6 +104,20 @@ class ResultTests(unittest.TestCase):
         out = build_result(parsed, units, [(1, 2, 0.9), (2, 3, 0.0), (3, 4, 0.01)], 10.0)
         self.assertEqual(out["coverage"], 0.5)
 
+    def test_each_line_says_how_much_of_it_was_heard(self):
+        # Coverage over the whole song can pass while one line was barely
+        # heard; that line's own share says so (docs/LYRIC_SYNC_REVIEW_CLAUDE.md L2).
+        parsed = [("", "ab"), ("", "cd"), ("", "!")]
+        units = [Unit(0, 0, 1, "a"), Unit(0, 1, 2, "b"), Unit(1, 0, 1, "c"), Unit(1, 1, 2, "d")]
+        spans = [(1, 2, 0.9), (2, 3, 0.8), (5, 6, 0.9), (6, 7, 0.0)]
+        out = build_result(parsed, units, spans, 10.0)
+        self.assertEqual(out["coverage"], 0.75)
+        first, second, third = out["lines"]
+        self.assertEqual(first["confidence"], 1.0)
+        self.assertEqual(second["confidence"], 0.5)
+        # Nothing singable is no evidence either way: no figure rather than 0 or 1.
+        self.assertNotIn("confidence", third)
+
     def test_group_spans_converts_frames_and_averages_scores(self):
         spans = group_spans([(0, 1, 0.2), (10, 12, 0.4), (12, 20, 0.6)], [(1, 3)], 0.02)
         self.assertAlmostEqual(spans[0][0], 0.2)

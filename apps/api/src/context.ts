@@ -222,6 +222,7 @@ function buildAlignment(cfg: AppConfig): AlignmentProvider {
       lineTextField: cfg.ALIGNMENT_LINE_TEXT_FIELD!,
       lineStartField: cfg.ALIGNMENT_LINE_START_FIELD!,
       lineEndField: cfg.ALIGNMENT_LINE_END_FIELD!,
+      lineConfidenceField: cfg.ALIGNMENT_LINE_CONFIDENCE_FIELD,
       ...(cfg.ALIGNMENT_WORDS_FIELD ? { wordsField: cfg.ALIGNMENT_WORDS_FIELD } : {}),
       ...(cfg.ALIGNMENT_WORD_TEXT_FIELD ? { wordTextField: cfg.ALIGNMENT_WORD_TEXT_FIELD } : {}),
       ...(cfg.ALIGNMENT_WORD_START_FIELD ? { wordStartField: cfg.ALIGNMENT_WORD_START_FIELD } : {}),

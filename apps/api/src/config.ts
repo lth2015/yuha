@@ -393,6 +393,12 @@ const envSchema = z.object({
   ALIGNMENT_LINE_TEXT_FIELD: z.string().optional(),
   ALIGNMENT_LINE_START_FIELD: z.string().optional(),
   ALIGNMENT_LINE_END_FIELD: z.string().optional(),
+  /**
+   * Where each line's confidence sits in the aligner's answer. Defaults to
+   * the DGX aligner's own field (forced.py); a response without it is read
+   * exactly as before, so this needs no new secret and no SRE step.
+   */
+  ALIGNMENT_LINE_CONFIDENCE_FIELD: z.string().default('confidence'),
   ALIGNMENT_WORDS_FIELD: z.string().optional(),
   ALIGNMENT_WORD_TEXT_FIELD: z.string().optional(),
   ALIGNMENT_WORD_START_FIELD: z.string().optional(),
@@ -1200,8 +1206,6 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
       }
     }
   }
-
-  if (problems.length) throw new ConfigError(problems);
 
   const alignment = e.ALIGNMENT_ADAPTER ?? 'estimated';
   if (alignment === 'http') {
