@@ -1211,8 +1211,6 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     }
   }
 
-  if (problems.length) throw new ConfigError(problems);
-
   const alignment = e.ALIGNMENT_ADAPTER ?? 'estimated';
   if (alignment === 'http') {
     const required = {
