@@ -5,7 +5,7 @@
 #   ./06_print_api_key.sh
 #   ./06_print_api_key.sh ~/somewhere-else/.env     (if the deploy lives elsewhere)
 #
-# 03_wire_yuha.sh normally fetches these over `ssh dgx`. Off the office network
+# 03_wire_yuha.sh normally fetches these over `ssh dgxa`. Off the office network
 # that host does not resolve and ssh is filtered, while the service itself
 # answers on its public address — so the key has to travel by hand, and this
 # prints exactly the two values needed and nothing else from the file.

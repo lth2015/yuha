@@ -18,11 +18,12 @@ if grep -qE '^MUSIC_[A-Z_]+=' "$ENV_FILE"; then
   echo "WARN: music/.env already has active MUSIC_* lines outside the block; later lines win:"; grep -nE '^MUSIC_' "$ENV_FILE" | sed -E 's/(KEY)=.*/\1=***/'
 fi
 
-REMOTE=$(ssh dgx 'grep -E "^(YUHA_API_KEY|AUDIO_BASE_URL)=" ~/yuha-spark/.env')
+DGX="${DGX:-dgxa}"
+REMOTE=$(ssh "$DGX" 'grep -E "^(YUHA_API_KEY|AUDIO_BASE_URL)=" ~/yuha-spark/.env')
 KEY=$(sed -n 's/^YUHA_API_KEY=//p' <<<"$REMOTE")
 BASE=$(sed -n 's/^AUDIO_BASE_URL=//p' <<<"$REMOTE")
 HOST=$(sed -E 's#^https?://([^:/]+).*#\1#' <<<"$BASE")
-[[ -n "$KEY" && -n "$BASE" ]] || { echo "could not read key/base url from dgx:~/yuha-spark/.env"; exit 1; }
+[[ -n "$KEY" && -n "$BASE" ]] || { echo "could not read key/base url from $DGX:~/yuha-spark/.env"; exit 1; }
 
 cat >> "$ENV_FILE" <<BLOCK
 

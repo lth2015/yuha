@@ -3,7 +3,7 @@
 # Run from a machine that can reach the configured DGX SSH host:
 #   DGX=your-ssh-host bash deploy/dgx/generation-health.sh
 set -euo pipefail
-DGX="${DGX:-dgx}"
+DGX="${DGX:-dgxa}"
 ssh -o BatchMode=yes -o ConnectTimeout=10 "$DGX" \
   'cd ~/yuha-app && docker compose exec -T mysql sh -c '\''exec mysql -uroot -p"$MYSQL_ROOT_PASSWORD" --batch loopscene_dev'\''' <<'SQL'
 SELECT 'finished jobs, rolling 7 days; excludes queued/running/cancelled' AS metric;

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Deploy the YUHA web app (web + api + worker + MySQL + Stripe forwarder) to the DGX.
 # Run on your Mac:   ./deploy_yuha.sh            (re-run any time to redeploy the current code)
-# Options (env):     APP_PORT=8580  TEAM_EMAIL=yuha-team@netstars.co.jp  TEAM_CREDITS=50  DGX=dgx
+# Options (env):     APP_PORT=8580  TEAM_EMAIL=yuha-team@netstars.co.jp  TEAM_CREDITS=50  DGX=dgxa
 #                    DEV_LOGIN_ALLOWLIST=@netstars.co.jp   (who may sign in; "-" = anyone, not recommended)
 set -euo pipefail
 cd "$(dirname "$0")"
@@ -10,7 +10,7 @@ cd "$(dirname "$0")"
 # proprietor named in the deployment's secret store, and named nowhere in this
 # repository at all. Seven or eight colleagues sign in with
 # their work addresses, so clearing this allowlist locks them all out. Leave it.
-DGX="${DGX:-dgx}"
+DGX="${DGX:-dgxa}"
 MUSIC="$(cd ../../.. && pwd)"   # repo root (this script lives in deploy/dgx/app)
 CONFIG_ENV="${YUHA_DEPLOY_ENV_FILE:-$MUSIC/.env}"
 TEAM_EMAIL="${TEAM_EMAIL:-yuha-team@netstars.co.jp}"
