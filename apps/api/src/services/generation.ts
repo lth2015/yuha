@@ -639,7 +639,7 @@ export async function currentBalance(userId: string): Promise<{ available: numbe
 }
 
 /** Who may make background music (BGM_STUDIO): everyone, staff only while it is tried, or nobody. */
-export async function bgmAllowed(ctx: AppContext, userId: string | null | undefined): Promise<boolean> {
+async function bgmAllowed(ctx: AppContext, userId: string | null | undefined): Promise<boolean> {
   const mode = ctx.config.BGM_STUDIO;
   if (mode === 'all') return true;
   if (mode !== 'staff' || !userId) return false;
