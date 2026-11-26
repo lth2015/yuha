@@ -58,6 +58,8 @@ export default async function publicRoutes(app: FastifyInstance, opts: { ctx: Ap
         photoVideoPreview: !features.photoVideoEnabled && staff,
         guestTrialEnabled: features.guestTrialEnabled,
         lyricAutoAlign: features.lyricAutoAlignEnabled && realAligner(ctx),
+        // The AI scene MV: staff try it before the switch is on; nobody has it without a video service.
+        sceneMv: !!ctx.video && (features.sceneMvEnabled || staff),
         commercialDeliveryEnabled: features.commercialDeliveryEnabled,
         realPaymentsEnabled: features.realPaymentsEnabled,
         cardPaymentsEnabled: features.cardPaymentsEnabled,

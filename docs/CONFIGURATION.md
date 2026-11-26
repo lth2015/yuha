@@ -67,6 +67,19 @@ cp .env.example .env   # 然后按需填写下表中的值
 
 `ALIGNMENT_ADAPTER=estimated`（默认，界面如实标注「估算同步」）。接入真实对齐模型时切 `http` 并填 `ALIGNMENT_*` 字段映射（`LINES_FIELD / LINE_TEXT_FIELD / LINE_START_FIELD / LINE_END_FIELD` 为必填）。
 
+### B4b. AI 场景 MV 的视频服务（可选）
+
+`VIDEO_ADAPTER`：`none`（生产默认，功能对所有人关闭）／`demo`（开发默认，ffmpeg 测试画面）／`http`（dgxv 上的 LTX 服务）。
+
+| 变量 | 放在哪里 | 说明 |
+| --- | --- | --- |
+| `LTX_API_BASE_URL` | 生产放 Secrets Manager（部署文件在公开仓库里，不写地址） | 服务地址 |
+| `LTX_API_KEY` | Secrets Manager | 请求头 `X-API-Key`；由模型服务负责人单独发放 |
+| `VIDEO_ALLOW_INSECURE_SELF_HOSTED` | ConfigMap | `true` 才允许对公网 IP 用明文 http（负责人 2026-11-26 为 PoC 选择）；只接受 IP，不接受域名 |
+| `FEATURE_SCENE_MV_ENABLED` | ConfigMap | 默认 `false`：只有员工能用；没有视频服务时任何人都用不了 |
+
+顺序：先在 Secrets Manager 里加好两个键，再在 `deploy/k8s/qa/resources.yaml` 里挂载——挂载一个不存在的键，pod 会起不来。
+
 ### B5. Stripe 支付（test mode 即可验收）
 
 | 变量 | 从哪里拿 |

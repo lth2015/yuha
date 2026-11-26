@@ -54,7 +54,8 @@ async function queued(user: TestUser, shots: string[]): Promise<string> {
   return id;
 }
 
-const deps = (video: VideoProvider, owner = 'w1') => ({ video, storage: h.ctx.storage, owner, log: () => undefined });
+// Retries here do not wait the service's five minutes; tests/scene-mv-store.test.ts pins that wait.
+const deps = (video: VideoProvider, owner = 'w1') => ({ video, storage: h.ctx.storage, owner, log: () => undefined, retryAfterSeconds: 0 });
 
 /** Ticks until nothing is left to do, or the limit. */
 async function run(video: VideoProvider, limit = 200, owner = 'w1'): Promise<TickOutcome[]> {
@@ -82,6 +83,8 @@ describe('drawing a scene MV', () => {
     ]);
     const mv = await getSceneMv(id);
     expect(mv?.status).toBe('composing');
+    // Kept here, so the service's copies are let go of, as its note asks.
+    expect(video.discarded).toHaveLength(4);
     for (const s of mv!.shots) {
       expect(s.status).toBe('succeeded');
       const bytes = await h.ctx.storage.get('delivery', s.clip_key!);
@@ -99,7 +102,7 @@ describe('drawing a scene MV', () => {
     expect(video.submitted.map((r) => r.prompt)).toEqual(['a0', 'b0', 'a1', 'b1', 'a2', 'b2']);
   }, 60_000);
 
-  it('tries a failed shot again on its own, and gives up on the MV after three failures', async () => {
+  it('tries a failed shot again on its own, once, and gives up on the MV after that', async () => {
     const user = await h.createUser({ credits: 10 });
     const video = new DemoVideoProvider({ delayMs: 10 });
     video.failNext = { count: 1, reason: 'out_of_memory' };
@@ -110,7 +113,7 @@ describe('drawing a scene MV', () => {
 
     const other = await h.createUser({ credits: 10 });
     const bad = await queued(other, ['x0', 'x1']);
-    video.failNext = { count: 3, reason: 'out_of_memory' };
+    video.failNext = { count: 2, reason: 'out_of_memory' };
     await run(video);
     const mv = await getSceneMv(bad);
     expect([mv?.status, mv?.failure]).toEqual(['failed', 'shot_failed']);
@@ -126,6 +129,7 @@ describe('drawing a scene MV', () => {
       submit: async (req) => (busy-- > 0 ? { status: 'rejected', reason: 'queue_full', retryable: true } : demo.submit(req)),
       status: (id) => demo.status(id),
       fetchClip: (id) => demo.fetchClip(id),
+      discard: (id) => demo.discard(id),
     };
     const id = await queued(user, ['only']);
     expect(await sceneMvTick(deps(video))).toBe('released');
@@ -152,7 +156,7 @@ describe('drawing a scene MV', () => {
     const id = await queued(user, ['only']);
     await startQueuedSceneMvs();
     // pod-a has claimed it and not yet asked; pod-b ticks in that moment.
-    expect((await claimNextShot('pod-a'))?.idx).toBe(0);
+    expect((await claimNextShot('pod-a', { retryAfterSeconds: 0 }))?.idx).toBe(0);
     expect(await sceneMvTick(deps(video, 'pod-b'))).toBe('waiting');
     expect(video.submitted).toHaveLength(0);
     // pod-a never comes back: after a while pod-b hands the shot back, with its try, and draws it.
@@ -183,13 +187,14 @@ describe('drawing a scene MV', () => {
       submit: async () => ({ status: 'accepted', id: 'n1' }),
       status: async () => ({ status: 'succeeded' }),
       fetchClip: async () => withSound,
+      discard: async () => undefined,
     };
     const id = await queued(user, ['only']);
     await sceneMvTick(deps(noisy));
     await sceneMvTick(deps(noisy));
     expect((await getSceneMv(id))?.shots[0]).toMatchObject({ status: 'failed', failure: 'clip_has_audio', clip_key: null });
 
-    const silent: VideoProvider = { kind: 'silent', submit: async () => ({ status: 'accepted', id: 's1' }), status: async () => ({ status: 'running', queuePosition: null }), fetchClip: async () => Buffer.alloc(0) };
+    const silent: VideoProvider = { kind: 'silent', submit: async () => ({ status: 'accepted', id: 's1' }), status: async () => ({ status: 'running', queuePosition: null }), fetchClip: async () => Buffer.alloc(0), discard: async () => undefined };
     await sceneMvTick({ ...deps(silent), shotTimeoutMs: -1 }); // submit the retry
     expect(await sceneMvTick({ ...deps(silent), shotTimeoutMs: -1 })).toBe('failed');
     expect((await getSceneMv(id))?.shots[0]?.failure).toBe('timeout');

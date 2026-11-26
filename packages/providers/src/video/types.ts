@@ -5,12 +5,12 @@
  * one at a time, keeps the bytes in its own storage and cuts them to the song
  * itself; nothing behind this seam sees a song, its lyrics or its owner.
  *
- * Shaped by the service actually running on dgxv (product owner, 2026-11-26):
- * a clip is a duration and an orientation — the service decides the frame
- * size — and the service has no cancel and no idempotency key. So:
- *   - there is no `cancel` here: a person's cancel stops YUHA waiting and
- *     asking for further shots; a shot already on the GPU finishes there, at
- *     the platform's cost (docs/AI_SCENE_MV_SPEC.md allows this);
+ * Shaped by the service actually running on dgxv (the model service's API
+ * note, 2026-11-26): a clip is a duration and an orientation — the service
+ * decides the frame size — and it has no idempotency key. So:
+ *   - `discard` cancels a clip still queued and deletes a finished one; a
+ *     shot already on the GPU finishes there, at the platform's cost
+ *     (docs/AI_SCENE_MV_SPEC.md allows this);
  *   - a submit that timed out may still have been accepted; the caller must
  *     not resubmit blindly (the pipeline records ids as soon as it has them).
  *
@@ -51,6 +51,12 @@ export interface VideoProvider {
   status(id: string): Promise<ClipState>;
   /** The finished clip's bytes. Throws unless the clip succeeded and its bytes could be fetched safely. */
   fetchClip(id: string): Promise<Buffer>;
+  /**
+   * Lets go of a clip: cancels it while it is still queued, deletes it once
+   * finished. Best effort — a clip already on the GPU cannot be stopped, and
+   * the service keeps finished clips seven days anyway.
+   */
+  discard(id: string): Promise<void>;
 }
 
 export const CLIP_MAX_SECONDS = 8;

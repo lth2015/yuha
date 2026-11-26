@@ -18,7 +18,7 @@
 3. **风格**：3 个预设——雨夜霓虹 `neon_rain`、日落海边 `seaside_sunset`、柔和插画 `soft_watercolor`。每个风格要有一张示意（Codex 出图，规矩同 [CODEX_VISUAL_REQUESTS.md](CODEX_VISUAL_REQUESTS.md)：原创、无文字）。
 4. **描述**：可选，一句话描述画面。提示用户**不要写真实人名、照片里的人、名人**；不会自动把歌词、照片或账号资料交给模型。
 5. **分镜确认**：服务端按风格和描述给出 4 段分镜文字，用户可以改每一段，确认后才开始。确认前什么都没花。
-6. **等待**：真实阶段进度——排队中（前面还有几段）、生成第 n/4 段、合成中。时间如实写：每段约 1.5–3 分钟，4 段约 6–12 分钟，排队时更久。**不能写「一分钟完成」**。用户可以离开，回到歌曲页能接着看到进度。
+6. **等待**：真实阶段进度——排队中、生成第 n/4 段（`drawn/total`）、合成中；有别人同时在做时（`othersInProgress`）如实说可能更久。时间如实写：每段约 1.5–3 分钟，4 段约 6–12 分钟，排队时更久。**不能写「一分钟完成」**。用户可以离开，回到歌曲页能接着看到进度。
 7. **取消**：排队中、生成中都能取消。文案要如实：已经在机器上画的那一段会画完，但不会再画下一段。
 8. **完成**：预览播放、下载、分享（沿用现有分享视频的系统分享）。写明「保存 7 天，请及时下载」。
 9. **失败**：说人话，并告诉用户这次没有花任何东西；可以重新开始。
@@ -33,15 +33,15 @@
 
 ## 接口契约（T7，Claude 实现；Codex 可以先按这个写，用 demo 视频后端在本地跑通）
 
-所有接口要求登录，只对歌曲所有者；不是所有者一律 404。开关关闭时 503。
+所有接口要求登录，只对歌曲所有者；不是所有者一律 404。开关关闭（或没有配置视频服务）时 503 `SERVICE_DISABLED`。出错时的返回体和其他接口一样：`{error: {code, message, details?}}`。
 
 | 方法 | 路径 | 说明 |
 | --- | --- | --- |
 | GET | `/v1/runtime` | `features.sceneMv: boolean`——这个人能不能看到入口 |
 | POST | `/v1/tracks/:id/scene-mvs` | `{clipStart, clipEnd, style, description?}` → `201 {id, status:'draft', shots:[{idx, prompt}]}`；只对可播放的歌曲（纯音乐也可以，只是没有字幕） |
 | PATCH | `/v1/scene-mvs/:id` | 草稿时改分镜：`{shots: string[]}`（1–4 段，每段 ≤ 300 字） |
-| POST | `/v1/scene-mvs/:id/start` | 草稿 → 排队。`202`；已有一个在进行：`409 {error:'busy', activeId}` |
-| GET | `/v1/scene-mvs/:id` | `{id, trackId, status, style, clipStart, clipEnd, shots:[{idx, status}], drawn, total, aheadOfYou, failure?, expiresAt?}`；`status` ∈ `draft·queued·generating·composing·ready·failed·cancelled` |
+| POST | `/v1/scene-mvs/:id/start` | 草稿 → 排队。`202`；已有一个在进行：`409`，`error.details = {reason:'busy', activeId}` |
+| GET | `/v1/scene-mvs/:id` | `{id, trackId, status, style, clipStart, clipEnd, shots:[{idx, status, prompt?}], drawn, total, othersInProgress, failure, expiresAt, createdAt}`。`prompt` 只在草稿时给出（给用户确认、修改）；`othersInProgress` 是同时在做的别人的 MV 数（共用一台机器，用来如实说明可能要等）；用户写的描述不会回传；`status` ∈ `draft·queued·generating·composing·ready·failed·cancelled` |
 | GET | `/v1/tracks/:id/scene-mvs` | 这首歌的场景 MV，新的在前（回到页面时找进行中的那个） |
 | POST | `/v1/scene-mvs/:id/cancel` | `200`；已经完成的不能取消：`409` |
 | GET | `/v1/scene-mvs/:id/download` | `{url, expiresAt}`，短期签名链接 |

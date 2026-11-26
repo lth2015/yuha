@@ -107,6 +107,11 @@ function fakeDgxv(key: string, opts: { full?: boolean; failWith?: string } = {})
     const m = /^\/v1\/videos\/([\w-]+)(\/content)?$/.exec(url);
     const clip = m ? clips.get(m[1]!) : undefined;
     if (!clip) return json(404, { detail: 'not found' });
+    if (req.method === 'DELETE') {
+      clips.delete(m![1]!);
+      res.statusCode = 204;
+      return res.end();
+    }
     if (m![2]) {
       const [w, h] = clip.orientation === 'portrait' ? [288, 512] : [512, 288];
       const out = spawnSync('ffmpeg', ['-loglevel', 'error', '-f', 'lavfi', '-i', `testsrc2=size=${w}x${h}:rate=24`, '-t', String(clip.seconds), '-pix_fmt', 'yuv420p', '-an', '-movflags', 'frag_keyframe+empty_moov', '-f', 'mp4', 'pipe:1']);
@@ -114,6 +119,7 @@ function fakeDgxv(key: string, opts: { full?: boolean; failWith?: string } = {})
       return res.end(out.stdout);
     }
     clip.polls += 1;
+    if (opts.failWith === 'cancelled') return json(200, { id: m![1], status: 'cancelled' });
     if (opts.failWith) return json(200, { id: m![1], status: 'failed', error: opts.failWith });
     return json(200, { id: m![1], status: clip.polls < 2 ? 'queued' : clip.polls < 3 ? 'running' : 'succeeded' });
   });
@@ -152,7 +158,7 @@ describe('http → the dgxv service, as described', () => {
     // A name can be repointed by DNS; a private address is the other exception's.
     expect(() => new HttpVideoProvider({ baseUrl: 'http://video.example.com', apiKey: 'k', allowInsecureSelfHosted: true })).toThrow(/https/);
     expect(() => new HttpVideoProvider({ baseUrl: 'http://192.168.1.20:8100', apiKey: 'k', allowInsecureSelfHosted: true })).toThrow(/https/);
-    expect(() => new HttpVideoProvider({ baseUrl: 'https://video.example.com', apiKey: '' })).toThrow(/VIDEO_API_KEY/);
+    expect(() => new HttpVideoProvider({ baseUrl: 'https://video.example.com', apiKey: '' })).toThrow(/LTX_API_KEY/);
   });
 
   it('names a wrong key, an unreachable service and a full queue, rather than throwing', async () => {
@@ -186,7 +192,38 @@ describe('http → the dgxv service, as described', () => {
       failing.server.close();
     }
     expect(failureCode('refused: "rain on a neon street"')).toBe('refused_by_model');
+    // The service writes its reasons in Chinese (its API note).
+    expect(failureCode('机器温度过高')).toBe('thermal');
+    expect(failureCode('显存不足')).toBe('out_of_memory');
     expect(failureCode('something about rain on a neon street')).toBe('service_failed');
+  });
+});
+
+describe('http: letting go of a clip, and a cancel at the service', () => {
+  it('sends DELETE with the key, and reads the service’s own cancel as a failed shot', async () => {
+    const svc = fakeDgxv('k');
+    const base = await svc.start();
+    try {
+      const p = new HttpVideoProvider({ baseUrl: base, apiKey: 'k', allowInsecureLocal: true });
+      const sub = await p.submit(SHOT);
+      if (sub.status !== 'accepted') throw new Error(sub.reason);
+      await p.discard(sub.id);
+      const del = svc.seen.find((x) => x.path === `DELETE /v1/videos/${sub.id}`);
+      expect(del?.key).toBe('k');
+      expect((await p.status(sub.id)).status).toBe('unknown'); // gone there
+    } finally {
+      svc.server.close();
+    }
+    const cancelling = fakeDgxv('k', { failWith: 'cancelled' });
+    const cBase = await cancelling.start();
+    try {
+      const p = new HttpVideoProvider({ baseUrl: cBase, apiKey: 'k', allowInsecureLocal: true });
+      const sub = await p.submit(SHOT);
+      if (sub.status !== 'accepted') throw new Error(sub.reason);
+      expect(await p.status(sub.id)).toEqual({ status: 'failed', reason: 'cancelled_by_service' });
+    } finally {
+      cancelling.server.close();
+    }
   });
 });
 

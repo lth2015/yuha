@@ -4,9 +4,9 @@ Two stacks on one DGX, both driven from a Mac that can `ssh dgxa`.
 
 **Hosts (2026-11-26).** The box these stacks run on is `ssh dgxa` (it was
 `dgx`). Every script here defaults to it and takes `DGX=<host>` to point
-elsewhere. `ssh dgxv` is the video box: `video/deploy.sh` (the scene MV clip
-service and its bench, `video/README.md`) is the only script that uses it,
-and YUHA does not call that service yet.
+elsewhere. `ssh dgxv` is the video box. Its clip service is deployed and run by the
+product owner, not from here; YUHA reaches it through
+`packages/providers/src/video/http.ts` (docs/AI_SCENE_MV_TICKETS.md).
 These scripts used to live in a separate `~/workplace/yuha-spark` folder;
 they are tracked here now so a change to the service ships with the code
 that depends on it.

@@ -11,8 +11,10 @@ import { db, execute, query, queryOne, withTx } from './pool.js';
  *   - one person has one job in the queue at a time (the database's unique
  *     key on `active_owner` refuses the second, however the requests race);
  *   - one shot is on the GPU at a time across every worker;
- *   - a shot gets SHOT_TRIES tries; after that the job fails, which frees the
- *     person's slot — the platform failed, not them;
+ *   - a shot gets SHOT_TRIES tries, at least RETRY_AFTER_SECONDS apart (the
+ *     LTX service's note: resubmit a failure at most once, five minutes on,
+ *     because the machine cools between runs); after that the job fails,
+ *     which frees the person's slot — the platform failed, not them;
  *   - a cancel stops every shot not yet drawn, and a shot that finishes after
  *     its job was cancelled is not saved as done.
  *
@@ -55,8 +57,10 @@ export interface SceneMvRow {
   expires_at: Date | null;
 }
 
-/** Tries per shot before the job is failed. */
-const SHOT_TRIES = 3;
+/** Tries per shot before the job is failed: the first, and one resubmission. */
+const SHOT_TRIES = 2;
+/** How long a failed shot waits before it is tried again. */
+const RETRY_AFTER_SECONDS = 300;
 const OPEN: SceneMvStatus[] = ['draft', 'queued', 'generating', 'composing'];
 /** The forward moves. Failing is allowed from every stage that is under way; cancelling has its own door. */
 const MOVES: Record<string, SceneMvStatus[]> = {
@@ -172,7 +176,7 @@ export async function cancelSceneMv(id: string, ownerId: string): Promise<boolea
  * anywhere — one GPU, one shot. A named lock makes check-and-claim one step
  * across every worker.
  */
-export async function claimNextShot(worker: string): Promise<SceneMvShotRow | null> {
+export async function claimNextShot(worker: string, opts: { retryAfterSeconds?: number } = {}): Promise<SceneMvShotRow | null> {
   const conn: mysql.PoolConnection = await db().getConnection();
   try {
     const got = await queryOne<{ ok: number | null }>(`SELECT GET_LOCK('yuha_scene_mv_shot_claim', 10) AS ok`, [], conn);
@@ -181,12 +185,14 @@ export async function claimNextShot(worker: string): Promise<SceneMvShotRow | nu
       if (await queryOne(`SELECT id FROM scene_mv_shots WHERE status = 'running' LIMIT 1`, [], conn)) return null;
       const next = await queryOne<{ id: string }>(
         `SELECT s.id FROM scene_mv_shots s JOIN scene_mvs m ON m.id = s.scene_mv_id
-          WHERE m.status = 'generating' AND (s.status = 'pending' OR (s.status = 'failed' AND s.attempts < ?))
+          WHERE m.status = 'generating'
+            AND (s.status = 'pending'
+                 OR (s.status = 'failed' AND s.attempts < ? AND s.finished_at <= UTC_TIMESTAMP(3) - INTERVAL ? SECOND))
           ORDER BY (SELECT MAX(x.started_at) FROM scene_mv_shots x WHERE x.scene_mv_id = m.id) IS NOT NULL,
                    (SELECT MAX(x.started_at) FROM scene_mv_shots x WHERE x.scene_mv_id = m.id),
                    m.queued_at, m.id, s.idx
           LIMIT 1`,
-        [SHOT_TRIES],
+        [SHOT_TRIES, opts.retryAfterSeconds ?? RETRY_AFTER_SECONDS],
         conn,
       );
       if (!next) return null;
@@ -333,4 +339,87 @@ export async function deleteSceneMvs(trackId: string): Promise<void> {
 /** A shot's file has been deleted: its record no longer points at it. */
 export async function forgetShotClips(sceneMvId: string, shotId: string): Promise<void> {
   await execute(`UPDATE scene_mv_shots SET clip_key = NULL WHERE id = ? AND scene_mv_id = ?`, [shotId, sceneMvId]);
+}
+
+/** A song's scene MVs, newest first. */
+export async function listSceneMvsForTrack(trackId: string): Promise<SceneMvRow[]> {
+  const rows = await query<SceneMvRow>(
+    `SELECT id, owner_id, track_id, status, style, description, clip_start, clip_end, timings_sha, output_key, failure,
+            created_at, queued_at, finished_at, expires_at FROM scene_mvs WHERE track_id = ? ORDER BY created_at DESC, id DESC LIMIT 20`,
+    [trackId],
+  );
+  return rows.map(parseMv);
+}
+
+/** The person's MV in the queue or being made, if any (there is at most one). */
+export async function activeSceneMvFor(ownerId: string): Promise<string | null> {
+  return (await queryOne<{ id: string }>(`SELECT id FROM scene_mvs WHERE active_owner = ?`, [ownerId]))?.id ?? null;
+}
+
+/** The owner's edit of a draft's storyboard; false unless it is their draft. */
+export async function replaceDraftShots(id: string, ownerId: string, shots: string[]): Promise<boolean> {
+  if (!shots.length || shots.length > 12) throw new Error('a scene MV has 1–12 shots');
+  return withTx(async (tx) => {
+    const row = await queryOne<{ status: SceneMvStatus }>(`SELECT status FROM scene_mvs WHERE id = ? AND owner_id = ? FOR UPDATE`, [id, ownerId], tx);
+    if (row?.status !== 'draft') return false;
+    await execute(`DELETE FROM scene_mv_shots WHERE scene_mv_id = ?`, [id], tx);
+    for (const [idx, prompt] of shots.entries()) {
+      await execute(`INSERT INTO scene_mv_shots (id, scene_mv_id, idx, prompt) VALUES (?, ?, ?, ?)`, [randomUUID(), id, idx, prompt], tx);
+    }
+    return true;
+  });
+}
+
+/** One MV's stored files: the finished MV and any drawn shots. */
+export async function sceneMvKeys(id: string): Promise<string[]> {
+  const rows = await query<{ k: string }>(
+    `SELECT output_key AS k FROM scene_mvs WHERE id = ? AND output_key IS NOT NULL
+     UNION SELECT clip_key FROM scene_mv_shots WHERE scene_mv_id = ? AND clip_key IS NOT NULL`,
+    [id, id],
+  );
+  return rows.map((r) => r.k);
+}
+
+/** Stops one MV and drops what was written for it; the first step of deleting it, as for a song's. */
+export async function stopAndScrubSceneMv(id: string): Promise<void> {
+  await withTx(async (tx) => {
+    await query(`SELECT id FROM scene_mvs WHERE id = ? FOR UPDATE`, [id], tx);
+    await execute(
+      `UPDATE scene_mvs SET status = IF(status IN ('draft','queued','generating','composing'), 'cancelled', status),
+              finished_at = COALESCE(finished_at, UTC_TIMESTAMP(3)), description = NULL WHERE id = ?`,
+      [id],
+      tx,
+    );
+    await execute(`UPDATE scene_mv_shots SET prompt = '', status = IF(status = 'succeeded', status, 'cancelled') WHERE scene_mv_id = ?`, [id], tx);
+  });
+}
+
+export async function deleteSceneMvRow(id: string): Promise<void> {
+  await execute(`DELETE FROM scene_mvs WHERE id = ?`, [id]);
+}
+
+/**
+ * MVs to let go of: a finished one past its keeping date, and a failed,
+ * cancelled or abandoned draft a week on — what was written for any of them
+ * is not kept indefinitely just because nothing came of it.
+ */
+export async function expiredSceneMvs(limit = 50): Promise<string[]> {
+  const rows = await query<{ id: string }>(
+    `SELECT id FROM scene_mvs
+      WHERE (expires_at IS NOT NULL AND expires_at < UTC_TIMESTAMP(3))
+         OR (status IN ('failed','cancelled') AND finished_at < UTC_TIMESTAMP(3) - INTERVAL 7 DAY)
+         OR (status = 'draft' AND created_at < UTC_TIMESTAMP(3) - INTERVAL 7 DAY)
+      LIMIT ?`,
+    [limit],
+  );
+  return rows.map((r) => r.id);
+}
+
+/** The service's ids for a scene MV's clips that were never collected: to let go of them there. */
+export async function uncollectedClipIds(sceneMvId: string): Promise<string[]> {
+  const rows = await query<{ p: string }>(
+    `SELECT provider_clip_id AS p FROM scene_mv_shots WHERE scene_mv_id = ? AND provider_clip_id IS NOT NULL AND status <> 'succeeded'`,
+    [sceneMvId],
+  );
+  return rows.map((r) => r.p);
 }

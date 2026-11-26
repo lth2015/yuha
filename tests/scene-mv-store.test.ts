@@ -59,6 +59,8 @@ async function song(user: TestUser): Promise<string> {
   throw new Error('not delivered');
 }
 
+/** Retries without the five-minute wait the service asks for; the wait itself is pinned below. */
+const NOW = { retryAfterSeconds: 0 };
 const SHOTS = ['neon street in rain', 'a window, raindrops', 'a train passing', 'dawn over rooftops'];
 const draft = (ownerId: string, trackId: string) =>
   createSceneMvDraft({ ownerId, trackId, style: 'neon_rain', description: 'a city at night', clipStart: 30, clipEnd: 60, timingsSha: null, shots: SHOTS });
@@ -70,7 +72,7 @@ describe('scene MV records', () => {
     const mv = await getSceneMv(id);
     expect(mv?.status).toBe('draft');
     expect(mv?.shots.map((s) => [s.idx, s.prompt, s.status])).toEqual(SHOTS.map((p, i) => [i, p, 'pending']));
-    expect(await claimNextShot('w1')).toBeNull(); // a draft's shots are not work
+    expect(await claimNextShot('w1', NOW)).toBeNull(); // a draft's shots are not work
   }, 60_000);
 
   it('lets one person have one job in the queue at a time, and frees the slot when it ends', async () => {
@@ -111,27 +113,40 @@ describe('scene MV records', () => {
     const id = await draft(user.id, await song(user));
     await queueSceneMv(id, user.id);
     await advanceSceneMv(id, 'queued', 'generating');
-    const first = await claimNextShot('w1');
+    const first = await claimNextShot('w1', NOW);
     expect(first?.idx).toBe(0);
-    expect(await claimNextShot('w2')).toBeNull(); // one shot in flight across every worker
+    expect(await claimNextShot('w2', NOW)).toBeNull(); // one shot in flight across every worker
     await finishShot(first!.id, { status: 'failed', failure: 'out_of_memory' });
-    const again = await claimNextShot('w1');
+    const again = await claimNextShot('w1', NOW);
     expect([again?.idx, again?.attempts]).toEqual([0, 2]); // the failed one again, before the next
     await finishShot(again!.id, { status: 'succeeded', clipKey: 'scene-mv/s0.mp4' });
-    expect((await claimNextShot('w1'))?.idx).toBe(1);
+    expect((await claimNextShot('w1', NOW))?.idx).toBe(1);
   }, 60_000);
 
-  it('gives up on a shot after three tries, and the job with it', async () => {
+  it('tries a failed shot again only after five minutes, drawing the others meanwhile', async () => {
     const user = await h.createUser({ credits: 10 });
     const id = await draft(user.id, await song(user));
     await queueSceneMv(id, user.id);
     await advanceSceneMv(id, 'queued', 'generating');
-    for (let i = 0; i < 3; i += 1) {
-      const s = await claimNextShot('w1');
+    const first = await claimNextShot('w1');
+    await finishShot(first!.id, { status: 'failed', failure: 'thermal' });
+    expect((await claimNextShot('w1'))?.idx).toBe(1); // shot 0 is resting
+    await finishShot((await getSceneMv(id))!.shots[1]!.id, { status: 'succeeded', clipKey: 'k1' });
+    await execute(`UPDATE scene_mv_shots SET finished_at = UTC_TIMESTAMP(3) - INTERVAL 301 SECOND WHERE id = ?`, [first!.id]);
+    expect((await claimNextShot('w1'))?.idx).toBe(0);
+  }, 60_000);
+
+  it('gives up on a shot after its one retry, and the job with it', async () => {
+    const user = await h.createUser({ credits: 10 });
+    const id = await draft(user.id, await song(user));
+    await queueSceneMv(id, user.id);
+    await advanceSceneMv(id, 'queued', 'generating');
+    for (let i = 0; i < 2; i += 1) {
+      const s = await claimNextShot('w1', NOW);
       expect(s?.idx).toBe(0);
       await finishShot(s!.id, { status: 'failed', failure: 'out_of_memory' });
     }
-    expect(await claimNextShot('w1')).toBeNull();
+    expect(await claimNextShot('w1', NOW)).toBeNull();
     const mv = await getSceneMv(id);
     expect([mv?.status, mv?.failure]).toEqual(['failed', 'shot_failed']);
     // The slot is free again: the platform failed, not the person.
@@ -143,7 +158,7 @@ describe('scene MV records', () => {
     const id = await draft(user.id, await song(user));
     await queueSceneMv(id, user.id);
     await advanceSceneMv(id, 'queued', 'generating');
-    const s = await claimNextShot('w1');
+    const s = await claimNextShot('w1', NOW);
     await finishShot(s!.id, { status: 'succeeded', clipKey: 'k0' });
     const stranger = await h.createUser({ credits: 10 });
     expect(await cancelSceneMv(id, stranger.id)).toBe(false);
@@ -151,12 +166,12 @@ describe('scene MV records', () => {
     const mv = await getSceneMv(id);
     expect(mv?.status).toBe('cancelled');
     expect(mv?.shots.map((x) => x.status)).toEqual(['succeeded', 'cancelled', 'cancelled', 'cancelled']);
-    expect(await claimNextShot('w1')).toBeNull();
+    expect(await claimNextShot('w1', NOW)).toBeNull();
     // A shot that was in flight when the cancel landed is not saved as done.
     const id2 = await draft(user.id, mv!.track_id);
     await queueSceneMv(id2, user.id);
     await advanceSceneMv(id2, 'queued', 'generating');
-    const inFlight = await claimNextShot('w1');
+    const inFlight = await claimNextShot('w1', NOW);
     await cancelSceneMv(id2, user.id);
     await finishShot(inFlight!.id, { status: 'succeeded', clipKey: 'late' });
     expect((await getSceneMv(id2))?.shots[0]?.status).toBe('cancelled');
@@ -168,7 +183,7 @@ describe('scene MV records', () => {
     const done = await draft(user.id, track);
     await queueSceneMv(done, user.id);
     await advanceSceneMv(done, 'queued', 'generating');
-    const shot = await claimNextShot('w1');
+    const shot = await claimNextShot('w1', NOW);
     const clipKey = `scene-mv/${randomUUID()}/s0.mp4`;
     await h.ctx.storage.put({ zone: 'delivery', key: clipKey, body: Buffer.from('clip'), contentType: 'video/mp4' });
     await finishShot(shot!.id, { status: 'succeeded', clipKey });
@@ -187,7 +202,7 @@ describe('scene MV records', () => {
     const id = await draft(user.id, track);
     await queueSceneMv(id, user.id);
     await advanceSceneMv(id, 'queued', 'generating');
-    const shot = await claimNextShot('w1');
+    const shot = await claimNextShot('w1', NOW);
     await finishShot(shot!.id, { status: 'succeeded', clipKey: 'scene-mv/stuck.mp4' });
     const storage = { ...h.ctx.storage, remove: async () => { throw new Error('storage down'); } } as typeof h.ctx.storage;
     expect(await removeSceneMvsOfTrack(storage, track)).toBe(false);

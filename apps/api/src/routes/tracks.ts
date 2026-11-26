@@ -250,7 +250,7 @@ export default async function trackRoutes(app: FastifyInstance, opts: { ctx: App
         .catch((err) => req.log.error({ err, key: card.storage_key }, 'could not remove a share card'));
     }
     // Its scene MVs go now too: the words written about the pictures, and the files.
-    await removeSceneMvsOfTrack(ctx.storage, id, req.log);
+    await removeSceneMvsOfTrack(ctx.storage, id, req.log, ctx.video);
     await trackEvent({
       name: 'track_deleted',
       userRef: req.user!.id,

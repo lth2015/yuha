@@ -64,6 +64,20 @@ export class DemoVideoProvider implements VideoProvider {
     return job.state;
   }
 
+  /** Every clip let go of, for tests to inspect. */
+  readonly discarded: string[] = [];
+
+  async discard(id: string): Promise<void> {
+    const job = this.jobs.get(id);
+    if (!job) return;
+    this.discarded.push(id);
+    if (job.state.status === 'queued') {
+      this.order.splice(this.order.indexOf(id), 1);
+      job.state = { status: 'failed', reason: 'cancelled_by_service' };
+    }
+    if (job.state.status === 'succeeded' || job.state.status === 'failed') this.jobs.delete(id);
+  }
+
   async fetchClip(id: string): Promise<Buffer> {
     const job = this.jobs.get(id);
     if (!job || job.state.status !== 'succeeded' || !job.bytes) throw new Error(`clip ${id} has no bytes (${job?.state.status ?? 'unknown'})`);
