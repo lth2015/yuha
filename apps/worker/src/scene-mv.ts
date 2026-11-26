@@ -33,6 +33,8 @@ export interface SceneMvDeps {
   log: (level: 'info' | 'warn' | 'error', msg: string, extra?: Record<string, unknown>) => void;
   /** A shot on the machine longer than this has failed (the service takes 1.5–3 minutes, more when queued). */
   shotTimeoutMs?: number;
+  /** A shot claimed by another worker that has not recorded an id by then is handed back (that worker stopped). */
+  claimStaleMs?: number;
   ffprobePath?: string;
 }
 
@@ -55,7 +57,21 @@ export async function sceneMvTick(d: SceneMvDeps): Promise<TickOutcome> {
     if (!shot) return 'idle';
   }
 
+  const age = Date.now() - new Date(shot.started_at ?? Date.now()).getTime();
   if (!shot.provider_clip_id) {
+    /*
+     * Only the worker that claimed a shot asks for it. Another that finds it
+     * in the moment before the id is recorded would ask a second time, and
+     * the service has no idempotency key: the GPU would draw it twice.
+     */
+    if (shot.claimed_by !== d.owner.slice(0, 64)) {
+      if (age > (d.claimStaleMs ?? 5 * 60_000)) {
+        await releaseShot(shot.id);
+        d.log('warn', 'scene mv shot claimed by a worker that stopped; handed back', { shotId: shot.id });
+        return 'released';
+      }
+      return 'waiting';
+    }
     const sub = await d.video.submit({
       prompt: shot.prompt,
       seconds: shotSeconds(shot.clip_start, shot.clip_end, shot.shot_count),
@@ -79,7 +95,6 @@ export async function sceneMvTick(d: SceneMvDeps): Promise<TickOutcome> {
   }
 
   const state = await d.video.status(shot.provider_clip_id);
-  const age = Date.now() - new Date(shot.started_at ?? Date.now()).getTime();
   if (state.status === 'queued' || state.status === 'running' || (state.status === 'unknown' && state.reason !== 'not_found')) {
     if (age > (d.shotTimeoutMs ?? 30 * 60_000)) {
       await finishShot(shot.id, { status: 'failed', failure: 'timeout' });

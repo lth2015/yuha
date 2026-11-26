@@ -11,7 +11,7 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { randomUUID } from 'node:crypto';
 import { spawnSync } from 'node:child_process';
-import { cancelSceneMv, claimOutboxBatch, createSceneMvDraft, getSceneMv, queryOne, queueSceneMv, withTx } from '@yuha/db';
+import { cancelSceneMv, claimNextShot, startQueuedSceneMvs, claimOutboxBatch, createSceneMvDraft, getSceneMv, queryOne, queueSceneMv, withTx } from '@yuha/db';
 import { DemoVideoProvider, type VideoProvider } from '@yuha/providers';
 import { runJobStep } from '@yuha/worker/pipeline';
 import { sceneMvTick, shotSeconds, type TickOutcome } from '@yuha/worker/scene-mv';
@@ -144,6 +144,22 @@ describe('drawing a scene MV', () => {
     await run(video, 200, 'pod-b');
     expect(video.submitted).toHaveLength(1);
     expect((await getSceneMv(id))?.status).toBe('composing');
+  }, 60_000);
+
+  it('lets only the worker that claimed a shot ask for it, and takes over from one that stopped', async () => {
+    const user = await h.createUser({ credits: 10 });
+    const video = new DemoVideoProvider({ delayMs: 10 });
+    const id = await queued(user, ['only']);
+    await startQueuedSceneMvs();
+    // pod-a has claimed it and not yet asked; pod-b ticks in that moment.
+    expect((await claimNextShot('pod-a'))?.idx).toBe(0);
+    expect(await sceneMvTick(deps(video, 'pod-b'))).toBe('waiting');
+    expect(video.submitted).toHaveLength(0);
+    // pod-a never comes back: after a while pod-b hands the shot back, with its try, and draws it.
+    expect(await sceneMvTick({ ...deps(video, 'pod-b'), claimStaleMs: -1 })).toBe('released');
+    await run(video, 200, 'pod-b');
+    const mv = await getSceneMv(id);
+    expect([video.submitted.length, mv?.status, mv?.shots[0]?.attempts]).toEqual([1, 'composing', 1]);
   }, 60_000);
 
   it('asks for nothing more once the MV is cancelled', async () => {

@@ -141,7 +141,7 @@ describe('http → the dgxv service, as described', () => {
     await http().fetchClip(sub.id);
     const mine = svc.seen.filter((s) => s.path.includes('/v1/videos'));
     expect(mine.every((s) => s.key === 'test-key')).toBe(true);
-    expect(mine.find((s) => s.body)?.body).toEqual({ prompt: SHOT.prompt, duration: 4, orientation: 'landscape', mute: true });
+    expect(mine.filter((s) => s.body).at(-1)?.body).toEqual({ prompt: SHOT.prompt, duration: 4, orientation: 'landscape', mute: true });
   }, 30_000);
 
   it('is refused a plain-http base unless it is local in development, or the box’s public IP by explicit choice', () => {

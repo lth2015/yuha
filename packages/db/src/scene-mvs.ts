@@ -191,7 +191,9 @@ export async function claimNextShot(worker: string): Promise<SceneMvShotRow | nu
       );
       if (!next) return null;
       await execute(
-        `UPDATE scene_mv_shots SET status = 'running', attempts = attempts + 1, claimed_by = ?, started_at = UTC_TIMESTAMP(3), failure = NULL
+        `UPDATE scene_mv_shots SET status = 'running', attempts = attempts + 1, claimed_by = ?, started_at = UTC_TIMESTAMP(3), failure = NULL,
+              -- A new try is a new clip: asking after the failed one again would spend every try on one failure.
+              provider_clip_id = NULL, clip_key = NULL
           WHERE id = ? AND status IN ('pending','failed')`,
         [worker.slice(0, 64), next.id],
         conn,
