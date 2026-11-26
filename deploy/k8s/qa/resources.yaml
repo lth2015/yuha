@@ -131,6 +131,16 @@ spec:
             # (the doc says how), then set "true" here.
             - name: FEATURE_LYRIC_AUTO_ALIGN_ENABLED
               value: "false"
+            # The AI scene MV's video service (docs/CONFIGURATION.md, B4b): the LTX
+            # service on dgxv, plain http to its public IP by the product owner's
+            # choice for the PoC. Its address and key come from the secret store.
+            # FEATURE_SCENE_MV_ENABLED stays false: staff only.
+            - name: VIDEO_ADAPTER
+              value: "http"
+            - name: VIDEO_ALLOW_INSECURE_SELF_HOSTED
+              value: "true"
+            - name: FEATURE_SCENE_MV_ENABLED
+              value: "false"
           envFrom:
             - configMapRef:
                 name: qa-music-api-config
@@ -252,6 +262,16 @@ spec:
               value: "true"
             - name: FEATURE_GUEST_TRIAL_ENABLED
               value: "true"
+            # The AI scene MV's video service (docs/CONFIGURATION.md, B4b): the LTX
+            # service on dgxv, plain http to its public IP by the product owner's
+            # choice for the PoC. Its address and key come from the secret store.
+            # FEATURE_SCENE_MV_ENABLED stays false: staff only.
+            - name: VIDEO_ADAPTER
+              value: "http"
+            - name: VIDEO_ALLOW_INSECURE_SELF_HOSTED
+              value: "true"
+            - name: FEATURE_SCENE_MV_ENABLED
+              value: "false"
           envFrom:
             - configMapRef:
                 name: qa-music-worker-config
@@ -476,6 +496,10 @@ spec:
             objectAlias: STORAGE_SIGNING_SECRET
           - path: ALIGNMENT_API_KEY
             objectAlias: ALIGNMENT_API_KEY
+          - path: LTX_API_BASE_URL
+            objectAlias: LTX_API_BASE_URL
+          - path: LTX_API_KEY
+            objectAlias: LTX_API_KEY
           - path: POLYGON_RPC_PRIMARY_URL
             objectAlias: POLYGON_RPC_PRIMARY_URL
           - path: POLYGON_RPC_SECONDARY_URL
@@ -512,6 +536,10 @@ spec:
           key: STORAGE_SIGNING_SECRET
         - objectName: ALIGNMENT_API_KEY
           key: ALIGNMENT_API_KEY
+        - objectName: LTX_API_BASE_URL
+          key: LTX_API_BASE_URL
+        - objectName: LTX_API_KEY
+          key: LTX_API_KEY
         - objectName: POLYGON_RPC_PRIMARY_URL
           key: POLYGON_RPC_PRIMARY_URL
         - objectName: POLYGON_RPC_SECONDARY_URL
@@ -590,6 +618,10 @@ spec:
             objectAlias: STORAGE_SIGNING_SECRET
           - path: ALIGNMENT_API_KEY
             objectAlias: ALIGNMENT_API_KEY
+          - path: LTX_API_BASE_URL
+            objectAlias: LTX_API_BASE_URL
+          - path: LTX_API_KEY
+            objectAlias: LTX_API_KEY
           - path: POLYGON_RPC_PRIMARY_URL
             objectAlias: POLYGON_RPC_PRIMARY_URL
           - path: POLYGON_RPC_SECONDARY_URL
@@ -626,6 +658,10 @@ spec:
           key: STORAGE_SIGNING_SECRET
         - objectName: ALIGNMENT_API_KEY
           key: ALIGNMENT_API_KEY
+        - objectName: LTX_API_BASE_URL
+          key: LTX_API_BASE_URL
+        - objectName: LTX_API_KEY
+          key: LTX_API_KEY
         - objectName: POLYGON_RPC_PRIMARY_URL
           key: POLYGON_RPC_PRIMARY_URL
         - objectName: POLYGON_RPC_SECONDARY_URL
