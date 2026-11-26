@@ -48,6 +48,20 @@ export interface QualityReport {
    * it on is supposed to buy, measured rather than assumed.
    */
   lyricProposals: { asked: number; aligned: number; heardTooLittle: number; failed: number };
+  /**
+   * The AI scene MV (migration 0036), for watching the internal test: started
+   * in the window, how they ended, why the failures failed, and the median
+   * minutes from start to ready. Drafts nobody started are not counted.
+   */
+  sceneMvs: {
+    started: number;
+    ready: number;
+    failed: number;
+    cancelled: number;
+    inProgress: number;
+    failures: { reason: string; n: number }[];
+    medianMinutesToReady: number | null;
+  };
 }
 
 /** How long a song must have existed before keeping it says anything. */
@@ -118,6 +132,7 @@ export async function qualityReport(params: { hours: number; buildSha?: string |
     approval: metric(),
     lyricsFallback: [],
     lyricProposals: { asked: 0, aligned: 0, heardTooLittle: 0, failed: 0 },
+    sceneMvs: { started: 0, ready: 0, failed: 0, cancelled: 0, inProgress: 0, failures: [], medianMinutesToReady: null },
   };
   const reasons = new Map<string, number>();
 
@@ -177,6 +192,26 @@ export async function qualityReport(params: { hours: number; buildSha?: string |
     aligned: sum((r) => r.status === 'ready'),
     heardTooLittle: sum((r) => r.failure === 'low_coverage'),
     failed: sum((r) => r.status === 'failed' && r.failure !== 'low_coverage'),
+  };
+
+  const mvs = await query<{ status: string; failure: string | null; minutes: number | null }>(
+    `SELECT status, failure,
+            CASE WHEN status = 'ready' THEN TIMESTAMPDIFF(SECOND, queued_at, finished_at) / 60 END AS minutes
+       FROM scene_mvs WHERE queued_at IS NOT NULL AND queued_at >= UTC_TIMESTAMP(3) - INTERVAL ? HOUR`,
+    [params.hours],
+  );
+  const failures = new Map<string, number>();
+  for (const m of mvs) if (m.status === 'failed') failures.set(m.failure ?? 'unknown', (failures.get(m.failure ?? 'unknown') ?? 0) + 1);
+  const minutes = mvs.filter((m) => m.status === 'ready' && m.minutes !== null).map((m) => Number(m.minutes)).sort((a, b) => a - b);
+  const mid = minutes.length ? (minutes[(minutes.length - 1) >> 1]! + minutes[minutes.length >> 1]!) / 2 : null;
+  report.sceneMvs = {
+    started: mvs.length,
+    ready: mvs.filter((m) => m.status === 'ready').length,
+    failed: mvs.filter((m) => m.status === 'failed').length,
+    cancelled: mvs.filter((m) => m.status === 'cancelled').length,
+    inProgress: mvs.filter((m) => ['queued', 'generating', 'composing'].includes(m.status)).length,
+    failures: [...failures].map(([reason, n]) => ({ reason, n })).sort((a, b) => b.n - a.n || a.reason.localeCompare(b.reason)),
+    medianMinutesToReady: mid === null ? null : Math.round(mid),
   };
 
   const ranked = [...reasons].map(([reason, n]) => ({ reason, n })).sort((a, b) => b.n - a.n || a.reason.localeCompare(b.reason));

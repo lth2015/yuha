@@ -729,6 +729,7 @@ const en: Dict = {
   'admin.quality.lyricsAligned': '· Lyrics aligned (sung)',
   'admin.quality.lyricsFallback': "Why lyrics were not aligned (last 7 days)",
   'admin.quality.lyricProposals': "Align again (last 7 days): asked {asked} · aligned {aligned} · heard too little {heard} · other failures {failed}",
+  'admin.quality.sceneMvs': "AI scene MV (last 7 days): started {started} · finished {ready} · failed {failed} · cancelled {cancelled} · median {minutes} min to finish",
   'admin.quality.approval': 'Kept by the customer (24 h+)',
   'admin.quality.noteBuild': '"This build" counts only jobs created by the running {sha}. Cancellations by the customer are not counted. Kept = still there 24 h after delivery, with no problem report.',
   'admin.quality.noteNoBuild': 'This process has no build SHA, so only "all" is shown. Cancellations by the customer are not counted.',
