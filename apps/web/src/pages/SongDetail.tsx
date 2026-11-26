@@ -179,6 +179,39 @@ export default function SongDetail() {
   }, [id]);
 
   useEffect(load, [load]);
+
+  /*
+   * While the platform syncs this song's lyrics (L4a/L4b), ask again every
+   * 12 s, only while the page is in front, and take just the timeline and its
+   * state: the player is not touched, so the music keeps playing and the
+   * highlight picks up at the current position; the video card reads the
+   * same `song.lyricTimings`, so an export uses what is shown. Nobody saves.
+   */
+  const syncing = song?.lyricSync === 'syncing';
+  useEffect(() => {
+    if (!id || !syncing) return undefined;
+    let cancelled = false;
+    const ask = () => {
+      if (document.visibilityState !== 'visible') return;
+      apiFetch<SongDetailResponse>(`/v1/tracks/${id}`)
+        .then((fresh) => {
+          if (cancelled) return;
+          setSong((s) =>
+            s && s.trackId === fresh.trackId && (s.lyricSync !== fresh.lyricSync || s.lyricTimings !== fresh.lyricTimings)
+              ? { ...s, lyricSync: fresh.lyricSync, lyricTimings: fresh.lyricTimings }
+              : s,
+          );
+        })
+        .catch(() => undefined);
+    };
+    const timer = window.setInterval(ask, 12_000);
+    document.addEventListener('visibilitychange', ask);
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+      document.removeEventListener('visibilitychange', ask);
+    };
+  }, [id, syncing]);
   // A trial song just added to this account (TrialClaimAsk): read it again,
   // so the page shows the song instead of the "not found" it had a moment ago.
   useEffect(() => {
@@ -962,6 +995,11 @@ export default function SongDetail() {
       {sung && (
         <section className="song-page__lyrics panel" aria-labelledby="lyrics-heading">
           <h2 id="lyrics-heading">{t('song.lyrics')}</h2>
+          {(song.lyricSync === 'syncing' || song.lyricSync === 'deferred' || song.lyricSync === 'partial') && (
+            <p className="lyrics-sync__status" role="status">
+              {t(`lyrics.sync.${song.lyricSync}`)}
+            </p>
+          )}
           {/*
             * Only while THIS song is the one playing. The readout above has
             * always guarded on `active`; these two props did not, so opening

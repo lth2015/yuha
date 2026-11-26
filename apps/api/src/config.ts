@@ -464,6 +464,13 @@ const envSchema = z.object({
    */
   LYRIC_AUTO_SYNC: z.enum(['off', 'staff', 'all']).default('off'),
   /**
+   * Backfill of older songs with no heard timeline, when their owner opens
+   * them (L4b). Sends YUHA's master, so the aligner must take sent audio
+   * (deploy/dgx/update.sh). off | staff | all; at most LYRIC_BACKFILL_DAILY a JST day.
+   */
+  LYRIC_BACKFILL: z.enum(['off', 'staff', 'all']).default('off'),
+  LYRIC_BACKFILL_DAILY: int(30),
+  /**
    * The AI scene MV (docs/AI_SCENE_MV_SPEC.md). Off: staff only, for the
    * internal test. It also needs a video service (VIDEO_ADAPTER), without
    * which it is off for everyone.

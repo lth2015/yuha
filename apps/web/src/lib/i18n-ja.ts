@@ -264,6 +264,7 @@ const ja: Dict = {
   'song.notFound': 'ページが見つかりません',
   'cover.aria': '「{title}」のカバー',
   'lyrics.instrumental': 'インスト — 表示できる歌詞はありません。',
+  'lyrics.sync.syncing': '歌詞を同期しています。先に歌詞をご覧いただけます。', 'lyrics.sync.deferred': '今日は同期できませんでした。次に開いたときに自動でもう一度試します。', 'lyrics.sync.partial': '一部の歌詞はまだ同期されていません。',
   'lyrics.tune.open': "歌詞のタイミングを調整", 'lyrics.tune.close': "タイミング調整を閉じる", 'lyrics.section.prechorus': "Bメロ", 'lyrics.section.outro': "アウトロ", 'lyrics.section.solo': "ソロ", 'lyrics.section.instrumental': "間奏", 'lyrics.estimated': '推定同期', 'lyrics.aligned': '単語同期',
   'lyrics.download': '.lrc をダウンロード',
   'lyrics.corrected': '補正済み',
