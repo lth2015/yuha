@@ -6,6 +6,8 @@
 
 下一阶段资源优先给歌曲质量。照片／封面 MV 相应受益，因为它们会使用同一份已核验歌词时间轴。Veo 的新增产品工作仍排在自动歌词同步之后。 [上一轮执行计划](NEXT_ITERATION_MUSIC_FIRST.md) · [Claude 独立评审](https://github.com/lth2015/yuha/pull/147)
 
+#155 合入后，Claude 按 [歌曲页交互与下一批验收](agents/LYRIC_AUTO_SYNC_UX_HANDOFF.md) 开工。线上生效和旧歌补齐仍分别核验。
+
 ## 交付给用户的体验
 
 | 情况 | 用户看到什么 | 系统负责什么 |
