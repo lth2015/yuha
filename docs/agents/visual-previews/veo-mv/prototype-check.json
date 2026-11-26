@@ -1,0 +1,23 @@
+{
+  "scope": "Chinese design prototype only; no model, backend, payment, real media or persistence acceptance",
+  "checks": [
+    "8 seconds has one editable scene",
+    "unedited plan survives back and return",
+    "15 seconds has two editable scenes",
+    "description appears in visible plan",
+    "explicit confirmation precedes queued state",
+    "leave opens return view",
+    "return retains in-memory demo progress",
+    "cancel waits for confirmation state",
+    "only demo acknowledgement reaches cancelled",
+    "unknown submission offers no new generation button",
+    "budget denial remains visible and blocks confirmation",
+    "no false download or share without media",
+    "reduced motion has no animation",
+    "mobile confirmation follows consumption summary",
+    "no browser script errors",
+    "no external HTTP requests or service calls"
+  ],
+  "views": 44,
+  "result": "pass"
+}
