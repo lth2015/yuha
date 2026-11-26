@@ -13,3 +13,4 @@ export * from './dedication.js';
 export * from './issue-reports.js';
 export * from './attribution.js';
 export * from './season.js';
+export * from './bgm.js';

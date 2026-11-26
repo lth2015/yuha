@@ -35,8 +35,10 @@ import {
   withTxRetry,
   type JobRow,
   openGuestJobs,
+  getUser,
 } from '@yuha/db';
 import { checkLyrics, checkPrompt, checkTitle } from '@yuha/providers';
+import { bgmIntent } from '@yuha/contracts';
 import type { AppContext } from '../context.js';
 import { estimateFromTimings, providerTimings, type Timing } from './estimate.js';
 
@@ -86,6 +88,8 @@ export function hashRequest(userId: string, req: CreateGenerationRequest): strin
     // Only when present, so every request without one hashes as it always
     // did — a retry that spans the deploy still finds its job.
     ...(req.dedication ? { dd: req.dedication } : {}),
+    // Same rule for background music: two BGMs differing only in mood are two requests.
+    ...(req.bgm ? { bg: req.bgm } : {}),
   });
   return createHash('sha256').update(canonical).digest('hex');
 }
@@ -126,9 +130,31 @@ export async function createGeneration(
 
   // A trial's song is a minute long, whatever was asked: half the engine time
   // of the simple path's two minutes, and still a whole song.
-  const req: CreateGenerationRequest = params.guest
+  const asked: CreateGenerationRequest = params.guest
     ? { ...params.request, durationSeconds: 60, projectId: undefined }
     : params.request;
+  /*
+   * Background music (docs/BGM_STUDIO_PLAN.md) is an instrumental made from
+   * its own choices: they set the length and the style tags, the note is the
+   * only free text and is screened as a description, and nothing can turn
+   * vocals back on. A guest cannot make one (the trial is a song).
+   */
+  if (asked.bgm && params.guest) throw new AppError('VALIDATION_FAILED', 'background music needs an account');
+  if (asked.bgm && !(await bgmAllowed(ctx, params.userId))) {
+    throw new AppError('SERVICE_DISABLED', 'background music is not available');
+  }
+  const req: CreateGenerationRequest = asked.bgm
+    ? {
+        ...asked,
+        mode: 'simple',
+        prompt: asked.bgm.note,
+        lyrics: undefined,
+        instrumental: true,
+        voice: 'auto',
+        styles: bgmIntent(asked.bgm).styles,
+        durationSeconds: asked.bgm.durationSeconds as CreateGenerationRequest['durationSeconds'],
+      }
+    : asked;
   const caps = ctx.music.capabilities();
 
   /*
@@ -292,6 +318,7 @@ export async function createGeneration(
             voice: req.voice,
             visibility: req.visibility,
             dedication: req.dedication ?? null,
+            bgm: req.bgm ?? null,
           },
         },
         tx,
@@ -609,4 +636,13 @@ export async function cancelGeneration(
 export async function currentBalance(userId: string): Promise<{ available: number; reserved: number }> {
   const b = await getBalance(userId);
   return { available: b.available, reserved: b.reserved };
+}
+
+/** Who may make background music (BGM_STUDIO): everyone, staff only while it is tried, or nobody. */
+export async function bgmAllowed(ctx: AppContext, userId: string | null | undefined): Promise<boolean> {
+  const mode = ctx.config.BGM_STUDIO;
+  if (mode === 'all') return true;
+  if (mode !== 'staff' || !userId) return false;
+  const role = (await getUser(userId).catch(() => undefined))?.role;
+  return role === 'admin' || role === 'support';
 }

@@ -457,6 +457,8 @@ const envSchema = z.object({
    * before that, every request would fail.
    */
   FEATURE_LYRIC_AUTO_ALIGN_ENABLED: bool(false),
+  /** AI BGM (docs/BGM_STUDIO_PLAN.md): who can make background music. Staff first. */
+  BGM_STUDIO: z.enum(['off', 'staff', 'all']).default('off'),
   /**
    * Automatic lyric sync for new sung songs (docs/AUTOMATIC_LYRIC_SYNC_TICKETS.md L4a).
    * off: aligned during delivery, as before. staff: only staff members' songs

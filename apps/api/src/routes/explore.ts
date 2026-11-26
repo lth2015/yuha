@@ -45,6 +45,9 @@ export function toPublicTrackView(
     lyricTimings: clientTimings(row.lyric_timings),
     lyricSync: opts.lyricSync !== undefined ? opts.lyricSync : lyricSyncStateOf(row, null),
     dedication: row.dedication ?? null,
+    kind: row.kind ?? 'song',
+    // The choices it was made from; the creator's own note stays in the job.
+    bgm: row.bgm ? ({ ...row.bgm, note: '' } as TrackView['bgm']) : null,
     licenseCount: opts.licenseCount ?? 0,
     licensedByMe: opts.licensedByMe ?? null,
     createdAt: row.created_at.toISOString(),

@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { bgmRequest } from './bgm.js';
 import { AudioFormat, JobPhase, JobState, Mood, Scene, TempoHint, TrackState, Visibility, VocalMode, VoiceChoice } from './enums.js';
 import { SECTION_GAP_SECONDS, sectionName } from './sections.js';
 import { dedicationSchema, type Dedication } from './dedication.js';
@@ -231,8 +232,21 @@ export const createGenerationRequest = z
     visibility: Visibility.default('private'),
     /** A song for somebody (docs/GIFT_AND_SHARE_SPEC.md). */
     dedication: dedicationSchema.optional(),
+    /**
+     * Background music instead of a song (docs/BGM_STUDIO_PLAN.md). Its own
+     * choices decide length, mood and style; it is always instrumental.
+     */
+    bgm: bgmRequest.optional(),
   })
   .superRefine((v, ctx) => {
+    if (v.bgm) {
+      // Background music has no words and no singer: anything that asks for them is a mistake, not a preference.
+      // `instrumental` is forced on downstream (it defaults to false, so false here says nothing).
+      if (v.lyrics || v.dedication) {
+        ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['bgm'], message: 'background music has no lyrics, vocals or dedication' });
+      }
+      return;
+    }
     // Who it is for, and why, is enough of a description on its own.
     if (v.mode === 'simple' && !v.prompt && !v.dedication) {
       ctx.addIssue({
@@ -496,6 +510,9 @@ export const trackView = z.object({
   lyricSync: LyricSyncState.nullable(),
   /** Who the song was written for; null for a song written for nobody in particular. */
   dedication: dedicationSchema.nullable(),
+  /** A song, or background music made from `bgm`'s choices (docs/BGM_STUDIO_PLAN.md). */
+  kind: z.enum(['song', 'bgm']),
+  bgm: bgmRequest.nullable(),
   /** How many people licensed this song on the Market. */
   licenseCount: z.number().int().nonnegative(),
   /** True when the viewer has bought a license for this song (download rights). */
@@ -513,6 +530,7 @@ export const listTracksQuery = z.object({
   state: TrackState.optional(),
   q: z.string().max(100).optional(),
   projectId: z.string().uuid().optional(),
+  kind: z.enum(['song', 'bgm']).optional(),
 });
 
 export const listTracksResponse = z.object({

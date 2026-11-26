@@ -22,6 +22,10 @@ export interface TrackRow {
   lyric_timings: LyricTimings | null;
   /** Who the song was written for (migration 0026); null for most songs. */
   dedication: Dedication | null;
+  /** A song or background music (migration 0040). */
+  kind: 'song' | 'bgm';
+  /** The choices a BGM was made from; null for a song. */
+  bgm: Record<string, unknown> | null;
   created_at: Date;
   updated_at: Date;
   deleted_at: Date | null;
@@ -33,13 +37,13 @@ export type TrackWithArtist = TrackRow & { artist_name: string | null; artist_av
 const TRACK_COLUMNS = `
   id, owner_id, project_id, job_id, title, scene, mood, duration_ms, state,
   suspended_reason, styles, lyrics, vocal_mode, visibility, play_count,
-  cover_seed, lyric_timings, dedication, created_at, updated_at, deleted_at
+  cover_seed, lyric_timings, dedication, kind, bgm, created_at, updated_at, deleted_at
 `;
 
 const TRACK_SELECT = `
   SELECT t.id, t.owner_id, t.project_id, t.job_id, t.title, t.scene, t.mood, t.duration_ms,
          t.state, t.suspended_reason, t.styles, t.lyrics, t.vocal_mode, t.visibility,
-         t.play_count, t.cover_seed, t.lyric_timings, t.dedication, t.created_at, t.updated_at, t.deleted_at,
+         t.play_count, t.cover_seed, t.lyric_timings, t.dedication, t.kind, t.bgm, t.created_at, t.updated_at, t.deleted_at,
          u.display_name AS artist_name, u.avatar_url AS artist_avatar
     FROM tracks t
     JOIN users u ON u.id = t.owner_id
@@ -63,6 +67,14 @@ function normaliseRow<T>(row: T): T {
       r.lyric_timings = JSON.parse(r.lyric_timings as string);
     } catch {
       r.lyric_timings = null;
+    }
+  }
+  const b = row as { bgm?: unknown };
+  if (typeof b.bgm === 'string') {
+    try {
+      b.bgm = JSON.parse(b.bgm as string);
+    } catch {
+      b.bgm = null;
     }
   }
   const d = row as { dedication?: unknown };
@@ -156,6 +168,8 @@ export async function insertTrack(
     visibility?: Visibility;
     coverSeed?: number;
     dedication?: Dedication | null;
+    kind?: 'song' | 'bgm';
+    bgm?: Record<string, unknown> | null;
   },
   tx: PoolConnection,
 ): Promise<TrackRow> {
@@ -163,8 +177,8 @@ export async function insertTrack(
   // A retried delivery must not create a second track for the same job.
   await execute(
     `INSERT INTO tracks (id, owner_id, project_id, job_id, title, scene, mood, duration_ms, state,
-                         styles, lyrics, vocal_mode, visibility, cover_seed, dedication)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                         styles, lyrics, vocal_mode, visibility, cover_seed, dedication, kind, bgm)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
      ON DUPLICATE KEY UPDATE updated_at = UTC_TIMESTAMP(3)`,
     [
       id,
@@ -182,6 +196,8 @@ export async function insertTrack(
       params.visibility ?? 'private',
       params.coverSeed ?? 0,
       params.dedication ? JSON.stringify(params.dedication) : null,
+      params.kind ?? 'song',
+      params.bgm ? JSON.stringify(params.bgm) : null,
     ],
     tx,
   );
@@ -293,6 +309,7 @@ export interface ListTracksParams {
   state?: TrackState | undefined;
   q?: string | undefined;
   projectId?: string | undefined;
+  kind?: 'song' | 'bgm' | undefined;
 }
 
 export async function listTracks(params: ListTracksParams): Promise<TrackRow[]> {
@@ -313,6 +330,10 @@ export async function listTracks(params: ListTracksParams): Promise<TrackRow[]> 
   if (params.q) {
     values.push(`%${params.q}%`);
     clauses.push('title LIKE ?');
+  }
+  if (params.kind) {
+    values.push(params.kind);
+    clauses.push('kind = ?');
   }
   values.push(params.limit);
   const rows = await query<TrackRow>(

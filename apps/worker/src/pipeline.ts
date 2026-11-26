@@ -1,6 +1,6 @@
 import type { AppContext } from '@yuha/api';
 import { deliver, failJob, handleLateResult, quarantineKey } from '@yuha/api';
-import { musicIntent, withDedication, type Dedication, type MusicIntent, type VoiceChoice } from '@yuha/contracts';
+import { bgmIntent, bgmRequest, musicIntent, withDedication, type Dedication, type MusicIntent, type VoiceChoice } from '@yuha/contracts';
 import {
   extendLease,
   deferJobStep,
@@ -162,13 +162,28 @@ async function submitJob(deps: PipelineDeps, job: JobRow): Promise<void> {
     durationSeconds: number;
     voice?: VoiceChoice;
     dedication?: Dedication | null;
+    bgm?: unknown;
   };
+
+  /*
+   * Background music (docs/BGM_STUDIO_PLAN.md): its choices make the intent
+   * through a fixed template. The text model is asked only when the creator
+   * added a note, and then only for English words to append — the template's
+   * choices are never the model's to change.
+   */
+  const bgmParsed = input.bgm ? bgmRequest.safeParse(input.bgm) : null;
+  const bgm = bgmParsed?.success ? bgmParsed.data : null;
+  const template = bgm ? bgmIntent(bgm) : null;
 
   // ---- text model: turn the creator's description into validated parameters
   const cached = musicIntent.safeParse(job.resolved_params);
+  const askText = !cached.success && !(template && !bgm!.note.trim());
   const intentResult = cached.success
     ? { status: 'ok' as const, intent: cached.data, requestId: null, repaired: false,
         usage: { costMinor: 0, costIsEstimate: true } }
+    : !askText
+      ? { status: 'ok' as const, intent: template!, requestId: null, repaired: false,
+          usage: { costMinor: 0, costIsEstimate: true } }
     : await ctx.text.extractIntent({
     scene: 'daily_log', // The provider derives the real scene from styles.
     mode: input.mode ?? 'simple',
@@ -183,7 +198,7 @@ async function submitJob(deps: PipelineDeps, job: JobRow): Promise<void> {
     durationSeconds: input.durationSeconds,
   });
 
-  if (!cached.success) await recordCostEvent({
+  if (askText) await recordCostEvent({
     jobId: job.id,
     providerId: ctx.text.providerId,
     providerKind: 'text',
@@ -225,8 +240,15 @@ async function submitJob(deps: PipelineDeps, job: JobRow): Promise<void> {
     log('warn', 'model-written lyrics failed screening; dropped', { jobId: job.id });
     resolvedLyrics = null;
   }
+  // A BGM keeps its template; a note's English words are appended to the brief.
+  const base =
+    template && !cached.success
+      ? askText
+        ? { ...template, brief: `${template.brief} ${intentResult.intent.brief}`.slice(0, 400) }
+        : template
+      : intentResult.intent;
   const parsed = musicIntent.safeParse({
-    ...intentResult.intent,
+    ...base,
     durationSeconds: input.durationSeconds,
     vocalMode: input.instrumental === false ? 'with_vocals' : 'instrumental',
     // The creator picked the voice; the model does not get a say in it. It is
@@ -234,7 +256,7 @@ async function submitJob(deps: PipelineDeps, job: JobRow): Promise<void> {
     // value would otherwise quietly win over the person who chose.
     voice: input.voice ?? 'auto',
     lyrics: resolvedLyrics,
-    title: input.title ?? intentResult.intent.title ?? null,
+    title: input.title ?? base.title ?? null,
   });
   if (!parsed.success) {
     await failJob(ctx, { job, to: 'FAILED', errorCode: 'intent_schema_invalid' });
