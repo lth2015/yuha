@@ -5,6 +5,7 @@ import { useSession } from '../lib/session';
 import { resolveLyricTimings } from '../lib/lyrics';
 import { drawPhotoFrame, frameJpeg, loadPhoto, planPhotoClip, type ShareLabels, type ShareSong } from '../lib/share-art';
 import { ErrorNotice } from './common';
+import { posterOf, saveLocalVideo, setLocalPoster, type SaveOutcome } from '../lib/local-videos';
 
 /**
  * The song as a video, in one place (product decision 2026-11-25: the share
@@ -67,7 +68,7 @@ export function PhotoVideo({
   timingsUnsaved?: boolean;
 }) {
   const { t } = useI18n();
-  const { runtime } = useSession();
+  const { runtime, me } = useSession();
   const preview = runtime?.features.photoVideoPreview === true;
   const [open, setOpen] = useState(startOpen);
   const sectionRef = useRef<HTMLElement>(null);
@@ -124,9 +125,45 @@ export function PhotoVideo({
     if (input.current) input.current.value = '';
   };
 
+  /*
+   * Every finished video is kept on this device (lib/local-videos.ts), so it
+   * is in "My songs" later; the server keeps none. Said under the result,
+   * including when the browser would not keep it.
+   */
+  const [kept, setKept] = useState<SaveOutcome | 'saving' | null>(null);
+  /** The latest video's save; an earlier, slower one must not write its outcome under it. */
+  const keeping = useRef(0);
+  const keep = async (file: File, kind: 'photo' | 'cover', seconds: number) => {
+    const mine = ++keeping.current;
+    // Signed out mid-encode: there is no account to file it under, and nothing to say about the browser.
+    if (!me?.userId) return setKept(null);
+    setKept('saving');
+    const id = crypto.randomUUID();
+    // The video first: drawing its picture can take seconds on a phone, and
+    // someone who leaves in that time must not lose the video for want of it.
+    const outcome = await saveLocalVideo({
+      id,
+      ownerId: me.userId,
+      trackId: song.trackId,
+      title: song.title,
+      kind,
+      seconds: Math.round(seconds),
+      createdAt: Date.now(),
+      bytes: file.size,
+      poster: null,
+      blob: file,
+    });
+    if (mine === keeping.current) setKept(outcome);
+    if (outcome === 'saved') {
+      const poster = await posterOf(file).catch(() => null);
+      if (poster) await setLocalPoster(id, poster);
+    }
+  };
+
   const make = async () => {
     if (photos.length < MIN_PHOTOS || !rights) return;
     setError(null);
+    setKept(null);
     setResult({ state: 'making' });
     try {
       const lines = lyrics ? resolveLyricTimings(lyrics, song.durationSeconds, lyricTimings).lines : [];
@@ -146,6 +183,7 @@ export function PhotoVideo({
       const name = `${song.title.replace(/[\\/:*?"<>|]+/g, ' ').trim() || 'yuha'}.mp4`;
       const file = new File([blob], name, { type: 'video/mp4' });
       setResult({ state: 'ready', file, url: URL.createObjectURL(file), timings: JSON.stringify(lyricTimings ?? null) });
+      void keep(file, 'photo', plan.duration);
     } catch (err) {
       setError(err);
       setResult({ state: 'idle' });
@@ -154,10 +192,12 @@ export function PhotoVideo({
 
   const makeFromCover = async () => {
     setError(null);
+    setKept(null);
     setResult({ state: 'making' });
     try {
       const file = await makeCoverVideo(length);
       setResult({ state: 'ready', file, url: URL.createObjectURL(file), timings: JSON.stringify(lyricTimings ?? null) });
+      void keep(file, 'cover', length);
     } catch (err) {
       setError(err);
       setResult({ state: 'idle' });
@@ -376,7 +416,19 @@ export function PhotoVideo({
               {t('video.stale')}
             </p>
           )}
-          <p className="small muted">{t('photo.notKept')}</p>
+          {kept && (
+            <p className="small muted" aria-live="polite">
+              {t(
+                kept === 'saved'
+                  ? 'video.kept.saved'
+                  : kept === 'full'
+                    ? 'video.kept.full'
+                    : kept === 'unavailable'
+                      ? 'video.kept.unavailable'
+                      : 'video.kept.saving',
+              )}
+            </p>
+          )}
         </div>
       )}
     </section>

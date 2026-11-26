@@ -7,6 +7,7 @@ import { useI18n } from '../lib/i18n';
 import { ErrorNotice } from '../components/common';
 import { formatJst } from '../lib/session';
 import { SongCard } from '../components/SongCard';
+import { LocalVideos } from '../components/LocalVideos';
 
 
 type Filter = 'all' | 'processing' | 'deliverable' | 'suspended';
@@ -154,6 +155,9 @@ export default function Library() {
           {t('lib.new')}
         </Link>
       </div>
+
+      {/* Videos made on this device: the server keeps none (lib/local-videos.ts). */}
+      <LocalVideos />
 
 
       <div className="library-controls">
