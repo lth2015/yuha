@@ -5,6 +5,7 @@ import { TITLE_MAX_CODEPOINTS, markCorrected, seasonOfOccasion, type LyricTiming
 import { API_BASE, ApiError, apiFetch, apiPostForBlob } from '../lib/api';
 import { drawVideoFrame, frameJpeg, planShareClip, shareCardPng } from '../lib/share-art';
 import { resolveLyricTimings, sungLyrics, timedLinesFor } from '../lib/lyrics';
+import { useLyricSyncRefresh } from '../lib/lyric-sync-refresh';
 import { clampToCodePoints } from '../lib/codepoints';
 import { createInFlightGuard, PENDING_AFTER_MS } from '../lib/in-flight';
 import { formatTime, usePlayer } from '../lib/player';
@@ -217,30 +218,14 @@ export default function SongDetail() {
       : justSynced
         ? 'synced'
         : null;
-  useEffect(() => {
-    if (!id || !syncing) return undefined;
-    let cancelled = false;
-    const ask = () => {
-      if (document.visibilityState !== 'visible') return;
-      apiFetch<SongDetailResponse>(`/v1/tracks/${id}`)
-        .then((fresh) => {
-          if (cancelled) return;
-          setSong((s) =>
-            s && s.trackId === fresh.trackId && (s.lyricSync !== fresh.lyricSync || s.lyricTimings !== fresh.lyricTimings)
-              ? { ...s, lyricSync: fresh.lyricSync, lyricTimings: fresh.lyricTimings }
-              : s,
-          );
-        })
-        .catch(() => undefined);
-    };
-    const timer = window.setInterval(ask, 12_000);
-    document.addEventListener('visibilitychange', ask);
-    return () => {
-      cancelled = true;
-      window.clearInterval(timer);
-      document.removeEventListener('visibilitychange', ask);
-    };
-  }, [id, syncing]);
+  // The shared refresh (lib/lyric-sync-refresh.ts): this page and Now Playing take the same timeline.
+  useLyricSyncRefresh(song?.trackId ?? null, syncing, (fresh) =>
+    setSong((s) =>
+      s && s.trackId === fresh.trackId && (s.lyricSync !== fresh.lyricSync || s.lyricTimings !== fresh.lyricTimings)
+        ? { ...s, lyricSync: fresh.lyricSync, lyricTimings: fresh.lyricTimings }
+        : s,
+    ),
+  );
   // A trial song just added to this account (TrialClaimAsk): read it again,
   // so the page shows the song instead of the "not found" it had a moment ago.
   useEffect(() => {

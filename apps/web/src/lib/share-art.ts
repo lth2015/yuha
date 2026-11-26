@@ -364,14 +364,27 @@ export function planShareClip(lines: TimedLine[], songSeconds: number, maxFrames
   const { start, duration } = clipWindow(lines, songSeconds, seconds);
   const end = start + duration;
 
-  const frames: ClipPlan['frames'] = [];
-  // Whatever is being sung as the clip opens is on the first frame.
-  const opening = lines.find((l) => l.start <= start && l.end > start);
-  frames.push({ at: 0, line: opening?.text ?? null });
+  /*
+   * A frame wherever a line starts or ends, carrying the line sung at that
+   * moment or none. Only starts used to make frames, so a line stayed on the
+   * screen across the gap after it — and, with unsure lines left out by the
+   * shared timing rule, across those too: the video showed a line nobody was
+   * singing (Codex review, PR #157). The photo video already took a line off
+   * when it ended; now both do.
+   */
+  const at = (t: number) => lines.find((l) => l.start <= t && l.end > t)?.text ?? null;
+  const times = new Set<number>([0]);
   for (const l of lines) {
-    if (l.start > start && l.start < end - 0.5 && frames.length < maxFrames) {
-      frames.push({ at: Number((l.start - start).toFixed(2)), line: l.text });
+    for (const edge of [l.start, l.end]) {
+      if (edge > start && edge < end - 0.5) times.add(Number((edge - start).toFixed(2)));
     }
+  }
+  const frames: ClipPlan['frames'] = [];
+  for (const t of [...times].sort((a, b) => a - b)) {
+    if (frames.length >= maxFrames) break;
+    const line = at(start + t);
+    if (frames.length && frames[frames.length - 1]!.line === line) continue;
+    frames.push({ at: t, line });
   }
   return { start: Number(start.toFixed(2)), duration: Number(duration.toFixed(2)), frames };
 }

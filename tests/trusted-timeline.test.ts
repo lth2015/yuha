@@ -66,6 +66,23 @@ describe('the videos and the .lrc', () => {
     expect(planShareClip(timedLinesFor(estimated, false), 30, 50, 30).frames.map(text).filter(Boolean)).toEqual(['one', 'two', 'three']);
   });
 
+  it('take a line off the share video when it ends, so a gap or an unsure line shows nothing (Codex, PR #157)', () => {
+    // Trusted 2-4 s, unsure 6-8 s, trusted 12-15 s.
+    const t = aligned([1, 0.2, 1]);
+    t.lines[2] = { ...t.lines[2]!, start: 12, end: 15 };
+    const plan = planShareClip(timedLinesFor(t, true), 30, 50, 30);
+    const at = (songSeconds: number) => {
+      let shown: string | null = null;
+      for (const f of plan.frames) if (plan.start + f.at <= songSeconds) shown = f.line;
+      return shown;
+    };
+    expect(at(3)).toBe('one');
+    expect(at(5)).toBeNull(); // the gap after it
+    expect(at(7)).toBeNull(); // the unsure line is not shown, and 'one' is not held over it
+    expect(at(13)).toBe('three');
+    expect(at(16)).toBeNull();
+  });
+
   it('burn only trusted lines into the scene MV', () => {
     const ass = buildAss(subtitleLines(aligned([1, 0.2, 1])), 0, 30);
     const said = ass.split('\n').filter((l) => l.startsWith('Dialogue:')).map((l) => l.split(',').slice(9).join(','));
