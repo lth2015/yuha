@@ -14,6 +14,10 @@
       "types": "./dist/scene-mv.d.ts",
       "default": "./dist/scene-mv.js"
     },
+    "./scene-mv-compose": {
+      "types": "./dist/scene-mv-compose.d.ts",
+      "default": "./dist/scene-mv-compose.js"
+    },
     "./loops": {
       "types": "./dist/loops.d.ts",
       "default": "./dist/loops.js"
