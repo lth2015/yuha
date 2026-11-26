@@ -6,6 +6,7 @@ import { activeLineIndex, resolveLyricTimings } from '../lib/lyrics';
 import { formatTime, usePlayer } from '../lib/player';
 import { lineRange, loopRange, moveLine } from '../lib/sync-studio';
 import { ErrorNotice } from './common';
+import { useSession } from '../lib/session';
 
 /**
  * Lining the lyrics up, inside the video card (docs/MV_LYRIC_SYNC_UX_SPEC.md,
@@ -75,6 +76,64 @@ export function LyricSyncStudio({
 }) {
   const { t } = useI18n();
   const player = usePlayer();
+  const { runtime } = useSession();
+
+  /*
+   * "Align it again" (services/lyric-proposal.ts): the aligner asked with the
+   * song's own audio, its answer loaded here as an unsaved edit to listen to
+   * before keeping. Free; offered only where a real aligner is configured.
+   * Only an answer this view watched arrive is loaded — a proposal from an
+   * earlier visit is not dropped onto the timeline unasked.
+   */
+  type Auto = { status: 'queued' | 'running' | 'ready' | 'held' | 'failed' | 'none' | 'limit'; ahead?: number; failure?: string; timings?: LyricTimings };
+  const [auto, setAuto] = useState<Auto | null>(null);
+  const watching = useRef(false);
+  /** The edit in hand when an answer lands: an answer never replaces it unasked. */
+  const draftNow = useRef(draft);
+  draftNow.current = draft;
+  useEffect(() => {
+    if (!runtime?.features.lyricAutoAlign) return;
+    let live = true;
+    let timer: number | undefined;
+    let misses = 0;
+    const poll = async () => {
+      const a = await apiFetch<Auto>(`/v1/tracks/${trackId}/lyric-proposal`).catch(() => null);
+      if (!live) return;
+      // A blip on a phone's connection is not the end of the wait: try again, more slowly.
+      if (!a) {
+        if (watching.current) timer = window.setTimeout(() => void poll(), Math.min(30_000, 3000 * 2 ** Math.min(4, ++misses)));
+        return;
+      }
+      misses = 0;
+      if (a.status === 'queued' || a.status === 'running') {
+        watching.current = true;
+        setAuto(a);
+        timer = window.setTimeout(() => void poll(), 3000);
+        return;
+      }
+      if (watching.current) {
+        watching.current = false;
+        // Edits made while it worked stay; the answer waits behind a button.
+        if (a.status === 'ready' && a.timings && draftNow.current) return setAuto({ ...a, status: 'held' });
+        setAuto(a);
+        if (a.status === 'ready' && a.timings) onDraft(a.timings);
+      }
+    };
+    if (auto?.status === 'queued' || auto?.status === 'running' || auto === null) void poll();
+    return () => {
+      live = false;
+      window.clearTimeout(timer);
+    };
+  }, [trackId, runtime?.features.lyricAutoAlign, auto?.status === 'queued' || auto?.status === 'running']);
+  const alignAgain = async () => {
+    try {
+      const a = await apiFetch<Auto>(`/v1/tracks/${trackId}/lyric-proposal`, { method: 'POST' });
+      watching.current = true;
+      setAuto(a);
+    } catch (err) {
+      setAuto({ status: err instanceof ApiError && err.status === 429 ? 'limit' : 'failed', failure: 'error' });
+    }
+  };
   const saved = useMemo(() => resolveLyricTimings(lyrics, duration, savedTimings), [lyrics, duration, savedTimings]);
   /** While a block is being dragged: shown at once, recorded once on release. */
   const [dragging, setDragging] = useState<LyricTimings | null>(null);
@@ -278,6 +337,48 @@ export function LyricSyncStudio({
   return (
     <div className="sync-studio" role="group" aria-label={t('sync.title')}>
       <p className="sync-studio__lead">{t('sync.lead')}</p>
+      {runtime?.features.lyricAutoAlign && (
+        <div className="sync-studio__auto">
+          <button
+            type="button"
+            className="btn btn--sm"
+            onClick={() => void alignAgain()}
+            disabled={!!draft || auto?.status === 'queued' || auto?.status === 'running'}
+            aria-busy={auto?.status === 'queued' || auto?.status === 'running'}
+          >
+            {t('sync.auto.button')}
+          </button>
+          {auto?.status === 'held' && auto.timings && (
+            <button
+              type="button"
+              className="btn btn--primary btn--sm"
+              onClick={() => {
+                onDraft(auto.timings!);
+                setAuto({ status: 'ready' });
+              }}
+            >
+              {t('sync.auto.load')}
+            </button>
+          )}
+          <p className="small muted" aria-live="polite">
+            {auto?.status === 'held'
+              ? t('sync.auto.held')
+              : draft && !auto
+              ? t('sync.auto.saveFirst')
+              : auto?.status === 'queued'
+                ? t('sync.auto.queued', { n: auto.ahead ?? 0 })
+                : auto?.status === 'running'
+                  ? t('sync.auto.running')
+                  : auto?.status === 'ready'
+                    ? t('sync.auto.ready')
+                    : auto?.status === 'limit'
+                      ? t('sync.auto.limit')
+                      : auto?.status === 'failed'
+                        ? t(auto.failure === 'low_coverage' ? 'sync.auto.failed.coverage' : 'sync.auto.failed.other')
+                        : t('sync.auto.note')}
+          </p>
+        </div>
+      )}
       <div className="sync-studio__top">
         <div
           className={`sync-studio__preview${photo ? '' : ' is-cover'}`}

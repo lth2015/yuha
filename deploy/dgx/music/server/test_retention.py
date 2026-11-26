@@ -30,7 +30,12 @@ class RetentionTests(unittest.TestCase):
         root = Path(self.dirs.name)
         (root / "jobs").mkdir()
         (root / "audio").mkdir()
-        self.patches = [patch.object(self.app, "JOBS_DIR", root / "jobs"), patch.object(self.app, "AUDIO_DIR", root / "audio")]
+        (root / "tmp").mkdir()
+        self.patches = [
+            patch.object(self.app, "JOBS_DIR", root / "jobs"),
+            patch.object(self.app, "AUDIO_DIR", root / "audio"),
+            patch.object(self.app, "TMP_DIR", root / "tmp"),
+        ]
         for p in self.patches:
             p.start()
 
@@ -74,6 +79,18 @@ class RetentionTests(unittest.TestCase):
         with patch.object(self.app, "RETENTION_DAYS", 0.0):
             self.assertEqual(self.app.purge_old(), 0)
         self.assertTrue((self.app.JOBS_DIR / "bench.json").exists())
+
+    def test_a_song_sent_for_alignment_and_left_by_a_crash_goes_within_the_hour_even_with_retention_off(self):
+        left = self.app.TMP_DIR / "align-left.mp3"
+        left.write_bytes(b"somebody's song")
+        then = time.time() - 2 * 3600
+        os.utime(left, (then, then))
+        busy = self.app.TMP_DIR / "align-busy.mp3"
+        busy.write_bytes(b"being aligned now")
+        with patch.object(self.app, "RETENTION_DAYS", 0.0):
+            self.app.purge_old()
+        self.assertFalse(left.exists())
+        self.assertTrue(busy.exists())
 
 
 if __name__ == "__main__":

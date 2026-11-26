@@ -417,6 +417,12 @@ const envSchema = z.object({
   // The photo MV (docs/PHOTO_MV_SPEC.md). Off until the privacy text that
   // describes it is reviewed (docs/legal/PRIVACY_CHANGES_2026-11.md).
   FEATURE_PHOTO_VIDEO_ENABLED: bool(false),
+  /**
+   * "Align it again" in the timing workspace (services/lyric-proposal.ts).
+   * Off until the DGX's /v1/align takes sent audio (deploy/dgx/update.sh):
+   * before that, every request would fail.
+   */
+  FEATURE_LYRIC_AUTO_ALIGN_ENABLED: bool(false),
   // Trying YUHA without an account (docs/GROWTH_SPEC.md, part three). Off
   // until the privacy text that describes it is reviewed.
   FEATURE_GUEST_TRIAL_ENABLED: bool(false),
@@ -1183,6 +1189,7 @@ export interface FeatureFlags {
   wavExportEnabled: boolean;
   /** The photo MV (docs/PHOTO_MV_SPEC.md). */
   photoVideoEnabled: boolean;
+  lyricAutoAlignEnabled: boolean;
   /** A song without an account (docs/GROWTH_SPEC.md, part three). */
   guestTrialEnabled: boolean;
   commercialDeliveryEnabled: boolean;
@@ -1212,6 +1219,7 @@ export function baseFeatures(cfg: AppConfig): FeatureFlags {
     freeTrialEnabled: cfg.FEATURE_FREE_TRIAL_ENABLED,
     wavExportEnabled: cfg.FEATURE_WAV_EXPORT_ENABLED,
     photoVideoEnabled: cfg.FEATURE_PHOTO_VIDEO_ENABLED,
+    lyricAutoAlignEnabled: cfg.FEATURE_LYRIC_AUTO_ALIGN_ENABLED,
     guestTrialEnabled: cfg.FEATURE_GUEST_TRIAL_ENABLED,
     // SEC-09: no signed agreement means no commercial delivery, regardless of
     // what anyone sets in the environment.

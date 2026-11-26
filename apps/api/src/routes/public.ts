@@ -1,4 +1,5 @@
 import { readdir } from 'node:fs/promises';
+import { realAligner } from '../services/lyric-proposal.js';
 import type { FastifyInstance } from 'fastify';
 import { seasonAt, type RuntimeInfo } from '@yuha/contracts';
 import type { AppContext } from '../context.js';
@@ -56,6 +57,7 @@ export default async function publicRoutes(app: FastifyInstance, opts: { ctx: Ap
         photoVideoEnabled: features.photoVideoEnabled || staff,
         photoVideoPreview: !features.photoVideoEnabled && staff,
         guestTrialEnabled: features.guestTrialEnabled,
+        lyricAutoAlign: features.lyricAutoAlignEnabled && realAligner(ctx),
         commercialDeliveryEnabled: features.commercialDeliveryEnabled,
         realPaymentsEnabled: features.realPaymentsEnabled,
         cardPaymentsEnabled: features.cardPaymentsEnabled,

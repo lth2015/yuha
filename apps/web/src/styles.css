@@ -2940,6 +2940,8 @@ textarea.is-full { border-color: var(--danger); }
 /* Lyric timing inside the video card (components/LyricSyncStudio.tsx). */
 .sync-studio { display: grid; gap: var(--s3); width: 100%; min-width: 0; padding: var(--s4); border: 1px solid var(--line); border-radius: var(--r-control); background: var(--surface-solid); }
 .sync-studio__lead { margin: 0; color: var(--muted); font-size: var(--t-body); line-height: 1.7; }
+.sync-studio__auto { display: grid; gap: var(--s2); justify-items: start; }
+.sync-studio__auto p { margin: 0; }
 .sync-studio__top { display: grid; grid-template-columns: 64px minmax(0, 1fr); gap: var(--s3); align-items: start; }
 .sync-studio__preview {
   aspect-ratio: 9 / 16; border-radius: 10px; background: #1d1f1c center / cover no-repeat; display: flex; align-items: flex-end; overflow: hidden;

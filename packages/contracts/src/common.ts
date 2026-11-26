@@ -51,6 +51,11 @@ export const runtimeInfo = z.object({
      * the public switch is still off (docs/PHOTO_MV_SPEC.md, staff preview).
      */
     photoVideoPreview: z.boolean().optional(),
+    /**
+     * "Align it again" in the timing workspace: offered only where a real
+     * aligner is configured (an estimator asked again only estimates again).
+     */
+    lyricAutoAlign: z.boolean().optional(),
     /** A song without an account (docs/GROWTH_SPEC.md, part three). */
     guestTrialEnabled: z.boolean(),
     commercialDeliveryEnabled: z.boolean(),

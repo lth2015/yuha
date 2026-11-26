@@ -136,6 +136,7 @@ const PAGES = [
   { name: 'song-guest-owner', path: '/song/:guestTrack', as: 'guest', needs: 'guestTrialEnabled' },
   { name: 'song-photo-video', path: '/song/:track', as: 'creator', needs: 'photoVideoEnabled', prepare: openPhotoVideo },
   { name: 'song-lyric-sync', path: '/song/:sungTrack', as: 'creator', prepare: openLyricSync },
+  { name: 'song-lyric-sync-auto', path: '/song/:sungTrack', as: 'creator', prepare: openLyricSyncAuto },
   // Three versions of the lyrics (docs/LYRIC_COWRITE_SPEC.md).
   { name: 'create-cowrite', path: '/create', as: 'creator', prepare: writeThreeVersions },
   { name: 'create-linefix', path: '/create', as: 'creator', prepare: rewriteOneLine },
@@ -236,6 +237,23 @@ async function keepDeviceVideos(page) {
   });
   await page.reload({ waitUntil: 'networkidle' });
   await page.waitForSelector('.local-videos__item', { timeout: 10_000 });
+}
+
+/*
+ * The same, with "align it again" offered. CI runs the estimator with the
+ * switch off, where the block never appears, so this page's runtime answer is
+ * told it is on: the block is drawn and measured, and nothing is asked of it.
+ */
+async function openLyricSyncAuto(page) {
+  await page.route('**/v1/runtime', async (route) => {
+    const res = await route.fetch();
+    const body = await res.json();
+    body.features.lyricAutoAlign = true;
+    await route.fulfill({ response: res, json: body });
+  });
+  await page.reload({ waitUntil: 'networkidle' });
+  await openLyricSync(page);
+  await page.waitForSelector('.sync-studio__auto', { timeout: 10_000 });
 }
 
 async function writeThreeVersions(page) {
