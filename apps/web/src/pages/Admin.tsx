@@ -26,6 +26,7 @@ type QualityReport = Record<'completion' | 'playable' | 'complete' | 'length' | 
   /** Why sung songs missed lyricsAligned, by the reason's first word (packages/db/src/quality.ts). */
   lyricsFallback?: Array<{ reason: string; n: number }>;
   lyricProposals?: { asked: number; aligned: number; heardTooLittle: number; failed: number };
+  sceneMvs?: { started: number; ready: number; failed: number; cancelled: number; inProgress: number; failures: { reason: string; n: number }[]; medianMinutesToReady: number | null };
 };
 const QUALITY_ROWS = ['completion', 'playable', 'complete', 'length', 'lyricsAligned', 'approval'] as const;
 
@@ -205,6 +206,19 @@ function QualityCard({ q }: { q: NonNullable<Overview['quality']> }) {
             heard: q.all.week.lyricProposals!.heardTooLittle,
             failed: q.all.week.lyricProposals!.failed,
           })}
+        </p>
+      )}
+      {/* The AI scene MV's internal test (docs/AI_SCENE_MV_SPEC.md): only once one has been started. */}
+      {(q.all.week.sceneMvs?.started ?? 0) > 0 && (
+        <p className="small muted num" style={{ margin: 0 }}>
+          {t('admin.quality.sceneMvs', {
+            started: q.all.week.sceneMvs!.started,
+            ready: q.all.week.sceneMvs!.ready,
+            failed: q.all.week.sceneMvs!.failed,
+            cancelled: q.all.week.sceneMvs!.cancelled,
+            minutes: q.all.week.sceneMvs!.medianMinutesToReady ?? '—',
+          })}
+          {q.all.week.sceneMvs!.failures.length > 0 && ` (${q.all.week.sceneMvs!.failures.map((f) => `${f.reason} × ${f.n}`).join(' · ')})`}
         </p>
       )}
       <p className="small muted" style={{ margin: 0 }}>

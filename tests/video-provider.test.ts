@@ -161,6 +161,13 @@ describe('http → the dgxv service, as described', () => {
     expect(() => new HttpVideoProvider({ baseUrl: 'https://video.example.com', apiKey: '' })).toThrow(/LTX_API_KEY/);
   });
 
+  it('reads its health without a key, and says when it cannot', async () => {
+    expect(await http({ apiKey: 'wrong' }).health()).toMatchObject({ ok: true });
+    expect(typeof (await http().health()).queued).toBe('number');
+    const gone = new HttpVideoProvider({ baseUrl: 'http://127.0.0.1:9', apiKey: 'k', allowInsecureLocal: true });
+    expect(await gone.health()).toEqual({ ok: false, queued: null });
+  });
+
   it('names a wrong key, an unreachable service and a full queue, rather than throwing', async () => {
     expect(await http({ apiKey: 'wrong' }).submit(SHOT)).toMatchObject({ status: 'rejected', reason: 'unauthorized', retryable: false });
     expect(await http({ apiKey: 'wrong' }).status('v1')).toEqual({ status: 'unknown', reason: 'unauthorized' });

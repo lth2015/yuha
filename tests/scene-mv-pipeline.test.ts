@@ -130,6 +130,7 @@ describe('drawing a scene MV', () => {
       status: (id) => demo.status(id),
       fetchClip: (id) => demo.fetchClip(id),
       discard: (id) => demo.discard(id),
+      health: () => demo.health(),
     };
     const id = await queued(user, ['only']);
     expect(await sceneMvTick(deps(video))).toBe('released');
@@ -188,13 +189,14 @@ describe('drawing a scene MV', () => {
       status: async () => ({ status: 'succeeded' }),
       fetchClip: async () => withSound,
       discard: async () => undefined,
+      health: async () => ({ ok: true, queued: 0 }),
     };
     const id = await queued(user, ['only']);
     await sceneMvTick(deps(noisy));
     await sceneMvTick(deps(noisy));
     expect((await getSceneMv(id))?.shots[0]).toMatchObject({ status: 'failed', failure: 'clip_has_audio', clip_key: null });
 
-    const silent: VideoProvider = { kind: 'silent', submit: async () => ({ status: 'accepted', id: 's1' }), status: async () => ({ status: 'running', queuePosition: null }), fetchClip: async () => Buffer.alloc(0), discard: async () => undefined };
+    const silent: VideoProvider = { kind: 'silent', submit: async () => ({ status: 'accepted', id: 's1' }), status: async () => ({ status: 'running', queuePosition: null }), fetchClip: async () => Buffer.alloc(0), discard: async () => undefined, health: async () => ({ ok: true, queued: 0 }) };
     await sceneMvTick({ ...deps(silent), shotTimeoutMs: -1 }); // submit the retry
     expect(await sceneMvTick({ ...deps(silent), shotTimeoutMs: -1 })).toBe('failed');
     expect((await getSceneMv(id))?.shots[0]?.failure).toBe('timeout');
