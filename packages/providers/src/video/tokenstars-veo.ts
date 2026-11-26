@@ -46,6 +46,8 @@ const ID = /^[0-9A-Za-z_-]{1,96}$/;
 export class TokenStarsVeoProvider implements VideoProvider {
   readonly kind = 'tokenstars-veo';
   readonly durations = [4, 6, 8] as const;
+  /** TokenStars' published price, 720p without audio (docs/VEO_VIA_TOKENSTARS.md). The first invoice checks it. */
+  readonly pricePerSecondUsd: number;
   private readonly base: URL;
   private readonly local: boolean;
   private readonly cfg: TokenStarsVeoConfig;
@@ -63,6 +65,7 @@ export class TokenStarsVeoProvider implements VideoProvider {
     if (!cfg.apiKey) throw new Error('TOKENSTARS_API_KEY is required');
     this.base = base;
     this.cfg = cfg;
+    this.pricePerSecondUsd = cfg.model === 'veo-3.1-fast-generate-001' ? 0.08 : 0.03;
   }
 
   private async call(method: 'GET' | 'POST', path: string, body?: unknown): Promise<{ code: number; json: Raw } | { error: 'timeout' | 'network' }> {

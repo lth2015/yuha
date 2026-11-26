@@ -7,11 +7,13 @@ import {
   finishDrawnSceneMvs,
   finishShot,
   recordShotSubmitted,
+  refundLatestCharge,
+  type SceneMvBudget,
   releaseShot,
   runningShot,
   startQueuedSceneMvs,
 } from '@yuha/db';
-import { CLIP_MAX_SECONDS, type StorageAdapter, type VideoProvider } from '@yuha/providers';
+import { shotSecondsFor, type StorageAdapter, type VideoProvider } from '@yuha/providers';
 
 /**
  * Drawing a scene MV's shots (docs/AI_SCENE_MV_TICKETS.md, T5).
@@ -35,6 +37,8 @@ export interface SceneMvDeps {
   shotTimeoutMs?: number;
   /** How long a failed shot waits before its one retry (the service asks for five minutes). */
   retryAfterSeconds?: number;
+  /** The money caps, for a paid service: a retry reserves its own share (packages/db/src/scene-mvs.ts). */
+  budget?: SceneMvBudget | null;
   /** A shot claimed by another worker that has not recorded an id by then is handed back (that worker stopped). */
   claimStaleMs?: number;
   ffprobePath?: string;
@@ -48,16 +52,14 @@ export type TickOutcome = 'idle' | 'submitted' | 'waiting' | 'stored' | 'failed'
  * of those that covers it, since a shot is billed by the second.
  */
 export function shotSeconds(clipStart: number, clipEnd: number, shots: number, durations?: readonly number[]): number {
-  const need = Math.max(1, Math.min(CLIP_MAX_SECONDS, Math.ceil((clipEnd - clipStart) / Math.max(1, shots))));
-  if (!durations?.length) return need;
-  return [...durations].sort((a, b) => a - b).find((d) => d >= need) ?? Math.max(...durations);
+  return shotSecondsFor(clipEnd - clipStart, shots, durations);
 }
 
 export async function sceneMvTick(d: SceneMvDeps): Promise<TickOutcome> {
   await startQueuedSceneMvs();
   let shot = await runningShot();
   if (!shot) {
-    if (!(await claimNextShot(d.owner, { retryAfterSeconds: d.retryAfterSeconds }))) {
+    if (!(await claimNextShot(d.owner, { retryAfterSeconds: d.retryAfterSeconds, budget: d.budget }))) {
       await finishDrawnSceneMvs();
       return 'idle';
     }
@@ -98,11 +100,14 @@ export async function sceneMvTick(d: SceneMvDeps): Promise<TickOutcome> {
       return 'failed';
     }
     if (sub.retryable) {
-      // Busy or unreachable is the platform's; the shot keeps its tries.
+      // Busy or unreachable is the platform's; the shot keeps its tries, and nothing was bought.
+      await refundLatestCharge(shot.id);
       await releaseShot(shot.id);
       d.log('warn', 'scene mv shot not accepted; will ask again', { shotId: shot.id, reason: sub.reason });
       return 'released';
     }
+    // Refused outright (a bad request, a wrong key, no balance): never sent, so never charged.
+    await refundLatestCharge(shot.id);
     await finishShot(shot.id, { status: 'failed', failure: sub.reason });
     d.log('error', 'scene mv shot refused', { shotId: shot.id, reason: sub.reason });
     return 'failed';
@@ -127,6 +132,8 @@ export async function sceneMvTick(d: SceneMvDeps): Promise<TickOutcome> {
   }
   if (state.status === 'failed' || state.status === 'unknown') {
     const failure = state.status === 'failed' ? state.reason : 'lost';
+    // A task that failed at the service is refunded there (TokenStars' terms); one we lost track of may not be.
+    if (state.status === 'failed') await refundLatestCharge(shot.id);
     // The service keeps a job, prompt and all, for seven days unless told otherwise: tell it.
     await d.video.discard(shot.provider_clip_id).catch(() => undefined);
     await finishShot(shot.id, { status: 'failed', failure });
