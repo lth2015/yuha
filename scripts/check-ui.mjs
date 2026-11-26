@@ -140,6 +140,11 @@ const PAGES = [
   ...['setup', 'draft', 'progress', 'ready', 'failed'].map((state) => ({
     name: `song-scene-mv-${state}`, path: '/song/:track', as: 'creator', allLanguages: true, prepare: (page) => openSceneMv(page, state),
   })),
+  // Automatic lyric sync on the song page (docs/agents/LYRIC_AUTO_SYNC_UX_HANDOFF.md), under the strict
+  // timing rule: the state line under the lyrics heading in each state, and "synced" at the moment it lands.
+  ...['syncing', 'partial', 'deferred', 'unavailable', 'synced'].map((state) => ({
+    name: `song-lyric-state-${state}`, path: '/song/:sungTrack', as: 'creator', allLanguages: true, prepare: (page) => openLyricState(page, state),
+  })),
   { name: 'song-lyric-sync', path: '/song/:sungTrack', as: 'creator', prepare: openLyricSync },
   { name: 'song-lyric-sync-auto', path: '/song/:sungTrack', as: 'creator', prepare: openLyricSyncAuto },
   // Three versions of the lyrics (docs/LYRIC_COWRITE_SPEC.md).
@@ -188,6 +193,44 @@ async function openTrialAsk(page) {
 async function openPhotoVideo(page) {
   await page.click('.photo-video__open');
   await page.waitForSelector('.photo-video', { timeout: 10_000 });
+}
+
+async function openLyricState(page, state) {
+  await page.unroute('**/v1/runtime*');
+  await page.unroute('**/v1/tracks/*');
+  await page.route('**/v1/runtime*', async (route) => {
+    const response = await route.fetch();
+    const body = await response.json();
+    body.features.lyricStrictTimeline = true;
+    await route.fulfill({ response, json: body });
+  });
+  // The song as the server would describe it in this state; "synced" starts syncing and lands while the page is open.
+  let shown = state === 'synced' ? 'syncing' : state;
+  await page.route('**/v1/tracks/*', async (route) => {
+    if (route.request().method() !== 'GET' || !/\/v1\/tracks\/[^/?]+$/.test(new URL(route.request().url()).pathname)) return route.fallback();
+    const response = await route.fetch();
+    const body = await response.json();
+    const heard = body.lyricTimings ? { ...body.lyricTimings, source: 'aligned' } : null;
+    body.lyricSync = shown;
+    body.lyricTimings =
+      shown === 'syncing' ? null
+      : shown === 'partial' && heard ? { ...heard, lines: heard.lines.map((l, i) => ({ ...l, confidence: i % 3 === 1 ? 0.2 : 1 })) }
+      : shown === 'synced' ? heard
+      : body.lyricTimings;
+    await route.fulfill({ response, json: body });
+  });
+  await page.reload({ waitUntil: 'networkidle' });
+  await page.waitForSelector('.lyrics-sync__status');
+  if (state === 'synced') {
+    const before = await page.locator('.lyrics-sync__status').textContent();
+    shown = 'synced';
+    await page.evaluate(() => document.dispatchEvent(new Event('visibilitychange')));
+    await page.waitForFunction((was) => {
+      const now = (document.querySelector('.lyrics-sync__status')?.textContent ?? '').trim();
+      return now.length > 0 && now !== (was ?? '').trim();
+    }, before, { timeout: 15_000 });
+  }
+  await page.waitForFunction(() => (document.querySelector('.lyrics-sync__status')?.textContent ?? '').trim().length > 0, null, { timeout: 15_000 });
 }
 
 async function openSceneMv(page, state) {

@@ -471,6 +471,13 @@ const envSchema = z.object({
   LYRIC_BACKFILL: z.enum(['off', 'staff', 'all']).default('off'),
   LYRIC_BACKFILL_DAILY: int(30),
   /**
+   * The shared rule for lyric timing (docs/agents/LYRIC_AUTO_SYNC_UX_HANDOFF.md):
+   * only trusted lines are lit, burned into videos or written to an .lrc, and
+   * an estimate is for reading. off keeps estimates lit as before; staff tries
+   * it on staff accounts first; all is everyone.
+   */
+  LYRIC_STRICT_TIMELINE: z.enum(['off', 'staff', 'all']).default('off'),
+  /**
    * The AI scene MV (docs/AI_SCENE_MV_SPEC.md). Off: staff only, for the
    * internal test. It also needs a video service (VIDEO_ADAPTER), without
    * which it is off for everyone.

@@ -278,7 +278,7 @@ const zh: Dict = {
   'song.notFound': '页面不存在',
   'cover.aria': '「{title}」的封面',
   'lyrics.instrumental': '纯音乐——没有歌词可以显示。',
-  'lyrics.sync.syncing': '正在同步歌词，可以先看原词。', 'lyrics.sync.deferred': '今天暂时无法同步，下次打开会自动再试。', 'lyrics.sync.partial': '部分歌词暂未同步。',
+  'lyrics.sync.syncing': '正在同步歌词', 'lyrics.sync.synced': '歌词已同步', 'lyrics.sync.partial': '部分歌词暂未同步', 'lyrics.sync.deferred': '今天暂时无法同步，明天再打开这首歌时会自动重试', 'lyrics.sync.unavailable': '暂无法同步歌词',
   'lyrics.tune.open': "调整歌词时间", 'lyrics.tune.close': "收起时间调整", 'lyrics.section.prechorus': "导歌", 'lyrics.section.outro': "尾声", 'lyrics.section.solo': "独奏", 'lyrics.section.instrumental': "器乐段", 'lyrics.estimated': '估算同步', 'lyrics.aligned': '词级同步',
   'lyrics.download': '下载 .lrc',
   'lyrics.corrected': '已校正',

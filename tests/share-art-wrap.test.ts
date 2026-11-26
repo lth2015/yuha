@@ -47,6 +47,8 @@ describe('planShareClip', () => {
       { at: 0, line: null },
       { at: 1.5, line: 'chorus a' },
       { at: 5.5, line: 'chorus b' },
+      // The line leaves when it ends: a gap is not the line before it held over.
+      { at: 9.5, line: null },
     ]);
   });
 
@@ -60,7 +62,7 @@ describe('planShareClip', () => {
   it('runs as long as asked, a line per frame, and starts earlier rather than ending short', () => {
     const minute = planShareClip(lines, 120, 200, 60);
     expect(minute).toMatchObject({ start: 38.5, duration: 60 });
-    expect(minute.frames.map((f) => f.line)).toEqual([null, 'chorus a', 'chorus b', 'after']);
+    expect(minute.frames.map((f) => f.line)).toEqual([null, 'chorus a', 'chorus b', null, 'after', null]);
     // A chorus near the end: the minute is kept, moved back to fit.
     const late = planShareClip([{ text: 'late', section: 'Chorus', start: 100, end: 104 }], 120, 200, 60);
     expect(late).toMatchObject({ start: 60, duration: 60 });

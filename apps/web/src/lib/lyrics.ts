@@ -7,7 +7,7 @@
  * proxy, sections as pauses) and lay the lines across the song's duration.
  * The result syncs well enough for karaoke display and is deterministic.
  */
-import { SECTION_GAP_SECONDS, sectionName, timingsMatchLyrics, type LyricTimings } from '@yuha/contracts';
+import { SECTION_GAP_SECONDS, isTrustedLine, sectionName, timingsMatchLyrics, trustedTimeline, type LyricTimings } from '@yuha/contracts';
 
 /** Choose the timeline used by both the player and its LRC export. */
 export function resolveLyricTimings(lyrics: string, duration: number, timings?: LyricTimings | null): LyricTimings {
@@ -149,4 +149,27 @@ export function sungLyrics(song: { vocalMode: string; lyrics: string | null | un
     return t !== '' && !/^\[[^\]]*\]$/.test(t);
   });
   return sung ? song.lyrics : null;
+}
+
+/**
+ * The line to light under the strict rule: a trusted line, only while it is
+ * sung. Between lines, and on a line the aligner was unsure of, nothing is
+ * lit — the previous line is not stretched over a gap or an unsung line.
+ */
+export function activeTrustedLine(lines: LyricLine[], trusted: boolean[], seconds: number): number {
+  for (let i = 0; i < lines.length; i += 1) {
+    const l = lines[i]!;
+    if (trusted[i] && seconds >= l.start && seconds < l.end) return i;
+  }
+  return -1;
+}
+
+/** The lines a video may draw or an .lrc may carry: the trusted ones, or every line under the earlier rule. */
+export function timedLinesFor(timeline: LyricTimings, strict: boolean): LyricLine[] {
+  return strict ? (trustedTimeline(timeline)?.lines ?? []) : timeline.lines;
+}
+
+/** Per line, whether it may be lit (isTrustedLine; the earlier rule trusts estimates too). */
+export function trustedFlags(timeline: LyricTimings, strict: boolean): boolean[] {
+  return timeline.lines.map((l) => isTrustedLine(timeline, l, { estimates: !strict }));
 }
