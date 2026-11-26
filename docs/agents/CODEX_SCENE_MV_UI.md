@@ -1,5 +1,7 @@
 # 交给 Codex：AI 场景 MV 的页面和功能布局（T8）
 
+> **2026-11-26 分工与方向更新**：新一轮由 Codex 负责设计／交互、Claude 负责实现，再交叉验收。请使用 [Veo 规格](../AI_SCENE_MV_VEO_SPEC.md) 与 [Claude 交接](CLAUDE_VEO_MV_HANDOFF.md)；本文的 30 秒／四分镜、LTX 耗时和数据路径仅作旧契约参考，不直接套用到 Veo。
+
 > 2026-11-26。产品负责人：UI 和功能布局交给 Codex 思考和完成。
 > 规格：[AI_SCENE_MV_SPEC.md](../AI_SCENE_MV_SPEC.md)；工作票：[AI_SCENE_MV_TICKETS.md](../AI_SCENE_MV_TICKETS.md)。
 > 分工照 [CODEX_COLLABORATION.md](CODEX_COLLABORATION.md)：这一张票页面归 Codex，接口、队列、合成归 Claude。
