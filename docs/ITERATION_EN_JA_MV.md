@@ -11,13 +11,13 @@
 | 项目 | 现状 | 缺口 |
 | --- | --- | --- |
 | 渲染 | 公开页面按语言预渲染（`/zh|ja|en/*.html`），爬虫首次请求即可读到标题、正文、链接 | 无 |
-| 多语言 | 独立 URL；`lang`、canonical、hreflang（含 x-default）正确 | 无 |
+| 多语言 | 独立 URL；`lang`、canonical、hreflang 互指正确；x-default 改为指向英文版（原先指向不带语言的路径，对不执行 JS 的爬虫是空壳） | 无 |
 | 收录范围 | `sitemap.xml` 只列公开页；`robots.txt` 屏蔽歌曲、账户、订单、后台；私密歌曲另有访问控制 | 无 |
-| 分享卡片 | 站点有 OG 图；公开歌曲有自己的卡片，私密歌曲不出卡片 | 场景页用站点通用图 |
+| 分享卡片 | 站点有 OG 图；生日、旅行页有各自的图；公开歌曲有自己的卡片，私密歌曲不出卡片 | 无 |
 | 结构化数据 | `WebApplication`（名称、别名、说明），无评分 | 无 |
 | 首页标题 | 已改为说明产品是什么（#120） | — |
-| 场景页 | 生日页有；旅行只在「回忆」页里一句话带过 | 无旅行页；场景页没有照片 MV、示例、步骤、价格说明、常见问题 |
-| 来源统计 | `?src=` → 访客、注册、做出一首歌、付费（`docs/ATTRIBUTION_SPEC.md`） | 没有试做、MV 完成；访客用试做时来源没记；分不出语言、场景、自然搜索 |
+| 场景页 | 生日、旅行 × 中日英已上线（#122，2026-11-26）：照片 MV 一节、五问 FAQ、各自的分享图 | 示例视频位留空，等负责人提供真实作品 |
+| 来源统计 | 访客→试做→注册→做出歌→做出 MV→付费，按语言、场景、来源拆；自然搜索记为 `seo-<页面>-<语言>`（#121） | 无 |
 | Search Console / Bing | 未知 | 需要负责人确认或配置 |
 
 ## 任务
@@ -38,3 +38,20 @@
 
 `?src=<渠道>-<场景>-<语言>-<编号>`，例如 `x-birthday-en-1`、`x-travel-ja-2`。
 没有 `?src=` 的访问，按首次落地页和来源网站记：从搜索引擎进入场景页记为 `seo-<场景>-<语言>`，其余不记。
+
+## X 广告落地链接（任务 7）
+
+直接落到对应语言的场景页（预渲染，打开即有内容），`?src=` 按上面的命名。投放时原样复制，不要改大小写；同一条素材换文案就换编号。
+
+| 场景 | 语言 | 素材 1 | 素材 2 |
+| --- | --- | --- | --- |
+| 生日 | 英 | `https://yuha.studio/en/birthday.html?src=x-birthday-en-1` | `https://yuha.studio/en/birthday.html?src=x-birthday-en-2` |
+| 生日 | 日 | `https://yuha.studio/ja/birthday.html?src=x-birthday-ja-1` | `https://yuha.studio/ja/birthday.html?src=x-birthday-ja-2` |
+| 旅行 | 英 | `https://yuha.studio/en/travel.html?src=x-travel-en-1` | `https://yuha.studio/en/travel.html?src=x-travel-en-2` |
+| 旅行 | 日 | `https://yuha.studio/ja/travel.html?src=x-travel-ja-1` | `https://yuha.studio/ja/travel.html?src=x-travel-ja-2` |
+
+- 标记只能是小写字母、数字和 `. _ -`，最长 48 个字符；不合规的标记整个丢弃，不会被改写成别的。
+- 首次进入的来源保留 30 天：点了广告、第二天从书签回来，仍记在这条广告名下；30 天内再点另一条广告不改归属。
+- 后台「数据看板 → 推广链接（?src=）」按这条标记看到访客、试做、注册、做出歌、做出 MV、付费；「按语言」「按场景」两张表把同一场景、同一语言的素材合计。
+- 页面的 canonical 不带 `?src=`，搜索引擎不会把带标记的地址当成另一页。
+- 不装 X Pixel 等第三方追踪（见上文「不做」）。
