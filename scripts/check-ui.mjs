@@ -104,7 +104,7 @@ const PAGES = [
     name: `marketplace-${state}`, path: '/marketplace', as: null, allLanguages: true,
     prepare: (page) => openMarketplace(page, state),
   })),
-  ...['review', 'import'].map((state) => ({
+  ...['review', 'import', 'publish', 'publish-result'].map((state) => ({
     name: `admin-marketplace-${state}`, path: '/admin/marketplace', as: 'admin',
     allLanguages: true, prepare: (page) => openMarketplace(page, state),
   })),
@@ -262,7 +262,7 @@ const MARKET_FIXTURES = [
 ];
 
 async function openMarketplace(page, state) {
-  const admin = state === 'review' || state === 'import';
+  const admin = ['review', 'import', 'publish', 'publish-result'].includes(state);
   const path = admin ? '/v1/admin/marketplace/bgm' : '/v1/marketplace/bgm';
   await page.unroute('**/v1/runtime*');
   await page.unroute(`**${path}?*`);
@@ -272,7 +272,9 @@ async function openMarketplace(page, state) {
   const items = state === 'empty' || state === 'off' ? [] : admin
     ? [{ ...MARKET_FIXTURES[0], state: 'draft', sourceKey: 'official-batch-01', previewStartSeconds: 15 }]
     : MARKET_FIXTURES;
-  await page.route(`**${path}?*`, (route) => route.fulfill({ json: { items, nextOffset: null } }));
+  await page.route(`**${path}?*`, (route) => route.fulfill({ json: {
+    items, nextOffset: null, ...(admin ? { pendingPublication: { count: items.length, revision: '0'.repeat(64) } } : {}),
+  } }));
   await page.reload({ waitUntil: 'networkidle' });
   if (state === 'off' || state === 'empty') {
     await page.waitForSelector('.market-empty');
@@ -285,13 +287,31 @@ async function openMarketplace(page, state) {
         'id,file,title,series,style,mood,scenario,cover,model,model_version,seed,prompt,generated_at,note',
         '01,coast.wav,A Coastal Morning · 海辺の朝,Demo,lofi,warm,travel,,ACE-Step,v1.5,43,Soft keys,2026-11-27T17:00:00+09:00,',
         '02,missing.wav,Missing track · 檔案未到,Demo,jazz,calm,vlog,,ACE-Step,v1.5,44,Warm drums,2026-11-27T17:00:00+09:00,',
+        ',night.wav,Night photo · 夜景,Demo,jazz,calm,vlog,,ACE-Step,,45,Soft jazz,2026-11-27T17:00:00+09:00,',
+        '04,masters/unclassified.wav,Unclassified track,,,,,,,,,,,',
       ].join('\n'));
-      await page.locator('.market-import summary').click();
+      await page.locator('[aria-controls=market-import-panel]').click();
       await page.locator('.market-import input[webkitdirectory]').setInputFiles(folder);
       await page.waitForSelector('.market-import__rows li:nth-child(2)');
       await page.waitForSelector('.market-import__submit:enabled');
     } finally {
       rmSync(folder, { recursive: true, force: true });
+    }
+  } else if (state === 'publish' || state === 'publish-result') {
+    await page.locator('.market-publish-all .btn--primary').click();
+    await page.locator('.market-publish-all textarea').fill('Preview and track details reviewed');
+    if (state === 'publish-result') {
+      await page.route(`**${path}/publish-all`, (route) => {
+        const request = route.request();
+        if (request.method() !== 'POST' || request.postDataJSON().revision !== '0'.repeat(64)) {
+          return route.fulfill({ status: 400, json: { error: { message: 'Expected confirmed listing queue' } } });
+        }
+        return route.fulfill({ json: {
+          published: 0, failed: [{ id: items[0].id, title: items[0].title, reason: 'preview_missing' }],
+        } });
+      });
+      await page.locator('.market-publish-all button[type=submit]').click();
+      await page.waitForSelector('.market-admin__bulk-result li');
     }
   } else if (admin) {
     await page.locator('.market-admin__actions button').nth(1).click();

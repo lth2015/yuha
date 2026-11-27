@@ -673,20 +673,21 @@ const TABS = [
   { key: 'ops', path: '/admin/ops', label: 'admin.tab.ops' },
   { key: 'review', path: '/admin/review', label: 'admin.tab.review' },
   { key: 'audit', path: '/admin/audit', label: 'admin.tab.audit' },
-  { key: 'marketplace', path: '/admin/marketplace', label: 'nav.marketplace' },
+  { key: 'marketplace', path: '/admin/marketplace', label: 'market.admin.tab' },
 ] as const;
 
 export default function Admin() {
   const { t } = useI18n();
   const { me } = useSession();
   const { tab = 'dashboard' } = useParams<{ tab?: string }>();
-  const tabs = TABS.filter((item) => item.key !== 'marketplace' || me?.role === 'admin');
-  const known = tabs.some((item) => item.key === tab);
+  const isAdmin = me?.role === 'admin';
+  const tabs = TABS.filter((item) => item.key !== 'marketplace' || isAdmin);
+  const known = TABS.some((item) => item.key === tab);
 
   return (
     <div className="stack stack--loose admin">
       <div className="row row--between">
-        <h1 style={{ fontSize: 28, margin: 0 }}>{t('admin.h1')}</h1>
+        <h1 style={{ fontSize: 28, margin: 0 }}>{t(tab === 'marketplace' ? 'market.admin.tab' : 'admin.h1')}</h1>
         <Badge tone={me?.role === 'admin' ? 'badge--accent' : ''}>{me?.role}</Badge>
       </div>
       <nav className="admin-tabs" aria-label={t('admin.tabs.aria')}>
@@ -701,13 +702,22 @@ export default function Admin() {
           </NavLink>
         ))}
       </nav>
-      {(!known || tab === 'dashboard') && <Dashboard />}
+      {(!known || tab === 'dashboard') && <>
+        {isAdmin && <section className="market-admin__entry" aria-labelledby="admin-bgm-entry">
+          <div>
+            <h2 id="admin-bgm-entry">{t('market.catalog')}</h2>
+            <p className="small muted">{t('market.admin.entryHelp')}</p>
+          </div>
+          <NavLink to="/admin/marketplace" className="btn btn--primary">{t('market.admin.tab')}</NavLink>
+        </section>}
+        <Dashboard />
+      </>}
       {tab === 'users' && <CustomerConsole />}
       {tab === 'orders' && <OrdersPanel />}
       {tab === 'ops' && <OverviewPanel part="ops" />}
       {tab === 'review' && <OverviewPanel part="review" />}
       {tab === 'audit' && <AuditPanel />}
-      {tab === 'marketplace' && me?.role === 'admin' && <OfficialBgmManager />}
+      {tab === 'marketplace' && (isAdmin ? <OfficialBgmManager /> : <p className="market-empty">{t('market.admin.restricted')}</p>)}
     </div>
   );
 }

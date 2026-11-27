@@ -61,11 +61,11 @@ export async function setOfficialBgmCatalog(
   );
 }
 
-/** Ids of every track not yet published or archived, oldest first: what "publish all" acts on. */
-export async function unpublishedOfficialBgmIds(): Promise<string[]> {
-  return (await query<{ id: string }>(
-    `SELECT id FROM official_bgm WHERE state IN ('draft','reviewed') ORDER BY created_at, id`, [],
-  )).map((r) => r.id);
+/** Every track awaiting publication, oldest first. */
+export function pendingOfficialBgmPublication(tx?: PoolConnection) {
+  return query<{ id: string; title: string }>(
+    `SELECT id, title FROM official_bgm WHERE state IN ('draft','reviewed') ORDER BY created_at, id`, [], tx,
+  );
 }
 
 export function findOfficialBgmImport(sourceKey: string, sha256: string) {

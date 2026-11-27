@@ -51,7 +51,16 @@ export type OfficialBgmCatalogEdit = z.infer<typeof officialBgmCatalogEdit>;
 export type OfficialBgmCopy = Partial<Record<OfficialBgmLang, { title: string; intro: string }>>;
 
 /** Approve and publish every draft or reviewed track at once (product owner, 2026-11-27). */
-export const officialBgmPublishAll = z.object({ reason: z.string().trim().min(5).max(500) });
+export const officialBgmPublishAll = z.object({
+  reason: z.string().trim().min(5).max(500),
+  revision: z.string().regex(/^[a-f0-9]{64}$/),
+});
+export type OfficialBgmBulkChange = z.infer<typeof officialBgmPublishAll>;
+export type OfficialBgmPublicationQueue = { count: number; revision: string };
+export type OfficialBgmBulkResult = {
+  published: number;
+  failed: Array<{ id: string; title: string; reason: 'preview_missing' | 'state_changed' | 'save_failed'; error: string }>;
+};
 
 export interface OfficialBgmItem extends OfficialBgmMetadata {
   id: string;

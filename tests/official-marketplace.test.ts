@@ -60,14 +60,15 @@ describe('official BGM catalogue', () => {
     const cover = await readFile(new URL('../apps/web/public/brand/og-card.png', import.meta.url));
     const csv = '\uFEFFid,file,title,series,style,mood,scenario,cover,model,model_version,seed,prompt,generated_at,note\r\n' +
       '01,晨光.wav,"First light, for you",Spring,Japanese healing,calm,travel,covers/01.png,ACE-Step,v1.5,9007199254740993,"Warm ""strings""\nsoft piano",2026-11-27T17:00:00+09:00,////';
-    const rejected: number[] = [];
+    const rejected: Array<{ row: number; code: string; fields?: string[] }> = [];
     const missingProvenance = ',bad.wav,Missing metadata,Spring,jazz,calm,travel,,ACE-Step,,1,Keys,2026-11-27T17:00:00+09:00,';
     // The first production batch (2026-11-27): empty generation fields and a
     // "masters/" prefix refused every row. Only a missing ID or file refuses one now;
     // the empty fields are listed, not filled in.
     const bareRecord = '02,masters/two.wav,No record yet,,,,,,,,,,,';
-    const [entry, bare] = parseOfficialBgmManifest(`${csv}\r\n${missingProvenance}\r\n${bareRecord}`, 'batch-01', (issue) => rejected.push(issue.row));
-    expect(rejected).toEqual([3]);
+    const [entry, bare] = parseOfficialBgmManifest(`${csv}\r\n\r\n${missingProvenance}\r\n${bareRecord}`, 'batch-01',
+      ({ row, code, fields }) => rejected.push({ row, code, fields }));
+    expect(rejected).toEqual([{ row: 5, code: 'fields', fields: ['trackId'] }]);
     expect(bare).toMatchObject({ title: 'No record yet', provenance: { trackId: '02', masterFilename: 'two.wav', model: '', seed: '', prompt: '' } });
     expect(officialBgmMissingProvenance(bare!.provenance)).toEqual(
       ['series', 'style', 'originalMood', 'originalScenario', 'model', 'modelVersion', 'seed', 'prompt', 'generatedAt']);
@@ -77,7 +78,7 @@ describe('official BGM catalogue', () => {
       provenance: { seed: '9007199254740993', prompt: 'Warm "strings"\nsoft piano', licenseStatus: 'pending', coverFilename: '01.png' } });
     const sha256 = createHash('sha256').update(source).digest('hex');
     const report = officialBgmInventoryReport.parse({ items: [{
-      id: '01', file: '晨光.wav', audio: { sha256, bytes: source.byteLength, duration_s: 61 }, missing: [], problems: [],
+      id: '01', file: 'masters/晨光.wav', audio: { sha256, bytes: source.byteLength, duration_s: 61 }, missing: [], problems: [],
     }] });
     const inventory = officialBgmInventoryFor(report, entry!.provenance)!.evidence;
     const adminBase = '/v1/admin/marketplace/bgm';
@@ -253,9 +254,12 @@ describe('official BGM catalogue', () => {
 
     // Nothing is public before "publish all", and it needs a reason and an admin.
     expect((await publicMarket.app.inject({ url: '/v1/marketplace/bgm' })).json().items).toEqual([]);
+    const queue = async () => (await publicMarket.app.inject({ url: base, headers: admin.authHeader })).json().pendingPublication;
+    const { revision } = await queue();
     expect((await publicMarket.app.inject({ method: 'POST', url: `${base}/publish-all`, headers: support.authHeader, payload: { reason: 'All checked by ear' } })).statusCode).toBe(403);
-    expect((await publicMarket.app.inject({ method: 'POST', url: `${base}/publish-all`, headers: admin.authHeader, payload: { reason: 'ok' } })).statusCode).toBe(400);
-    const all = await publicMarket.app.inject({ method: 'POST', url: `${base}/publish-all`, headers: admin.authHeader, payload: { reason: 'All checked by ear' } });
+    expect((await publicMarket.app.inject({ method: 'POST', url: `${base}/publish-all`, headers: admin.authHeader, payload: { reason: 'ok', revision } })).statusCode).toBe(400);
+    expect((await publicMarket.app.inject({ method: 'POST', url: `${base}/publish-all`, headers: admin.authHeader, payload: { reason: 'All checked by ear' } })).statusCode).toBe(400);
+    const all = await publicMarket.app.inject({ method: 'POST', url: `${base}/publish-all`, headers: admin.authHeader, payload: { reason: 'All checked by ear', revision } });
     expect(all.json()).toEqual({ published: 2, failed: [] });
     const items = (await publicMarket.app.inject({ url: '/v1/marketplace/bgm' })).json().items as Array<{ id: string }>;
     expect(items.map((i) => i.id).sort()).toEqual([a.id, b.id].sort());
@@ -268,11 +272,42 @@ describe('official BGM catalogue', () => {
     expect(rows.filter((r) => r.subject_id === a.id).map((r) => r.action).sort()).toEqual(['official_bgm.publish', 'official_bgm.review']);
     expect(rows.filter((r) => r.subject_id === b.id)).toHaveLength(2);
     // Run again: nothing left to publish.
-    expect((await publicMarket.app.inject({ method: 'POST', url: `${base}/publish-all`, headers: admin.authHeader, payload: { reason: 'All checked by ear' } })).json())
+    expect((await publicMarket.app.inject({ method: 'POST', url: `${base}/publish-all`, headers: admin.authHeader,
+      payload: { reason: 'All checked by ear', revision: (await queue()).revision } })).json())
       .toEqual({ published: 0, failed: [] });
     // An edited title is searchable.
     expect((await publicMarket.app.inject({ url: `/v1/marketplace/bgm?q=${encodeURIComponent('港湾')}` })).json().items.map((i: { id: string }) => i.id)).toEqual([a.id]);
   }, 120_000);
+
+  it('requires a fresh bulk scope and leaves a missing-preview draft unaudited', async () => {
+    const admin = await publicMarket.createUser({ role: 'admin' });
+    const base = '/v1/admin/marketplace/bgm';
+    const list = async () => (await publicMarket.app.inject({ url: base, headers: admin.authHeader })).json();
+    const submit = (revision: string) => publicMarket.app.inject({
+      method: 'POST', url: `${base}/publish-all`, headers: admin.authHeader,
+      payload: { reason: 'Checked by ear', revision },
+    });
+    const before = (await list()).pendingPublication;
+    const master = execFileSync('ffmpeg', ['-hide_banner', '-v', 'error', '-f', 'lavfi', '-i',
+      'sine=frequency=420:sample_rate=44100', '-t', '61', '-b:a', '128k', '-f', 'mp3', 'pipe:1']);
+    const item = await importOfficialBgm(publicMarket.ctx, {
+      sourceKey: 'missing-excerpt', title: 'Missing excerpt', genre: 'jazz', scenario: 'travel', mood: 'warm',
+    }, master);
+    const { query } = await import('@yuha/db');
+    const [row] = await query<{ preview_key: string }>('SELECT preview_key FROM official_bgm WHERE id = ?', [item.id]);
+    await publicMarket.ctx.storage.remove('delivery', row!.preview_key);
+
+    expect((await submit(before.revision)).statusCode).toBe(409);
+    const current = (await list()).pendingPublication;
+    expect(current.count).toBe(1);
+    expect((await submit(current.revision)).json()).toMatchObject({
+      published: 0, failed: [{ id: item.id, title: 'Missing excerpt', reason: 'preview_missing' }],
+    });
+    expect((await list()).items[0].state).toBe('draft');
+    expect(await query(
+      "SELECT action FROM audit_logs WHERE subject_id = ? AND action IN ('official_bgm.review','official_bgm.publish')", [item.id],
+    )).toEqual([]);
+  }, 30_000);
 
   it('starts scores in 3.8–4.5 and reads style tags from the batch', () => {
     expect(startingRating(() => 0)).toBe(3.8);

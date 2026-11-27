@@ -18,12 +18,8 @@ const sha256 = z.string().regex(/^[0-9a-f]{64}$/i).transform((hex) => hex.toLowe
 
 export const officialBgmLicenseStatus = z.enum(['pending', 'cleared', 'restricted']);
 /*
- * The generation record is kept as the sheet gives it, and a field the sheet
- * left empty stays empty: listed as missing (officialBgmMissingProvenance),
- * never made up, and never a reason to refuse the track (PRD: "缺失的元数据明确
- * 列出，不自行编造"). Only what identifies the track — its ID and its master
- * file — is required. The first production batch (2026-11-27) had all thirty
- * rows refused for empty generation fields.
+ * Empty generation fields are recorded as missing. Only the track ID and
+ * its master file identify an import.
  */
 const text = (max: number) => z.string().max(max).default('').transform((value) => value.trim());
 export const OFFICIAL_BGM_PROVENANCE_FIELDS = [
@@ -65,14 +61,16 @@ type BatchEntry = {
   scenario?: typeof BGM_SCENARIOS[number];
 };
 
-function csvRows(input: string): string[][] {
+function csvRows(input: string): Array<{ cells: string[]; line: number }> {
   const text = input.replace(/^\uFEFF/, '');
   if (text.length > OFFICIAL_BGM_DOCUMENT_BYTES) throw new Error('manifest.csv is too large');
-  const rows: string[][] = [];
+  const rows: Array<{ cells: string[]; line: number }> = [];
   let row: string[] = [];
   let cell = '';
   let quoted = false;
   let closed = false;
+  let line = 1;
+  let rowStart = 1;
 
   function endCell() {
     row.push(cell);
@@ -81,12 +79,13 @@ function csvRows(input: string): string[][] {
   }
   function endRow() {
     endCell();
-    if (row.some((value) => value.trim())) rows.push(row);
+    if (row.some((value) => value.trim())) rows.push({ cells: row, line: rowStart });
     row = [];
   }
 
   for (let i = 0; i < text.length; i++) {
     const char = text[i]!;
+    if (char === '\n' || (char === '\r' && text[i + 1] !== '\n')) line++;
     if (quoted) {
       if (char !== '"') cell += char;
       else if (text[i + 1] === '"') {
@@ -99,8 +98,9 @@ function csvRows(input: string): string[][] {
     } else if (char === ',') {
       endCell();
     } else if (char === '\r' || char === '\n') {
-      if (char === '\r' && text[i + 1] === '\n') i++;
+      if (char === '\r' && text[i + 1] === '\n') { i++; line++; }
       endRow();
+      rowStart = line;
     } else if (char === '"' && !closed && cell === '') {
       quoted = true;
     } else if (char === '"' || (closed && char !== ' ' && char !== '\t')) {
@@ -124,6 +124,12 @@ export interface OfficialBgmManifestIssue {
   id: string;
   title: string;
   message: string;
+  code: 'columns' | 'duplicate' | 'fields';
+  fields?: string[];
+}
+
+function manifestMasterName(value: string) {
+  return value.trim().replace(/^\.?\/?masters\//i, '');
 }
 
 /** Keep the sheet's words for provenance, and propose matches for the storefront filters. */
@@ -132,52 +138,57 @@ export function parseOfficialBgmManifest(
 ): BatchEntry[] {
   const batchId = batch.parse(batchName);
   const [headings, ...rows] = csvRows(csv);
-  const header = headings?.map((name) => name.trim());
+  const header = headings?.cells.map((name) => name.trim());
   if (!header || new Set(header).size !== header.length || columns.some((name) => !header.includes(name))) {
     throw new Error('manifest.csv is missing required columns or has duplicate headings');
   }
   if (!rows.length || rows.length > OFFICIAL_BGM_BATCH_SIZE) throw new Error('manifest.csv must contain 1–30 tracks');
   const duplicates = (field: 'id' | 'file') => {
-    const keys = rows.map((record) => record[header.indexOf(field)]?.trim().toLowerCase()).filter(Boolean);
+    const column = header.indexOf(field);
+    const keys = rows.map(({ cells }) => {
+      const value = cells[column] ?? '';
+      return (field === 'file' ? manifestMasterName(value) : value.trim()).toLowerCase();
+    }).filter(Boolean);
     return new Set(keys.filter((key, index) => keys.indexOf(key) !== index));
   };
   const duplicateIds = duplicates('id');
   const duplicateFiles = duplicates('file');
 
-  return rows.flatMap((record, index) => {
-    const line = index + 2;
+  return rows.flatMap(({ cells: record, line }) => {
     const row = Object.fromEntries(header.map((name, i) => [name, record[i] ?? '']));
     const trackId = row.id!.trim();
-    // "masters/x.wav" and "x.wav" name the same master.
-    const sourceFile = row.file!.trim().replace(/^\.?\/?masters\//i, '');
-    try {
-      if (record.length !== header.length) throw new Error('the number of fields differs from the header');
-      if (duplicateIds.has(trackId.toLowerCase()) || duplicateFiles.has(sourceFile.toLowerCase())) {
-        throw new Error('duplicate track ID or master filename');
-      }
-      const declaredCover = row.cover?.trim().replace(/^covers\//, '') || undefined;
-      const parsed = officialBgmProvenance.safeParse({
-        batch: batchId, trackId, masterFilename: sourceFile,
-        series: row.series, style: row.style, originalMood: row.mood, originalScenario: row.scenario,
-        model: row.model, modelVersion: row.model_version, seed: row.seed, prompt: row.prompt,
-        generatedAt: row.generated_at, note: row.note, licenseStatus: row.license_status?.trim() || undefined,
-        ...(declaredCover ? { coverFilename: declaredCover } : {}),
-      });
-      if (!parsed.success) throw new Error(parsed.error.issues.map((issue) => issue.path.join('.')).join(', '));
-      const value = parsed.data;
-      return [{
-        title: officialBgmMetadata.shape.title.parse(row.title),
-        provenance: value,
-        genre: category(row.genre?.trim() || value.style, BGM_GENRES),
-        mood: category(row.catalog_mood?.trim() || value.originalMood, BGM_MOODS),
-        scenario: category(row.catalog_scenario?.trim() || value.originalScenario, BGM_SCENARIOS),
-      }];
-    } catch (error) {
-      const message = error instanceof Error ? error.message : 'invalid catalogue row';
+    const sourceFile = manifestMasterName(row.file!);
+    function rejectRow(code: OfficialBgmManifestIssue['code'], message: string, fields?: string[]) {
       if (!reject) throw new Error(`manifest row ${line}: ${message}`);
-      reject({ row: line, id: trackId, title: row.title?.trim() || sourceFile, message });
+      reject({ row: line, id: trackId, title: row.title?.trim() || sourceFile, message, code, fields });
       return [];
     }
+    if (record.length !== header.length) return rejectRow('columns', 'the number of fields differs from the header');
+    if (duplicateIds.has(trackId.toLowerCase()) || duplicateFiles.has(sourceFile.toLowerCase())) {
+      return rejectRow('duplicate', 'duplicate track ID or master filename');
+    }
+    const declaredCover = row.cover?.trim().replace(/^covers\//, '') || undefined;
+    const parsed = officialBgmProvenance.safeParse({
+      batch: batchId, trackId, masterFilename: sourceFile,
+      series: row.series, style: row.style, originalMood: row.mood, originalScenario: row.scenario,
+      model: row.model, modelVersion: row.model_version, seed: row.seed, prompt: row.prompt,
+      generatedAt: row.generated_at, note: row.note, licenseStatus: row.license_status?.trim() || undefined,
+      ...(declaredCover ? { coverFilename: declaredCover } : {}),
+    });
+    const title = officialBgmMetadata.shape.title.safeParse(row.title);
+    if (!parsed.success || !title.success) {
+      const fields = new Set(parsed.success ? [] : parsed.error.issues.map((issue) => issue.path.join('.')));
+      if (!title.success) fields.add('title');
+      return rejectRow('fields', [...fields].join(', '), [...fields]);
+    }
+    const value = parsed.data;
+    return [{
+      title: title.data,
+      provenance: value,
+      genre: category(row.genre?.trim() || value.style, BGM_GENRES),
+      mood: category(row.catalog_mood?.trim() || value.originalMood, BGM_MOODS),
+      scenario: category(row.catalog_scenario?.trim() || value.originalScenario, BGM_SCENARIOS),
+    }];
   });
 }
 
@@ -195,7 +206,8 @@ export type OfficialBgmInventoryReport = z.infer<typeof officialBgmInventoryRepo
 
 export function officialBgmInventoryFor(report: OfficialBgmInventoryReport | undefined, track: OfficialBgmProvenance) {
   if (!report) return undefined;
-  const entries = report.items.filter((item) => item.id === track.trackId && item.file === track.masterFilename);
+  const entries = report.items.filter((item) =>
+    item.id === track.trackId && item.file !== null && manifestMasterName(item.file) === track.masterFilename);
   const match = entries.length === 1 ? entries[0] : undefined;
   if (!match?.audio) throw new Error(`no matching audio record in inventory for ${track.trackId}`);
   return {

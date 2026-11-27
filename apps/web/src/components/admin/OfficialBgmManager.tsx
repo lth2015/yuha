@@ -1,9 +1,9 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   OFFICIAL_BGM_ACTIONS, OFFICIAL_BGM_INTRO_MAX, OFFICIAL_BGM_LANGS, OFFICIAL_BGM_TAGS_MAX, OFFICIAL_BGM_TRANSITIONS,
-  type OfficialBgmAction, type OfficialBgmAdminItem, type OfficialBgmLang,
+  type OfficialBgmAction, type OfficialBgmAdminItem, type OfficialBgmBulkResult, type OfficialBgmLang, type OfficialBgmPublicationQueue,
 } from '@yuha/contracts';
-import { apiFetch } from '../../lib/api';
+import { ApiError, apiFetch } from '../../lib/api';
 import { useI18n } from '../../lib/i18n';
 import { OFFICIAL_BGM_ADMIN, useOfficialBgmCatalog } from '../../lib/official-bgm-catalog';
 import { formatTime } from '../../lib/player';
@@ -86,60 +86,92 @@ function CatalogEditor({ track, onSaved }: { track: OfficialBgmAdminItem; onSave
   );
 }
 
-/**
- * "Approve and publish all" (product owner, 2026-11-27): every draft and
- * reviewed track, in the same two steps as by hand, with one reason. Tracks
- * whose preview is missing stay where they are and are listed.
- */
-function PublishAll({ onDone }: { onDone: () => void }) {
+function PublishAll({ queue, loading, onDone }: {
+  queue?: OfficialBgmPublicationQueue; loading: boolean; onDone: () => void;
+}) {
   const { t } = useI18n();
-  const [open, setOpen] = useState(false);
+  const [scope, setScope] = useState<OfficialBgmPublicationQueue>();
   const [reason, setReason] = useState('');
   const [busy, setBusy] = useState(false);
-  const [outcome, setOutcome] = useState<{ published: number; failed: Array<{ id: string; error: string }> } | null>(null);
-  const [error, setError] = useState(false);
+  const [outcome, setOutcome] = useState<OfficialBgmBulkResult>();
+  const [error, setError] = useState('');
+  const note = useRef<HTMLTextAreaElement>(null);
+  const trigger = useRef<HTMLButtonElement>(null);
+  const toolbarStatus = useRef<HTMLParagraphElement>(null);
+  const feedback = useRef<HTMLParagraphElement>(null);
+  useEffect(() => { if (scope) note.current?.focus(); }, [scope]);
+
+  function close(restoreTrigger: boolean) {
+    setScope(undefined);
+    requestAnimationFrame(() => {
+      const button = trigger.current;
+      const target = restoreTrigger && button && !button.disabled ? button : feedback.current ?? toolbarStatus.current;
+      target?.focus();
+    });
+  }
 
   async function run() {
+    if (!scope || busy || reason.trim().length < 5) return;
     setBusy(true);
-    setError(false);
+    setError('');
     try {
-      const res = await apiFetch<{ published: number; failed: Array<{ id: string; error: string }> }>(
-        `${OFFICIAL_BGM_ADMIN}/publish-all`, { method: 'POST', body: { reason: reason.trim() } });
-      setOutcome(res);
-      setOpen(false);
+      setOutcome(await apiFetch<OfficialBgmBulkResult>(`${OFFICIAL_BGM_ADMIN}/publish-all`, {
+        method: 'POST', body: { reason: reason.trim(), revision: scope.revision },
+      }));
+      close(false);
       onDone();
-    } catch {
-      setError(true);
+    } catch (error) {
+      if (error instanceof ApiError && error.status === 409) {
+        setError('market.publishAll.changed');
+        close(false);
+        onDone();
+      } else {
+        setError('market.admin.saveError');
+      }
     } finally {
       setBusy(false);
     }
   }
 
   return (
-    <div className="market-publish-all stack">
-      {!open && <button type="button" className="btn btn--primary" onClick={() => { setOpen(true); setOutcome(null); }}>{t('market.publishAll')}</button>}
-      {open && (
+    <div className="market-publish-all">
+      <div className="market-admin__toolbar">
+        <p className="small muted" ref={toolbarStatus} tabIndex={-1}>{queue
+          ? t(queue.count ? 'market.publishAll.pending' : 'market.publishAll.none', { count: queue.count })
+          : t(loading ? 'market.publishAll.loading' : 'market.publishAll.unavailable')}</p>
+        {!scope && <button ref={trigger} type="button" className="btn btn--primary"
+          disabled={loading || !queue?.count} onClick={() => {
+            setScope(queue); setError(''); setOutcome(undefined); setReason('');
+          }}>{t('market.publishAll')}</button>}
+      </div>
+      {scope && (
         <form className="market-admin__confirm stack" onSubmit={(event) => { event.preventDefault(); void run(); }}>
-          <p className="small">{t('market.publishAll.help')}</p>
+          <h3>{t('market.publishAll.scope', { count: scope.count })}</h3>
+          <p className="small muted">{t('market.publishAll.help')}</p>
           <label className="field">
             <span>{t('market.admin.reason')}</span>
-            <textarea required minLength={5} maxLength={500} rows={2} value={reason} disabled={busy} onChange={(e) => setReason(e.target.value)} />
+            <textarea ref={note} required minLength={5} maxLength={500} rows={2} value={reason} disabled={busy} onChange={(e) => setReason(e.target.value)} />
           </label>
-          {error && <p role="alert">{t('market.admin.saveError')}</p>}
           <div className="market-admin__actions">
             <button type="submit" className="btn btn--primary" disabled={busy || reason.trim().length < 5}>
               {t(busy ? 'market.publishAll.running' : 'market.publishAll.confirm')}
             </button>
-            <button type="button" className="btn" disabled={busy} onClick={() => setOpen(false)}>{t('market.close')}</button>
+            <button type="button" className="btn" disabled={busy} onClick={() => close(true)}>{t('market.admin.cancel')}</button>
           </div>
         </form>
       )}
-      {outcome && (
-        <p role="status" className="market-admin__result">
-          {t('market.publishAll.done', { count: outcome.published })}
-          {outcome.failed.length > 0 && ` ${t('market.publishAll.failed', { count: outcome.failed.length })}`}
+      {error && <p className="small market-admin__problem" role="alert" ref={feedback} tabIndex={-1}>{t(error)}</p>}
+      {outcome && <div className="market-admin__bulk-result">
+        <p role="status" ref={feedback} tabIndex={-1}>
+          {t('market.publishAll.done', { count: outcome.published })}{' '}
+          {outcome.failed.length > 0 && t('market.publishAll.failed', { count: outcome.failed.length })}
         </p>
-      )}
+        {outcome.failed.length > 0 && <ul className="small">
+          {outcome.failed.map((item) => <li key={item.id}>
+            <strong>{item.title || item.id}</strong>{' · '}{t(`market.publishAll.issue.${item.reason ?? 'save_failed'}`)}
+          </li>)}
+        </ul>}
+      </div>}
     </div>
   );
 }
@@ -191,111 +223,143 @@ function ImportedBgmDetails({ track }: { track: OfficialBgmAdminItem }) {
 export function OfficialBgmManager() {
   const { t } = useI18n();
   const catalog = useOfficialBgmCatalog<OfficialBgmAdminItem>(OFFICIAL_BGM_ADMIN);
+  const [view, setView] = useState<'review' | 'import'>('review');
+  const reviewHeading = useRef<HTMLHeadingElement>(null);
+  const importHeading = useRef<HTMLHeadingElement>(null);
   const [preview, setPreview] = useState<OfficialBgmAdminItem | null>(null);
   const previewButton = useRef<HTMLButtonElement | null>(null);
   const [confirmation, setConfirmation] = useState<{ track: OfficialBgmAdminItem; action: OfficialBgmAction['action'] } | null>(null);
   const [reason, setReason] = useState('');
   const [saving, setSaving] = useState(false);
   const [result, setResult] = useState('');
-  const [saveError, setSaveError] = useState(false);
+  const [saveError, setSaveError] = useState('');
+  const trackNote = useRef<HTMLTextAreaElement>(null);
+  useEffect(() => { if (confirmation) trackNote.current?.focus(); }, [confirmation]);
+
+  function closeTrackForm(trackId: string) {
+    setConfirmation(null);
+    requestAnimationFrame(() => document.getElementById(`bgm-track-${trackId}`)?.focus());
+  }
+
+  function openPanel(panel: typeof view) {
+    setView(panel);
+    requestAnimationFrame(() => (panel === 'review' ? reviewHeading : importHeading).current?.focus());
+  }
 
   async function save() {
     if (!confirmation || saving || reason.trim().length < 5) return;
     const { track, action } = confirmation;
     setSaving(true);
-    setSaveError(false);
+    setSaveError('');
     try {
-      const updated = await apiFetch<OfficialBgmAdminItem>(`${OFFICIAL_BGM_ADMIN}/${track.id}/state`, {
+      const { pendingPublication, ...updated } = await apiFetch<OfficialBgmAdminItem & { pendingPublication?: OfficialBgmPublicationQueue }>(
+        `${OFFICIAL_BGM_ADMIN}/${track.id}/state`, {
         method: 'POST', body: { action, reason: reason.trim() },
       });
-      catalog.replace(updated);
-      setConfirmation(null);
+      catalog.replace(updated, pendingPublication);
+      closeTrackForm(track.id);
       setResult(t('market.admin.saved', { title: updated.title, state: t(`market.state.${updated.state}`) }));
-    } catch {
-      setSaveError(true);
+    } catch (error) {
+      const previewMissing = error instanceof ApiError
+        && (error.details as { reason?: string } | undefined)?.reason === 'preview_missing';
+      setSaveError(previewMissing ? 'market.publishAll.issue.preview_missing' : 'market.admin.saveError');
     } finally {
       setSaving(false);
     }
   }
 
   return (
-    <section className="market-admin stack" aria-labelledby="market-admin-title">
-      <header>
-        <h2 id="market-admin-title">{t('market.catalog')}</h2>
-        <p className="muted">{t('market.admin.lede')}</p>
-      </header>
-      <OfficialBgmBatchImport onImported={catalog.reload} />
-      <PublishAll onDone={catalog.reload} />
-      {preview && <OfficialBgmPreview key={preview.id} track={preview} endpoint={OFFICIAL_BGM_ADMIN}
-        onClose={() => { setPreview(null); previewButton.current?.focus(); }} />}
-      {result && <p role="status" className="market-admin__result">{result}</p>}
-      {catalog.items.length === 0 && catalog.pending && <Loading />}
-      {catalog.items.length === 0 && !catalog.pending && !catalog.failed &&
-        <p role="status" className="market-empty">{t('market.admin.empty')}</p>}
-      <ul className="market-admin__list">
-        {catalog.items.map((track) => (
-          <li className="market-admin__track" key={track.id}>
-            <div className="market-admin__info">
-              <h3>{track.title}</h3>
-              <Badge>{t(`market.state.${track.state}`)}</Badge>
-              <p className="small muted">{track.sourceKey} · {formatTime(track.durationSeconds)} · {t(`bgm.genre.${track.genre}`)}</p>
-              <p className="small muted">{t('market.admin.excerpt', {
-                start: formatTime(track.previewStartSeconds), length: formatTime(track.previewSeconds),
-              })}</p>
-              <ImportedBgmDetails track={track} />
-              <CatalogEditor track={track} onSaved={(updated) => {
-                catalog.replace(updated);
-                setResult(t('market.copy.saved', { title: updated.title }));
-              }} />
-            </div>
-            <div className="market-admin__actions">
-              <button type="button" className="btn" aria-pressed={preview?.id === track.id}
-                aria-label={t('market.previewTrack', { title: track.title })}
-                onClick={(event) => {
-                  previewButton.current = event.currentTarget;
-                  setPreview((current) => current?.id === track.id ? null : track);
-                }}>{t('market.preview')}</button>
-              {OFFICIAL_BGM_ACTIONS.filter((action) => OFFICIAL_BGM_TRANSITIONS[track.state][action]).map((action) => (
-                <button type="button" className={action === 'publish' ? 'btn btn--primary' : 'btn'} key={action} disabled={saving}
-                  onClick={() => {
-                    setReason('');
-                    setResult('');
-                    setSaveError(false);
-                    setConfirmation({ track, action });
-                  }}>{t(`market.action.${action}`)}</button>
-              ))}
-            </div>
-            {confirmation?.track.id === track.id && (
-              <form className="market-admin__confirm stack" onSubmit={(event) => { event.preventDefault(); void save(); }}>
-                <h4>{t('market.admin.confirm', { action: t(`market.action.${confirmation.action}`), title: track.title })}</h4>
-                <p className="small muted">{t(`market.admin.help.${confirmation.action}`)}</p>
-                <label className="field">
-                  <span>{t('market.admin.reason')}</span>
-                  <textarea required minLength={5} maxLength={500} rows={2} value={reason} disabled={saving}
-                    onChange={(event) => setReason(event.target.value)} />
-                </label>
-                {saveError && <p role="alert">{t('market.admin.saveError')}</p>}
-                <div className="market-admin__actions">
-                  <button type="submit" className="btn btn--primary" disabled={saving || reason.trim().length < 5}>
-                    {t(saving ? 'market.admin.saving' : 'market.admin.submit')}
-                  </button>
-                  <button type="button" className="btn" disabled={saving} onClick={() => setConfirmation(null)}>{t('market.close')}</button>
-                </div>
-              </form>
-            )}
-          </li>
-        ))}
-      </ul>
-      {catalog.failed ? (
-        <div className="market-empty">
-          <p role="alert">{t('market.catalogError')}</p>
-          <button type="button" className="btn" onClick={catalog.retry}>{t('market.retry')}</button>
-        </div>
-      ) : catalog.nextOffset !== null && (
-        <button type="button" className="btn market-more" disabled={catalog.pending} onClick={catalog.loadMore}>
-          {t(catalog.pending ? 'market.loadingMore' : 'market.more')}
-        </button>
-      )}
-    </section>
+    <div className="market-admin">
+      <div className="market-admin__switch" role="group" aria-label={t('market.admin.tab')}>
+        <button type="button" className="btn" aria-controls="market-review-panel" aria-pressed={view === 'review'}
+          onClick={() => setView('review')}>{t('market.admin.review')}</button>
+        <button type="button" className="btn" aria-controls="market-import-panel" aria-pressed={view === 'import'}
+          onClick={() => { setPreview(null); setView('import'); }}>{t('market.import.title')}</button>
+      </div>
+      <section className="market-admin__panel" id="market-import-panel" hidden={view !== 'import'} aria-labelledby="market-import-title">
+        <h2 id="market-import-title" ref={importHeading} tabIndex={-1}>{t('market.import.title')}</h2>
+        <OfficialBgmBatchImport onImported={catalog.reload} onReview={() => openPanel('review')} />
+      </section>
+      <section className="market-admin__panel" id="market-review-panel" hidden={view !== 'review'} aria-labelledby="market-review-title">
+        <header>
+          <h2 id="market-review-title" ref={reviewHeading} tabIndex={-1}>{t('market.admin.review')}</h2>
+          <p className="small muted">{t('market.admin.lede')}</p>
+        </header>
+        <PublishAll queue={catalog.failed ? undefined : catalog.pendingPublication} loading={catalog.pending} onDone={catalog.reload} />
+        {result && <p role="status" className="market-admin__result">{result}</p>}
+        {catalog.items.length === 0 && catalog.pending && <Loading />}
+        {catalog.items.length === 0 && !catalog.pending && !catalog.failed &&
+          <div className="market-empty">
+            <p>{t('market.admin.empty')}</p>
+            <button type="button" className="btn" onClick={() => openPanel('import')}>{t('market.import.title')}</button>
+          </div>}
+        <ul className="market-admin__list">
+          {catalog.items.map((track) => (
+            <li className="market-admin__track" key={track.id}>
+              <div className="market-admin__info">
+                <h3 id={`bgm-track-${track.id}`} tabIndex={-1}>{track.title}</h3>
+                <Badge>{t(`market.state.${track.state}`)}</Badge>
+                <p className="small muted">{track.sourceKey} · {formatTime(track.durationSeconds)} · {t(`bgm.genre.${track.genre}`)}</p>
+                <p className="small muted">{t('market.admin.excerpt', {
+                  start: formatTime(track.previewStartSeconds), length: formatTime(track.previewSeconds),
+                })}</p>
+                <ImportedBgmDetails track={track} />
+                <CatalogEditor track={track} onSaved={(updated) => {
+                  catalog.replace(updated);
+                  setResult(t('market.copy.saved', { title: updated.title }));
+                }} />
+              </div>
+              <div className="market-admin__actions">
+                <button type="button" className="btn" aria-pressed={preview?.id === track.id}
+                  aria-label={t('market.previewTrack', { title: track.title })}
+                  onClick={(event) => {
+                    previewButton.current = event.currentTarget;
+                    setPreview((current) => current?.id === track.id ? null : track);
+                  }}>{t('market.preview')}</button>
+                {OFFICIAL_BGM_ACTIONS.filter((action) => OFFICIAL_BGM_TRANSITIONS[track.state][action]).map((action) => (
+                  <button type="button" className={action === 'publish' ? 'btn btn--primary' : 'btn'} key={action} disabled={saving}
+                    onClick={() => {
+                      setReason('');
+                      setResult('');
+                      setSaveError('');
+                      setConfirmation({ track, action });
+                    }}>{t(`market.action.${action}`)}</button>
+                ))}
+              </div>
+              {preview?.id === track.id && <OfficialBgmPreview track={preview} endpoint={OFFICIAL_BGM_ADMIN}
+                onClose={() => { setPreview(null); previewButton.current?.focus(); }} />}
+              {confirmation?.track.id === track.id && (
+                <form className="market-admin__confirm stack" onSubmit={(event) => { event.preventDefault(); void save(); }}>
+                  <h4>{t('market.admin.confirm', { action: t(`market.action.${confirmation.action}`), title: track.title })}</h4>
+                  <p className="small muted">{t(`market.admin.help.${confirmation.action}`)}</p>
+                  <label className="field">
+                    <span>{t('market.admin.reason')}</span>
+                    <textarea ref={trackNote} required minLength={5} maxLength={500} rows={2} value={reason} disabled={saving}
+                      onChange={(event) => setReason(event.target.value)} />
+                  </label>
+                  {saveError && <p className="market-admin__problem" role="alert">{t(saveError)}</p>}
+                  <div className="market-admin__actions">
+                    <button type="submit" className="btn btn--primary" disabled={saving || reason.trim().length < 5}>
+                      {t(saving ? 'market.admin.saving' : 'market.admin.submit')}
+                    </button>
+                    <button type="button" className="btn" disabled={saving} onClick={() => closeTrackForm(track.id)}>{t('market.admin.cancel')}</button>
+                  </div>
+                </form>
+              )}
+            </li>
+          ))}
+        </ul>
+        {catalog.failed ? (
+          <div className="market-empty">
+            <p role="alert">{t('market.catalogError')}</p>
+            <button type="button" className="btn" onClick={catalog.retry}>{t('market.retry')}</button>
+          </div>
+        ) : catalog.nextOffset !== null && (
+          <button type="button" className="btn market-more" disabled={catalog.pending} onClick={catalog.loadMore}>
+            {t(catalog.pending ? 'market.loadingMore' : 'market.more')}
+          </button>
+        )}
+      </section>
+    </div>
   );
 }
