@@ -15,3 +15,4 @@ export * from './attribution.js';
 export * from './season.js';
 export * from './bgm.js';
 export * from './trusted-timeline.js';
+export * from './gift-invitation.js';

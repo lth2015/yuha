@@ -40,7 +40,13 @@ const SECRET_PARAMS = new Set([
   'email',
 ]);
 
-export function redactUrlSecrets(url: string): string {
+export function redactUrlSecrets(raw: string): string {
+  /*
+   * A gift invitation's token is in the path, not the query
+   * (docs/GIFT_INVITATION_PLAN.md): /gift/{token} and /v1/gift/{token}/….
+   * The path stays readable; the token does not stay at all.
+   */
+  const url = raw.replace(/(\/gift\/)[A-Za-z0-9_-]+/g, '$1[redacted]');
   const q = url.indexOf('?');
   if (q < 0) return url;
   const path = url.slice(0, q);

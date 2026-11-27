@@ -8,6 +8,7 @@ import { deleteLyricProposals,
   failAccountDeletion,
   forgetAsset,
   forgetShareCard,
+  revokeGiftInvitationsOf,
   getShareCard,
   query,
   recordAccountDeletionOutcome,
@@ -121,6 +122,9 @@ export async function executeAccountDeletion(
         await forgetAsset(asset.id);
         outcome.objectsRemoved += 1;
       }
+
+      // Invitations to it stop and their words go (docs/GIFT_INVITATION_PLAN.md).
+      await revokeGiftInvitationsOf({ trackId: track.id });
 
       // The link-preview image is the owner's too (migration 0026). Same rule
       // as above: the row goes only once the object has.
