@@ -36,6 +36,21 @@ describe('what counts as a marker', () => {
     expect(sectionName('(chorus)')).toBe('chorus');
   });
 
+  it('takes Markdown headings and bold section names from pasted lyrics (2026-11-27)', () => {
+    // The production song: a `#` title and bold section names were sung lines.
+    expect(sectionName('# 晚霞依旧')).toBe('晚霞依旧');
+    expect(sectionName('## Verse 1')).toBe('Verse 1');
+    expect(sectionName('**主歌一**')).toBe('主歌一');
+    expect(sectionName('**副歌**')).toBe('副歌');
+    expect(sectionName('__Chorus__')).toBe('Chorus');
+    expect(canonicalSectionTag('主歌一')).toBe('verse');
+    expect(canonicalSectionTag('尾声')).toBe('outro');
+    // A bold line that is not a section name is still sung, and a hashtag is not a heading.
+    expect(sectionName('**我爱你**')).toBeNull();
+    expect(sectionName('#love you')).toBeNull();
+    expect(withCanonicalSections('# 晚霞依旧\n**主歌一**\n风从远方')).toBe('# 晚霞依旧\n[verse]\n风从远方');
+  });
+
   it('does not touch a line that merely contains brackets', () => {
     expect(sectionName('I called you [twice] last night')).toBeNull();
     expect(sectionName('')).toBeNull();

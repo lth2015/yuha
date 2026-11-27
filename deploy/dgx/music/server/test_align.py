@@ -1,6 +1,6 @@
 """No model/GPU dependency: exercise the same alignment contract as /v1/align."""
 import unittest
-from align import align_lines, fuse_lines, guess_language, place_units, qwen_lines, voiced_intervals
+from align import align_lines, fuse_lines, guess_language, parse_lyrics, place_units, qwen_lines, voiced_intervals
 
 
 class SyncedLyricsTests(unittest.TestCase):
@@ -160,6 +160,21 @@ class QwenLinesTests(unittest.TestCase):
             self.assertIsInstance(l['start'], float)
             self.assertIsInstance(l['end'], float)
 
+    def test_lines_piled_onto_one_instant_are_never_lit(self):
+        # The production case (2026-11-27): the voice ran out and the aligner
+        # stacked the remaining lines at one time, a few hundredths each.
+        units = chars('晚风吹过街角', 2) + chars('我等你回来', 9.0, 0.002) + chars('天上的星星', 9.01, 0.002)
+        lines = qwen_lines(self.LYRICS, units, 15, voiced=[(1.9, 12)])
+        self.assertEqual(lines[0]['confidence'], 1.0)
+        self.assertEqual(lines[1]['confidence'], 0.0)  # 5 characters in 0.01 s
+        self.assertEqual(lines[2]['confidence'], 0.0)  # and stacked on it
+
+    def test_a_fast_but_singable_line_stays_trusted(self):
+        # Eight characters a second is quick singing, not a pile-up.
+        units = chars('晚风吹过街角', 2) + chars('我等你回来', 6, 0.125) + chars('天上的星星', 10)
+        lines = qwen_lines(self.LYRICS, units, 15)
+        self.assertEqual([l['confidence'] for l in lines], [1.0, 1.0, 1.0])
+
 
 def L(start, conf=1.0):
     return {"text": "x", "section": "", "start": start, "end": start + 2.0, "confidence": conf}
@@ -213,3 +228,11 @@ class FuseLinesTests(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
+
+
+class MarkdownSectionTests(unittest.TestCase):
+    """Pasted Markdown (2026-11-27): headings and bold section names are not sung lines."""
+
+    def test_headings_and_bold_sections_are_markers(self):
+        got = parse_lyrics("# 晚霞依旧\n**主歌一**\n风从远方\n**副歌**\n晚霞依旧盛开\n**我爱你**\n**尾声**\n又是一片云海")
+        self.assertEqual(got, [("主歌一", "风从远方"), ("副歌", "晚霞依旧盛开"), ("副歌", "**我爱你**"), ("尾声", "又是一片云海")])
