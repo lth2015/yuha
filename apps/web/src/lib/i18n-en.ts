@@ -7,6 +7,7 @@ import type { Dict } from './i18n-dict';
  */
 const en: Dict = {
   "market.admin.tab": "Manage official BGM",
+  "market.admin.nav": "Official BGM",
   "market.admin.entryHelp": "Import official tracks, review previews, and list them in the BGM library.",
   "market.admin.review": "Review and list",
   "market.admin.cancel": "Cancel",

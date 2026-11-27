@@ -7,6 +7,7 @@ import type { Dict } from './i18n-dict';
  */
 const zh: Dict = {
   "market.admin.tab": "管理官方 BGM",
+  "market.admin.nav": "BGM 管理",
   "market.admin.entryHelp": "导入官方曲目、试听审核，并上架到访客曲库。",
   "market.admin.review": "审核与上架",
   "market.admin.cancel": "取消",

@@ -673,7 +673,7 @@ const TABS = [
   { key: 'ops', path: '/admin/ops', label: 'admin.tab.ops' },
   { key: 'review', path: '/admin/review', label: 'admin.tab.review' },
   { key: 'audit', path: '/admin/audit', label: 'admin.tab.audit' },
-  { key: 'marketplace', path: '/admin/marketplace', label: 'market.admin.tab' },
+  { key: 'marketplace', path: '/admin/marketplace', label: 'market.admin.nav' },
 ] as const;
 
 export default function Admin() {

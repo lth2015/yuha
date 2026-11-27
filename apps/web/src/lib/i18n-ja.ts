@@ -7,6 +7,7 @@ import type { Dict } from './i18n-dict';
  */
 const ja: Dict = {
   "market.admin.tab": "公式BGM管理",
+  "market.admin.nav": "公式BGM管理",
   "market.admin.entryHelp": "公式曲を取り込み、試聴して審査し、BGMライブラリに公開します。",
   "market.admin.review": "審査と公開",
   "market.admin.cancel": "キャンセル",
