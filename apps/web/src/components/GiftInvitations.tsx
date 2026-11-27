@@ -4,6 +4,7 @@ import { apiFetch } from '../lib/api';
 import { useI18n } from '../lib/i18n';
 import { copyText } from '../lib/share';
 import { giftEvent } from '../lib/gift';
+import { greetingCardFile } from '../lib/share-art';
 import { ErrorNotice } from './common';
 
 interface Invitation {
@@ -24,8 +25,9 @@ interface Invitation {
  * sheet. Below, the song's invitations, each revocable on its own. The card
  * says plainly that anyone holding the link can open it.
  */
-export function GiftInvitations({ trackId, title }: { trackId: string; title: string }) {
-  const { t } = useI18n();
+export function GiftInvitations({ trackId, title, coverSeed, styles }: { trackId: string; title: string; coverSeed: number; styles: string[] }) {
+  const { t, lang } = useI18n();
+  const [carding, setCarding] = useState(false);
   const [items, setItems] = useState<Invitation[]>([]);
   const [form, setForm] = useState({ recipientName: '', senderName: '', message: '', theme: 'warm' as Invitation['theme'] });
   const [made, setMade] = useState<{ url: string; token: string } | null>(null);
@@ -57,6 +59,41 @@ export function GiftInvitations({ trackId, title }: { trackId: string; title: st
     if (!window.confirm(t('giftInvite.revoke.confirm'))) return;
     await apiFetch(`/v1/gifts/${id}/revoke`, { method: 'POST' }).catch(setError);
     void load();
+  };
+  /**
+   * The greeting card (user feedback, 2026-11-27): the invitation as an image
+   * with a QR code to its link, to print or post. Handed to the share sheet
+   * where files can be shared, else saved. Only while the link is on screen:
+   * the link is shown once and never stored, so neither is the card.
+   */
+  const saveCard = async () => {
+    if (!made) return;
+    setCarding(true);
+    try {
+      const file = await greetingCardFile({ title, coverSeed, styles }, made.url, {
+        to: t('giftCard.to', { name: form.recipientName.trim() }),
+        from: form.senderName.trim() ? t('giftCard.from', { name: form.senderName.trim() }) : '',
+        message: form.message.trim(),
+        scan: t('giftCard.scan'),
+        site: 'yuha.studio',
+        lang,
+      });
+      giftEvent(made.token, 'share');
+      if (navigator.canShare?.({ files: [file] })) {
+        await navigator.share({ files: [file], title }).catch(() => undefined);
+      } else {
+        const href = URL.createObjectURL(file);
+        const a = document.createElement('a');
+        a.href = href;
+        a.download = file.name;
+        a.click();
+        URL.revokeObjectURL(href);
+      }
+    } catch (err) {
+      setError(err);
+    } finally {
+      setCarding(false);
+    }
   };
   const share = async () => {
     if (!made) return;
@@ -117,7 +154,11 @@ export function GiftInvitations({ trackId, title }: { trackId: string; title: st
             <button type="button" className="btn" onClick={async () => { giftEvent(made.token, 'share'); setCopied(await copyText(made.url)); }}>
               {copied ? t('giftInvite.copied') : t('giftInvite.copy')}
             </button>
+            <button type="button" className="btn" disabled={carding} onClick={() => void saveCard()}>
+              {carding ? t('giftCard.making') : t('giftCard.save')}
+            </button>
           </div>
+          <p className="small muted">{t('giftCard.hint')}</p>
           <p className="small muted">{t('giftInvite.once')}</p>
         </div>
       )}

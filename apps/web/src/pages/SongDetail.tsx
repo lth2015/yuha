@@ -873,7 +873,7 @@ export default function SongDetail() {
 
           {/* A music gift invitation (docs/GIFT_INVITATION_PLAN.md): a link of its
               own, revocable, and no need to make the song public. */}
-          {manages && song.state === 'deliverable' && <GiftInvitations trackId={song.trackId} title={song.title} />}
+          {manages && song.state === 'deliverable' && <GiftInvitations trackId={song.trackId} title={song.title} coverSeed={song.coverSeed} styles={song.styles ?? []} />}
 
           {/* The photo MV (docs/PHOTO_MV_SPEC.md): the owner's, once the song plays,
               and only where the switch is on. */}

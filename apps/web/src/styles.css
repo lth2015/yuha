@@ -3122,6 +3122,10 @@ textarea.is-full { border-color: var(--danger); }
 .gift__play { min-width: 160px; }
 .gift__seek { width: 100%; accent-color: var(--gift-accent); }
 .gift__time { display: flex; gap: var(--s3); justify-content: center; align-items: center; font-size: var(--t-caption); color: var(--muted); }
+.gift__lyrics { background: rgba(255, 255, 255, 0.55); border-radius: 16px; padding: var(--s2) var(--s3); }
+.gift__lyric-lines { list-style: none; margin: 0; padding: 0; max-height: 280px; overflow-y: auto; overscroll-behavior: contain; display: grid; gap: 6px; line-height: 1.6; color: var(--muted); overflow-wrap: anywhere; }
+.gift__lyric.is-section-start { margin-top: var(--s2); }
+.gift__lyric.is-active { color: var(--ink); font-weight: 600; }
 .gift__letter { text-align: left; background: rgba(255, 255, 255, 0.7); border-radius: 16px; padding: var(--s3); line-height: 1.8; overflow-wrap: anywhere; }
 .gift__letter p { margin: 0 0 var(--s1); }
 .gift__onward { display: grid; gap: var(--s2); justify-items: center; }
