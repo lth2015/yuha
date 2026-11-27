@@ -17,6 +17,7 @@ import { SyncedLyrics } from './SyncedLyrics';
 export function NowPlaying({
   lyrics,
   timings,
+  still = false,
   onClose,
   onDownload,
   downloading = false,
@@ -29,6 +30,8 @@ export function NowPlaying({
   /** undefined means its detail payload is still loading; null is instrumental. */
   lyrics: string | null | undefined;
   timings?: LyricTimings | null;
+  /** The platform is still syncing and nothing heard it yet: the words, unlit (SyncedLyrics `still`). */
+  still?: boolean;
   onClose: () => void;
   onDownload?: () => void;
   /** Pending state for the download, so the press has a visible answer. */
@@ -135,6 +138,7 @@ export function NowPlaying({
                 duration={duration || 120}
                 currentTime={player.currentTime}
                 timings={timings}
+                still={still}
                 onSeek={player.seek}
               />
             </div>

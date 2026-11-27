@@ -11,7 +11,7 @@ import { spawnSync } from 'node:child_process';
 import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { claimOutboxBatch, createSceneMvDraft, execute, getSceneMv, queryOne, queueSceneMv, withTx } from '@yuha/db';
+import { claimOutboxBatch, createSceneMvDraft, execute, getSceneMv, query, queryOne, queueSceneMv, withTx } from '@yuha/db';
 import { DemoVideoProvider } from '@yuha/providers';
 import { runJobStep } from '@yuha/worker/pipeline';
 import { sceneMvTick } from '@yuha/worker/scene-mv';
@@ -81,6 +81,8 @@ describe('composing a scene MV', () => {
     const user = await h.createUser({ credits: 10 });
     const track = await song(user);
     const id = await drawn(user, track, 4, 16);
+    // Heard by the aligner, so its lines may be burned in (isTrustedLine).
+    await query(`UPDATE tracks SET lyric_timings = JSON_SET(lyric_timings, '$.source', 'aligned') WHERE id = ?`, [track]);
     const shotKeys = (await getSceneMv(id))!.shots.map((s) => s.clip_key!);
     const logged: Record<string, unknown>[] = [];
     expect(await composeNextSceneMv({ ...composeDeps(), log: (_l: string, _m: string, extra?: Record<string, unknown>) => void logged.push(extra ?? {}) })).toBe(id);
@@ -97,6 +99,17 @@ describe('composing a scene MV', () => {
     expect(days).toBeLessThan(7.1);
     for (const k of shotKeys) await expect(h.ctx.storage.get('delivery', k)).rejects.toThrow();
     expect(await composeNextSceneMv(composeDeps())).toBeNull();
+  }, 120_000);
+
+  it('burns no words from an estimate', async () => {
+    const user = await h.createUser({ credits: 10 });
+    const track = await song(user);
+    expect((await queryOne<{ s: string }>(`SELECT JSON_UNQUOTE(JSON_EXTRACT(lyric_timings, '$.source')) AS s FROM tracks WHERE id = ?`, [track]))?.s).toBe('estimated');
+    const id = await drawn(user, track, 4, 16);
+    const logged: Record<string, unknown>[] = [];
+    expect(await composeNextSceneMv({ ...composeDeps(), log: (_l: string, _m: string, extra?: Record<string, unknown>) => void logged.push(extra ?? {}) })).toBe(id);
+    expect(logged.find((e) => 'subtitles' in e)?.subtitles).toBe(false);
+    expect((await getSceneMv(id))?.status).toBe('ready');
   }, 120_000);
 
   it('fails the MV, and frees the owner’s slot, when it cannot be composed', async () => {

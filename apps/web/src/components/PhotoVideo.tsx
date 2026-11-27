@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { apiPostForBlob } from '../lib/api';
 import { useI18n } from '../lib/i18n';
 import { useSession } from '../lib/session';
-import { resolveLyricTimings } from '../lib/lyrics';
+import { resolveLyricTimings, timedLinesFor } from '../lib/lyrics';
 import { drawPhotoFrame, frameJpeg, loadPhoto, planPhotoClip, type ShareLabels, type ShareSong } from '../lib/share-art';
 import { ErrorNotice } from './common';
 import { posterOf, saveLocalVideo, setLocalPoster, type SaveOutcome } from '../lib/local-videos';
@@ -93,6 +93,7 @@ export function PhotoVideo({
   const lengths = [30, 60].filter((n) => n < song.durationSeconds - 1);
   // Lyrics placed by counting characters drift from the singing; say so before
   // the video is made, and where to fix it (the song page's timing tool).
+  const strict = Boolean(runtime?.features?.lyricStrictTimeline);
   const estimated = Boolean(lyrics) && resolveLyricTimings(lyrics ?? '', song.durationSeconds, lyricTimings).source === 'estimated';
   const [error, setError] = useState<unknown>(null);
   /** The timing workspace is open (in this card, beside what it changes). */
@@ -173,7 +174,8 @@ export function PhotoVideo({
     setKept(null);
     setResult({ state: 'making' });
     try {
-      const lines = lyrics ? resolveLyricTimings(lyrics, song.durationSeconds, lyricTimings).lines : [];
+      // Only trusted lines are drawn under the shared rule (isTrustedLine); an estimate makes a video without words.
+      const lines = lyrics ? timedLinesFor(resolveLyricTimings(lyrics, song.durationSeconds, lyricTimings), strict) : [];
       const plan = planPhotoClip(lines, song.durationSeconds, photos.length, length);
       const frames = [];
       for (const f of plan.frames) {

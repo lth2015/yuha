@@ -59,6 +59,7 @@ export default async function publicRoutes(app: FastifyInstance, opts: { ctx: Ap
         guestTrialEnabled: features.guestTrialEnabled,
         lyricAutoAlign: features.lyricAutoAlignEnabled && realAligner(ctx),
         bgmStudio: ctx.config.BGM_STUDIO === 'all' || (ctx.config.BGM_STUDIO === 'staff' && staff),
+        lyricStrictTimeline: ctx.config.LYRIC_STRICT_TIMELINE === 'all' || (ctx.config.LYRIC_STRICT_TIMELINE === 'staff' && staff),
         // The AI scene MV: staff try it before the switch is on; nobody has it without a video service.
         sceneMv: !!ctx.video && (features.sceneMvEnabled || staff),
         commercialDeliveryEnabled: features.commercialDeliveryEnabled,
