@@ -150,6 +150,38 @@ class AlignRouteTests(unittest.TestCase):
         self.assertEqual(out["heard"], "mix")
         self.assertEqual(out["coverage"], 1.0)
 
+    def run_qwen(self, qwen_mod, heard=lambda audio: STEM_WORDS):
+        with patch.dict(sys.modules, {"qwen_align": qwen_mod}):
+            return self.run_align(fake_separate(), heard, method="qwen")
+
+    def test_qwen_times_every_line_and_whisper_still_runs_for_its_confidence(self):
+        mod = types.ModuleType("qwen_align")
+        mod.align = lambda stem, lyrics, lang: [(c, 1.0 + i * 0.3, 1.3 + i * 0.3) for i, c in enumerate("晚风吹过街角")] + \
+            [(c, 10.4 + i * 0.3, 10.7 + i * 0.3) for i, c in enumerate("我等你回来")]
+        out, calls = self.run_qwen(mod)
+        self.assertEqual(out["method"], "qwen")
+        self.assertEqual(out["model"], "qwen3-forced-aligner-0.6b")
+        self.assertEqual([l["start"] for l in out["lines"]], [1.0, 10.4])
+        self.assertTrue(all("confidence" in l for l in out["lines"]))
+        self.assertEqual(len(calls), 1)  # Whisper heard the stem, for the agreement check
+        self.assertIn("whisper_coverage", out)
+
+    def test_a_qwen_failure_leaves_whisper_s_answer(self):
+        mod = types.ModuleType("qwen_align")
+        def boom(*a):
+            raise RuntimeError("qwen worker timed out")
+        mod.align = boom
+        out, _ = self.run_qwen(mod)
+        self.assertEqual(out["method"], "whisper")
+        self.assertEqual(out["heard"], "vocal_stem")
+
+    def test_qwen_with_too_few_trusted_lines_leaves_whisper_s_answer(self):
+        # Both lines placed where Whisper heard them whole, far away: neither trusted.
+        mod = types.ModuleType("qwen_align")
+        mod.align = lambda stem, lyrics, lang: [(c, 30.0 + i * 0.3, 30.3 + i * 0.3) for i, c in enumerate("晚风吹过街角我等你回来")]
+        out, _ = self.run_qwen(mod, heard=lambda audio: MIX_WORDS)
+        self.assertEqual(out["method"], "whisper")
+
     def test_a_song_partly_heard_comes_back_partial_with_each_line_s_confidence(self):
         # Only the first line was heard: 6 of 11 characters. Below the full
         # threshold, above the partial floor: the lines come back, the unheard

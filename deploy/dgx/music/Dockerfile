@@ -66,6 +66,20 @@ RUN pip install --no-deps "demucs==4.0.1" "openunmix==1.3.0" "dora-search==0.1.1
  && pip install einops omegaconf pyyaml tqdm retrying submitit treetable \
  && python -c "from demucs.pretrained import get_model; from demucs.apply import apply_model; import julius, openunmix.filtering; print('demucs importable')"
 
+# Qwen3-ForcedAligner-0.6B for ALIGN_METHOD=qwen (server/qwen_align.py,
+# server/qwen_worker.py; weights and code Apache-2.0). Its own venv: it needs
+# transformers 4.57 and ACE-Step above pins 4.50. --system-site-packages keeps
+# the image's CUDA torch; qwen-asr and accelerate go in with --no-deps because
+# accelerate asks for torch>=2.0 and pip does not count this torch's
+# pre-release version as that (the demucs trap above). The same sequence ran
+# on dgxa in a throwaway container (docs: README, "Choosing an aligner").
+# No fallback: an aligner that cannot import is a failed build, not a WARN.
+RUN python -m venv --system-site-packages /opt/qwenv \
+ && /opt/qwenv/bin/pip install --no-deps "qwen-asr==0.0.6" "accelerate==1.12.0" \
+ && /opt/qwenv/bin/pip install "transformers==4.57.6" "nagisa==0.2.11" "soynlp==0.0.493" qwen-omni-utils psutil \
+ && mkdir -p /tmp/cudastub && ln -sf /usr/local/cuda/lib64/stubs/libcuda.so /tmp/cudastub/libcuda.so.1 \
+ && LD_LIBRARY_PATH=/tmp/cudastub:$LD_LIBRARY_PATH /opt/qwenv/bin/python -c "from qwen_asr import Qwen3ForcedAligner; import torch; print('qwen aligner importable; torch', torch.__version__)"
+
 # ---- 4. Hard fail the build if torch got replaced / lost CUDA, or ACE-Step can't import.
 # No GPU driver exists during `docker build`, so libcuda.so.1 is absent; transformer_engine
 # (pulled in via peft) dlopens it at import. Use the CUDA stub for this check only —

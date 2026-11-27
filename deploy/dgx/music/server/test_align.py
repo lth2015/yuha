@@ -1,6 +1,6 @@
 """No model/GPU dependency: exercise the same alignment contract as /v1/align."""
 import unittest
-from align import align_lines, guess_language, place_units, voiced_intervals
+from align import align_lines, guess_language, place_units, qwen_lines, voiced_intervals
 
 
 class SyncedLyricsTests(unittest.TestCase):
@@ -120,6 +120,45 @@ class PlaceUnitsTests(unittest.TestCase):
         lines = place_units('晚风吹过\n天上\n等你', [('晚', 1, 1.2), ('风', 1.2, 1.4), ('吹', 1.4, 1.6), ('过', 1.6, 1.8), ('等', 5, 5.2), ('你', 5.2, 5.4)])
         self.assertIsNone(lines[1]['start'])
         self.assertEqual(lines[1]['confidence'], 0.0)
+
+
+def chars(text, start, step=0.25):
+    return [(c, start + i * step, start + (i + 1) * step) for i, c in enumerate(text)]
+
+
+class QwenLinesTests(unittest.TestCase):
+    """A forced aligner's lines, with confidence from where the voice is and what Whisper heard."""
+    LYRICS = '晚风吹过街角\n我等你回来\n天上的星星'
+
+    def test_lines_placed_where_someone_is_singing_are_confident(self):
+        units = chars('晚风吹过街角', 2) + chars('我等你回来', 6) + chars('天上的星星', 10)
+        lines = qwen_lines(self.LYRICS, units, 15, voiced=[(1.9, 3.6), (5.9, 7.4), (9.9, 11.4)])
+        self.assertEqual([l['confidence'] for l in lines], [1.0, 1.0, 1.0])
+        self.assertEqual([l['start'] for l in lines], [2, 6, 10])
+
+    def test_a_line_placed_in_an_instrumental_is_not_trusted(self):
+        units = chars('晚风吹过街角', 2) + chars('我等你回来', 6) + chars('天上的星星', 10)
+        lines = qwen_lines(self.LYRICS, units, 15, voiced=[(1.9, 3.6), (9.9, 11.4)])  # nobody sings at 6 s
+        self.assertLess(lines[1]['confidence'], 0.5)
+        self.assertEqual(lines[0]['confidence'], 1.0)
+
+    def test_a_line_whisper_heard_somewhere_else_is_not_trusted(self):
+        units = chars('晚风吹过街角', 2) + chars('我等你回来', 6) + chars('天上的星星', 10)
+        heard = [{'start': 2.0, 'confidence': 1.0}, {'start': 8.5, 'confidence': 1.0}, {'start': 9.8, 'confidence': 0.0}]
+        lines = qwen_lines(self.LYRICS, units, 15, heard=heard)
+        self.assertLess(lines[1]['confidence'], 0.5)   # 2.5 s from where Whisper heard it
+        self.assertEqual(lines[0]['confidence'], 1.0)  # agrees
+        self.assertEqual(lines[2]['confidence'], 1.0)  # Whisper did not hear it: no say
+
+    def test_a_line_the_aligner_left_out_is_filled_in_and_unsure(self):
+        units = chars('晚风吹过街角', 2) + chars('天上的星星', 10)
+        lines = qwen_lines(self.LYRICS, units, 15)
+        self.assertEqual(lines[1]['confidence'], 0.0)
+        self.assertGreaterEqual(lines[1]['start'], lines[0]['start'])
+        self.assertLessEqual(lines[1]['end'], lines[2]['start'])
+        for l in lines:
+            self.assertIsInstance(l['start'], float)
+            self.assertIsInstance(l['end'], float)
 
 
 if __name__ == '__main__':
