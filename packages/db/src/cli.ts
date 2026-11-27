@@ -13,6 +13,7 @@ import { closeDb, db, initDb } from './pool.js';
 import { migrate, reset } from './migrate.js';
 import { INVARIANTS, checkInvariants } from './invariants.js';
 import { resetMfaFactor } from './mfa.js';
+import { bgmReviewSet } from './bgm-review.js';
 import { lyricTruth } from './lyric-truth.js';
 
 type MysqlCredentials = {
@@ -53,7 +54,7 @@ if (!url) {
 
 const command = process.argv[2] ?? 'migrate';
 // One connection for the logic rules, so the READ ONLY set below covers every query they run.
-initDb({ connectionString: url, ...(command === 'invariants' || command === 'lyric-truth' ? { max: 1 } : {}) });
+initDb({ connectionString: url, ...(command === 'invariants' || command === 'lyric-truth' || command === 'bgm-sheet' ? { max: 1 } : {}) });
 
 try {
   if (command === 'migrate') {
@@ -89,6 +90,26 @@ try {
       console.log(`\n${results.length} rules checked, ${broken.length} broken.`);
     }
     if (broken.length) process.exitCode = 1;
+  } else if (command === 'bgm-sheet') {
+    /*
+     * The BGM listening review (docs/quality/BGM_REVIEW.md): staff BGM only,
+     * read only. sheet.csv is what a reviewer fills in and shows the choices
+     * alone; what the DGX measured goes to quality.json, out of their sight.
+     */
+    const dir = resolve(process.env.INIT_CWD ?? process.cwd(), process.argv[3] ?? 'quality-probes/bgm-review');
+    await db().query('SET SESSION TRANSACTION READ ONLY');
+    const set = await bgmReviewSet();
+    if (!set.length) throw new Error('no staff BGM yet: make the review set at /bgm first (docs/quality/BGM_REVIEW.md)');
+    mkdirSync(join(dir, 'reviews'), { recursive: true });
+    // Production by default: a local .env's PUBLIC_WEB_URL would hand reviewers links to localhost.
+    const web = (process.env.REVIEW_WEB_URL ?? 'https://yuha.studio').replace(/\/+$/, '');
+    const head = 'trackId,link,scenario,genre,mood,durationSeconds,tempo,reviewer,fitsBackground,fitsScenario,fitsGenre,fitsMood,soundQuality,cleanEdges,voiceHeard,usable,note';
+    const rows = set.map((s) => [s.trackId, `${web}/song/${s.trackId}`, s.choice.scenario, s.choice.genre, s.choice.mood, s.choice.durationSeconds, s.choice.tempo, '', '', '', '', '', '', '', '', '', ''].join(','));
+    writeFileSync(join(dir, 'sheet.csv'), [head, ...rows].join('\n') + '\n');
+    writeFileSync(join(dir, 'meta.json'), JSON.stringify(Object.fromEntries(set.map((s) => [s.trackId, s.choice])), null, 1));
+    writeFileSync(join(dir, 'quality.json'), JSON.stringify(Object.fromEntries(set.map((s) => [s.trackId, s.quality])), null, 1));
+    const measured = set.filter((s) => s.quality && typeof s.quality['vocalSeconds'] === 'number').length;
+    console.log(`${set.length} BGM -> ${dir}/sheet.csv (${measured} with the DGX's voice measurement)`);
   } else if (command === 'lyric-truth') {
     /*
      * Ground truth for the lyric sync benchmark (docs/quality/LYRIC_BENCH.md):

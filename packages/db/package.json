@@ -17,6 +17,7 @@
     "migrate": "tsx --env-file-if-exists=../../.env src/cli.ts migrate",
     "reset": "tsx --env-file-if-exists=../../.env src/cli.ts reset",
     "invariants": "tsx --env-file-if-exists=../../.env src/cli.ts invariants",
+    "bgm-sheet": "tsx --env-file-if-exists=../../.env src/cli.ts bgm-sheet",
     "lyric-truth": "tsx --env-file-if-exists=../../.env src/cli.ts lyric-truth"
   },
   "dependencies": {
