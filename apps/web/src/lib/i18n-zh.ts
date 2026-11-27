@@ -782,7 +782,7 @@ const zh: Dict = {
   'admin.tab.orders': '订单',
   'admin.tab.ops': '运营指标',
   'admin.tab.review': '审核',
-  'admin.tab.audit': '审计日志',
+  'admin.tab.audit': '审计日志', 'admin.tab.marketplace': '官方 BGM 管理',
   'admin.more': '加载更多',
   'admin.dash.granularity': '统计粒度',
   'admin.dash.g.day': '日',
