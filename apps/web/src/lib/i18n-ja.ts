@@ -1564,7 +1564,7 @@ const ja: Dict = {
   'create.section.rap': 'ラップ',
   'create.section.interlude': '間奏',
   'create.lyrics.placeholder': '[Aメロ]\n街の灯りが金色に溶ける\n…',
-  'create.visibility': '完成後に公開する：リンクで開けるほか、トップページの作品一覧にも並びます（いつでも戻せます）',
+  'create.visibility': '完成後に公開する：リンクを知っている人が開いて聴けます（いつでも戻せます）',
   'create.aside.costValue': '1 クレジット',
   'create.aside.vocalsYours': 'あなたの歌詞',
   'create.aside.linkOpen': 'リンクで開ける',

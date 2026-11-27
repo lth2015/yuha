@@ -231,7 +231,7 @@ export function Privacy() {
   const d = useDisclosure();
   if (!d) return <Loading />;
   return (
-    <LegalPage title="Privacy Policy" updated="2026-11-24">
+    <LegalPage title="Privacy Policy" updated="2026-11-27">
       <DraftBanner isPlaceholder={d.isPlaceholder} />
       <Section h="1. Who we are">
         <p>
@@ -315,10 +315,9 @@ export function Privacy() {
       <Section h="5. Publishing and public songs">
         <p>
           Songs are private by default. If you publish a song, its title, styles, audio and creator
-          display name become publicly visible: anyone holding the link can open it, and it appears in
-          the showcase on our home page. Other visitors can play it. You can unpublish at any time,
-          which removes it from the showcase and from the link — except that anyone who has bought a
-          licence for it keeps their download.
+          display name become visible to anyone holding the link, who can open and play it. Songs are
+          not listed anywhere for browsing. You can unpublish at any time, which closes the link —
+          except that anyone who has bought a licence for it keeps their download.
         </p>
       </Section>
       <Section h="6. Retention">
