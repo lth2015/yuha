@@ -109,12 +109,43 @@ export function importInputForBgmTrack(track: OfficialBgmBatchTrack): OfficialBg
 }
 
 /** Keep the source bytes. Only the public listening excerpt is encoded here. */
+/**
+ * An import that fails answers which step failed and how, not a bare
+ * "internal error" (the first production batch, 2026-11-27, failed every track
+ * that way with nothing to go on). Admin-only, so the step and the error's own
+ * name/code are safe to show; an AppError passes through as it is.
+ */
+export class OfficialBgmImportStageError extends AppError {
+  constructor(step: string, cause: unknown) {
+    const e = cause as { name?: string; code?: string; Code?: string; message?: string };
+    const kind = [e?.name, e?.code ?? e?.Code].filter((v) => v && v !== 'Error').join(' ');
+    const detail = String(e?.message ?? cause).split('\n')[0]!.slice(0, 200);
+    super('UPSTREAM_UNAVAILABLE', `import failed while ${step}: ${kind ? `${kind}: ` : ''}${detail}`);
+  }
+}
+
 export async function importOfficialBgm(
   ctx: Pick<AppContext, 'audio' | 'storage'>, raw: OfficialBgmImportInput, bytes: Buffer,
   attachments: { cover?: Buffer; actorId?: string } = {},
 ) {
+  let step = 'reading the request';
+  try {
+    return await importOfficialBgmSteps(ctx, raw, bytes, attachments, (next) => { step = next; });
+  } catch (error) {
+    if (error instanceof AppError || (error as { code?: string }).code === 'ER_DUP_ENTRY') throw error;
+    throw new OfficialBgmImportStageError(step, error);
+  }
+}
+
+async function importOfficialBgmSteps(
+  ctx: Pick<AppContext, 'audio' | 'storage'>, raw: OfficialBgmImportInput, bytes: Buffer,
+  attachments: { cover?: Buffer; actorId?: string },
+  at: (step: string) => void,
+) {
   const input = officialBgmImportInput.parse(raw);
+  at('checking the cover');
   const cover = await inspectOfficialBgmCover(input.provenance?.coverFilename, attachments.cover);
+  at('probing the master (ffprobe)');
   const { durationMs, startMs, sha256, format } = await inspectOfficialBgmSource(ctx.audio, bytes, input);
   const provenance = input.provenance ? { ...input.provenance, ...(cover ? { coverSha256: cover.sha256 } : {}) } : null;
   if (provenance?.coverFilename === undefined && provenance) delete provenance.coverFilename;
@@ -124,9 +155,11 @@ export async function importOfficialBgm(
     provenance,
   };
   const lookup = () => findOfficialBgmImport(input.sourceKey, sha256);
+  at('looking for an earlier import (database)');
   const already = reuse(await lookup(), fields);
   if (already) return already;
 
+  at('encoding the 60-second preview (ffmpeg)');
   const preview = await ctx.audio.renderExport({ source: bytes, clipStartMs: startMs, clipDurationMs: PREVIEW_RENDER_MS,
     fadeOutMs: 900, format: 'mp3', mp3BitrateKbps: 128, timeoutMs: AUDIO_TIMEOUT_MS });
   const actual = await ctx.audio.probe(preview, AUDIO_TIMEOUT_MS);
@@ -139,6 +172,7 @@ export async function importOfficialBgm(
   const previewKey = `official-bgm/previews/${id}.mp3`;
   const coverKey = cover ? `official-bgm/covers/${id}.${cover.ext}` : null;
   try {
+    at('recording the draft (database)');
     await withTx(async (tx) => {
       // Claim both unique values before writing to private delivery storage.
       // Style tags start from the batch's own style words; the score starts in
@@ -149,11 +183,13 @@ export async function importOfficialBgm(
       const put = (key: string, body: Buffer, contentType: string) =>
         ctx.storage.put({ zone: 'delivery', key, body, contentType, abortSignal: writeDeadline });
       try {
+        at('writing the master and preview to storage');
         const writes = [put(masterKey, bytes, format === 'wav' ? 'audio/wav' : 'audio/mpeg'), put(previewKey, preview, 'audio/mpeg')];
         if (cover && coverKey) writes.push(put(coverKey, cover.bytes, cover.type));
         const failed = (await Promise.allSettled(writes)).find((result) => result.status === 'rejected');
         if (failed?.status === 'rejected') throw failed.reason;
         if (attachments.actorId) {
+          at('writing the audit log (database)');
           await writeAuditLog({ actorId: attachments.actorId, actorRole: 'admin', subjectType: 'official_bgm', subjectId: id,
             action: 'official_bgm.import', reason: 'Imported from official BGM batch', before: null, after: { state: 'draft' } }, tx);
         }
