@@ -53,8 +53,10 @@ async function runOne(d: PipelineDeps, job: ClaimedLyricSync): Promise<void> {
   }
 
   const durationSeconds = job.duration_ms / 1000;
-  // The aligner's own copy of the render when it still has one; otherwise the song itself.
-  const result = job.provider_request_id
+  // A new song: the aligner's own copy of the render, which it still has. An
+  // older song (a backfill) always sends YUHA's master: it may still name a
+  // render the DGX cleared long ago.
+  const result = job.provider_request_id && job.trigger_kind !== 'backfill'
     ? await d.ctx.alignment.align({ lyrics, durationSeconds, providerRequestId: job.provider_request_id })
     : await d.ctx.alignment.align({
         lyrics,

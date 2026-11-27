@@ -48,6 +48,27 @@ heard line's `confidence` is below 0.5, `syncing` while a job is queued or runni
 
 `off` (the default) is the previous behaviour, so rolling back is one value.
 
+## Backfill of older songs (`LYRIC_BACKFILL`)
+
+This is L4b. With `LYRIC_BACKFILL` set to `staff` or `all`, an older sung song with no heard
+timeline (none, or an estimate) is queued for a sync **when its owner opens it**. Only the owner's
+`GET /v1/tracks/:id` does this. The library list and visitors on a shared link never do.
+
+- **Audio.** It always sends YUHA's own master (`audio_b64`). An old song may still name a DGX
+  render the DGX cleared long ago. The aligner must therefore take sent audio, so turn this on
+  only after `deploy/dgx/update.sh` and one real `audio_b64` request.
+- **Quota.** At most `LYRIC_BACKFILL_DAILY` jobs per JST day (default 30). Past that, the song
+  plays with its words, `lyricSync` is `deferred` (「今天暂时无法同步，下次打开会自动再试」), and the
+  song is queued the next time it is opened. Tabs share one job: it is one job per song,
+  master and words.
+- **Failures.** A failure from an earlier day is tried again on the next open; a failure from today
+  is not.
+- **Queue order.** New songs' syncs are claimed first.
+- **The page.** While `syncing`, the song page asks again every 12 s, only while it is in front,
+  and swaps in only the timeline. The music keeps playing, the highlight picks up at the current
+  position, and the video card reads the same timings. While syncing with no timeline, the words
+  show with no line lit.
+
 ## Diagnosing a song whose words do not match the voice
 
 **Across all songs**: admin console → 运营指标 → 生成质量. 「歌词对齐（人声）」 is the

@@ -430,7 +430,7 @@ export type JobView = z.infer<typeof jobView>;
 /** Below this per-line confidence a line is not shown as synced (docs/quality/LYRIC_BENCH.md). */
 export const LINE_CONFIDENT = 0.5;
 
-export const LyricSyncState = z.enum(['syncing', 'synced', 'partial', 'unavailable']);
+export const LyricSyncState = z.enum(['syncing', 'synced', 'partial', 'deferred', 'unavailable', 'idle']);
 export type LyricSyncState = z.infer<typeof LyricSyncState>;
 
 export const lyricTimings = z.object({
@@ -505,7 +505,9 @@ export const trackView = z.object({
    *   syncing      the platform is aligning it (static lyrics meanwhile)
    *   synced       a heard or corrected timeline, every line confirmed
    *   partial      heard, but some lines the aligner was not sure of
-   *   unavailable  no heard timeline (an estimate or nothing) and none on the way
+   *   deferred     an older song: today's sync quota is spent; it is tried the next time it is opened
+   *   unavailable  an attempt ended without a heard timeline
+   *   idle         no heard timeline and none attempted (not in scope, or not yet): readable words, no promise
    */
   lyricSync: LyricSyncState.nullable(),
   /** Who the song was written for; null for a song written for nobody in particular. */
