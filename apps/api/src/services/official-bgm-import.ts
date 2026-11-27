@@ -115,7 +115,7 @@ export function importInputForBgmTrack(track: OfficialBgmBatchTrack): OfficialBg
  * that way with nothing to go on). Admin-only, so the step and the error's own
  * name/code are safe to show; an AppError passes through as it is.
  */
-export class OfficialBgmImportStageError extends AppError {
+class OfficialBgmImportStageError extends AppError {
   constructor(step: string, cause: unknown) {
     const e = cause as { name?: string; code?: string; Code?: string; message?: string };
     const kind = [e?.name, e?.code ?? e?.Code].filter((v) => v && v !== 'Error').join(' ');
