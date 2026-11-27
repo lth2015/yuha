@@ -1,6 +1,6 @@
 """No model/GPU dependency: exercise the same alignment contract as /v1/align."""
 import unittest
-from align import align_lines, guess_language, place_units, qwen_lines, voiced_intervals
+from align import align_lines, fuse_lines, guess_language, place_units, qwen_lines, voiced_intervals
 
 
 class SyncedLyricsTests(unittest.TestCase):
@@ -159,6 +159,56 @@ class QwenLinesTests(unittest.TestCase):
         for l in lines:
             self.assertIsInstance(l['start'], float)
             self.assertIsInstance(l['end'], float)
+
+
+def L(start, conf=1.0):
+    return {"text": "x", "section": "", "start": start, "end": start + 2.0, "confidence": conf}
+
+
+class FuseLinesTests(unittest.TestCase):
+    """Qwen and Whisper averaged where they agree, after Whisper's own early clock is taken out."""
+
+    def test_whisper_s_steady_offset_is_removed_before_averaging(self):
+        # Whisper is 0.3 s early on every line, with a little noise of its own.
+        q = [L(1.0), L(5.0), L(9.0), L(13.0)]
+        w = [L(0.7), L(4.6), L(8.75), L(12.7)]
+        fused, offset = fuse_lines(q, w)
+        self.assertAlmostEqual(offset, 0.3, places=2)
+        # 5.0 and 4.6+0.3=4.9 average to 4.95: halfway, not dragged 0.15 s early.
+        self.assertAlmostEqual(fused[1]["start"], 4.95, places=2)
+        self.assertAlmostEqual(fused[0]["start"], 1.0, places=2)
+
+    def test_lines_they_disagree_on_keep_qwen_s_time_and_confidence(self):
+        q = [L(1.0), L(5.0), L(9.0, 0.3), L(13.0)]
+        w = [L(0.7), L(4.7), L(11.0), L(12.7)]
+        fused, _ = fuse_lines(q, w)
+        self.assertEqual(fused[2]["start"], 9.0)
+        self.assertEqual(fused[2]["confidence"], 0.3)
+
+    def test_a_line_whisper_did_not_hear_is_qwen_s_alone(self):
+        q = [L(1.0), L(5.0), L(9.0), L(13.0)]
+        w = [L(0.7), L(4.7, 0.2), L(8.7), L(12.7)]
+        fused, _ = fuse_lines(q, w)
+        self.assertEqual(fused[1]["start"], 5.0)
+
+    def test_with_too_few_shared_lines_there_is_no_offset_to_trust(self):
+        q = [L(1.0), L(5.0)]
+        w = [L(0.4), L(4.0, 0.2)]
+        fused, offset = fuse_lines(q, w)
+        self.assertEqual(offset, 0.0)
+        self.assertAlmostEqual(fused[0]["start"], 0.7, places=2)  # still averaged, unshifted
+
+    def test_weight_one_is_qwen_alone(self):
+        q = [L(1.0), L(5.0), L(9.0)]
+        w = [L(0.7), L(4.6), L(8.8)]
+        fused, _ = fuse_lines(q, w, w_qwen=1.0)
+        self.assertEqual([l["start"] for l in fused], [1.0, 5.0, 9.0])
+
+    def test_a_line_never_ends_before_it_starts(self):
+        q = [{"text": "x", "section": "", "start": 1.0, "end": 1.1, "confidence": 1.0}]
+        w = [L(1.6)]
+        fused, _ = fuse_lines(q, w)
+        self.assertGreater(fused[0]["end"], fused[0]["start"])
 
 
 if __name__ == '__main__':

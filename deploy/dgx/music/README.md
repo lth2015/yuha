@@ -127,6 +127,14 @@ late, but it is only settled by hand-timed songs (docs/quality/LYRIC_BENCH.md).
     1.5 s away.
 
   A line it left out is filled in with 0 confidence.
+- **Qwen and Whisper averaged (`ALIGN_QWEN_WEIGHT`, default 0.5; product owner's suggestion,
+  2026-11-27).** Where both trust a line and agree within 1 s, its start is the weighted
+  average of the two (`align.fuse_lines`). Whisper's steady early offset is taken out first,
+  using the median per song over at least 3 shared lines. Without that step, the average
+  would put every line halfway into Whisper's earliness. A line they disagree on, or one
+  Whisper did not hear whole, keeps Qwen's time. `1.0` means Qwen alone. The weight is
+  meant to be set from hand-timed songs, where `bench_align.py` scores `fused` as a third
+  route. The response carries `qwen_weight` and the song's `whisper_offset`.
 - **When Whisper's answer is used instead.** Below `ALIGN_QWEN_MIN_TRUSTED`
   (0.6) of the lines trusted, the result falls back to Whisper's, unchanged.
   So does any failure: a worker that dies, times out

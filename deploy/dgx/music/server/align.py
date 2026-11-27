@@ -13,6 +13,7 @@ Pure functions here (no torch) so the matching can be tested on its own.
 from __future__ import annotations
 
 import difflib
+import statistics
 import re
 import unicodedata
 from typing import Dict, List, Optional, Sequence, Tuple
@@ -446,3 +447,40 @@ def qwen_lines(lyrics: str, units: Sequence[Tuple[str, float, float]], duration:
         lines.append({"text": l["text"], "section": l["section"], "start": round(float(s), 3),
                       "end": round(float(e), 3), "confidence": round(conf[i], 3)})
     return lines
+
+
+FUSE_MAX_GAP = 1.0     # past this (after the offset), the two disagree: someone is wrong, so no average
+FUSE_MIN_SHARED = 3    # fewer shared lines than this and a song's offset is not trusted
+
+
+def fuse_lines(qwen: Sequence[Dict], whisper: Sequence[Dict], w_qwen: float = 0.5) -> Tuple[List[Dict], float]:
+    """Qwen's lines with Whisper averaged in where the two agree (product owner, 2026-11-27).
+
+    Two independent clocks averaged lose some of each one's random error. But
+    Whisper's word clock runs early by a steady amount (+0.32 s median on dgxa's
+    songs), and averaging that in would put every line halfway into it. So
+    the song's own offset is taken out first: the median of Qwen minus
+    Whisper over the lines both heard, given FUSE_MIN_SHARED of them. Then a
+    line both trust and agree on, within FUSE_MAX_GAP, gets the weighted
+    average. A line they disagree on, or one Whisper did not hear whole,
+    keeps Qwen's time and confidence: an average of a right and a wrong
+    answer is neither. `w_qwen` 1.0 is Qwen alone. Returns (lines, offset).
+    """
+    pairs = [(q, w) for q, w in zip(qwen, whisper)
+             if q.get("start") is not None and w.get("start") is not None
+             and float(q.get("confidence", 0)) >= 0.5 and float(w.get("confidence", 0)) >= 1.0]
+    diffs = [float(q["start"]) - float(w["start"]) for q, w in pairs]
+    offset = statistics.median(diffs) if len(diffs) >= FUSE_MIN_SHARED else 0.0
+    out: List[Dict] = []
+    for i, q in enumerate(qwen):
+        line = dict(q)
+        w = whisper[i] if i < len(whisper) else None
+        if (w is not None and q.get("start") is not None and w.get("start") is not None
+                and float(q.get("confidence", 0)) >= 0.5 and float(w.get("confidence", 0)) >= 1.0):
+            shifted = float(w["start"]) + offset
+            if abs(float(q["start"]) - shifted) <= FUSE_MAX_GAP:
+                start = w_qwen * float(q["start"]) + (1 - w_qwen) * shifted
+                line["start"] = round(start, 3)
+                line["end"] = round(max(float(q["end"]), start + 0.3), 3)
+        out.append(line)
+    return out, round(offset, 3)

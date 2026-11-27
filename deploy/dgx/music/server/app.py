@@ -94,6 +94,10 @@ ALIGN_FORCED_MIN_COVERAGE = float(os.environ.get("ALIGN_FORCED_MIN_COVERAGE", "0
 # ALIGN_METHOD=qwen: below this share of trusted lines the Qwen result is not
 # used and Whisper's stands (README, "Qwen3-ForcedAligner").
 ALIGN_QWEN_MIN_TRUSTED = float(os.environ.get("ALIGN_QWEN_MIN_TRUSTED", "0.6"))
+# Where Qwen and Whisper agree, a weighted average of the two, Whisper's own
+# early offset taken out first (align.fuse_lines). 1.0 = Qwen alone. 0.5 until
+# hand-timed songs say which clock deserves more.
+ALIGN_QWEN_WEIGHT = float(os.environ.get("ALIGN_QWEN_WEIGHT", "0.5"))
 # Vocal-quality knobs, chosen from bench_vocals.py results rather than by ear.
 TAG_STYLE = os.environ.get("TAG_STYLE", "v1")            # v1 = original prompt, v2 = short tags + vocal descriptor
 VOCAL_TAKES = max(1, int(os.environ.get("VOCAL_TAKES", "1")))  # >1: render N seeds, keep the most intelligible
@@ -946,10 +950,15 @@ def _align_path(body: AlignRequest, path: Path, label: str):
                 units = qwen_align.align(stem16, body.lyrics, guess_language(body.lyrics))
             lines = qwen_lines(body.lyrics, units, body.duration_seconds, voiced=voiced,
                                heard=(out or {}).get("lines"))
+            offset = None
+            if out and out.get("lines") and ALIGN_QWEN_WEIGHT < 1.0:
+                from align import fuse_lines
+                lines, offset = fuse_lines(lines, out["lines"], w_qwen=ALIGN_QWEN_WEIGHT)
             trusted = sum(1 for l in lines if l["confidence"] >= 0.5) / max(1, len(lines))
             q = {"lines": lines, "coverage": round(trusted, 3), "heard": "vocal_stem", "method": "qwen",
                  "model": "qwen3-forced-aligner-0.6b", "voice_activity": voiced is not None,
-                 "whisper_coverage": (out or {}).get("coverage"), "seconds": round(time.time() - t0, 1)}
+                 "whisper_coverage": (out or {}).get("coverage"), "whisper_offset": offset,
+                 "qwen_weight": ALIGN_QWEN_WEIGHT, "seconds": round(time.time() - t0, 1)}
             log.info("aligned %s method=qwen trusted=%.2f whisper=%s in %.1fs", label, trusted,
                      q["whisper_coverage"], q["seconds"])
             if trusted >= ALIGN_QWEN_MIN_TRUSTED:

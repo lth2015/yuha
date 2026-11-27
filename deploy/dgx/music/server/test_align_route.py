@@ -150,8 +150,8 @@ class AlignRouteTests(unittest.TestCase):
         self.assertEqual(out["heard"], "mix")
         self.assertEqual(out["coverage"], 1.0)
 
-    def run_qwen(self, qwen_mod, heard=lambda audio: STEM_WORDS):
-        with patch.dict(sys.modules, {"qwen_align": qwen_mod}):
+    def run_qwen(self, qwen_mod, heard=lambda audio: STEM_WORDS, weight=1.0):
+        with patch.dict(sys.modules, {"qwen_align": qwen_mod}), patch.object(self.app, "ALIGN_QWEN_WEIGHT", weight):
             return self.run_align(fake_separate(), heard, method="qwen")
 
     def test_qwen_times_every_line_and_whisper_still_runs_for_its_confidence(self):
@@ -165,6 +165,18 @@ class AlignRouteTests(unittest.TestCase):
         self.assertTrue(all("confidence" in l for l in out["lines"]))
         self.assertEqual(len(calls), 1)  # Whisper heard the stem, for the agreement check
         self.assertIn("whisper_coverage", out)
+
+    def test_by_default_qwen_and_whisper_are_averaged_where_they_agree(self):
+        self.assertEqual(self.app.ALIGN_QWEN_WEIGHT, 0.5)
+        mod = types.ModuleType("qwen_align")
+        mod.align = lambda stem, lyrics, lang: [(c, 1.0 + i * 0.3, 1.3 + i * 0.3) for i, c in enumerate("晚风吹过街角")] + \
+            [(c, 10.4 + i * 0.3, 10.7 + i * 0.3) for i, c in enumerate("我等你回来")]
+        alone, _ = self.run_qwen(mod)
+        fused, _ = self.run_qwen(mod, weight=0.5)
+        self.assertEqual(fused["qwen_weight"], 0.5)
+        whisper_start = fused["lines"][1]["start"] * 2 - alone["lines"][1]["start"]  # what the average was taken with
+        self.assertNotEqual(fused["lines"][1]["start"], alone["lines"][1]["start"])
+        self.assertLess(abs(whisper_start - alone["lines"][1]["start"]), 1.0)
 
     def test_a_qwen_failure_leaves_whisper_s_answer(self):
         mod = types.ModuleType("qwen_align")
