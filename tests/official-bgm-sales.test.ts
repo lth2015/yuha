@@ -68,8 +68,9 @@ describe('sale rights', () => {
       h.app.inject({ method: 'POST', url: `${base}/${id}/sale-rights`, headers, payload: body as never });
 
     // Publishing opens listening only.
+    const { revision } = (await h.app.inject({ url: base, headers: admin.authHeader })).json().pendingPublication;
     expect((await h.app.inject({ method: 'POST', url: `${base}/publish-all`, headers: admin.authHeader,
-      payload: { reason: 'All checked by ear' } })).json()).toEqual({ published: 2, failed: [] });
+      payload: { reason: 'All checked by ear', revision } })).json()).toEqual({ published: 2, failed: [] });
     const listed = (await h.app.inject({ url: base, headers: admin.authHeader })).json().items as Array<{ id: string; saleRights: string; onSale: boolean }>;
     expect(listed.map((i) => [i.saleRights, i.onSale])).toEqual([['unreviewed', false], ['unreviewed', false]]);
 
