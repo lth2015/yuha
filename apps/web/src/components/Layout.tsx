@@ -334,6 +334,7 @@ export function Layout({ children }: { children: ReactNode }) {
       : [{ to: '/library', key: 'nav.library', end: false }]),
     // AI BGM, where it is open to this viewer (docs/BGM_STUDIO_PLAN.md).
     ...(runtime?.features?.bgmStudio && me && me.role !== 'guest' ? [{ to: '/bgm', key: 'nav.bgm', end: false }] : []),
+    ...(runtime?.features?.officialBgmMarketplace ? [{ to: '/marketplace', key: 'nav.marketplace', end: true }] : []),
   ];
 
   return (

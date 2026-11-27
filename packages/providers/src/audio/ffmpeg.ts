@@ -174,6 +174,8 @@ export class AudioProcessor {
     format: AudioFormat;
     /** Target integrated loudness (LUFS). */
     loudnessTarget?: number;
+    /** Catalogue previews use 128 kbps; customer exports keep the 192 kbps default. */
+    mp3BitrateKbps?: 128 | 192;
   }): Promise<Buffer> {
     const dir = await mkdtemp(join(tmpdir(), 'loopscene-export-'));
     const inPath = join(dir, 'in');
@@ -197,7 +199,7 @@ export class AudioProcessor {
         '-map_metadata', '-1', // strip source metadata
       ];
       if (params.format === 'mp3') {
-        args.push('-codec:a', 'libmp3lame', '-b:a', '192k', '-ar', '44100');
+        args.push('-codec:a', 'libmp3lame', '-b:a', `${params.mp3BitrateKbps ?? 192}k`, '-ar', '44100');
       } else {
         args.push('-codec:a', 'pcm_s16le', '-ar', '44100');
       }

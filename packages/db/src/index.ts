@@ -10,6 +10,7 @@ export * from './misc.js';
 export * as reporting from './reporting.js';
 export * from './auth_codes.js';
 export * from './market.js';
+export * from './official-bgm.js';
 export * from './mfa.js';
 export * from './stablecoin.js';
 export * from './deletions.js';
