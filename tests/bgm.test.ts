@@ -17,6 +17,7 @@ import {
 import { claimOutboxBatch, query, queryOne, withTx } from '@yuha/db';
 import type { MusicSubmitRequest } from '@yuha/providers';
 import { runJobStep } from '@yuha/worker/pipeline';
+import { BGM_PROHIBITED_USES } from '../apps/api/src/services/delivery.js';
 import { createHarness, resetData, teardown, type Harness, type TestUser } from './helpers/harness.js';
 
 let h: Harness;
@@ -112,6 +113,12 @@ describe('making a BGM', () => {
     const view = (await h.app.inject({ method: 'GET', url: `/v1/tracks/${trackId}`, headers: user.authHeader })).json();
     expect(view.kind).toBe('bgm');
     expect(view.bgm).toMatchObject({ scenario: 'vlog', genre: 'japanese_healing', mood: 'warm', durationSeconds: 30, tempo: 'medium' });
+
+    // Its usage record is frozen under Terms §4a, not a song's §4: the BGM
+    // limits travel with the BGM even before commercial delivery is on.
+    const rec = (await queryOne<{ prohibited_uses: unknown }>(`SELECT prohibited_uses FROM license_snapshots WHERE track_id = ?`, [trackId]))!;
+    const prohibited = (typeof rec.prohibited_uses === 'string' ? JSON.parse(rec.prohibited_uses) : rec.prohibited_uses) as string[];
+    expect(prohibited).toEqual([...BGM_PROHIBITED_USES]);
 
     // One unit, like a song (docs/BGM_STUDIO_PLAN.md, decision 1).
     const { getBalance } = await import('@yuha/db');

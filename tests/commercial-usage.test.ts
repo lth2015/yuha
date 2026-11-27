@@ -9,6 +9,7 @@
  */
 import { describe, expect, it } from 'vitest';
 import { createContext, loadConfig } from '@yuha/api';
+import { BGM_ALLOWED_USES, BGM_PROHIBITED_USES, licenseSnapshotFor } from '../apps/api/src/services/delivery.js';
 
 const httpMusic = {
   DATABASE_URL: 'mysql://u:p@localhost:3306/x',
@@ -46,5 +47,27 @@ describe('the usage record of a self-hosted provider', () => {
     expect(caps.prohibitedUses.join(' ')).toMatch(/resell/i);
     expect(caps.prohibitedUses.join(' ')).toMatch(/human/i);
     expect(caps.prohibitedUses.join(' ')).toMatch(/train/i);
+  });
+});
+
+describe('the usage record of a BGM (Terms §4a)', () => {
+  const ctx = createContext(loadConfig({ ...httpMusic, MUSIC_COMMERCIAL_DELIVERY: 'true' } as never));
+  const at = { trackId: 't', userId: 'u', sha256: 'x'.repeat(64), generatedAt: new Date(0) };
+
+  it('allows the limited commercial uses §4a lists, and forbids what it forbids', () => {
+    const r = licenseSnapshotFor(ctx, { commercialDeliveryEnabled: true }, { ...at, kind: 'bgm' });
+    expect(r.allowedUses).toEqual([...BGM_ALLOWED_USES]);
+    expect(r.prohibitedUses).toEqual([...BGM_PROHIBITED_USES]);
+    // §4a, in substance.
+    expect(r.allowedUses.join(' ')).toMatch(/advertising/i);
+    expect(r.prohibitedUses.join(' ')).toMatch(/Content ID/);
+    expect(r.prohibitedUses.join(' ')).toMatch(/streaming/i);
+  });
+
+  it('leaves a song under §4, and says "preview only" for both while commercial delivery is off', () => {
+    const song = licenseSnapshotFor(ctx, { commercialDeliveryEnabled: true }, { ...at, kind: 'song' });
+    expect(song.allowedUses).toEqual(ctx.music.capabilities().allowedUses);
+    const off = licenseSnapshotFor(ctx, { commercialDeliveryEnabled: false }, { ...at, kind: 'bgm' });
+    expect(off.allowedUses).toEqual(['動作確認・プレビューのみ（商用配信の許諾は未取得）']);
   });
 });
