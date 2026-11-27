@@ -1564,7 +1564,7 @@ const en: Dict = {
   'create.section.rap': 'Rap',
   'create.section.interlude': 'Interlude',
   'create.lyrics.placeholder': '[Verse]\nCity lights blur into gold\n…',
-  'create.visibility': 'Publish when finished: anyone with the link can open it, and it joins the showcase on the home page (you can change this anytime)',
+  'create.visibility': 'Publish when finished: anyone with the link can open and play it (you can change this anytime)',
   'create.aside.costValue': '1 credit',
   'create.aside.vocalsYours': 'Your lyrics',
   'create.aside.linkOpen': 'Anyone with the link',

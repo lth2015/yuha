@@ -1582,7 +1582,7 @@ const zh: Dict = {
   'create.section.rap': '说唱',
   'create.section.interlude': '间奏',
   'create.lyrics.placeholder': '[主歌]\n城市的灯光融成金色\n…',
-  'create.visibility': '生成后公开：凭链接可打开，也会出现在首页的作品墙（随时可以改回私密）',
+  'create.visibility': '生成后公开：拿到链接的人就能打开收听（随时可以改回私密）',
   'create.aside.costValue': '1 次额度',
   'create.aside.vocalsYours': '你写的歌词',
   'create.aside.linkOpen': '凭链接可打开',
