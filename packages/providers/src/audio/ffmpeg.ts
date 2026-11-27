@@ -36,7 +36,7 @@ export interface OutputCheckResult {
   probe: AudioProbe | null;
 }
 
-function run(cmd: string, args: string[], input?: Buffer): Promise<{ code: number; stdout: Buffer; stderr: string }> {
+function run(cmd: string, args: string[], input?: Buffer, timeoutMs?: number): Promise<{ code: number; stdout: Buffer; stderr: string }> {
   return new Promise((resolve, reject) => {
     const child = spawn(cmd, args, { stdio: ['pipe', 'pipe', 'pipe'] });
     const stdout: Buffer[] = [];
@@ -45,8 +45,12 @@ function run(cmd: string, args: string[], input?: Buffer): Promise<{ code: numbe
     child.stderr.on('data', (d: Buffer) => {
       stderr += d.toString('utf8');
     });
-    child.on('error', reject);
-    child.on('close', (code) => resolve({ code: code ?? -1, stdout: Buffer.concat(stdout), stderr }));
+    const timer = timeoutMs ? setTimeout(() => child.kill('SIGKILL'), timeoutMs) : undefined;
+    child.on('error', (error) => { clearTimeout(timer); reject(error); });
+    child.on('close', (code) => {
+      clearTimeout(timer);
+      resolve({ code: code ?? -1, stdout: Buffer.concat(stdout), stderr });
+    });
     if (input) {
       child.stdin.on('error', () => {
         /* ffmpeg may close stdin early; not fatal */
@@ -84,7 +88,7 @@ export class AudioProcessor {
   }
 
   /** Probes duration, codec and loudness. Works on a temp file so ffprobe can seek. */
-  async probe(buffer: Buffer): Promise<AudioProbe | null> {
+  async probe(buffer: Buffer, timeoutMs?: number): Promise<AudioProbe | null> {
     const dir = await mkdtemp(join(tmpdir(), 'loopscene-probe-'));
     const path = join(dir, 'input');
     try {
@@ -94,7 +98,7 @@ export class AudioProcessor {
         '-show_entries', 'stream=codec_name,sample_rate,channels:format=duration',
         '-of', 'json',
         path,
-      ]);
+      ], undefined, timeoutMs);
       if (meta.code !== 0) return null;
 
       let parsed: {
@@ -111,7 +115,8 @@ export class AudioProcessor {
       if (!Number.isFinite(durationSec)) return null;
 
       // volumedetect writes its summary to stderr.
-      const vol = await run(this.ffmpeg, ['-v', 'info', '-i', path, '-af', 'volumedetect', '-f', 'null', '-']);
+      const vol = await run(this.ffmpeg, ['-v', 'info', '-i', path, '-af', 'volumedetect', '-f', 'null', '-'], undefined, timeoutMs);
+      if (timeoutMs && vol.code !== 0) return null;
       const mean = /mean_volume:\s*(-?[\d.]+) dB/.exec(vol.stderr);
       const max = /max_volume:\s*(-?[\d.]+) dB/.exec(vol.stderr);
 
@@ -176,6 +181,7 @@ export class AudioProcessor {
     loudnessTarget?: number;
     /** Catalogue previews use 128 kbps; customer exports keep the 192 kbps default. */
     mp3BitrateKbps?: 128 | 192;
+    timeoutMs?: number;
   }): Promise<Buffer> {
     const dir = await mkdtemp(join(tmpdir(), 'loopscene-export-'));
     const inPath = join(dir, 'in');
@@ -205,7 +211,7 @@ export class AudioProcessor {
       }
       args.push(outPath);
 
-      const res = await run(this.ffmpeg, args);
+      const res = await run(this.ffmpeg, args, undefined, params.timeoutMs);
       if (res.code !== 0) {
         throw new Error(`ffmpeg export failed (${res.code}): ${res.stderr.slice(0, 400)}`);
       }

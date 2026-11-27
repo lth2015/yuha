@@ -1,4 +1,4 @@
-import type { OfficialBgmMetadata, OfficialBgmState } from '@yuha/contracts';
+import type { OfficialBgmMetadata, OfficialBgmProvenance, OfficialBgmState } from '@yuha/contracts';
 import type { PoolConnection } from 'mysql2/promise';
 import { execute, query, queryOne } from './pool.js';
 
@@ -11,11 +11,14 @@ export interface OfficialBgmRow {
   scenario: OfficialBgmMetadata['scenario'];
   mood: OfficialBgmMetadata['mood'];
   master_key: string;
+  master_format: 'mp3' | 'wav';
   master_ms: number;
   preview_key: string;
   preview_start_ms: number;
   preview_ms: number;
   state: OfficialBgmState;
+  provenance: (OfficialBgmProvenance & { coverSha256?: string }) | null;
+  cover_key: string | null;
 }
 
 export function getOfficialBgm(id: string, tx: PoolConnection, lock: 'share' | 'update') {
@@ -30,10 +33,12 @@ export function findOfficialBgmImport(sourceKey: string, sha256: string) {
 export async function insertOfficialBgm(row: Omit<OfficialBgmRow, 'state'>, tx: PoolConnection): Promise<void> {
   await execute(
     `INSERT INTO official_bgm
-      (id, source_key, sha256, title, genre, scenario, mood, master_key, master_ms, preview_key, preview_start_ms, preview_ms)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      (id, source_key, sha256, title, genre, scenario, mood, master_key, master_format, master_ms, preview_key,
+       preview_start_ms, preview_ms, provenance, cover_key)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [row.id, row.source_key, row.sha256, row.title, row.genre, row.scenario, row.mood,
-      row.master_key, row.master_ms, row.preview_key, row.preview_start_ms, row.preview_ms], tx,
+      row.master_key, row.master_format, row.master_ms, row.preview_key, row.preview_start_ms, row.preview_ms,
+      row.provenance ? JSON.stringify(row.provenance) : null, row.cover_key], tx,
   );
 }
 

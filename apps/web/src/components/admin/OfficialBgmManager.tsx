@@ -6,6 +6,51 @@ import { OFFICIAL_BGM_ADMIN, useOfficialBgmCatalog } from '../../lib/official-bg
 import { formatTime } from '../../lib/player';
 import { Badge, Loading } from '../common';
 import { OfficialBgmPreview } from '../OfficialBgmPreview';
+import { OfficialBgmBatchImport } from './OfficialBgmBatchImport';
+
+function ImportedBgmDetails({ track }: { track: OfficialBgmAdminItem }) {
+  const { t } = useI18n();
+  const [cover, setCover] = useState<string>();
+  const [loading, setLoading] = useState(false);
+  const [coverError, setCoverError] = useState(false);
+  const source = track.provenance;
+  if (!source) return null;
+
+  async function loadCover() {
+    setLoading(true);
+    setCoverError(false);
+    try {
+      const result = await apiFetch<{ url: string }>(`${OFFICIAL_BGM_ADMIN}/${track.id}/cover`);
+      setCover(result.url);
+    } catch {
+      setCoverError(true);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <details className="market-source">
+      <summary>{t('market.source.title')}</summary>
+      <dl className="small">
+        <dt>{t('market.source.series')}</dt><dd>{source.series}</dd>
+        <dt>{t('market.source.master')}</dt><dd>{source.masterFilename}</dd>
+        <dt>{t('market.source.originalTags')}</dt><dd>{source.style} · {source.originalScenario} · {source.originalMood}</dd>
+        <dt>{t('market.source.model')}</dt><dd>{source.model} · {source.modelVersion}</dd>
+        <dt>{t('market.source.seed')}</dt><dd>{source.seed}</dd>
+        <dt>{t('market.source.time')}</dt><dd>{source.generatedAt}</dd>
+        <dt>{t('market.source.license')}</dt><dd>{t(`market.source.license.${source.licenseStatus}`)}</dd>
+        <dt>{t('market.source.prompt')}</dt><dd>{source.prompt}</dd>
+        {source.note && <><dt>{t('market.source.note')}</dt><dd>{source.note}</dd></>}
+      </dl>
+      {track.hasCover && (cover ? <img className="market-source__cover" src={cover} alt={t('market.source.cover', { title: track.title })}
+        onError={() => { setCover(undefined); setCoverError(true); }} /> :
+        <button type="button" className="btn" disabled={loading}
+          onClick={() => void loadCover()}>{t(loading ? 'market.import.reading' : 'market.source.openCover')}</button>)}
+      {coverError && <p className="small" role="alert">{t('market.source.coverError')}</p>}
+    </details>
+  );
+}
 
 export function OfficialBgmManager() {
   const { t } = useI18n();
@@ -43,6 +88,7 @@ export function OfficialBgmManager() {
         <h2 id="market-admin-title">{t('market.catalog')}</h2>
         <p className="muted">{t('market.admin.lede')}</p>
       </header>
+      <OfficialBgmBatchImport onImported={catalog.reload} />
       {preview && <OfficialBgmPreview key={preview.id} track={preview} endpoint={OFFICIAL_BGM_ADMIN}
         onClose={() => { setPreview(null); previewButton.current?.focus(); }} />}
       {result && <p role="status" className="market-admin__result">{result}</p>}
@@ -59,6 +105,7 @@ export function OfficialBgmManager() {
               <p className="small muted">{t('market.admin.excerpt', {
                 start: formatTime(track.previewStartSeconds), length: formatTime(track.previewSeconds),
               })}</p>
+              <ImportedBgmDetails track={track} />
             </div>
             <div className="market-admin__actions">
               <button type="button" className="btn" aria-pressed={preview?.id === track.id}

@@ -3,7 +3,9 @@ import { AppError, BGM_GENRES, officialBgmAction } from '@yuha/contracts';
 import { listOfficialBgm } from '@yuha/db';
 import { z } from 'zod';
 import type { AppContext } from '../context.js';
-import { canBrowseOfficialBgm, changeOfficialBgm, officialBgmAdminItem, officialBgmItem, officialBgmPreview } from '../services/official-marketplace.js';
+import { canBrowseOfficialBgm, changeOfficialBgm, officialBgmAdminItem, officialBgmCover, officialBgmItem, officialBgmPreview } from '../services/official-marketplace.js';
+
+import officialBgmUploadRoutes from './official-bgm-upload.js';
 
 const idParam = z.object({ id: z.string().uuid() });
 const query = z.object({
@@ -15,6 +17,7 @@ const PAGE_SIZE = 30;
 
 export default async function officialMarketplaceRoutes(app: FastifyInstance, { ctx }: { ctx: AppContext }) {
   const admin = app.requireRole(['admin']);
+  await app.register(officialBgmUploadRoutes, { ctx });
   const assertBrowsable = (req: FastifyRequest) => {
     if (!canBrowseOfficialBgm(ctx.config.OFFICIAL_BGM_MARKETPLACE, req.user?.role)) {
       throw new AppError('NOT_FOUND', 'BGM catalogue is unavailable');
@@ -47,6 +50,10 @@ export default async function officialMarketplaceRoutes(app: FastifyInstance, { 
 
   app.get('/v1/admin/marketplace/bgm/:id/preview', { preHandler: admin }, async (req, reply) =>
     reply.header('cache-control', 'no-store').send(await officialBgmPreview(ctx, idParam.parse(req.params).id, true)),
+  );
+
+  app.get('/v1/admin/marketplace/bgm/:id/cover', { preHandler: admin }, async (req, reply) =>
+    reply.header('cache-control', 'no-store').send(await officialBgmCover(ctx, idParam.parse(req.params).id)),
   );
 
   app.post('/v1/admin/marketplace/bgm/:id/state', { preHandler: admin }, async (req, reply) =>

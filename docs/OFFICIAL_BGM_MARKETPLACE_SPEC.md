@@ -18,6 +18,8 @@
 
 ## 运营入口
 
+DGXA 正式批次的浏览器上传和 CSV 清单见 [官方 BGM 批次导入](OFFICIAL_BGM_BATCH_IMPORT_SPEC.md)。下面的 JSON 命令仍可用于早期生成脚本的批次。
+
 DGX 上的原始批次可先用 [DGX 盘点脚本](../deploy/dgx/music/README.md#official-bgm-batches-serverbench_official_inventorypy) 检查。以下导入格式对应本轮生成脚本的 MP3 批次，每批最多 30 首。批次目录保留 `catalog.json`，把 dgxa 返回的 `dgxa-results.json` 与候选 MP3 放在它下面的 `output-dgxa/`。在仓库根目录运行以下命令。
 
 ```sh

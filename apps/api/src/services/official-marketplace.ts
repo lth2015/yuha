@@ -14,7 +14,10 @@ export function officialBgmItem(row: OfficialBgmRow): OfficialBgmItem {
 }
 
 export function officialBgmAdminItem(row: OfficialBgmRow): OfficialBgmAdminItem {
-  return { ...officialBgmItem(row), state: row.state, sourceKey: row.source_key, previewStartSeconds: row.preview_start_ms / 1000 };
+  const provenance = row.provenance ? { ...row.provenance } : null;
+  if (provenance) delete provenance.coverSha256;
+  return { ...officialBgmItem(row), state: row.state, sourceKey: row.source_key, previewStartSeconds: row.preview_start_ms / 1000,
+    masterFormat: row.master_format, provenance, hasCover: Boolean(row.cover_key) };
 }
 
 export async function officialBgmPreview(ctx: AppContext, id: string, admin: boolean) {
@@ -26,6 +29,13 @@ export async function officialBgmPreview(ctx: AppContext, id: string, admin: boo
     const signed = await ctx.storage.signedUrl({ zone: 'delivery', key: row.preview_key, ttlSeconds: 300 });
     return { url: signed.url, expiresAt: signed.expiresAt.toISOString() };
   });
+}
+
+export async function officialBgmCover(ctx: AppContext, id: string) {
+  const key = await withTx(async (tx) => (await getOfficialBgm(id, tx, 'share'))?.cover_key);
+  if (!key) throw new AppError('NOT_FOUND', 'BGM cover not found');
+  const signed = await ctx.storage.signedUrl({ zone: 'delivery', key, ttlSeconds: 300 });
+  return { url: signed.url };
 }
 
 export async function changeOfficialBgm(ctx: AppContext, id: string, actorId: string, change: OfficialBgmAction) {
