@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createHash } from 'node:crypto';
-import { officialBgmInventoryFor, officialBgmInventoryReport, officialBgmSourceKey, parseOfficialBgmManifest } from '@yuha/contracts';
+import { officialBgmInventoryFor, officialBgmInventoryReport, officialBgmMissingProvenance, officialBgmSourceKey, parseOfficialBgmManifest } from '@yuha/contracts';
 import { execFileSync } from 'node:child_process';
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -62,8 +62,16 @@ describe('official BGM catalogue', () => {
       '01,晨光.wav,"First light, for you",Spring,Japanese healing,calm,travel,covers/01.png,ACE-Step,v1.5,9007199254740993,"Warm ""strings""\nsoft piano",2026-11-27T17:00:00+09:00,////';
     const rejected: number[] = [];
     const missingProvenance = ',bad.wav,Missing metadata,Spring,jazz,calm,travel,,ACE-Step,,1,Keys,2026-11-27T17:00:00+09:00,';
-    const [entry] = parseOfficialBgmManifest(`${csv}\r\n${missingProvenance}`, 'batch-01', (issue) => rejected.push(issue.row));
+    // The first production batch (2026-11-27): empty generation fields and a
+    // "masters/" prefix refused every row. Only a missing ID or file refuses one now;
+    // the empty fields are listed, not filled in.
+    const bareRecord = '02,masters/two.wav,No record yet,,,,,,,,,,,';
+    const [entry, bare] = parseOfficialBgmManifest(`${csv}\r\n${missingProvenance}\r\n${bareRecord}`, 'batch-01', (issue) => rejected.push(issue.row));
     expect(rejected).toEqual([3]);
+    expect(bare).toMatchObject({ title: 'No record yet', provenance: { trackId: '02', masterFilename: 'two.wav', model: '', seed: '', prompt: '' } });
+    expect(officialBgmMissingProvenance(bare!.provenance)).toEqual(
+      ['series', 'style', 'originalMood', 'originalScenario', 'model', 'modelVersion', 'seed', 'prompt', 'generatedAt']);
+    expect(officialBgmMissingProvenance(entry!.provenance)).toEqual([]);
     expect(officialBgmSourceKey({ batch: 'a-b', trackId: 'c' })).not.toBe(officialBgmSourceKey({ batch: 'a', trackId: 'b-c' }));
     expect(entry).toMatchObject({ genre: 'japanese_healing', title: 'First light, for you',
       provenance: { seed: '9007199254740993', prompt: 'Warm "strings"\nsoft piano', licenseStatus: 'pending', coverFilename: '01.png' } });

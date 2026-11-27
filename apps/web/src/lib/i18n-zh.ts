@@ -11,6 +11,7 @@ const zh: Dict = {
   "market.import.folder": "批次文件夹",
   "market.import.report": "盘点报告（可选 JSON）",
   "market.import.clearReport": "移除盘点报告",
+  "market.import.missing": "生成资料缺少：{fields}（照原样导入，不补写）",
   "market.import.rowError": "清单第 {row} 行无法读取 · {message}",
   "market.import.manifest": "请选择包含 manifest.csv 的批次文件夹。",
   "market.import.badReport": "无法读取盘点报告，请更换或移除。",

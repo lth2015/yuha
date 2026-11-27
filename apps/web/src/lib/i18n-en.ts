@@ -11,6 +11,7 @@ const en: Dict = {
   "market.import.folder": "Batch folder",
   "market.import.report": "Inventory report (optional JSON)",
   "market.import.clearReport": "Remove inventory report",
+  "market.import.missing": "Missing from the generation record: {fields} (imported as is, not filled in)",
   "market.import.rowError": "Manifest row {row} could not be read · {message}",
   "market.import.manifest": "Choose the batch folder containing manifest.csv.",
   "market.import.badReport": "The inventory report could not be read. Replace or remove it.",
