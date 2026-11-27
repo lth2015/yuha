@@ -131,10 +131,15 @@ spec:
             # "false" hides the button again.
             - name: FEATURE_LYRIC_AUTO_ALIGN_ENABLED
               value: "true"
-            # AI BGM (docs/BGM_STUDIO_PLAN.md): staff try it first; "all" after the
-            # product owner's go-ahead, "off" to hide it. Read by the API.
+            # AI BGM (docs/BGM_STUDIO_PLAN.md): "all" since 2026-11-27 (product
+            # owner); "staff" or "off" to step back. Read by the API.
             - name: BGM_STUDIO
-              value: "staff"
+              value: "all"
+            # The official BGM catalogue (docs/OFFICIAL_BGM_MARKETPLACE_SPEC.md):
+            # previews of published items only; no sale path. "all" since
+            # 2026-11-27 (product owner); "staff" or "off" to step back.
+            - name: OFFICIAL_BGM_MARKETPLACE
+              value: "all"
             # Older songs with no heard timeline are re-aligned when their owner
             # opens them (L4b, docs/AUTOMATIC_LYRIC_SYNC_TICKETS.md), from YUHA's
             # own master, at most LYRIC_BACKFILL_DAILY (30) a JST day. "staff"
