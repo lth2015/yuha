@@ -1,11 +1,11 @@
 import { useEffect, useState } from 'react';
-import type { OfficialBgmItem } from '@yuha/contracts';
+import type { OfficialBgmItem, OfficialBgmPublicationQueue } from '@yuha/contracts';
 import { apiFetch } from './api';
 
 export const OFFICIAL_BGM_CATALOG = '/v1/marketplace/bgm';
 export const OFFICIAL_BGM_ADMIN = '/v1/admin/marketplace/bgm';
 
-type Page<T> = { items: T[]; nextOffset: number | null };
+type Page<T> = { items: T[]; nextOffset: number | null; pendingPublication?: OfficialBgmPublicationQueue };
 
 export function useOfficialBgmCatalog<T extends OfficialBgmItem>(endpoint: string, query = '') {
   const [page, setPage] = useState<Page<T>>({ items: [], nextOffset: null });
@@ -46,8 +46,9 @@ export function useOfficialBgmCatalog<T extends OfficialBgmItem>(endpoint: strin
       setOffset(0);
       setRevision((n) => n + 1);
     },
-    replace: (item: T) => setPage((current) => ({
-      ...current, items: current.items.map((previous) => previous.id === item.id ? item : previous),
+    replace: (item: T, pendingPublication?: OfficialBgmPublicationQueue) => setPage((current) => ({
+      ...current, pendingPublication: pendingPublication ?? current.pendingPublication,
+      items: current.items.map((previous) => previous.id === item.id ? item : previous),
     })),
   };
 }

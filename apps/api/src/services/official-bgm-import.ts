@@ -101,7 +101,7 @@ function reuse(rows: OfficialBgmRow[], fields: Pick<OfficialBgmRow,
     isDeepStrictEqual(r[key as keyof OfficialBgmRow], expected))) {
     return { status: 'existing' as const, id: r.id };
   }
-  throw new AppError('CONFLICT', 'source key or audio is already present with different catalogue metadata');
+  throw new AppError('CONFLICT', 'source key or audio is already present with different catalogue metadata', { reason: 'import_conflict' });
 }
 
 export function importInputForBgmTrack(track: OfficialBgmBatchTrack): OfficialBgmImportInput {

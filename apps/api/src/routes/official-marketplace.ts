@@ -5,7 +5,7 @@ import { z } from 'zod';
 import type { AppContext } from '../context.js';
 import {
   canBrowseOfficialBgm, changeOfficialBgm, decideOfficialBgmSaleRights, editOfficialBgmCatalog, officialBgmAdminItem, officialBgmCover, officialBgmItem,
-  officialBgmPreview, publishAllOfficialBgm,
+  officialBgmPreview, officialBgmPublicationQueue, publishAllOfficialBgm,
 } from '../services/official-marketplace.js';
 
 import officialBgmUploadRoutes from './official-bgm-upload.js';
@@ -44,10 +44,14 @@ export default async function officialMarketplaceRoutes(app: FastifyInstance, { 
 
   app.get('/v1/admin/marketplace/bgm', { preHandler: admin }, async (req, reply) => {
     const p = query.parse(req.query);
-    const rows = await listOfficialBgm({ admin: true, genre: p.genre, search: p.q, offset: p.offset, limit: PAGE_SIZE + 1 });
+    const [rows, pendingPublication] = await Promise.all([
+      listOfficialBgm({ admin: true, genre: p.genre, search: p.q, offset: p.offset, limit: PAGE_SIZE + 1 }),
+      officialBgmPublicationQueue(),
+    ]);
     return reply.header('cache-control', 'no-store').send({
       items: rows.slice(0, PAGE_SIZE).map(officialBgmAdminItem),
       nextOffset: rows.length > PAGE_SIZE ? p.offset + PAGE_SIZE : null,
+      pendingPublication,
     });
   });
 
@@ -71,7 +75,7 @@ export default async function officialMarketplaceRoutes(app: FastifyInstance, { 
 
   app.post('/v1/admin/marketplace/bgm/publish-all', { preHandler: admin }, async (req, reply) =>
     reply.header('cache-control', 'no-store').send(
-      await publishAllOfficialBgm(ctx, req.user!.id, officialBgmPublishAll.parse(req.body).reason)),
+      await publishAllOfficialBgm(ctx, req.user!.id, officialBgmPublishAll.parse(req.body))),
   );
 
   app.post('/v1/admin/marketplace/bgm/:id/state', { preHandler: admin }, async (req, reply) =>

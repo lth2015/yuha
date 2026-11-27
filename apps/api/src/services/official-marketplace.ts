@@ -1,10 +1,11 @@
+import { createHash } from 'node:crypto';
 import {
   AppError, OFFICIAL_BGM_TRANSITIONS, type OfficialBgmAction, type OfficialBgmAdminItem, type OfficialBgmCatalogEdit,
-  type OfficialBgmItem, type OfficialBgmSaleRights,
+  type OfficialBgmBulkChange, type OfficialBgmBulkResult, type OfficialBgmItem, type OfficialBgmSaleRights, type OfficialBgmState,
 } from '@yuha/contracts';
 import {
-  getOfficialBgm, setOfficialBgmCatalog, setOfficialBgmSaleRights, setOfficialBgmState, unpublishedOfficialBgmIds, withTx, writeAuditLog,
-  type OfficialBgmRow,
+  getOfficialBgm, pendingOfficialBgmPublication, setOfficialBgmCatalog, setOfficialBgmSaleRights, setOfficialBgmState, withTx, writeAuditLog,
+  type OfficialBgmRow, type Tx,
 } from '@yuha/db';
 import type { AppContext } from '../context.js';
 
@@ -47,23 +48,37 @@ export async function officialBgmCover(ctx: AppContext, id: string) {
   return { url: signed.url };
 }
 
+function transition(row: OfficialBgmRow, change: OfficialBgmAction) {
+  const state = OFFICIAL_BGM_TRANSITIONS[row.state][change.action];
+  if (!state) throw new AppError('CONFLICT', 'this BGM has changed or cannot take that action');
+  return state;
+}
+
+async function changeState(tx: Tx, row: OfficialBgmRow, actorId: string, change: OfficialBgmAction, state: OfficialBgmState) {
+  await setOfficialBgmState(row.id, state, tx);
+  await writeAuditLog({
+    actorId, actorRole: 'admin', subjectType: 'official_bgm', subjectId: row.id,
+    action: `official_bgm.${change.action}`, reason: change.reason,
+    before: { state: row.state }, after: { state },
+  }, tx);
+  return { ...row, state };
+}
+
+async function previewAvailable(ctx: AppContext, row: OfficialBgmRow) {
+  const audio = await ctx.storage.get('delivery', row.preview_key).catch(() => null);
+  return Boolean(audio?.length);
+}
+
 export async function changeOfficialBgm(ctx: AppContext, id: string, actorId: string, change: OfficialBgmAction) {
   return withTx(async (tx) => {
     const row = await getOfficialBgm(id, tx, 'update');
     if (!row) throw new AppError('NOT_FOUND', 'BGM item not found');
-    const to = OFFICIAL_BGM_TRANSITIONS[row.state][change.action];
-    if (!to) throw new AppError('CONFLICT', 'this BGM has changed or cannot take that action');
-    if (to === 'published') {
-      const audio = await ctx.storage.get('delivery', row.preview_key).catch(() => null);
-      if (!audio?.length) throw new AppError('CONFLICT', 'the BGM preview is unavailable');
+    const state = transition(row, change);
+    if (state === 'published' && !await previewAvailable(ctx, row)) {
+      throw new AppError('CONFLICT', 'the BGM preview is unavailable', { reason: 'preview_missing' });
     }
-    await setOfficialBgmState(id, to, tx);
-    await writeAuditLog({
-      actorId, actorRole: 'admin', subjectType: 'official_bgm', subjectId: id,
-      action: `official_bgm.${change.action}`, reason: change.reason,
-      before: { state: row.state }, after: { state: to },
-    }, tx);
-    return officialBgmAdminItem({ ...row, state: to });
+    const updated = await changeState(tx, row, actorId, change, state);
+    return { ...officialBgmAdminItem(updated), pendingPublication: await officialBgmPublicationQueue(tx) };
   });
 }
 
@@ -86,27 +101,49 @@ export async function editOfficialBgmCatalog(id: string, actorId: string, edit: 
   });
 }
 
-/**
- * "Approve and publish all" (product owner, 2026-11-27): every draft or
- * reviewed track goes through the same two steps as by hand — review, then
- * publish — each in its own transaction with its own audit row and the one
- * reason given. A track whose preview is missing is left where it is and
- * reported, never published without one.
- */
-export async function publishAllOfficialBgm(ctx: AppContext, actorId: string, reason: string) {
-  const published: string[] = [];
-  const failed: Array<{ id: string; error: string }> = [];
-  for (const id of await unpublishedOfficialBgmIds()) {
-    try {
-      const now = await withTx(async (tx) => (await getOfficialBgm(id, tx, 'share'))?.state);
-      if (now === 'draft') await changeOfficialBgm(ctx, id, actorId, { action: 'review', reason });
-      await changeOfficialBgm(ctx, id, actorId, { action: 'publish', reason });
-      published.push(id);
-    } catch (error) {
-      failed.push({ id, error: error instanceof Error ? error.message : 'failed' });
-    }
+function publicationRevision(items: ReadonlyArray<{ id: string }>) {
+  return createHash('sha256').update(items.map(({ id }) => id).join('\n')).digest('hex');
+}
+
+export async function officialBgmPublicationQueue(tx?: Tx) {
+  const items = await pendingOfficialBgmPublication(tx);
+  return { count: items.length, revision: publicationRevision(items) };
+}
+
+const bulkFailure = {
+  preview_missing: 'the BGM preview is unavailable',
+  state_changed: 'this BGM has changed or cannot take that action',
+  save_failed: 'the BGM could not be published',
+} as const;
+
+export async function publishAllOfficialBgm(
+  ctx: AppContext, actorId: string, change: OfficialBgmBulkChange,
+): Promise<OfficialBgmBulkResult> {
+  const items = await pendingOfficialBgmPublication();
+  if (change.revision !== publicationRevision(items)) {
+    throw new AppError('CONFLICT', 'the BGM publication queue has changed');
   }
-  return { published: published.length, failed };
+  let published = 0;
+  const failed: OfficialBgmBulkResult['failed'] = [];
+  for (const item of items) {
+    let reason: keyof typeof bulkFailure | undefined;
+    try {
+      reason = await withTx(async (tx) => {
+        const row = await getOfficialBgm(item.id, tx, 'update');
+        if (!row || (row.state !== 'draft' && row.state !== 'reviewed')) return 'state_changed';
+        if (!await previewAvailable(ctx, row)) return 'preview_missing';
+        const review = { action: 'review', reason: change.reason } as const;
+        const publish = { action: 'publish', reason: change.reason } as const;
+        const reviewed = row.state === 'draft' ? await changeState(tx, row, actorId, review, transition(row, review)) : row;
+        await changeState(tx, reviewed, actorId, publish, transition(reviewed, publish));
+      });
+    } catch {
+      reason = 'save_failed';
+    }
+    if (reason) failed.push({ ...item, reason, error: bulkFailure[reason] });
+    else published++;
+  }
+  return { published, failed };
 }
 
 /**
