@@ -40,6 +40,12 @@ export function useOfficialBgmCatalog<T extends OfficialBgmItem>(endpoint: strin
       setFailed(false);
       setRevision((n) => n + 1);
     },
+    reload: () => {
+      setPending(true);
+      setFailed(false);
+      setOffset(0);
+      setRevision((n) => n + 1);
+    },
     replace: (item: T) => setPage((current) => ({
       ...current, items: current.items.map((previous) => previous.id === item.id ? item : previous),
     })),

@@ -1,6 +1,8 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import { createHash } from 'node:crypto';
+import { officialBgmInventoryFor, officialBgmInventoryReport, officialBgmSourceKey, parseOfficialBgmManifest } from '@yuha/contracts';
 import { execFileSync } from 'node:child_process';
-import { mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { importOfficialBgm } from '../apps/api/src/services/official-bgm-import.js';
@@ -36,6 +38,84 @@ describe('official BGM catalogue', () => {
       if (enabled) expect(response.json()).toEqual({ items: [], nextOffset: null });
     }
   });
+
+  it('protects the browser import before reading uploaded media', async () => {
+    const support = await publicMarket.createUser({ role: 'support' });
+    const admin = await publicMarket.createUser({ role: 'admin' });
+    const request = (headers: Record<string, string>) => publicMarket.app.inject({
+      method: 'POST', url: '/v1/admin/marketplace/bgm/import',
+      headers: { ...headers, 'content-type': 'multipart/form-data; boundary=missing' }, payload: 'not a file',
+    });
+    expect((await request({})).statusCode).toBe(401);
+    expect((await request(support.authHeader)).statusCode).toBe(403);
+    expect((await request(admin.authHeader)).statusCode).toBe(400);
+  });
+
+  it('imports a DGXA WAV with its original bytes, report and private provenance', async () => {
+    const admin = await publicMarket.createUser({ role: 'admin' });
+    const source = execFileSync('ffmpeg', ['-hide_banner', '-v', 'error', '-f', 'lavfi', '-i',
+      'sine=frequency=520:sample_rate=44100', '-t', '61', '-c:a', 'pcm_s16le', '-f', 'wav', 'pipe:1'], { maxBuffer: 8_000_000 });
+    const cover = await readFile(new URL('../apps/web/public/brand/og-card.png', import.meta.url));
+    const csv = '\uFEFFid,file,title,series,style,mood,scenario,cover,model,model_version,seed,prompt,generated_at,note\r\n' +
+      '01,晨光.wav,"First light, for you",Spring,Japanese healing,calm,travel,covers/01.png,ACE-Step,v1.5,9007199254740993,"Warm ""strings""\nsoft piano",2026-11-27T17:00:00+09:00,////';
+    const rejected: number[] = [];
+    const missingProvenance = ',bad.wav,Missing metadata,Spring,jazz,calm,travel,,ACE-Step,,1,Keys,2026-11-27T17:00:00+09:00,';
+    const [entry] = parseOfficialBgmManifest(`${csv}\r\n${missingProvenance}`, 'batch-01', (issue) => rejected.push(issue.row));
+    expect(rejected).toEqual([3]);
+    expect(officialBgmSourceKey({ batch: 'a-b', trackId: 'c' })).not.toBe(officialBgmSourceKey({ batch: 'a', trackId: 'b-c' }));
+    expect(entry).toMatchObject({ genre: 'japanese_healing', title: 'First light, for you',
+      provenance: { seed: '9007199254740993', prompt: 'Warm "strings"\nsoft piano', licenseStatus: 'pending', coverFilename: '01.png' } });
+    const sha256 = createHash('sha256').update(source).digest('hex');
+    const report = officialBgmInventoryReport.parse({ items: [{
+      id: '01', file: '晨光.wav', audio: { sha256, bytes: source.byteLength, duration_s: 61 }, missing: [], problems: [],
+    }] });
+    const inventory = officialBgmInventoryFor(report, entry!.provenance)!.evidence;
+    const adminBase = '/v1/admin/marketplace/bgm';
+    const upload = async (evidence = inventory, imageBytes = cover) => {
+      const form = new FormData();
+      form.append('fields', JSON.stringify({ track: { ...entry, inventory: evidence } }));
+      form.append('master', new Blob([new Uint8Array(source)], { type: 'audio/wav' }), '晨光.wav');
+      form.append('cover', new Blob([new Uint8Array(imageBytes)], { type: 'image/png' }), '01.png');
+      const wire = new Response(form);
+      return publicMarket.app.inject({
+        url: `${adminBase}/import`, method: 'POST', headers: { ...admin.authHeader, 'content-type': wire.headers.get('content-type')! },
+        payload: Buffer.from(await wire.arrayBuffer()),
+      });
+    };
+    expect((await upload({ ...inventory, sha256: '0'.repeat(64) })).statusCode).toBe(400);
+    const brokenCover = await upload(inventory, cover.subarray(0, 8));
+    expect(brokenCover.statusCode).toBe(400);
+    expect(brokenCover.json().error.message).toContain('cover could not be decoded');
+    expect((await publicMarket.app.inject({ url: adminBase, headers: admin.authHeader })).json().items).toEqual([]);
+    const first = await upload();
+    expect(first.statusCode).toBe(201);
+    const { id } = first.json();
+    expect((await upload()).json()).toEqual({ status: 'existing', id });
+    expect((await publicMarket.ctx.storage.get('delivery', `official-bgm/masters/${sha256}.wav`)).equals(source)).toBe(true);
+    const items = (await publicMarket.app.inject({ url: adminBase, headers: admin.authHeader })).json().items;
+    expect(items[0]).toMatchObject({ id, state: 'draft', masterFormat: 'wav', hasCover: true, provenance: entry!.provenance });
+    expect(items[0].provenance).not.toHaveProperty('coverSha256');
+    const privateCover = `${adminBase}/${id}/cover`;
+    expect((await publicMarket.app.inject({ url: privateCover })).statusCode).toBe(401);
+    const coverUrl = new URL((await publicMarket.app.inject({ url: privateCover, headers: admin.authHeader })).json().url);
+    const image = await publicMarket.app.inject({ url: coverUrl.pathname + coverUrl.search });
+    expect(image.headers['content-type']).toBe('image/png');
+    expect(image.rawPayload.equals(cover)).toBe(true);
+    expect((await publicMarket.app.inject({ url: '/v1/marketplace/bgm' })).json().items).toEqual([]);
+    for (const action of ['review', 'publish']) {
+      expect((await publicMarket.app.inject({ method: 'POST', url: `${adminBase}/${id}/state`, headers: admin.authHeader,
+        payload: { action, reason: 'Audio and original rights record checked' } })).statusCode).toBe(200);
+    }
+    const exposed = (await publicMarket.app.inject({ url: '/v1/marketplace/bgm' })).json().items[0];
+    expect(exposed).toMatchObject({ id, title: entry!.title, previewSeconds: expect.any(Number) });
+    expect(exposed).not.toHaveProperty('provenance');
+    expect(exposed).not.toHaveProperty('masterFormat');
+    expect(exposed).not.toHaveProperty('hasCover');
+    const signed = await publicMarket.app.inject({ url: `/v1/marketplace/bgm/${id}/preview` });
+    const preview = new URL(signed.json().url);
+    expect(preview.searchParams.get('key')).toMatch(/^official-bgm\/previews\//);
+    expect(exposed.previewSeconds).toBeLessThanOrEqual(60);
+  }, 30_000);
 
   it('imports a repeatable private draft and only exposes its separately encoded preview after review', async () => {
     const admin = await publicMarket.createUser({ role: 'admin' });

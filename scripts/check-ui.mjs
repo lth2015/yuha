@@ -50,7 +50,8 @@
  * or integration stack only — never production, where dev login is refused.
  */
 import { chromium } from 'playwright';
-import { mkdirSync, readFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 const BASE = process.env.UI_BASE ?? 'http://localhost:5173';
@@ -103,8 +104,10 @@ const PAGES = [
     name: `marketplace-${state}`, path: '/marketplace', as: null, allLanguages: true,
     prepare: (page) => openMarketplace(page, state),
   })),
-  { name: 'admin-marketplace-review', path: '/admin/marketplace', as: 'admin',
-    allLanguages: true, prepare: (page) => openMarketplace(page, 'review') },
+  ...['review', 'import'].map((state) => ({
+    name: `admin-marketplace-${state}`, path: '/admin/marketplace', as: 'admin',
+    allLanguages: true, prepare: (page) => openMarketplace(page, state),
+  })),
 
   { name: 'auth', path: '/auth', as: null },
   { name: 'create', path: '/create', as: 'creator' },
@@ -256,7 +259,7 @@ const MARKET_FIXTURES = [
 ];
 
 async function openMarketplace(page, state) {
-  const admin = state === 'review';
+  const admin = state === 'review' || state === 'import';
   const path = admin ? '/v1/admin/marketplace/bgm' : '/v1/marketplace/bgm';
   await page.unroute('**/v1/runtime*');
   await page.unroute(`**${path}?*`);
@@ -270,6 +273,23 @@ async function openMarketplace(page, state) {
   await page.reload({ waitUntil: 'networkidle' });
   if (state === 'off' || state === 'empty') {
     await page.waitForSelector('.market-empty');
+  } else if (state === 'import') {
+    const folder = mkdtempSync(join(tmpdir(), 'bgm-batch-'));
+    try {
+      mkdirSync(join(folder, 'masters'));
+      writeFileSync(join(folder, 'masters', 'coast.wav'), 'local fixture');
+      writeFileSync(join(folder, 'manifest.csv'), [
+        'id,file,title,series,style,mood,scenario,cover,model,model_version,seed,prompt,generated_at,note',
+        '01,coast.wav,A Coastal Morning · 海辺の朝,Demo,lofi,warm,travel,,ACE-Step,v1.5,43,Soft keys,2026-11-27T17:00:00+09:00,',
+        '02,missing.wav,Missing track · 檔案未到,Demo,jazz,calm,vlog,,ACE-Step,v1.5,44,Warm drums,2026-11-27T17:00:00+09:00,',
+      ].join('\n'));
+      await page.locator('.market-import summary').click();
+      await page.locator('.market-import input[webkitdirectory]').setInputFiles(folder);
+      await page.waitForSelector('.market-import__rows li:nth-child(2)');
+      await page.waitForSelector('.market-import__submit:enabled');
+    } finally {
+      rmSync(folder, { recursive: true, force: true });
+    }
   } else if (admin) {
     await page.locator('.market-admin__actions button').nth(1).click();
     await page.waitForSelector('.market-admin__confirm textarea');

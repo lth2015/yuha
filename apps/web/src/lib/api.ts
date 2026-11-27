@@ -106,7 +106,8 @@ async function request(path: string, opts: RequestOptions): Promise<{ res: Respo
   const headers: Record<string, string> = {};
   const token = getToken();
   if (token) headers['authorization'] = `Bearer ${token}`;
-  if (opts.body !== undefined) headers['content-type'] = 'application/json';
+  const form = opts.body instanceof FormData ? opts.body : undefined;
+  if (opts.body !== undefined && !form) headers['content-type'] = 'application/json';
   if (opts.idempotencyKey) headers['idempotency-key'] = opts.idempotencyKey;
 
   if (opts.signal?.aborted) throw new DOMException('request aborted', 'AbortError');
@@ -114,7 +115,7 @@ async function request(path: string, opts: RequestOptions): Promise<{ res: Respo
   const onAbort = () => controller.abort();
   opts.signal?.addEventListener('abort', onAbort, { once: true });
   // Reads should recover promptly; mutations can include a text-model call.
-  const timeout = setTimeout(onAbort, (opts.method ?? 'GET') === 'GET' ? 15_000 : 60_000);
+  const timeout = setTimeout(onAbort, form ? 180_000 : (opts.method ?? 'GET') === 'GET' ? 15_000 : 60_000);
   try {
     const readOnly = (opts.method ?? 'GET') === 'GET';
     for (let attempt = 0; ; attempt++) {
@@ -122,7 +123,7 @@ async function request(path: string, opts: RequestOptions): Promise<{ res: Respo
         const res = await fetch(`${API_BASE}${path}`, {
           method: opts.method ?? 'GET',
           headers,
-          body: opts.body === undefined ? undefined : JSON.stringify(opts.body),
+          body: form ?? (opts.body === undefined ? undefined : JSON.stringify(opts.body)),
           signal: controller.signal,
         });
         const text = res.status === 204 ? '' : await res.text();

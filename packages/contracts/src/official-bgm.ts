@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import type { OfficialBgmProvenance } from './official-bgm-batch.js';
 import { BGM_GENRES, BGM_MOODS, BGM_SCENARIOS } from './bgm.js';
 
 export const officialBgmMetadata = z.object({
@@ -35,4 +36,7 @@ export interface OfficialBgmAdminItem extends OfficialBgmItem {
   state: OfficialBgmState;
   sourceKey: string;
   previewStartSeconds: number;
+  masterFormat: 'mp3' | 'wav';
+  provenance: OfficialBgmProvenance | null;
+  hasCover: boolean;
 }

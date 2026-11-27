@@ -3245,3 +3245,30 @@ textarea.is-full { border-color: var(--danger); }
   .market-track__play { padding-inline: 10px; }
   .market-admin__track { grid-template-columns: minmax(0, 1fr); }
 }
+
+.market-import {
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  padding: 16px;
+  background: var(--surface-solid);
+}
+.market-import summary, .market-source summary { cursor: pointer; font-weight: 600; padding-block: 9px; }
+.market-import .field { min-width: 0; }
+.market-import input[type="file"] { width: 100%; min-height: 44px; }
+.market-import__clear, .market-import__submit { align-self: start; }
+.market-import__rows {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  max-height: 28rem;
+  overflow: auto;
+}
+.market-import__rows li { display: grid; gap: 5px; border-top: 1px solid var(--line); padding: 12px 0; overflow-wrap: anywhere; }
+.market-import__rows p { margin: 0; }
+.market-import__tags { display: grid; gap: 8px; grid-template-columns: repeat(auto-fit, minmax(min(100%, 160px), 1fr)); }
+.market-source { margin-top: 8px; }
+.market-import:not([open]) > :not(summary),
+.market-source:not([open]) > :not(summary) { display: none; }
+.market-source dl { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 3fr); gap: 5px 12px; }
+.market-source dd { margin: 0; white-space: pre-wrap; }
+.market-source__cover { display: block; width: min(240px, 100%); height: auto; border-radius: 12px; }

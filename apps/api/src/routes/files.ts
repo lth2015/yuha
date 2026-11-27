@@ -42,8 +42,12 @@ export default async function fileRoutes(app: FastifyInstance, opts: { ctx: AppC
     }
 
     const filename = q['filename'];
+    const ext = key.split('.').at(-1);
+    const coverType = key.startsWith('official-bgm/covers/') && (
+      ext === 'png' ? 'image/png' : ext === 'webp' ? 'image/webp' : /^(jpe?g)$/.test(ext ?? '') ? 'image/jpeg' : null
+    );
     reply
-      .header('content-type', key.endsWith('.wav') ? 'audio/wav' : 'audio/mpeg')
+      .header('content-type', coverType || (key.endsWith('.wav') ? 'audio/wav' : 'audio/mpeg'))
       .header('cache-control', 'private, max-age=60')
       .header('x-content-type-options', 'nosniff')
       .header('accept-ranges', 'bytes')

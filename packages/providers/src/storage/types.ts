@@ -27,6 +27,7 @@ export interface StorageAdapter {
     body: Buffer;
     contentType: string;
     metadata?: Record<string, string>;
+    abortSignal?: AbortSignal;
   }): Promise<PutResult>;
   get(zone: StorageZone, key: string): Promise<Buffer>;
   /**
@@ -38,7 +39,7 @@ export interface StorageAdapter {
    * re-run must not fail on the objects it already removed, and "absent" is
    * the state the caller wanted either way.
    */
-  remove(zone: StorageZone, key: string): Promise<void>;
+  remove(zone: StorageZone, key: string, abortSignal?: AbortSignal): Promise<void>;
   /** Short-lived, unguessable download URL. Re-issued on every read. */
   signedUrl(params: {
     zone: StorageZone;

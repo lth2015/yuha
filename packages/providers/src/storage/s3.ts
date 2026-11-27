@@ -37,6 +37,7 @@ export class S3StorageAdapter implements StorageAdapter {
     body: Buffer;
     contentType: string;
     metadata?: Record<string, string>;
+    abortSignal?: AbortSignal;
   }): Promise<PutResult> {
     await this.client.send(
       new PutObjectCommand({
@@ -49,6 +50,7 @@ export class S3StorageAdapter implements StorageAdapter {
           ? { ServerSideEncryption: 'aws:kms', SSEKMSKeyId: this.kmsKeyId }
           : { ServerSideEncryption: 'AES256' }),
       }),
+      { abortSignal: params.abortSignal },
     );
     return { byteSize: params.body.byteLength, sha256: createHash('sha256').update(params.body).digest('hex') };
   }
@@ -80,8 +82,8 @@ export class S3StorageAdapter implements StorageAdapter {
    * whoever writes the retention policy, not to this method, so it stays as it
    * is and the delay is written down here and in the deletion flow.
    */
-  async remove(zone: StorageZone, key: string): Promise<void> {
-    await this.client.send(new DeleteObjectCommand({ Bucket: this.buckets[zone], Key: key }));
+  async remove(zone: StorageZone, key: string, abortSignal?: AbortSignal): Promise<void> {
+    await this.client.send(new DeleteObjectCommand({ Bucket: this.buckets[zone], Key: key }), { abortSignal });
   }
 
   async signedUrl(params: {
