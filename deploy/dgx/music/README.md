@@ -95,6 +95,10 @@ docker compose run --rm --no-deps -v ~/yuha-bench:/bench --entrypoint "" music b
   cd /bench && PYTHONPATH=/bench:/opt/server /tmp/q/bin/python bench_align.py --songs 10 --out /bench/out'
 ```
 
+With hand-timed staff songs (`pnpm bench:lyric-truth`, docs/quality/LYRIC_BENCH.md), put the
+export in `~/yuha-bench/truth` and replace `--songs 10` with `--truth /bench/truth`: routes for
+the repository's scorer are written beside it.
+
 The venv is gone when the container exits; the Qwen weights (~1.8 GB) stay
 in `~/.cache/huggingface`. Agreement with Whisper is a proxy (Whisper's own
 starts run early in places); human-corrected timelines are the ground truth

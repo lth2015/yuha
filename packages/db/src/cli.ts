@@ -6,13 +6,14 @@
  * Uses the mounted RDS credentials in the cluster, or DATABASE_URL for local
  * development and CI.
  */
-import { existsSync, readFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { join, resolve } from 'node:path';
 
 import { closeDb, db, initDb } from './pool.js';
 import { migrate, reset } from './migrate.js';
 import { INVARIANTS, checkInvariants } from './invariants.js';
 import { resetMfaFactor } from './mfa.js';
+import { lyricTruth } from './lyric-truth.js';
 
 type MysqlCredentials = {
   host?: string;
@@ -52,7 +53,7 @@ if (!url) {
 
 const command = process.argv[2] ?? 'migrate';
 // One connection for the logic rules, so the READ ONLY set below covers every query they run.
-initDb({ connectionString: url, ...(command === 'invariants' ? { max: 1 } : {}) });
+initDb({ connectionString: url, ...(command === 'invariants' || command === 'lyric-truth' ? { max: 1 } : {}) });
 
 try {
   if (command === 'migrate') {
@@ -88,6 +89,28 @@ try {
       console.log(`\n${results.length} rules checked, ${broken.length} broken.`);
     }
     if (broken.length) process.exitCode = 1;
+  } else if (command === 'lyric-truth') {
+    /*
+     * Ground truth for the lyric sync benchmark (docs/quality/LYRIC_BENCH.md):
+     * staff songs whose timing a person corrected, never a customer's. Read
+     * only, one connection, so it can be pointed at production. Writes the
+     * scorer's annotations and a songs.json for bench_align.py on the DGX.
+     */
+    const dir = resolve(process.env.INIT_CWD ?? process.cwd(), process.argv[3] ?? 'quality-probes/lyric-bench');
+    await db().query('SET SESSION TRANSACTION READ ONLY');
+    const songs = await lyricTruth();
+    // An export of nothing is not a ground truth.
+    if (!songs.length) throw new Error('no staff song has a corrected timeline yet: correct some in the song page first');
+    mkdirSync(join(dir, 'annotations', 'staff'), { recursive: true });
+    for (const s of songs) writeFileSync(join(dir, 'annotations', 'staff', `${s.songId}.json`), JSON.stringify(s.annotation, null, 1));
+    writeFileSync(
+      join(dir, 'songs.json'),
+      JSON.stringify(songs.map(({ songId, providerRequestId, language, lyrics }) => ({ songId, providerRequestId, language, lyrics })), null, 1),
+    );
+    const by = (l: string) => songs.filter((s) => s.language === l).length;
+    console.log(`${songs.length} songs (zh ${by('zh')}, ja ${by('ja')}, en ${by('en')}) -> ${dir}`);
+    const missing = songs.filter((s) => !s.providerRequestId).length;
+    if (missing) console.log(`${missing} have no DGX job id: their audio cannot be found on the DGX`);
   } else if (command === 'mfa-reset') {
     /*
      * The address comes from the command line, never from a file: an
