@@ -286,4 +286,21 @@ describe('official BGM catalogue', () => {
     expect(officialBgmStyleTags('lo-fi, piano / Chill，lo-fi、')).toEqual(['lo-fi', 'piano', 'Chill']);
     expect(officialBgmStyleTags(null)).toEqual([]);
   });
+
+  it('says which step of an import failed and how, instead of "internal error"', async () => {
+    const source = execFileSync('ffmpeg', ['-hide_banner', '-v', 'error', '-f', 'lavfi', '-i',
+      'sine=frequency=700:sample_rate=44100', '-t', '61', '-b:a', '128k', '-f', 'mp3', 'pipe:1'], { maxBuffer: 8_000_000 });
+    const denied = Object.assign(new Error('Access Denied'), { name: 'AccessDenied' });
+    const put = vi.spyOn(publicMarket.ctx.storage, 'put').mockRejectedValue(denied);
+    try {
+      await expect(importOfficialBgm(publicMarket.ctx, { sourceKey: 'stage-01', title: 'Stage', genre: 'lofi', scenario: 'vlog', mood: 'calm' }, source))
+        .rejects.toMatchObject({ code: 'UPSTREAM_UNAVAILABLE', message: 'import failed while writing the master and preview to storage: AccessDenied: Access Denied' });
+    } finally {
+      put.mockRestore();
+    }
+    // Nothing half-imported is left behind.
+    const { query } = await import('@yuha/db');
+    expect(await query(`SELECT id FROM official_bgm WHERE source_key = 'stage-01'`, [])).toEqual([]);
+  }, 60_000);
 });
+
