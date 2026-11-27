@@ -122,6 +122,18 @@ On the full mix that clock smears across instrumentals: the first line after
 an interlude lit up while the band was still playing, and the last line before
 one stayed lit through it. So the vocal is taken out first:
 
+**Per-line confidence on the Whisper path (2026-11-27).** Every line now
+carries `confidence`: the share of its characters Whisper heard in runs of two
+or more (a lone matched character counts half), and 0 for a line whose time
+was filled in between its neighbours or dropped for breaking their order.
+YUHA's shared rule leaves a line under 0.5 unlit, out of videos and out of the
+`.lrc`. With `ALIGN_PARTIAL_MIN_COVERAGE` set below `ALIGN_MIN_COVERAGE`
+(0.85), a song in between comes back `partial: true` instead of 422. It is
+**off by default** (equal to 0.85): YUHA applies the rule to staff only while
+`LYRIC_STRICT_TIMELINE=staff`, and anyone else would see an unheard line lit.
+Set it, e.g. `ALIGN_PARTIAL_MIN_COVERAGE=0.5` in `.env`, once the rule is on
+for everyone.
+
 - **Demucs (`htdemucs`) separates the vocal** (`server/separate.py`) and
   Whisper transcribes the stem. If the stem hears less of the lyrics than the
   mix, the mix is transcribed too and the better match kept.

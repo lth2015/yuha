@@ -1,4 +1,5 @@
 """/v1/align's choice of what Whisper hears, without GPU models or real audio."""
+import json
 import os
 import sys
 import tempfile
@@ -148,6 +149,29 @@ class AlignRouteTests(unittest.TestCase):
         out, calls = self.run_align(fake_separate(), heard)
         self.assertEqual(out["heard"], "mix")
         self.assertEqual(out["coverage"], 1.0)
+
+    def test_a_song_partly_heard_comes_back_partial_with_each_line_s_confidence(self):
+        # Only the first line was heard: 6 of 11 characters. Below the full
+        # threshold, above the partial floor: the lines come back, the unheard
+        # one marked unsure, and YUHA's trusted-line rule leaves it unlit.
+        heard = [("晚风吹过街角", 1, 4)]
+        with patch.object(self.app, "ALIGN_PARTIAL_MIN_COVERAGE", 0.5):
+            out, _ = self.run_align(fake_separate(), lambda audio: heard, method="whisper")
+        self.assertTrue(out["partial"])
+        self.assertEqual([l["confidence"] for l in out["lines"]], [1.0, 0.0])
+
+    def test_partial_results_are_off_until_the_box_is_told(self):
+        # Off by default: YUHA's trusted-line rule is staff-only for now, and
+        # anyone else would see the unheard line lit.
+        self.assertEqual(self.app.ALIGN_PARTIAL_MIN_COVERAGE, self.app.ALIGN_MIN_COVERAGE)
+        out, _ = self.run_align(fake_separate(), lambda audio: [("晚风吹过街角", 1, 4)], method="whisper")
+        self.assertEqual(out.status_code, 422)
+
+    def test_a_song_barely_heard_is_still_refused(self):
+        with patch.object(self.app, "ALIGN_PARTIAL_MIN_COVERAGE", 0.5):
+            out, _ = self.run_align(fake_separate(), lambda audio: [("晚风", 1, 2)], method="whisper")
+        self.assertEqual(out.status_code, 422)
+        self.assertEqual(json.loads(out.body)["error"], "low_coverage")
 
     def test_a_stem_with_no_singing_is_not_reported_as_voice_activity(self):
         silent = fake_separate()

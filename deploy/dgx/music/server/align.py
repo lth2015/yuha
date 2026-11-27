@@ -209,6 +209,19 @@ def align_lines(
     for li, idxs in trusted.items():
         spans[li] = (min(char_time[i][0] for i in idxs), max(char_time[i][1] for i in idxs))
 
+    # How much of each line was heard (the shared trusted-line rule reads it:
+    # under 0.5 a line is not lit, burned in or written to an .lrc). A
+    # character in a run of two or more is evidence; a lone match is half of
+    # one; a line whose span is dropped below or filled in between its
+    # neighbours was not heard at all.
+    line_chars = [0] * n
+    for li, _ in lyr_owner:
+        line_chars[li] += 1
+    confidence = [0.0] * n
+    for li, idxs in trusted.items():
+        evidence = sum(1.0 if char_run[i] >= 2 else 0.5 for i in idxs)
+        confidence[li] = min(1.0, evidence / max(1, line_chars[li]))
+
     # A recogniser can match a stray character far away; drop spans that break
     # the order of their neighbours, then fill the holes proportionally.
     last_end = 0.0
@@ -218,6 +231,7 @@ def align_lines(
             continue
         if sp[0] < last_end - 0.25:
             spans[i] = None
+            confidence[i] = 0.0
             continue
         last_end = sp[1]
 
@@ -276,7 +290,8 @@ def align_lines(
         if 0 < nxt - e < 1.5:
             e = nxt
         e = max(e, s + min_line)
-        lines.append({"text": text, "section": section, "start": round(s, 3), "end": round(min(e, duration), 3)})
+        lines.append({"text": text, "section": section, "start": round(s, 3), "end": round(min(e, duration), 3),
+                      "confidence": round(confidence[i], 3)})
 
     # Per-character "words" for the karaoke fill: matched characters carry
     # their own time, the rest are interpolated inside the line.
