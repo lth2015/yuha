@@ -159,6 +159,8 @@ export default function Bgm() {
                 {formatTime(track.durationSeconds)} · {t(`bgm.genre.${track.bgm?.genre ?? choice.genre}`)} · {t(`bgm.scenario.${track.bgm?.scenario ?? choice.scenario}`)} ·{' '}
                 {new Date(track.createdAt).toLocaleString(lang)}
               </p>
+              {/* The music service heard something like a voice in it (B2): say so before it goes under a video. */}
+              {track.bgmVoiceHeard === true && <p className="alert alert--warn" role="note">{t('bgm.voiceHeard')}</p>}
               <div className="bgm__actions">
                 <button type="button" className="btn btn--primary" onClick={() => player.play({ ...track, previewUrl: track.previewUrl })}>
                   {t('bgm.play')}

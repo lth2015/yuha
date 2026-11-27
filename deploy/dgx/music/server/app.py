@@ -111,6 +111,12 @@ V15_MODEL = os.environ.get("V15_MODEL", "")          # DiT slot name, e.g. acest
 V15_STEPS = int(os.environ.get("V15_STEPS", "8"))     # turbo: 8, sft/base: ~50
 V15_THINKING = os.environ.get("V15_THINKING", "true").lower() == "true"  # let the 5Hz LM plan the song
 
+# The render report (quality.py; docs/BGM_STUDIO_PLAN.md B2): which model made
+# the take, how long it took, whether it clipped and, for an instrumental, how
+# much voice the separator hears in it. Measuring never fails a job.
+QUALITY_REPORT = os.environ.get("QUALITY_REPORT", "on").lower() != "off"
+QUALITY_VOCALS = os.environ.get("QUALITY_VOCALS", "on").lower() != "off"
+
 # What YUHA sent (brief, lyrics) and what came back are kept this many days,
 # then deleted (docs/legal/PRIVACY_CHANGES_2026-11.md). YUHA copies a finished
 # song into its own storage within minutes, and a signed audio URL lives a day,
@@ -178,6 +184,7 @@ def public_view(job: dict) -> dict:
         "queue_wait_seconds": job.get("queue_wait_seconds"),
         "generation_seconds": job.get("generation_seconds"),
         "audio_seconds": job.get("audio_seconds"),
+        "report": job.get("report"),
     }
     if job["status"] == "succeeded":
         out["audio_url"] = audio_url(job["id"])
@@ -668,11 +675,50 @@ def intelligibility(path: Path, lyrics: str) -> float:
     return float(align_lines(lyrics, words, 600.0)["coverage"])
 
 
+def model_label() -> str:
+    """Which model made a take, as the report names it."""
+    if ENGINE == "v15":
+        return f"ace-step-1.5:{V15_MODEL or 'default'}"
+    return "ace-step-v1-3.5b"
+
+
+def _decode_native(path: Path):
+    """[channels, n] float32 at the file's own rate: resampling would round off the flat tops clipping leaves."""
+    import separate
+    info = subprocess.run(
+        ["ffprobe", "-v", "error", "-select_streams", "a:0", "-show_entries", "stream=sample_rate,channels",
+         "-of", "default=nw=1:nk=1", str(path)],
+        capture_output=True, text=True, check=True,
+    ).stdout.split()
+    sr, channels = int(info[0]), int(info[1])
+    return separate.decode(path, sr, channels), sr
+
+
+def _stem_locked(path: Path):
+    import separate
+    with _gpu_lock:
+        return separate.vocal_stem(path)
+
+
+def render_report(path: Path, *, instrumental: bool, render_seconds: float) -> dict:
+    """The take's report for YUHA. A measurement that fails says so and the song is still delivered."""
+    from quality import measure
+    report: dict = {"engine": ENGINE, "model": model_label(), "render_seconds": round(render_seconds, 1)}
+    try:
+        report.update(measure(path, instrumental=instrumental, decode=_decode_native,
+                              stem=_stem_locked if QUALITY_VOCALS else None))
+    except Exception as e:
+        log.warning("render report incomplete: %r", e)
+        report["error"] = repr(e)[:200]
+    return report
+
+
 def run_generation(job: dict) -> None:
     req = job["request"]
     work = DATA_DIR / "tmp" / job["id"]
     sung = not req.get("instrumental") and bool(req.get("lyrics"))
     takes = VOCAL_TAKES if sung else 1
+    rendering_from = time.time()
     if takes == 1:
         produced = render(req, work)
     else:
@@ -691,6 +737,10 @@ def run_generation(job: dict) -> None:
         produced = scored[0][2]
         job["takes"] = [{"seed": sd, "intelligibility": round(sc, 3)} for sc, sd, _ in scored]
         job["intelligibility"] = round(scored[0][0], 3)
+
+    render_seconds = time.time() - rendering_from
+    if QUALITY_REPORT:
+        job["report"] = render_report(produced, instrumental=not sung, render_seconds=render_seconds)
 
     mp3_path = AUDIO_DIR / f"{job['id']}.mp3"
     # The render's own length, not the requested one: ACE-Step is close but not

@@ -36,9 +36,15 @@ import type { AppContext } from '../context.js';
 import { createExport, issueDownloadUrl } from '../services/exports.js';
 import { LICENSE_DISCLAIMER } from '../services/delivery.js';
 import { screenDedication } from '../services/generation.js';
-import { toPublicTrackView } from './explore.js';
+import { bgmChoices, toPublicTrackView } from './explore.js';
 import { removeSceneMvsOfTrack } from '../services/scene-mv-cleanup.js';
 import { lyricSyncStateFor, lyricSyncStateOnOpen } from '../services/lyric-sync-state.js';
+
+/** Did the music service hear a voice in it for longer than allowed? null: it did not measure. */
+function voiceHeard(stored: Record<string, unknown> | null, maxSeconds: number): boolean | null {
+  const seconds = (stored?.quality as { vocalSeconds?: unknown } | null | undefined)?.vocalSeconds;
+  return typeof seconds === 'number' ? seconds > maxSeconds : null;
+}
 
 async function toTrackView(
   ctx: AppContext,
@@ -79,7 +85,8 @@ async function toTrackView(
     dedication: row.dedication ?? null,
     kind: row.kind ?? 'song',
     // The choices it was made from; the creator's own note stays in the job.
-    bgm: row.bgm ? ({ ...row.bgm, note: '' } as TrackView['bgm']) : null,
+    bgm: row.bgm ? bgmChoices(row.bgm) : null,
+    ...(row.kind === 'bgm' && viewerId === row.owner_id ? { bgmVoiceHeard: voiceHeard(row.bgm, ctx.config.BGM_VOICE_SECONDS_MAX) } : {}),
     licenseCount: await countLicenses(row.id),
     licensedByMe: viewerId === row.owner_id ? false : await hasLicense(row.id, viewerId),
     createdAt: row.created_at.toISOString(),

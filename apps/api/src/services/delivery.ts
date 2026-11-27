@@ -14,6 +14,7 @@ import {
   withTx,
   type JobRow,
 } from '@yuha/db';
+import type { MusicRenderReport } from '@yuha/providers';
 import type { AppContext } from '../context.js';
 
 export const LICENSE_DISCLAIMER_JA = [
@@ -71,6 +72,15 @@ export interface DeliverParams {
   format: 'mp3' | 'wav';
   durationMs: number;
   providerRequestId: string;
+  /** The music service's report on the raw render; recorded with a BGM (B2), never a reason to refuse delivery. */
+  report?: MusicRenderReport;
+}
+
+/** What a BGM keeps of the render report: the measurements, under names of our own; null when nothing was reported. */
+function bgmQuality(r: MusicRenderReport | undefined): Record<string, unknown> | null {
+  if (!r) return null;
+  const { engine, model, renderSeconds, peakDbfs, clippedRatio, vocalRatio, vocalSeconds } = r;
+  return { engine, model, renderSeconds, peakDbfs, clippedRatio, vocalRatio, vocalSeconds, ...(r.error ? { error: r.error } : {}) };
 }
 
 /**
@@ -138,7 +148,8 @@ export async function deliver(ctx: AppContext, params: DeliverParams): Promise<{
         coverSeed: coverSeedFor(trackId),
         dedication: input.dedication ?? null,
         kind: input.bgm ? 'bgm' : 'song',
-        bgm: input.bgm ? { ...input.bgm, note: undefined } : null,
+        // The choices it was made from, and what the music service measured on its render (B2).
+        bgm: input.bgm ? { ...input.bgm, note: undefined, quality: bgmQuality(params.report) } : null,
       },
       tx,
     );

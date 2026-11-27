@@ -53,6 +53,7 @@ If `01_deploy.sh` fails at the "torch was replaced" assertion, that is the ARM64
 | MUSIC_STATUS_MAP | `queued→pending, running→pending, succeeded→completed, failed→failed, rejected→rejected` |
 | MUSIC_IDEMPOTENCY_HEADER | `Idempotency-Key` (supported) |
 | MUSIC_ALLOWED_AUDIO_HOSTS | the Spark IP |
+| MUSIC_REPORT_FIELD | `report` (the render report below; set in `deploy/k8s/qa/resources.yaml` for the worker) |
 | API key | `YUHA_API_KEY` in `.env` |
 
 HTTP codes: 200 submit/poll · 401 bad key · 422 invalid input · 429 queue full (`Retry-After: 60`) · 404 unknown id. No redirects.
@@ -217,6 +218,20 @@ It is read from `.env` (`env_file`), so changing it needs only
 everything (benchmarks only). Takes effect on the Spark only after the image
 is rebuilt and the container restarted (`01_deploy.sh`); this box is not
 deployed by the Deploy QA workflow.
+
+## Render report (`report` on a finished job; `quality.py`)
+
+A finished job carries a `report` for YUHA (docs/BGM_STUDIO_PLAN.md, B2):
+
+| field | meaning |
+|---|---|
+| `engine`, `model` | which engine and model made the take (`ace-step-v1-3.5b`, or `ace-step-1.5:<V15_MODEL>`) |
+| `render_seconds` | time spent rendering, takes and their scoring included; `generation_seconds` beside it also counts mastering |
+| `peak_dbfs`, `clipped_ratio` | on the **raw render**, before mastering. The delivered MP3 is levelled to `MASTER_TP` (-2.5 dBTP), so its own peak cannot show clipping. `clipped_ratio` counts samples in runs of 3+ held at full scale: a single sample at the peak, a float render's overs past 1.0, and flat tops below full scale (a limiter) are not clipping |
+| `vocal_ratio`, `vocal_seconds` | instrumental takes only: the demucs vocal stem's share of the energy, and seconds (0.5 s windows) where it is both louder than -35 dBFS and at least a quarter of the window. `null` when separation is unavailable — not measured, never "no voice" |
+| `error` | the measurement failed; the song is delivered anyway |
+
+`QUALITY_REPORT=off` drops the report; `QUALITY_VOCALS=off` skips the separation (it holds the GPU for a few seconds per instrumental). The thresholds are YUHA's (`BGM_VOICE_SECONDS_MAX`), set from listening, not here. Takes effect after `01_deploy.sh`, like everything on this box; until then YUHA records nothing, which it treats as "not measured".
 
 ## Lyric alignment (`POST /v1/align`)
 

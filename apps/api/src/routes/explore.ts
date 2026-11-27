@@ -17,6 +17,16 @@ import {
 import { licenseStateFor } from '../services/market.js';
 import type { AppContext } from '../context.js';
 
+/**
+ * The choices a BGM was made from, and nothing else of what is stored with it.
+ * The render's quality is stored beside them (B2) and stays on the server: a
+ * spread of the stored object would hand it to anyone holding a public link.
+ */
+export function bgmChoices(stored: Record<string, unknown>): TrackView['bgm'] {
+  const { scenario, genre, mood, durationSeconds, tempo } = stored;
+  return { scenario, genre, mood, durationSeconds, tempo, note: '' } as unknown as TrackView['bgm'];
+}
+
 export function toPublicTrackView(
   ctx: AppContext,
   row: TrackWithArtist,
@@ -47,7 +57,7 @@ export function toPublicTrackView(
     dedication: row.dedication ?? null,
     kind: row.kind ?? 'song',
     // The choices it was made from; the creator's own note stays in the job.
-    bgm: row.bgm ? ({ ...row.bgm, note: '' } as TrackView['bgm']) : null,
+    bgm: row.bgm ? bgmChoices(row.bgm) : null,
     licenseCount: opts.licenseCount ?? 0,
     licensedByMe: opts.licensedByMe ?? null,
     createdAt: row.created_at.toISOString(),

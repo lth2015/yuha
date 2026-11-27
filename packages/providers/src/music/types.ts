@@ -74,6 +74,29 @@ export interface MusicAudioRef {
   /** Provider-declared duration; verified locally before delivery (AI-07). */
   declaredDurationSeconds?: number;
   providerRequestId: string;
+  /** What the service measured on the raw render, when it reports it (BGM B2). Informational: never gates delivery. */
+  report?: MusicRenderReport;
+}
+
+/**
+ * The music service's report on one take (deploy/dgx/music/server/quality.py).
+ * Measured on the raw render, before mastering: the delivered MP3 is levelled
+ * to a -2.5 dBTP ceiling, so its own peak cannot show clipping. null means not
+ * measured (or not readable), never "measured and fine".
+ */
+export interface MusicRenderReport {
+  engine: string | null;
+  model: string | null;
+  renderSeconds: number | null;
+  peakDbfs: number | null;
+  /** Share of samples in runs held at full scale, 0..1. */
+  clippedRatio: number | null;
+  /** Instrumental takes: the vocal stem's share of the energy, 0..1. */
+  vocalRatio: number | null;
+  /** Instrumental takes: seconds in which the separator heard a voice. */
+  vocalSeconds: number | null;
+  /** The service could not finish measuring; what it has is above. */
+  error?: string;
 }
 
 export interface MusicProvider {

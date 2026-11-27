@@ -275,6 +275,11 @@ spec:
             # delivery. Read by the worker, which is where delivery happens.
             - name: LYRIC_AUTO_SYNC
               value: "staff"
+            # The DGX's render report (docs/BGM_STUDIO_PLAN.md B2): model, render
+            # time, clipping and voice heard in an instrumental, recorded on a BGM.
+            # A DGX that sends none (not yet updated) simply records nothing.
+            - name: MUSIC_REPORT_FIELD
+              value: "report"
             # Qwen fused with Whisper for every song's alignment (see the API's LYRIC_ALIGNER).
             - name: LYRIC_ALIGNER
               value: "all"

@@ -515,6 +515,13 @@ export const trackView = z.object({
   /** A song, or background music made from `bgm`'s choices (docs/BGM_STUDIO_PLAN.md). */
   kind: z.enum(['song', 'bgm']),
   bgm: bgmRequest.nullable(),
+  /**
+   * A BGM, to its owner only: true when the music service heard a voice in it
+   * for longer than the threshold allows (docs/BGM_STUDIO_PLAN.md B2), false
+   * when it listened and did not, null when nothing was measured. Absent for
+   * a song and for anyone else.
+   */
+  bgmVoiceHeard: z.boolean().nullable().optional(),
   /** How many people licensed this song on the Market. */
   licenseCount: z.number().int().nonnegative(),
   /** True when the viewer has bought a license for this song (download rights). */
