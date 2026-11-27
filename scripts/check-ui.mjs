@@ -165,6 +165,10 @@ const PAGES = [
   { name: 'home-newyear', path: '/?preview-season=newyear', as: 'admin' },
   { name: 'create-holiday', path: '/create?gift=1&occasion=christmas', as: 'creator' },
   { name: 'gift-opening', path: '/song/:gift', as: null },
+  // Music gift invitation (docs/GIFT_INVITATION_PLAN.md): opened with no account, and a link that no longer opens.
+  { name: 'gift-invite', path: '/gift/:giftInvite', as: null, allLanguages: true },
+  { name: 'gift-invite-missing', path: '/gift/AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA', as: null, allLanguages: true },
+  { name: 'song-gift-make', path: '/song/:sungTrack', as: 'creator', allLanguages: true, prepare: openGiftMake },
   { name: 'track-export', path: '/tracks/:track/export', as: 'creator' },
   { name: 'track-license', path: '/tracks/:track/license', as: 'admin' },
   { name: 'checkout-complete', path: '/checkout/complete?order_id=:order', as: 'creator' },
@@ -621,7 +625,7 @@ async function routesCovered() {
   const { readFileSync } = await import('node:fs');
   const src = readFileSync(new URL('../apps/web/src/App.tsx', import.meta.url), 'utf8');
   const routed = [...src.matchAll(/path="([^"]+)"/g)].map((m) => m[1]).filter((p) => p !== '*');
-  const asRoute = (p) => p.split('?')[0].replace(/:track|:order/g, ':id');
+  const asRoute = (p) => p.split('?')[0].replace(/:track|:order/g, ':id').replace(':giftInvite', ':token');
   const visited = new Set(PAGES.map((p) => asRoute(p.path)));
   return routed.filter((r) => !visited.has(r) && !(r in NOT_VISITED));
 }
@@ -774,6 +778,14 @@ async function fixtures(browser, states) {
     }
   }
   if (!sung) throw new Error('fixtures: the song with written lyrics was not delivered in 60 s — is the worker running?');
+  // A music gift invitation for the sung song (docs/GIFT_INVITATION_PLAN.md): the link is only ever shown at creation.
+  const made = await call('POST', `/v1/tracks/${sung}/gifts`, {
+    recipientName: '亲爱的你',
+    senderName: '小林',
+    message: '有些话说不出口，就写成一首歌送给你。\n谢谢你一直在。',
+    theme: 'warm',
+  });
+  const giftInvite = made.url.split('/gift/')[1];
   await ctx.close();
 
   const actx = await browser.newContext({ storageState: states.admin });
@@ -792,7 +804,7 @@ async function fixtures(browser, states) {
     });
   }, [USERS.creator, `ui-check-grant-${new Date().toISOString().slice(0, 10)}`]);
   await actx.close();
-  return { track, order, job, gift, sung };
+  return { track, order, job, gift, sung, giftInvite };
 }
 
 mkdirSync(SHOTS, { recursive: true });
@@ -851,7 +863,8 @@ for (const p of PAGES) {
     .replace(':job', data.job)
     .replace(':gift', data.gift)
     .replace(':guestTrack', data.guestTrack ?? '')
-    .replace(':sungTrack', data.sung);
+    .replace(':sungTrack', data.sung)
+    .replace(':giftInvite', data.giftInvite);
 }
 let failures = 0;
 let warnings = 0;

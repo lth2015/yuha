@@ -77,6 +77,8 @@ export function spaPathFor(pathname: string, search: string): string | null {
  */
 export const PRIVATE_PREFIXES: readonly string[] = [
   '/song/',
+  // A gift invitation's link is its only key: never indexed (docs/GIFT_INVITATION_PLAN.md).
+  '/gift/',
   '/create',
   '/library',
   // AI BGM (docs/BGM_STUDIO_PLAN.md): a signed-in tool, like /create.

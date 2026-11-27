@@ -30,6 +30,7 @@ import { applyCreateLink } from '../lib/create-link';
 import { STYLE_PRESETS, styleLabel } from '../lib/style-label';
 import { airPrefillPlan, withDraftedLyrics } from '../lib/air-prefill';
 import { JOB_PHASES as PHASE_STEPS, fractionOfPhase } from '../lib/phases';
+import { forgetGiftOrigin, giftEvent, giftOrigin } from '../lib/gift';
 import { Score } from '../components/Score';
 import { useSession } from '../lib/session';
 import { ErrorNotice, Loading } from '../components/common';
@@ -593,6 +594,23 @@ export default function Create() {
    * title, the estimate and the queue card above the fold. A new job starts at
    * the top.
    */
+  /*
+   * Arrived from a music gift invitation's "I want to send a song too"
+   * (docs/GIFT_INVITATION_PLAN.md): counted once on arrival, and once more if
+   * a song comes of it — the question the invitation exists to answer.
+   */
+  useEffect(() => {
+    const origin = giftOrigin();
+    if (origin) giftEvent(origin, 'create_entered');
+  }, []);
+  const deliveredJob = job?.phase === 'done' ? job.jobId : null;
+  useEffect(() => {
+    const origin = giftOrigin();
+    if (!deliveredJob || !origin) return;
+    giftEvent(origin, 'song_completed');
+    forgetGiftOrigin();
+  }, [deliveredJob]);
+
   const shownJobId = job?.jobId ?? null;
   useEffect(() => {
     if (shownJobId) window.scrollTo({ top: 0 });

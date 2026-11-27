@@ -94,6 +94,8 @@ export default function App() {
               <Route path="/auth/google/callback" element={<GoogleCallback />} />
               <Route path="/auth/mfa" element={<MfaChallenge />} />
               <Route path="/song/:id" element={<SongDetail />} />
+              {/* A music gift invitation: no account, the link is the key (docs/GIFT_INVITATION_PLAN.md). */}
+              <Route path="/gift/:token" element={<Gift />} />
               <Route path="/pricing" element={<Pricing />} />
 
               <Route
