@@ -1,5 +1,5 @@
 import { useEffect, useState, type ReactNode } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 import { apiFetch } from '../lib/api';
 import { Loading } from '../components/common';
 import { useI18n } from '../lib/i18n';
@@ -83,8 +83,8 @@ export function DraftBanner({ isPlaceholder }: { isPlaceholder: boolean }) {
 }
 
 /** Marks text added after the last review, on the page, where a reader sees it. */
-function UnderReview() {
-  return <p className="small muted">Added on 2026-11-24; this part is under legal review.</p>;
+function UnderReview({ added = '2026-11-24' }: { added?: string }) {
+  return <p className="small muted">Added on {added}; this part is under legal review.</p>;
 }
 
 export function LegalPage({ title, updated = '2026-09-18', children }: { title: string; updated?: string; children: ReactNode }) {
@@ -97,9 +97,9 @@ export function LegalPage({ title, updated = '2026-09-18', children }: { title: 
   );
 }
 
-function Section({ h, children }: { h: string; children: ReactNode }) {
+function Section({ h, id, children }: { h: string; id?: string; children: ReactNode }) {
   return (
-    <section>
+    <section id={id}>
       <h2>{h}</h2>
       {children}
     </section>
@@ -108,9 +108,15 @@ function Section({ h, children }: { h: string; children: ReactNode }) {
 
 export function Terms() {
   const d = useDisclosure();
+  const { hash } = useLocation();
+  // A link to one section (the BGM page links to #bgm) lands on it once the
+  // page has drawn; the router does not scroll to a hash by itself.
+  useEffect(() => {
+    if (d && hash) document.getElementById(decodeURIComponent(hash.slice(1)))?.scrollIntoView();
+  }, [d, hash]);
   if (!d) return <Loading />;
   return (
-    <LegalPage title="Terms of Service" updated="2026-11-24">
+    <LegalPage title="Terms of Service" updated="2026-11-27">
       <DraftBanner isPlaceholder={d.isPlaceholder} />
       <Section h="1. The service">
         <p>
@@ -158,6 +164,36 @@ export function Terms() {
           shown are their own, separate from any copyright in the photos.
         </p>
         <UnderReview />
+      </Section>
+      {/* BGM's limited commercial use (product owner, 2026-11-27). Mirrored,
+          use by use, in BGM_ALLOWED_USES / BGM_PROHIBITED_USES, which every
+          BGM's usage record freezes (apps/api/src/services/delivery.ts). */}
+      <Section h="4a. Background music (BGM)" id="bgm">
+        <p>
+          Background music you make at /bgm may also be used commercially, within these limits and subject to
+          these Terms and applicable law:
+        </p>
+        <ul>
+          <li>as the soundtrack of your own videos, including monetised posts on YouTube, TikTok, Instagram and similar platforms;</li>
+          <li>in advertising for your own products, services or shop;</li>
+          <li>as background music played in your own shop or at your own events;</li>
+          <li>as the background of your own podcasts and live streams.</li>
+        </ul>
+        <p>
+          You may not resell, sublicense or redistribute the audio itself, alone or as part of a music or
+          sound library; register it, or have it registered, for copyright or in a content identification
+          system (such as YouTube Content ID) as your own work; distribute it to streaming or download stores
+          as your own track; use it to train AI models; or present it as a human performance.
+        </p>
+        <p>
+          This is a non-exclusive licence to use the music, not a transfer of copyright. We do not warrant that
+          it is original, that it does not infringe third-party rights, or that it can be registered for
+          copyright (section 6). Where a platform or the law requires it, disclose that the music is
+          AI-generated. Each BGM carries the usage record frozen when it was made, and that record applies to
+          it. Songs with vocals or lyrics remain under section 4. Previews of the official catalogue at
+          /marketplace are for listening only; licences for catalogue tracks will be offered separately.
+        </p>
+        <UnderReview added="2026-11-27" />
       </Section>
       <Section h="5. Acceptable use">
         <p>

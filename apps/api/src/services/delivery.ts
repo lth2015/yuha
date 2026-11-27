@@ -41,13 +41,33 @@ export function quarantineKey(jobId: string, attemptNo: number): string {
   return `${jobId}/attempt-${attemptNo}.audio`;
 }
 
+/**
+ * What a BGM may be used for (Terms §4a, 2026-11-27): limited commercial use,
+ * wider than a song's §4. Frozen into each BGM's usage record like a song's,
+ * so a later change to §4a does not rewrite what an older BGM was made under.
+ */
+export const BGM_ALLOWED_USES = [
+  "Soundtrack of the account holder's own videos, including monetised posts",
+  "Advertising for the account holder's own products, services or shop",
+  "Background music in the account holder's own shop or at their own events",
+  "Background of the account holder's own podcasts and live streams",
+] as const;
+export const BGM_PROHIBITED_USES = [
+  'Reselling, sublicensing or redistributing the audio itself, alone or in a music or sound library',
+  'Registering it for copyright or in a content identification system (such as Content ID) as own work',
+  'Distributing it to streaming or download stores as own track',
+  'Using it to train AI models',
+  'Presenting it as a human performance',
+] as const;
+
 /** The usage-terms record of one song, as it is frozen (SEC-08). */
 export function licenseSnapshotFor(
   ctx: AppContext,
   features: { commercialDeliveryEnabled: boolean },
-  params: { trackId: string; userId: string; sha256: string; generatedAt: Date },
+  params: { trackId: string; userId: string; sha256: string; generatedAt: Date; kind?: 'song' | 'bgm' },
 ) {
   const caps = ctx.music.capabilities();
+  const bgm = params.kind === 'bgm';
   return {
     trackId: params.trackId,
     userId: params.userId,
@@ -56,8 +76,10 @@ export function licenseSnapshotFor(
     contractVersion: caps.contractVersion,
     licenseVersion: caps.licenseVersion,
     territory: caps.territory,
-    allowedUses: features.commercialDeliveryEnabled ? caps.allowedUses : ['動作確認・プレビューのみ（商用配信の許諾は未取得）'],
-    prohibitedUses: caps.prohibitedUses,
+    allowedUses: !features.commercialDeliveryEnabled
+      ? ['動作確認・プレビューのみ（商用配信の許諾は未取得）']
+      : bgm ? [...BGM_ALLOWED_USES] : caps.allowedUses,
+    prohibitedUses: bgm ? [...BGM_PROHIBITED_USES] : caps.prohibitedUses,
     sourceSha256: params.sha256,
     generatedAt: params.generatedAt,
     commercialDelivery: features.commercialDeliveryEnabled,
@@ -166,7 +188,7 @@ export async function deliver(ctx: AppContext, params: DeliverParams): Promise<{
     // signs up and claims the song (services/guest-trial.ts, claimGuestTrial).
     if (job.priority !== 1) {
       await insertLicenseSnapshot(
-        licenseSnapshotFor(ctx, features, { trackId: track.id, userId: job.user_id, sha256, generatedAt: new Date() }),
+        licenseSnapshotFor(ctx, features, { trackId: track.id, userId: job.user_id, sha256, generatedAt: new Date(), kind: track.kind }),
         tx,
       );
     }

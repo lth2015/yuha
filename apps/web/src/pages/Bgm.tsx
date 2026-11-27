@@ -136,7 +136,7 @@ export default function Bgm() {
           disabled={running}
         />
         <p className="small muted">{t('bgm.instrumental')}</p>
-        <p className="small muted">{t('bgm.use')}</p>
+        <p className="small muted">{t('bgm.use')} <Link to="/legal/terms#bgm">{t('bgm.use.terms')}</Link></p>
         <button type="button" className="btn btn--primary" onClick={() => void generate()} disabled={submitting || running}>
           {submitting ? t('bgm.submitting') : t('bgm.generate')}
         </button>
@@ -166,7 +166,7 @@ export default function Bgm() {
                 <Link to={`/song/${track.trackId}`} className="btn">{t('bgm.open')}</Link>
                 <button type="button" className="btn" onClick={again}>{t('bgm.again')}</button>
               </div>
-              <p className="small muted">{t('bgm.use')}</p>
+              <p className="small muted">{t('bgm.use')} <Link to="/legal/terms#bgm">{t('bgm.use.terms')}</Link></p>
             </>
           ) : (
             <>
