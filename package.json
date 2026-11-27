@@ -26,6 +26,7 @@
     "check:ui": "node scripts/check-ui.mjs",
     "check:invariants": "pnpm --filter @yuha/db invariants",
     "bench:bgm-sheet": "pnpm --filter @yuha/db bgm-sheet",
+    "bench:lyric-truth": "pnpm --filter @yuha/db lyric-truth",
     "probe:quality": "node scripts/quality-probe.mjs",
     "pretest": "node scripts/check-build-fresh.mjs",
     "test": "vitest run",

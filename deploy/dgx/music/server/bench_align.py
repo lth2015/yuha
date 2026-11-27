@@ -39,6 +39,12 @@ from pathlib import Path
 LANGS = {"zh": "Chinese", "ja": "Japanese", "en": "English"}
 
 
+def separate_seconds(path: Path) -> float:
+    import subprocess
+    return float(subprocess.run(["ffprobe", "-v", "error", "-show_entries", "format=duration", "-of",
+                                 "default=nw=1:nk=1", str(path)], capture_output=True, text=True, check=True).stdout.strip())
+
+
 def songs(data: Path, limit: int):
     out = []
     for f in sorted(glob.glob(str(data / "jobs" / "*.json")), key=os.path.getmtime, reverse=True):
@@ -50,6 +56,32 @@ def songs(data: Path, limit: int):
         if len(out) >= limit:
             break
     return out
+
+
+def truth_songs(truth: Path, data: Path):
+    """Staff songs a person timed by hand (`pnpm bench:lyric-truth`), with their audio on this box."""
+    out = []
+    for s in json.load(open(truth / "songs.json")):
+        mp3 = data / "audio" / f"{s.get('providerRequestId')}.mp3"
+        if s.get("providerRequestId") and mp3.exists():
+            out.append((s["songId"], s["lyrics"], None, mp3))
+        else:
+            print(f"{s['songId'][:8]}: no audio here (kept {os.environ.get('RETENTION_DAYS', 6)} days); skipped", flush=True)
+    return out
+
+
+def as_route(lines: list) -> dict:
+    """A lyricTimings the scorer (scripts/lyric-bench.mjs) reads: one entry per lyric line, untimed ones unconfirmed."""
+    out, last = [], 0.0
+    for l in lines:
+        start = l.get("start")
+        if start is None:
+            out.append({"text": l["text"], "section": l.get("section", ""), "start": last, "end": last, "confidence": 0.0})
+            continue
+        last = float(l.get("end") or start)
+        out.append({"text": l["text"], "section": l.get("section", ""), "start": float(start), "end": last,
+                    "confidence": float(l.get("confidence", 1.0))})
+    return {"source": "aligned", "lines": out}
 
 
 def agreement(reference: list, other: list) -> list:
@@ -75,6 +107,8 @@ def main() -> None:
     ap.add_argument("--songs", type=int, default=10)
     ap.add_argument("--out", default="/out")
     ap.add_argument("--methods", default="whisper,qwen")
+    ap.add_argument("--truth", default=None,
+                    help="a `pnpm bench:lyric-truth` export: align those songs and write routes/<method>/ beside it")
     args = ap.parse_args()
     methods = args.methods.split(",")
     out = Path(args.out)
@@ -90,7 +124,13 @@ def main() -> None:
                                                   device_map="cuda:0" if torch.cuda.is_available() else "cpu")
 
     totals = {m: {"timed": 0, "lines": 0, "diffs": [], "seconds": 0.0} for m in methods}
-    for sid, lyrics, dur, mp3 in songs(Path(args.data), args.songs):
+    truth = Path(args.truth) if args.truth else None
+    picked = truth_songs(truth, Path(args.data)) if truth else songs(Path(args.data), args.songs)
+    if not picked:
+        raise SystemExit("no songs to align")  # a run over nothing is not a result
+    for sid, lyrics, dur, mp3 in picked:
+        if dur is None:
+            dur = separate_seconds(mp3)
         stem = separate.vocal_stem(mp3)
         if stem is None:
             print(f"{sid[:8]}: no vocal stem ({separate.status().get('error')}); skipped", flush=True)
@@ -126,6 +166,12 @@ def main() -> None:
             tq["seconds"] += time.time() - t
 
         (out / f"{sid}.json").write_text(json.dumps(record, ensure_ascii=False, indent=1))
+        if truth:
+            for m in ("whisper", "qwen"):
+                if m in record and m in methods:
+                    d = truth / "routes" / m
+                    d.mkdir(parents=True, exist_ok=True)
+                    (d / f"{sid}.json").write_text(json.dumps(as_route(record[m]["lines"]), ensure_ascii=False))
         line = f"{sid[:8]} {lang} whisper coverage={w['coverage']:.2f} heard-whole={sum(l['confidence'] >= 1.0 for l in ref)}/{len(ref)}"
         if "qwen" in record:
             d = agreement(ref, record["qwen"]["lines"])
@@ -139,6 +185,8 @@ def main() -> None:
         t = totals[m]
         print(summary(m, t["timed"], t["lines"], t["diffs"], t["seconds"]))
     print(f"\nper-song detail in {out}/<id>.json (line starts from each method, for listening)")
+    if truth:
+        print(f"routes written to {truth}/routes/; score them: node scripts/lyric-bench.mjs {truth} --base whisper")
 
 
 if __name__ == "__main__":
