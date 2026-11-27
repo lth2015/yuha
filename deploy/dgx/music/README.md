@@ -153,6 +153,13 @@ cd ~/yuha-spark
 docker compose run --rm --no-deps -e ALIGN_METHOD=qwen --entrypoint "" music python bench_service_align.py --songs 3
 ```
 
+**Per request (2026-11-27).** `POST /v1/align` takes an optional
+`"method": "whisper" | "qwen"`, which overrides `ALIGN_METHOD` for that
+request only. YUHA sends it according to `LYRIC_ALIGNER` (off / staff / all,
+decided by who owns the song), so the box's `.env` stays `whisper`. MMS_FA
+cannot be requested this way; only `.env` can turn it on. A box older than
+this ignores the field and aligns as before.
+
 Turn it on only after the hand-timed scores agree, and only once
 `LYRIC_STRICT_TIMELINE=all` in YUHA. Until then, a customer's view would
 light the unsure lines.

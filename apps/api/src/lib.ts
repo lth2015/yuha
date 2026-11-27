@@ -35,6 +35,7 @@ export {
 } from './services/delivery.js';
 
 export { createExport, issueDownloadUrl } from './services/exports.js';
+export { alignerFor } from './services/aligner-choice.js';
 
 export {
   createCheckout,

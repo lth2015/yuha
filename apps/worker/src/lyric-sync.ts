@@ -1,5 +1,6 @@
 import { EstimatedAlignmentProvider, type AlignmentResult } from '@yuha/providers';
 import {
+  getTrack,
   claimNextLyricSync,
   finishLyricSync,
   getMasterAsset,
@@ -8,6 +9,7 @@ import {
   storeDeliveredLyricTimings,
   type ClaimedLyricSync,
 } from '@yuha/db';
+import { alignerFor } from '@yuha/api';
 import type { PipelineDeps } from './pipeline.js';
 
 /**
@@ -53,12 +55,17 @@ async function runOne(d: PipelineDeps, job: ClaimedLyricSync): Promise<void> {
   }
 
   const durationSeconds = job.duration_ms / 1000;
+  // Which aligner, by whose song it is (LYRIC_ALIGNER).
+  const owner = (await getTrack(job.track_id).catch(() => null))?.owner_id;
+  const method = owner ? await alignerFor(d.ctx, owner) : undefined;
+  const chosen = method ? { method } : {};
   // A new song: the aligner's own copy of the render, which it still has. An
   // older song (a backfill) always sends YUHA's master: it may still name a
   // render the DGX cleared long ago.
   const result = job.provider_request_id && job.trigger_kind !== 'backfill'
-    ? await d.ctx.alignment.align({ lyrics, durationSeconds, providerRequestId: job.provider_request_id })
+    ? await d.ctx.alignment.align({ ...chosen, lyrics, durationSeconds, providerRequestId: job.provider_request_id })
     : await d.ctx.alignment.align({
+        ...chosen,
         lyrics,
         durationSeconds,
         providerRequestId: '',
