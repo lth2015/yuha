@@ -1,5 +1,8 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { execFileSync } from 'node:child_process';
+import { mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { importOfficialBgm } from '../apps/api/src/services/official-bgm-import.js';
 import { createHarness, resetData, teardown, type Harness } from './helpers/harness.js';
 
@@ -88,9 +91,16 @@ describe('official BGM catalogue', () => {
     expect(range.statusCode).toBe(206);
     expect(range.rawPayload).toEqual(media.rawPayload.subarray(0, 2048));
     expect(media.rawPayload.equals(source)).toBe(false);
-    const metadata = JSON.parse(execFileSync('ffprobe', ['-v', 'error', '-show_entries', 'format=duration:stream=bit_rate',
-      '-of', 'json', 'pipe:0'], { input: media.rawPayload, encoding: 'utf8' }));
-    expect(Number(metadata.streams[0].bit_rate)).toBe(128_000);
+    const probeDir = await mkdtemp(join(tmpdir(), 'official-bgm-preview-'));
+    try {
+      const path = join(probeDir, 'preview.mp3');
+      await writeFile(path, media.rawPayload);
+      const metadata = JSON.parse(execFileSync('ffprobe', ['-v', 'error', '-show_entries', 'stream=bit_rate',
+        '-of', 'json', path], { encoding: 'utf8' }));
+      expect(Number(metadata.streams[0].bit_rate)).toBe(128_000);
+    } finally {
+      await rm(probeDir, { recursive: true, force: true });
+    }
     const probed = await publicMarket.ctx.audio.probe(media.rawPayload);
     expect(probed?.durationMs).toBeGreaterThan(1000);
     expect(probed!.durationMs).toBeLessThanOrEqual(60_000);
