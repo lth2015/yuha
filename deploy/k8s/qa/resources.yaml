@@ -126,11 +126,11 @@ spec:
               value: "true"
             - name: FEATURE_GUEST_TRIAL_ENABLED
               value: "true"
-            # "Align it again" (docs/LYRIC_ALIGNMENT.md). Off until the DGX's
-            # /v1/align takes sent audio: run deploy/dgx/update.sh, check it
-            # (the doc says how), then set "true" here.
+            # "Align it again" (docs/LYRIC_ALIGNMENT.md). On since 2026-11-27: the
+            # DGX takes sent audio and aligns with Qwen (LYRIC_ALIGNER below).
+            # "false" hides the button again.
             - name: FEATURE_LYRIC_AUTO_ALIGN_ENABLED
-              value: "false"
+              value: "true"
             # AI BGM (docs/BGM_STUDIO_PLAN.md): staff try it first; "all" after the
             # product owner's go-ahead, "off" to hide it. Read by the API.
             - name: BGM_STUDIO
@@ -139,9 +139,10 @@ spec:
             # opens them (L4b, docs/AUTOMATIC_LYRIC_SYNC_TICKETS.md), from YUHA's
             # own master, at most LYRIC_BACKFILL_DAILY (30) a JST day. "staff"
             # since 2026-11-27 (product owner, after Qwen was confirmed on a new
-            # song); "all" after staff songs look right; "off" to stop.
+            # song), "all" the same day (product owner: not yet public, so
+            # widen now and tune); "off" to stop.
             - name: LYRIC_BACKFILL
-              value: "staff"
+              value: "all"
             # The shared lyric timing rule (docs/agents/LYRIC_AUTO_SYNC_UX_HANDOFF.md):
             # only trusted lines are lit, burned into videos or written to an .lrc;
             # an estimate is for reading. Read by the web app through /v1/runtime.
@@ -277,11 +278,11 @@ spec:
             - name: FEATURE_GUEST_TRIAL_ENABLED
               value: "true"
             # Automatic lyric sync (docs/AUTOMATIC_LYRIC_SYNC_TICKETS.md L4a):
-            # staff members' new songs only, the small production check before
-            # widening. "all" for everyone; "off" goes back to aligning during
-            # delivery. Read by the worker, which is where delivery happens.
+            # every new sung song is delivered first and aligned after, in the
+            # sync queue. "all" since 2026-11-27 (product owner); "staff" or
+            # "off" (align during delivery) to step back. Read by the worker.
             - name: LYRIC_AUTO_SYNC
-              value: "staff"
+              value: "all"
             # Qwen fused with Whisper for every song's alignment (see the API's LYRIC_ALIGNER).
             - name: LYRIC_ALIGNER
               value: "all"
