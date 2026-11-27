@@ -87,6 +87,27 @@ export function catalogue(config: AppConfig) {
       stripeProduct: 'Licence — one song',
       stripe_price_id: config.STRIPE_PRICE_ID_MARKET_LICENSE ?? null,
     },
+    {
+      /*
+       * A licence for one official BGM (product owner, 2026-11-27): ¥980, the
+       * single-song licence's price as the launch anchor. `units` is the number
+       * of tracks licensed, never generation credits — fulfilment branches on
+       * this key before the credit-granting branch can see it. Bought only from
+       * the library (POST /v1/marketplace/bgm/:id/purchase); the generic
+       * checkout and quote routes refuse it, because they carry no track.
+       */
+      price_key: 'official_bgm_license',
+      version: 1,
+      kind: 'one_time' as const,
+      display_name: 'Official BGM licence — one track',
+      amount_minor: 980,
+      units: 1,
+      validity_days: null,
+      auto_renew: false,
+      billing_interval: null,
+      stripeProduct: 'Official BGM licence — one track',
+      stripe_price_id: config.STRIPE_PRICE_ID_OFFICIAL_BGM_LICENSE ?? null,
+    },
   ] as const;
 }
 

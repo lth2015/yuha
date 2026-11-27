@@ -1,9 +1,9 @@
 import {
   AppError, OFFICIAL_BGM_TRANSITIONS, type OfficialBgmAction, type OfficialBgmAdminItem, type OfficialBgmCatalogEdit,
-  type OfficialBgmItem,
+  type OfficialBgmItem, type OfficialBgmSaleRights,
 } from '@yuha/contracts';
 import {
-  getOfficialBgm, setOfficialBgmCatalog, setOfficialBgmState, unpublishedOfficialBgmIds, withTx, writeAuditLog,
+  getOfficialBgm, setOfficialBgmCatalog, setOfficialBgmSaleRights, setOfficialBgmState, unpublishedOfficialBgmIds, withTx, writeAuditLog,
   type OfficialBgmRow,
 } from '@yuha/db';
 import type { AppContext } from '../context.js';
@@ -24,7 +24,9 @@ export function officialBgmAdminItem(row: OfficialBgmRow): OfficialBgmAdminItem 
   const provenance = row.provenance ? { ...row.provenance } : null;
   if (provenance) delete provenance.coverSha256;
   return { ...officialBgmItem(row), state: row.state, sourceKey: row.source_key, previewStartSeconds: row.preview_start_ms / 1000,
-    masterFormat: row.master_format, provenance, hasCover: Boolean(row.cover_key) };
+    masterFormat: row.master_format, provenance, hasCover: Boolean(row.cover_key),
+    saleRights: row.sale_rights ?? 'unreviewed', saleRightsBasis: row.sale_rights_basis ?? null,
+    onSale: officialBgmOnSale({ state: row.state, sale_rights: row.sale_rights ?? 'unreviewed' }) };
 }
 
 export async function officialBgmPreview(ctx: AppContext, id: string, admin: boolean) {
@@ -105,4 +107,40 @@ export async function publishAllOfficialBgm(ctx: AppContext, actorId: string, re
     }
   }
   return { published: published.length, failed };
+}
+
+/**
+ * Who may buy (docs/PAYMENTS_DESIGN.md §1): the sales switch for this viewer,
+ * separate from the listening one. A track is on sale only when this is true
+ * AND it is published with cleared sale rights (officialBgmOnSale).
+ */
+export function canBuyOfficialBgm(mode: AppContext['config']['OFFICIAL_BGM_MARKETPLACE_SALES'], role?: string) {
+  return mode === 'all' || (mode === 'staff' && (role === 'admin' || role === 'support'));
+}
+
+/** Whether this track itself may be sold: published, and its sale rights reviewed and cleared. */
+function officialBgmOnSale(row: Pick<OfficialBgmRow, 'state' | 'sale_rights'>): boolean {
+  return row.state === 'published' && row.sale_rights === 'cleared';
+}
+
+/**
+ * A sale-rights decision for one track, with its basis, in the audit log.
+ * Never made by import or "publish all": each track is decided on its own.
+ */
+export async function decideOfficialBgmSaleRights(
+  id: string, actorId: string, decision: { status: OfficialBgmSaleRights; basis: string },
+) {
+  return withTx(async (tx) => {
+    const row = await getOfficialBgm(id, tx, 'update');
+    if (!row) throw new AppError('NOT_FOUND', 'BGM item not found');
+    const basis = decision.status === 'unreviewed' ? null : decision.basis;
+    await setOfficialBgmSaleRights(id, { status: decision.status, basis, actorId }, tx);
+    await writeAuditLog({
+      actorId, actorRole: 'admin', subjectType: 'official_bgm', subjectId: id, action: 'official_bgm.sale_rights',
+      reason: basis ?? 'Sale rights returned to unreviewed',
+      before: { saleRights: row.sale_rights, basis: row.sale_rights_basis },
+      after: { saleRights: decision.status, basis },
+    }, tx);
+    return officialBgmAdminItem({ ...row, sale_rights: decision.status, sale_rights_basis: basis });
+  });
 }

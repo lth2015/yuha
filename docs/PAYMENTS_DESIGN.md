@@ -16,7 +16,7 @@ change does not fit this page, change this page first, in the same commit.
 | --- | --- | --- |
 | Top-up pack (充值包) | DROP | no — one payment, credits valid 90 days |
 | Subscription (订阅) | CREATOR, STUDIO | yes — charged every month until cancelled |
-| Song licence (单曲授权) | Licence | no — one payment, one song |
+| Song licence (单曲授权) | Licence; Official BGM licence | no — one payment, one song or one official track |
 
 **How you pay** — channels:
 
@@ -26,6 +26,31 @@ change does not fit this page, change this page first, in the same commit.
 | JPYC | Yen stablecoin on Polygon, 1 JPYC per yen by pricing policy |
 | USDC | Dollar stablecoin on Polygon, priced as one US dollar at the live USD/JPY rate plus a buffer (§4) |
 | NETX | The NETX community's token on BNB Smart Chain — **not** a stablecoin — at a fixed 1 NETX = ¥40, pausable by an operator at runtime (docs/NETX_PAYMENT.md) |
+
+### The official BGM licence (2026-11-27)
+
+`official_bgm_license` v1, ¥980 tax-inclusive, one payment for one track of
+the official BGM library. Kind: song licence, so the matrix below applies
+unchanged — every open channel, card and stablecoin alike.
+
+- **Not credits.** `units` counts tracks licensed. Fulfilment branches on the
+  price key before the credit branch can see it (`services/fulfilment.ts`).
+- **Bought only from the library**, for one named track: the generic checkout
+  (`POST /v1/checkout`) and stablecoin quote refuse this key, because they
+  carry no track and cannot check one.
+- **Two switches and one review stand between a track and a sale:**
+  `OFFICIAL_BGM_MARKETPLACE` (who may listen), `OFFICIAL_BGM_MARKETPLACE_SALES`
+  (who may buy, default `off`), and the track's own sale-rights decision
+  (`official_bgm.sale_rights`, migration 0045), made per track with a recorded
+  basis. Publishing, including "publish all", opens previews only; it never
+  clears sale rights, whatever the batch manifest says.
+- **Card needs its own Stripe Price:** `STRIPE_PRICE_ID_OFFICIAL_BGM_LICENSE`,
+  required once sales are on. It cannot share the song licence's Price: the
+  catalogue check refuses a duplicated id.
+- **Not yet sold.** The purchase route, its fulfilment (a licence row per
+  track, the master download, the licence certificate) and the terms section
+  for it follow; sales stay `off` until the terms and checkout copy are
+  reviewed by counsel.
 
 ## 2. The matrix — the whole rule
 

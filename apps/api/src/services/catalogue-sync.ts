@@ -103,8 +103,8 @@ export async function syncCatalogue(
     );
     if (compared.length === 0) {
       log('• no Stripe price was compared — nothing below is evidence that the ids are right');
-    } else if (compared.length < 4) {
-      log(`✓ ${compared.length} of 4 Stripe prices agree with the catalogue; the rest were not compared`);
+    } else if (compared.length < cataloguePrices(config).length) {
+      log(`✓ ${compared.length} of ${cataloguePrices(config).length} Stripe prices agree with the catalogue; the rest were not compared`);
     } else {
       log('✓ Stripe prices agree with the catalogue (amount, currency, interval, tax, active)');
     }

@@ -350,7 +350,7 @@ describe('the webhook path is one decision, in one place', () => {
   const envKeyFor = (priceKey: string) => priceRows.find((r) => r.priceKey === priceKey)!.envVar;
 
   it('seeds a catalogue at all, so the loop below is not empty', () => {
-    expect(catalogueKeys.sort()).toEqual(['drop_5', 'market_license', 'premier_monthly', 'pro_monthly']);
+    expect(catalogueKeys.sort()).toEqual(['drop_5', 'market_license', 'official_bgm_license', 'premier_monthly', 'pro_monthly']);
   });
 
   /*
@@ -372,6 +372,8 @@ describe('the webhook path is one decision, in one place', () => {
       STRIPE_SECRET_KEY: 'sk_test_x',
       STRIPE_WEBHOOK_SECRET: 'whsec_x',
       STRIPE_API_VERSION: '2025-03-31.basil',
+      // Every product on sale, so every conditional requirement applies.
+      OFFICIAL_BGM_MARKETPLACE_SALES: 'all',
     };
     for (const key of catalogueKeys) env[envKeyFor(key)] = `price_${key}`;
     if (omit) delete env[omit];
@@ -380,6 +382,12 @@ describe('the webhook path is one decision, in one place', () => {
 
   it('starts when every price id is present', () => {
     expect(() => loadConfig(stripeEnv() as never)).not.toThrow();
+  });
+
+  it('does not ask for the official BGM licence price while its sales are off', () => {
+    const env = stripeEnv('STRIPE_PRICE_ID_OFFICIAL_BGM_LICENSE');
+    delete env['OFFICIAL_BGM_MARKETPLACE_SALES'];
+    expect(() => loadConfig(env as never)).not.toThrow();
   });
 
   it.each(catalogueKeys)('refuses to start without a price id for %s', (priceKey) => {

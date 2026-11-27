@@ -65,6 +65,16 @@ export async function grantEntitlementForOrder(order: OrderRow, tx: Tx): Promise
 
   // A subscription's first period is granted by invoice.paid, keyed on the
   // invoice, so a checkout or a settlement must not also grant one (PAY-06).
+  /*
+   * An official BGM licence is never generation credits. Until its own
+   * fulfilment exists (a licence row on the track, then the download), an
+   * order for it is not delivered here — and the generic routes refuse to
+   * create one. Without this branch it would fall to `kind === 'one_time'`
+   * below and be handed one song credit.
+   */
+  if (product.price_key === 'official_bgm_license') {
+    throw new Error(`official BGM licence order ${order.id} has no fulfilment in this build`);
+  }
   if (product.price_key === 'market_license') {
     // Market sale: no credits — the buyer receives a per-track license and
     // the authorship record is written, both idempotent on the order id.

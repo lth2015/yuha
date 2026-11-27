@@ -1,6 +1,7 @@
 import { useRef, useState } from 'react';
 import {
-  OFFICIAL_BGM_ACTIONS, OFFICIAL_BGM_INTRO_MAX, OFFICIAL_BGM_LANGS, OFFICIAL_BGM_TAGS_MAX, OFFICIAL_BGM_TRANSITIONS,
+  OFFICIAL_BGM_ACTIONS, OFFICIAL_BGM_INTRO_MAX, OFFICIAL_BGM_LANGS, OFFICIAL_BGM_SALE_RIGHTS, OFFICIAL_BGM_TAGS_MAX,
+  OFFICIAL_BGM_TRANSITIONS, type OfficialBgmSaleRights,
   type OfficialBgmAction, type OfficialBgmAdminItem, type OfficialBgmLang,
 } from '@yuha/contracts';
 import { apiFetch } from '../../lib/api';
@@ -79,6 +80,57 @@ function CatalogEditor({ track, onSaved }: { track: OfficialBgmAdminItem; onSave
         <p className="small muted">{t('market.rating.note')}</p>
         {error && <p role="alert">{t('market.admin.saveError')}</p>}
         <button type="submit" className="btn btn--primary" disabled={saving || !scoreOk}>
+          {t(saving ? 'market.admin.saving' : 'market.copy.save')}
+        </button>
+      </form>
+    </details>
+  );
+}
+
+/**
+ * Sale rights for one track (docs/PAYMENTS_DESIGN.md §1): reviewed on their
+ * own, with the basis written down. Publishing a track never clears them.
+ */
+function SaleRights({ track, onSaved }: { track: OfficialBgmAdminItem; onSaved: (t: OfficialBgmAdminItem) => void }) {
+  const { t } = useI18n();
+  const [status, setStatus] = useState<OfficialBgmSaleRights>(track.saleRights ?? 'unreviewed');
+  const [basis, setBasis] = useState(track.saleRightsBasis ?? '');
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState(false);
+  const ready = status === 'unreviewed' || basis.trim().length >= 5;
+
+  async function save() {
+    setSaving(true);
+    setError(false);
+    try {
+      onSaved(await apiFetch<OfficialBgmAdminItem>(`${OFFICIAL_BGM_ADMIN}/${track.id}/sale-rights`, {
+        method: 'POST', body: { status, basis: basis.trim() },
+      }));
+    } catch {
+      setError(true);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <details className="market-source">
+      <summary>{t('market.sale.title')} · {t(`market.sale.status.${track.saleRights ?? 'unreviewed'}`)}</summary>
+      <form className="stack" onSubmit={(event) => { event.preventDefault(); void save(); }}>
+        <p className="small muted">{t('market.sale.help')}</p>
+        <label className="field">
+          <span>{t('market.sale.decision')}</span>
+          <select value={status} disabled={saving} onChange={(e) => setStatus(e.target.value as OfficialBgmSaleRights)}>
+            {OFFICIAL_BGM_SALE_RIGHTS.map((s) => <option key={s} value={s}>{t(`market.sale.status.${s}`)}</option>)}
+          </select>
+        </label>
+        <label className="field">
+          <span>{t('market.sale.basis')}</span>
+          <textarea rows={2} maxLength={500} value={basis} disabled={saving || status === 'unreviewed'}
+            onChange={(e) => setBasis(e.target.value)} />
+        </label>
+        {error && <p role="alert">{t('market.admin.saveError')}</p>}
+        <button type="submit" className="btn btn--primary" disabled={saving || !ready}>
           {t(saving ? 'market.admin.saving' : 'market.copy.save')}
         </button>
       </form>
@@ -243,6 +295,10 @@ export function OfficialBgmManager() {
                 start: formatTime(track.previewStartSeconds), length: formatTime(track.previewSeconds),
               })}</p>
               <ImportedBgmDetails track={track} />
+              <SaleRights track={track} onSaved={(updated) => {
+                catalog.replace(updated);
+                setResult(t('market.sale.saved', { title: updated.title, status: t(`market.sale.status.${updated.saleRights}`) }));
+              }} />
               <CatalogEditor track={track} onSaved={(updated) => {
                 catalog.replace(updated);
                 setResult(t('market.copy.saved', { title: updated.title }));
