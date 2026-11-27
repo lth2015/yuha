@@ -1,4 +1,4 @@
-import type { OfficialBgmMetadata, OfficialBgmProvenance, OfficialBgmState } from '@yuha/contracts';
+import type { OfficialBgmCopy, OfficialBgmMetadata, OfficialBgmProvenance, OfficialBgmState } from '@yuha/contracts';
 import type { PoolConnection } from 'mysql2/promise';
 import { execute, query, queryOne } from './pool.js';
 
@@ -10,6 +10,10 @@ export interface OfficialBgmRow {
   genre: OfficialBgmMetadata['genre'];
   scenario: OfficialBgmMetadata['scenario'];
   mood: OfficialBgmMetadata['mood'];
+  /** Migration 0044: an editor's zh/ja/en title and intro, style tags, and the editorial score. */
+  copy: OfficialBgmCopy | null;
+  tags: string[] | null;
+  rating: string | number | null;
   master_key: string;
   master_format: 'mp3' | 'wav';
   master_ms: number;
@@ -21,28 +25,70 @@ export interface OfficialBgmRow {
   cover_key: string | null;
 }
 
-export function getOfficialBgm(id: string, tx: PoolConnection, lock: 'share' | 'update') {
+/** mysql2 hands JSON columns back as strings in some configurations; one place reads them. */
+function normalise<T extends OfficialBgmRow | undefined>(row: T): T {
+  if (!row) return row;
+  for (const k of ['copy', 'tags', 'provenance'] as const) {
+    const v = row[k] as unknown;
+    if (typeof v === 'string') (row as unknown as Record<string, unknown>)[k] = JSON.parse(v);
+  }
+  return row;
+}
+
+export async function getOfficialBgm(id: string, tx: PoolConnection, lock: 'share' | 'update') {
   const clause = lock === 'share' ? 'FOR SHARE' : 'FOR UPDATE';
-  return queryOne<OfficialBgmRow>(`SELECT * FROM official_bgm WHERE id = ? ${clause}`, [id], tx);
+  return normalise(await queryOne<OfficialBgmRow>(`SELECT * FROM official_bgm WHERE id = ? ${clause}`, [id], tx));
+}
+
+/**
+ * A new track's starting score (product owner, 2026-11-27): random in
+ * 3.8–4.5, one decimal, until there is a recommendation standard.
+ */
+export function startingRating(random: () => number = Math.random): number {
+  return Math.round((3.8 + random() * 0.7) * 10) / 10;
+}
+
+/** An editor's words, tags and score for one track. */
+export async function setOfficialBgmCatalog(
+  id: string,
+  edit: { copy: OfficialBgmCopy; tags: string[]; rating: number | null },
+  tx: PoolConnection,
+): Promise<void> {
+  await execute(
+    `UPDATE official_bgm SET copy = ?, tags = ?, rating = ?, updated_at = UTC_TIMESTAMP(3) WHERE id = ?`,
+    [JSON.stringify(edit.copy), JSON.stringify(edit.tags), edit.rating, id],
+    tx,
+  );
+}
+
+/** Ids of every track not yet published or archived, oldest first: what "publish all" acts on. */
+export async function unpublishedOfficialBgmIds(): Promise<string[]> {
+  return (await query<{ id: string }>(
+    `SELECT id FROM official_bgm WHERE state IN ('draft','reviewed') ORDER BY created_at, id`, [],
+  )).map((r) => r.id);
 }
 
 export function findOfficialBgmImport(sourceKey: string, sha256: string) {
   return query<OfficialBgmRow>('SELECT * FROM official_bgm WHERE source_key = ? OR sha256 = ?', [sourceKey, sha256]);
 }
 
-export async function insertOfficialBgm(row: Omit<OfficialBgmRow, 'state'>, tx: PoolConnection): Promise<void> {
+export async function insertOfficialBgm(
+  row: Omit<OfficialBgmRow, 'state' | 'copy' | 'tags' | 'rating'> & { tags?: string[]; rating?: number },
+  tx: PoolConnection,
+): Promise<void> {
   await execute(
     `INSERT INTO official_bgm
-      (id, source_key, sha256, title, genre, scenario, mood, master_key, master_format, master_ms, preview_key,
+      (id, source_key, sha256, title, genre, scenario, mood, tags, rating, master_key, master_format, master_ms, preview_key,
        preview_start_ms, preview_ms, provenance, cover_key)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [row.id, row.source_key, row.sha256, row.title, row.genre, row.scenario, row.mood,
+      JSON.stringify(row.tags ?? []), row.rating ?? startingRating(),
       row.master_key, row.master_format, row.master_ms, row.preview_key, row.preview_start_ms, row.preview_ms,
       row.provenance ? JSON.stringify(row.provenance) : null, row.cover_key], tx,
   );
 }
 
-export function listOfficialBgm(input: { admin?: boolean; genre?: string; search?: string; limit: number; offset: number }) {
+export async function listOfficialBgm(input: { admin?: boolean; genre?: string; search?: string; limit: number; offset: number }) {
   const clauses: string[] = input.admin ? [] : ["state = 'published'"];
   const values: Array<string | number> = [];
   if (input.genre) {
@@ -50,13 +96,15 @@ export function listOfficialBgm(input: { admin?: boolean; genre?: string; search
     values.push(input.genre);
   }
   if (input.search) {
-    clauses.push("title LIKE ? ESCAPE '='");
-    values.push(`%${input.search.replace(/[=%_]/g, '=$&')}%`);
+    // The original title, or any language's title an editor wrote.
+    clauses.push("(title LIKE ? ESCAPE '=' OR CAST(JSON_EXTRACT(copy, '$.*.title') AS CHAR) LIKE ? ESCAPE '=')");
+    const like = `%${input.search.replace(/[=%_]/g, '=$&')}%`;
+    values.push(like, like);
   }
   const where = clauses.length ? `WHERE ${clauses.join(' AND ')}` : '';
   const order = input.admin ? 'created_at DESC, id DESC' : 'published_at DESC, id DESC';
   return query<OfficialBgmRow>(`SELECT * FROM official_bgm ${where} ORDER BY ${order} LIMIT ? OFFSET ?`,
-    [...values, input.limit, input.offset]);
+    [...values, input.limit, input.offset]).then((rows) => rows.map(normalise));
 }
 
 export async function setOfficialBgmState(id: string, state: OfficialBgmState, tx: PoolConnection): Promise<void> {

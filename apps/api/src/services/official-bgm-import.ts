@@ -6,7 +6,7 @@ import { createHash, randomUUID } from 'node:crypto';
 import { isDeepStrictEqual, promisify } from 'node:util';
 import {
   AppError, OFFICIAL_BGM_COVER_BYTES, OFFICIAL_BGM_MASTER_BYTES, officialBgmBatchTrack,
-  officialBgmMetadata, officialBgmSourceKey, type OfficialBgmBatchTrack,
+  officialBgmMetadata, officialBgmSourceKey, officialBgmStyleTags, type OfficialBgmBatchTrack,
 } from '@yuha/contracts';
 import { findOfficialBgmImport, insertOfficialBgm, withTx, writeAuditLog, type OfficialBgmRow } from '@yuha/db';
 import type { AudioProcessor } from '@yuha/providers';
@@ -141,8 +141,10 @@ export async function importOfficialBgm(
   try {
     await withTx(async (tx) => {
       // Claim both unique values before writing to private delivery storage.
+      // Style tags start from the batch's own style words; the score starts in
+      // 3.8–4.5 (insertOfficialBgm). An editor can change both.
       await insertOfficialBgm({ ...fields, id, master_key: masterKey, master_ms: durationMs, preview_key: previewKey,
-        preview_ms: actual.durationMs, cover_key: coverKey }, tx);
+        preview_ms: actual.durationMs, cover_key: coverKey, tags: officialBgmStyleTags(provenance?.style) }, tx);
       const writeDeadline = AbortSignal.timeout(20_000);
       const put = (key: string, body: Buffer, contentType: string) =>
         ctx.storage.put({ zone: 'delivery', key, body, contentType, abortSignal: writeDeadline });

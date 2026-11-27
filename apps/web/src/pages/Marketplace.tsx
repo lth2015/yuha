@@ -7,14 +7,16 @@ import { useI18n } from '../lib/i18n';
 import { OFFICIAL_BGM_CATALOG, useOfficialBgmCatalog } from '../lib/official-bgm-catalog';
 import { formatTime } from '../lib/player';
 import { useSession } from '../lib/session';
+import { catalogIntro, catalogRating, catalogTitle } from '../lib/official-bgm-copy';
 
 function Tracks({ query, selected, onSelect }: {
   query: string;
   selected: string | undefined;
   onSelect: (track: OfficialBgmItem, button: HTMLButtonElement) => void;
 }) {
-  const { t } = useI18n();
+  const { t, lang } = useI18n();
   const { items, pending, failed, nextOffset, retry, loadMore } = useOfficialBgmCatalog(OFFICIAL_BGM_CATALOG, query);
+  const rated = items.some((track) => typeof track.rating === 'number');
 
   return (
     <div className="stack">
@@ -24,26 +26,40 @@ function Tracks({ query, selected, onSelect }: {
       )}
       {items.length > 0 && (
         <ul className="market-tracks" aria-label={t('market.catalog')}>
-          {items.map((track) => (
+          {items.map((track) => {
+            const title = catalogTitle(track, lang);
+            const rating = catalogRating(track.rating);
+            return (
             <li key={track.id} className={`market-track${selected === track.id ? ' is-active' : ''}`}>
               <div className="market-track__sleeve" aria-hidden="true">
-                <CoverArt title={track.title} seed={Number.parseInt(track.id.slice(0, 8), 16)} styles={[track.genre]} size={76} />
+                <CoverArt title={title} seed={Number.parseInt(track.id.slice(0, 8), 16)} styles={[track.genre]} size={76} />
               </div>
               <div className="market-track__text">
-                <h2>{track.title}</h2>
-                <p className="small muted">
-                  {t(`bgm.genre.${track.genre}`)} · {t(`bgm.scenario.${track.scenario}`)} · {t(`bgm.mood.${track.mood}`)}
-                </p>
+                <h2>{title}</h2>
+                {rating && (
+                  <p className="market-track__rating small" title={t('market.rating.note')}>
+                    <span className="market-stars" style={{ '--rating': rating } as React.CSSProperties} aria-hidden="true" />
+                    <span>{t('market.rating', { score: rating })}</span>
+                  </p>
+                )}
+                <p className="market-track__intro small">{catalogIntro(track, lang, t)}</p>
+                <ul className="market-tags" aria-label={t('market.tags')}>
+                  {[t(`bgm.genre.${track.genre}`), t(`bgm.mood.${track.mood}`), t(`bgm.scenario.${track.scenario}`), ...(track.tags ?? [])]
+                    .filter((tag, i, all) => all.findIndex((x) => x.toLowerCase() === tag.toLowerCase()) === i)
+                    .map((tag) => <li key={tag} className="market-tag">{tag}</li>)}
+                </ul>
                 <span className="small muted">{formatTime(track.durationSeconds)}</span>
               </div>
               <button type="button" className="btn market-track__play"
                 aria-pressed={selected === track.id}
-                aria-label={t('market.previewTrack', { title: track.title })}
+                aria-label={t('market.previewTrack', { title })}
                 onClick={(event) => onSelect(track, event.currentTarget)}>{t('market.preview')}</button>
             </li>
-          ))}
+            );
+          })}
         </ul>
       )}
+      {rated && <p className="small muted market-rating-note">{t('market.rating.note')}</p>}
       {failed ? (
         <div className="market-empty">
           <p role="alert">{t('market.catalogError')}</p>

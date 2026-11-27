@@ -3206,6 +3206,18 @@ textarea.is-full { border-color: var(--danger); }
 .market-track__sleeve { display: flex; }
 .market-track__sleeve .cover-art__index { display: none; }
 .market-track__text { min-width: 0; overflow-wrap: anywhere; }
+/* Catalogue words (product owner, 2026-11-27): the editorial score as stars, an intro, style tags. */
+.market-track__rating { display: flex; align-items: center; gap: 6px; margin: 2px 0 0; color: var(--muted); }
+.market-stars { position: relative; display: inline-block; font-size: 14px; line-height: 1; letter-spacing: 1px; }
+.market-stars::before { content: "★★★★★"; color: var(--line, #d8d6cf); }
+.market-stars::after { content: "★★★★★"; position: absolute; inset: 0 auto 0 0; overflow: hidden; white-space: nowrap; color: var(--petal); width: calc(var(--rating, 0) / 5 * 100%); }
+.market-track__intro { margin: var(--s1) 0; color: var(--ink); line-height: 1.6; }
+.market-tags { list-style: none; margin: 0 0 var(--s1); padding: 0; display: flex; flex-wrap: wrap; gap: 6px; }
+.market-tag { font-size: var(--t-caption); padding: 2px 10px; border-radius: 999px; background: rgb(255 255 255 / 70%); border: 1px solid var(--line, #e4e2db); color: var(--muted); }
+.market-rating-note { margin: 0; }
+.market-copy { border: 1px solid var(--line, #e4e2db); border-radius: 12px; padding: var(--s2); display: grid; gap: var(--s2); }
+.market-copy legend { padding: 0 6px; font-weight: 600; }
+.market-publish-all { align-items: start; }
 .market-track__text h2, .market-admin__info h3 { margin: 0 0 3px; font-size: var(--t-lead); }
 .market-track__text p, .market-admin__info p, .market-admin header p { margin: 4px 0 0; }
 .market-more { justify-self: center; align-self: center; }
