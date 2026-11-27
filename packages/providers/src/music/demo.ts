@@ -69,7 +69,8 @@ export class DemoMusicProvider implements MusicProvider {
       providerId: DemoMusicProvider.PROVIDER_ID,
       model: 'demo-synth-v2',
       contractVersion: 'demo-no-contract',
-      supportedDurationsSeconds: [30, 60, 120, 180, 240],
+      // 15 s is background music's shortest (docs/BGM_STUDIO_PLAN.md); songs are offered 30 s and up.
+      supportedDurationsSeconds: [15, 30, 60, 120, 180, 240],
       supportedFormats: ['mp3'],
       supportsInstrumentalOnly: true,
       // The synthesised fixtures stand in for sung output too: demo mode

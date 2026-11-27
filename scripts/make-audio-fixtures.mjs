@@ -21,7 +21,7 @@ const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const outDir = join(root, 'assets', 'fixtures', 'audio');
 
 /** One fixture per supported song length, so the duration check is exact. */
-const DURATIONS = [30, 60, 120, 180, 240];
+const DURATIONS = [15, 30, 60, 120, 180, 240];
 
 /**
  * Each fixture is a small additive-synthesis patch: a chord pad, a bass pulse

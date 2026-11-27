@@ -116,7 +116,7 @@ export async function deliver(ctx: AppContext, params: DeliverParams): Promise<{
     // not charge a second time.
     if (!delivered) return null;
 
-    const input = job.input as { visibility?: 'private' | 'public'; title?: string | null; dedication?: Dedication | null };
+    const input = job.input as { visibility?: 'private' | 'public'; title?: string | null; dedication?: Dedication | null; bgm?: Record<string, unknown> | null };
 
     // The track row must exist before the job can reference it, so the id is
     // derived from the job id up front and used for both.
@@ -137,6 +137,8 @@ export async function deliver(ctx: AppContext, params: DeliverParams): Promise<{
         visibility: input.visibility === 'public' ? 'public' : 'private',
         coverSeed: coverSeedFor(trackId),
         dedication: input.dedication ?? null,
+        kind: input.bgm ? 'bgm' : 'song',
+        bgm: input.bgm ? { ...input.bgm, note: undefined } : null,
       },
       tx,
     );

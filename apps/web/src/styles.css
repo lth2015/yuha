@@ -3107,3 +3107,10 @@ textarea.is-full { border-color: var(--danger); }
 .scene__faq dl { margin: 0; display: grid; gap: var(--s4); }
 .scene__faq dt { font-weight: 600; }
 .scene__faq dd { margin: var(--s1) 0 0; color: var(--muted); }
+
+/* AI BGM (pages/Bgm.tsx): long labels in ja/en wrap rather than run off a 360 px screen. */
+.bgm { display: grid; gap: var(--s4); }
+.bgm__form { display: grid; gap: var(--s3); }
+.bgm__form textarea { width: 100%; }
+.bgm__actions { display: flex; flex-wrap: wrap; gap: var(--s2); }
+.bgm__actions .btn { white-space: normal; max-width: 100%; text-align: center; }
