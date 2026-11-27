@@ -16,6 +16,7 @@ import {
   type TrackRow,
 } from '@yuha/db';
 import type { AppContext } from '../context.js';
+import { alignerFor } from './aligner-choice.js';
 
 /**
  * "Align it again", for one song, by its owner (docs/LYRIC_ALIGNMENT.md).
@@ -153,7 +154,8 @@ async function processOne(ctx: AppContext, row: LyricProposalRow, log: (msg: str
     const master = await getMasterAsset(track.id);
     if (!master) return finishLyricProposal(row.id, { status: 'failed', failure: 'error' });
     const audio = await ctx.storage.get('delivery', master.storage_key);
-    const result = await ctx.alignment.align({ lyrics, durationSeconds: track.duration_ms / 1000, providerRequestId: '', audio });
+    const method = await alignerFor(ctx, track.owner_id);
+    const result = await ctx.alignment.align({ ...(method ? { method } : {}), lyrics, durationSeconds: track.duration_ms / 1000, providerRequestId: '', audio });
     // Only what the aligner heard is offered; an estimate would only repeat what the song has.
     if (result.status === 'ok' && result.timings.source === 'aligned') {
       return finishLyricProposal(row.id, { status: 'ready', timings: result.timings });

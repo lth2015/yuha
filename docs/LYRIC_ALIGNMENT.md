@@ -48,6 +48,15 @@ heard line's `confidence` is below 0.5, `syncing` while a job is queued or runni
 
 `off` (the default) is the previous behaviour, so rolling back is one value.
 
+## Which aligner (`LYRIC_ALIGNER`)
+
+`off` / `staff` / `all`, decided by who owns the song. When it applies, YUHA's request to the DGX
+carries `method: qwen`: Qwen3-ForcedAligner fused with Whisper, with per-line confidence
+(deploy/dgx/music README, "Qwen3-ForcedAligner"). Otherwise the DGX uses its own default, Whisper
+on the vocal stem. It is read wherever YUHA aligns: delivery, the automatic sync queue, and
+re-alignment proposals. Production has `all`, paired with `LYRIC_STRICT_TIMELINE=all` so that an
+unsure line is lit for nobody (product owner, 2026-11-27).
+
 ## Backfill of older songs (`LYRIC_BACKFILL`)
 
 This is L4b. With `LYRIC_BACKFILL` set to `staff` or `all`, an older sung song with no heard

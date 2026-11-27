@@ -65,7 +65,7 @@ class AlignRouteTests(unittest.TestCase):
         cls.environment.stop()
         cls.data.cleanup()
 
-    def run_align(self, separate_mod, heard, forced_mod=None, method="forced"):
+    def run_align(self, separate_mod, heard, forced_mod=None, method="forced", requested=None):
         calls = []
 
         def transcribe(audio, lyrics):
@@ -73,7 +73,7 @@ class AlignRouteTests(unittest.TestCase):
             return heard(audio)
 
         body = self.app.AlignRequest(lyrics=LYRICS, audio_url=f"https://x/v1/audio/{JOB}.mp3",
-                                     duration_seconds=20)
+                                     duration_seconds=20, **({"method": requested} if requested else {}))
         # The Whisper path's tests run with forced alignment unable to answer,
         # which is also what an image without its model weights does.
         with patch.dict(sys.modules, {"separate": separate_mod, "forced": forced_mod or fake_forced(error=True)}), \
@@ -177,6 +177,28 @@ class AlignRouteTests(unittest.TestCase):
         whisper_start = fused["lines"][1]["start"] * 2 - alone["lines"][1]["start"]  # what the average was taken with
         self.assertNotEqual(fused["lines"][1]["start"], alone["lines"][1]["start"])
         self.assertLess(abs(whisper_start - alone["lines"][1]["start"]), 1.0)
+
+    def qwen_mod(self):
+        mod = types.ModuleType("qwen_align")
+        mod.align = lambda stem, lyrics, lang: [(c, 1.0 + i * 0.3, 1.3 + i * 0.3) for i, c in enumerate("晚风吹过街角")] + \
+            [(c, 10.4 + i * 0.3, 10.7 + i * 0.3) for i, c in enumerate("我等你回来")]
+        return mod
+
+    def test_a_request_can_ask_for_qwen_while_the_box_default_is_whisper(self):
+        with patch.dict(sys.modules, {"qwen_align": self.qwen_mod()}), patch.object(self.app, "ALIGN_QWEN_WEIGHT", 1.0):
+            out, _ = self.run_align(fake_separate(), lambda audio: STEM_WORDS, method="whisper", requested="qwen")
+        self.assertEqual(out["method"], "qwen")
+
+    def test_a_request_can_ask_for_whisper_while_the_box_default_is_qwen(self):
+        with patch.dict(sys.modules, {"qwen_align": self.qwen_mod()}):
+            out, _ = self.run_align(fake_separate(), lambda audio: STEM_WORDS, method="qwen", requested="whisper")
+        self.assertEqual(out["method"], "whisper")
+
+    def test_no_request_can_ask_for_mms_fa(self):
+        # Its weights are non-commercial; only the box's own .env can turn it on.
+        from pydantic import ValidationError
+        with self.assertRaises(ValidationError):
+            self.app.AlignRequest(lyrics=LYRICS, audio_url="https://x/a.mp3", duration_seconds=20, method="forced")
 
     def test_a_qwen_failure_leaves_whisper_s_answer(self):
         mod = types.ModuleType("qwen_align")

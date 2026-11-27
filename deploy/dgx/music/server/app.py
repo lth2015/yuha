@@ -793,8 +793,7 @@ def healthz():
 
 
 def _qwen_status():
-    if ALIGN_METHOD != "qwen":
-        return None
+    # Always reported: a request can ask for qwen whatever ALIGN_METHOD says.
     try:
         import qwen_align
         return qwen_align.status()
@@ -862,6 +861,10 @@ class AlignRequest(BaseModel):
     audio_url: Optional[str] = Field(None, min_length=1, max_length=2000)
     audio_b64: Optional[str] = Field(None, min_length=4, max_length=MAX_ALIGN_AUDIO_B64)
     duration_seconds: float = Field(..., gt=0, le=600)
+    # Which aligner, for this request only (YUHA's LYRIC_ALIGNER decides per
+    # song owner). Absent: this box's ALIGN_METHOD. MMS_FA cannot be asked for
+    # here: its weights are non-commercial, so only this box's .env turns it on.
+    method: Optional[Literal["whisper", "qwen"]] = None
 
 
 @app.post("/v1/align")
@@ -898,6 +901,7 @@ def _align_path(body: AlignRequest, path: Path, label: str):
     """The alignment itself, on a file on this server."""
     from align import align_lines
     t0 = time.time()
+    method = body.method or ALIGN_METHOD
     # Listen to the singer, not the band: Whisper on the separated vocal, and
     # the stem's loudness as the record of where singing is (see separate.py).
     # If the stem hears less of the lyrics than the mix would have, the mix is
@@ -920,7 +924,7 @@ def _align_path(body: AlignRequest, path: Path, label: str):
     out = None
     # The known lyrics placed on the stem (forced.py). Whisper below is the
     # fallback, and the only path when separation is unavailable.
-    if stem16 is not None and ALIGN_METHOD == "forced":
+    if stem16 is not None and method == "forced":
         try:
             import forced
             with _gpu_lock:
@@ -942,7 +946,7 @@ def _align_path(body: AlignRequest, path: Path, label: str):
     # placed on the stem, every line timed; each line's confidence comes from
     # where the voice is and from what Whisper just heard (align.qwen_lines).
     # Any failure leaves the Whisper result below exactly as it was.
-    if stem16 is not None and ALIGN_METHOD == "qwen":
+    if stem16 is not None and method == "qwen":
         try:
             import qwen_align
             from align import guess_language, qwen_lines

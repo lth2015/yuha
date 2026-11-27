@@ -59,7 +59,7 @@ export class HttpAlignmentProvider implements AlignmentProvider {
       const res = await fetch(new URL(this.cfg.submitPath, this.cfg.baseUrl), {
         method: 'POST',
         headers: { authorization: `Bearer ${this.cfg.apiKey}`, 'content-type': 'application/json' },
-        body: JSON.stringify({ lyrics: req.lyrics, ...source, duration_seconds: req.durationSeconds }),
+        body: JSON.stringify({ lyrics: req.lyrics, ...source, duration_seconds: req.durationSeconds, ...(req.method ? { method: req.method } : {}) }),
         signal: controller.signal,
         redirect: 'error',
       });

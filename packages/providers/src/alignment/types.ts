@@ -19,6 +19,12 @@ export interface AlignmentRequest {
    * of the render — it keeps those only for days, and YUHA keeps every song.
    */
   audio?: Buffer;
+  /**
+   * Which aligner the DGX should use for this request (LYRIC_ALIGNER;
+   * deploy/dgx/music README, "Qwen3-ForcedAligner"). Absent: its own default.
+   * There is deliberately no way to ask for MMS_FA: its weights are non-commercial.
+   */
+  method?: 'whisper' | 'qwen';
 }
 
 export type AlignmentResult =
