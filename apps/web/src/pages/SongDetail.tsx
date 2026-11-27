@@ -4,7 +4,8 @@ import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { TITLE_MAX_CODEPOINTS, markCorrected, seasonOfOccasion, type LyricTimings, type Occasion, type ProductView, type TrackView } from '@yuha/contracts';
 import { API_BASE, ApiError, apiFetch, apiPostForBlob } from '../lib/api';
 import { drawVideoFrame, frameJpeg, planShareClip, shareCardPng } from '../lib/share-art';
-import { resolveLyricTimings, sungLyrics } from '../lib/lyrics';
+import { resolveLyricTimings, sungLyrics, timedLinesFor } from '../lib/lyrics';
+import { useLyricSyncRefresh } from '../lib/lyric-sync-refresh';
 import { clampToCodePoints } from '../lib/codepoints';
 import { createInFlightGuard, PENDING_AFTER_MS } from '../lib/in-flight';
 import { formatTime, usePlayer } from '../lib/player';
@@ -55,6 +56,7 @@ export default function SongDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { me, runtime } = useSession();
+  const strictTimeline = Boolean(runtime?.features?.lyricStrictTimeline);
   const player = usePlayer();
   const sceneSeek = useRef<number | null>(null);
   useEffect(() => { sceneSeek.current = null; }, [id]);
@@ -180,6 +182,51 @@ export default function SongDetail() {
   }, [id]);
 
   useEffect(load, [load]);
+
+  /*
+   * While the platform syncs this song's lyrics (L4a/L4b), ask again every
+   * 12 s, only while the page is in front, and take just the timeline and its
+   * state: the player is not touched, so the music keeps playing and the
+   * highlight picks up at the current position; the video card reads the
+   * same `song.lyricTimings`, so an export uses what is shown. Nobody saves.
+   */
+  const syncing = song?.lyricSync === 'syncing';
+  /*
+   * What the lyrics heading says (docs/agents/LYRIC_AUTO_SYNC_UX_HANDOFF.md):
+   * the state while it needs saying, and "synced" only at the moment a sync
+   * this page watched completes — never as a standing badge. `idle` (nothing
+   * tried: not in scope, or not yet) promises nothing.
+   */
+  const lastSync = useRef<string | null | undefined>(undefined);
+  const [justSynced, setJustSynced] = useState(false);
+  useEffect(() => {
+    const was = lastSync.current;
+    lastSync.current = song?.lyricSync;
+    if (was === 'syncing' && song?.lyricSync === 'synced') {
+      setJustSynced(true);
+      const timer = window.setTimeout(() => setJustSynced(false), 6000);
+      return () => window.clearTimeout(timer);
+    }
+    return undefined;
+  }, [song?.lyricSync]);
+  useEffect(() => {
+    lastSync.current = undefined;
+    setJustSynced(false);
+  }, [id]);
+  const syncNote =
+    song?.lyricSync === 'syncing' || song?.lyricSync === 'partial' || song?.lyricSync === 'deferred' || song?.lyricSync === 'unavailable'
+      ? song.lyricSync
+      : justSynced
+        ? 'synced'
+        : null;
+  // The shared refresh (lib/lyric-sync-refresh.ts): this page and Now Playing take the same timeline.
+  useLyricSyncRefresh(song?.trackId ?? null, syncing, (fresh) =>
+    setSong((s) =>
+      s && s.trackId === fresh.trackId && (s.lyricSync !== fresh.lyricSync || s.lyricTimings !== fresh.lyricTimings)
+        ? { ...s, lyricSync: fresh.lyricSync, lyricTimings: fresh.lyricTimings }
+        : s,
+    ),
+  );
   // A trial song just added to this account (TrialClaimAsk): read it again,
   // so the page shows the song instead of the "not found" it had a moment ago.
   useEffect(() => {
@@ -401,7 +448,8 @@ export default function SongDetail() {
    * audio by the API. Returned as a file for the phone's share sheet.
    */
   const makeVideo = async (seconds: number): Promise<File> => {
-    const lines = sung ? resolveLyricTimings(sung, song.durationSeconds, song.lyricTimings).lines : [];
+    // Only trusted lines are drawn under the shared rule (isTrustedLine); an estimate makes a video without words.
+    const lines = sung ? timedLinesFor(resolveLyricTimings(sung, song.durationSeconds, song.lyricTimings), strictTimeline) : [];
     const plan = planShareClip(lines, song.durationSeconds, 200, seconds);
     const labels = shareLabels();
     const frames = [];
@@ -967,6 +1015,10 @@ export default function SongDetail() {
       {sung && (
         <section className="song-page__lyrics panel" aria-labelledby="lyrics-heading">
           <h2 id="lyrics-heading">{t('song.lyrics')}</h2>
+          {/* Always present, so a screen reader announces a change once and a poll that changes nothing says nothing. */}
+          <p className="lyrics-sync__status" role="status" aria-live="polite">
+            {syncNote ? t(`lyrics.sync.${syncNote}`) : null}
+          </p>
           {/*
             * Only while THIS song is the one playing. The readout above has
             * always guarded on `active`; these two props did not, so opening
@@ -978,6 +1030,7 @@ export default function SongDetail() {
             duration={active ? player.duration || song.durationSeconds : song.durationSeconds}
             currentTime={active ? player.currentTime : 0}
             live={active}
+            still={song.lyricSync === 'syncing' && !song.lyricTimings}
             timings={song.lyricTimings}
             draft={manages ? edits.present : undefined}
             onDraft={manages ? setTimingDraft : undefined}

@@ -180,7 +180,8 @@ function buildMusic(cfg: AppConfig): MusicProvider {
     supportsCancel: cfg.MUSIC_SUPPORTS_CANCEL,
     supportsWebhook: cfg.MUSIC_SUPPORTS_WEBHOOK,
     supportsStatusQuery: cfg.MUSIC_SUPPORTS_STATUS_QUERY,
-    supportedDurationsSeconds: [30, 60, 120, 180, 240],
+    // 15 s is background music's shortest (docs/BGM_STUDIO_PLAN.md); the DGX takes 10–240 s.
+    supportedDurationsSeconds: [15, 30, 60, 120, 180, 240],
     supportedFormats: cfg.FEATURE_WAV_EXPORT_ENABLED ? ['mp3', 'wav'] : ['mp3'],
     commercialDeliveryPermitted: cfg.MUSIC_COMMERCIAL_DELIVERY,
     maxConcurrency: cfg.MUSIC_MAX_CONCURRENCY,

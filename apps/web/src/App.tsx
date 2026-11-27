@@ -32,7 +32,7 @@ const Export = lazy(() => import('./pages/Export'));
 const GoogleCallback = lazy(() => import('./pages/GoogleCallback'));
 const MfaChallenge = lazy(() => import('./pages/MfaChallenge'));
 const Library = lazy(() => import('./pages/Library'));
-const Gift = lazy(() => import('./pages/Gift'));
+const Bgm = lazy(() => import('./pages/Bgm'));
 const LegalIndex = lazy(() => import('./pages/Legal').then((m) => ({ default: m.LegalIndex })));
 const Terms = lazy(() => import('./pages/Legal').then((m) => ({ default: m.Terms })));
 const Privacy = lazy(() => import('./pages/Legal').then((m) => ({ default: m.Privacy })));
@@ -98,6 +98,14 @@ export default function App() {
               <Route path="/gift/:token" element={<Gift />} />
               <Route path="/pricing" element={<Pricing />} />
 
+              <Route
+                path="/bgm"
+                element={
+                  <RequireAuth>
+                    <Bgm />
+                  </RequireAuth>
+                }
+              />
               <Route
                 path="/create"
                 element={

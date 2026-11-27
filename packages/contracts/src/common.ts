@@ -56,6 +56,10 @@ export const runtimeInfo = z.object({
      * aligner is configured (an estimator asked again only estimates again).
      */
     lyricAutoAlign: z.boolean().optional(),
+    /** AI BGM is available to this viewer (docs/BGM_STUDIO_PLAN.md). */
+    bgmStudio: z.boolean().optional(),
+    /** Only trusted lines are lit, burned in or written to an .lrc; estimates are for reading (isTrustedLine). */
+    lyricStrictTimeline: z.boolean().optional(),
     /** The AI scene MV (docs/AI_SCENE_MV_SPEC.md): may this person start one. */
     sceneMv: z.boolean().optional(),
     /** A song without an account (docs/GROWTH_SPEC.md, part three). */

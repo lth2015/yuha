@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { lrcFileName, markCorrected, setLineStart, shiftTimings, toLrc, type LyricTimings } from '@yuha/contracts';
 import { useI18n } from '../lib/i18n';
-import { activeLineIndex, resolveLyricTimings, lineProgress } from '../lib/lyrics';
+import { activeLineIndex, activeTrustedLine, resolveLyricTimings, lineProgress, trustedFlags } from '../lib/lyrics';
 import { usePlayer } from '../lib/player';
 import { useSession } from '../lib/session';
 import { Snow } from './HolidayOpening';
@@ -45,6 +45,7 @@ export function SyncedLyrics({
   onSaveTimings,
   compact = false,
   live = true,
+  still = false,
   draft: sharedDraft,
   onDraft,
 }: {
@@ -71,6 +72,12 @@ export function SyncedLyrics({
    * not follow it.
    */
   live?: boolean;
+  /**
+   * The platform is still syncing this song and nothing heard it yet: show
+   * the words as they are, with no line lit. A highlight from an estimate
+   * would look like a sync that has not happened.
+   */
+  still?: boolean;
 }) {
   const { t } = useI18n();
   /*
@@ -104,11 +111,19 @@ export function SyncedLyrics({
   const shown = draft ?? timeline;
   const lines = shown.lines;
   const source = shown.source;
+  /*
+   * The shared rule (isTrustedLine): only trusted lines are lit or written to
+   * an .lrc, and an estimate is for reading. Not while the owner edits a
+   * draft by hand: the editor lights what it is being told.
+   */
+  const strict = Boolean(useSession().runtime?.features?.lyricStrictTimeline) && !draft;
+  const trusted = useMemo(() => trustedFlags(shown, strict), [shown, strict]);
+  const lrcLines = strict ? lines.filter((_, i) => trusted[i]) : lines;
 
 
   const downloadLrc = () => {
     const url = URL.createObjectURL(
-      new Blob([toLrc(shown, { title, artist, durationSeconds: duration })], {
+      new Blob([toLrc({ ...shown, lines: lrcLines }, { title, artist, durationSeconds: duration })], {
         type: 'text/plain;charset=utf-8',
       }),
     );
@@ -142,7 +157,7 @@ export function SyncedLyrics({
   useEffect(() => (live ? player.onTime(setFrameTime) : undefined), [player, live]);
   const liveTime = live ? frameTime : currentTime;
 
-  const active = activeLineIndex(lines, liveTime);
+  const active = still ? -1 : strict ? activeTrustedLine(lines, trusted, liveTime) : activeLineIndex(lines, liveTime);
   /*
    * In a holiday season, a line about snow brings a little snow while it is
    * sung (docs/HOLIDAY_SPEC.md). Once per line, and only while playing.
@@ -237,9 +252,11 @@ export function SyncedLyrics({
             <button type="button" className="btn btn--ghost btn--sm" onClick={() => nudge(0.5)}>
               {t('lyrics.later')}
             </button>
-            <button type="button" className="btn btn--ghost btn--sm" onClick={downloadLrc}>
-              {t('lyrics.download')}
-            </button>
+            {lrcLines.length > 0 && (
+              <button type="button" className="btn btn--ghost btn--sm" onClick={downloadLrc}>
+                {t('lyrics.download')}
+              </button>
+            )}
           </span>
         )}
       </div>
@@ -273,7 +290,10 @@ export function SyncedLyrics({
         <p className="lyrics-sync__note">{t('lyrics.estimated.why')}</p>
       )}
       {lines.map((line, i) => {
-        const state = i < active ? 'past' : i === active ? 'active' : 'future';
+        // Strictly, a line is past only once it was trusted and sung: a gap lights nothing and dims nothing.
+        const state = strict
+          ? i === active ? 'active' : trusted[i] && liveTime >= line.end ? 'past' : 'future'
+          : i < active ? 'past' : i === active ? 'active' : 'future';
         const fill = i === active ? lineProgress(lines, i, liveTime) : state === 'past' ? 1 : 0;
         return (
           <div key={i} role="listitem" className="lyrics-sync__section">

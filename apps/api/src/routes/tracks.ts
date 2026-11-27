@@ -38,7 +38,7 @@ import { LICENSE_DISCLAIMER } from '../services/delivery.js';
 import { screenDedication } from '../services/generation.js';
 import { toPublicTrackView } from './explore.js';
 import { removeSceneMvsOfTrack } from '../services/scene-mv-cleanup.js';
-import { lyricSyncStateFor } from '../services/lyric-sync-state.js';
+import { lyricSyncStateFor, lyricSyncStateOnOpen } from '../services/lyric-sync-state.js';
 
 async function toTrackView(
   ctx: AppContext,
@@ -77,6 +77,9 @@ async function toTrackView(
     lyricTimings: clientTimings(row.lyric_timings),
     lyricSync: await lyricSyncStateFor(row),
     dedication: row.dedication ?? null,
+    kind: row.kind ?? 'song',
+    // The choices it was made from; the creator's own note stays in the job.
+    bgm: row.bgm ? ({ ...row.bgm, note: '' } as TrackView['bgm']) : null,
     licenseCount: await countLicenses(row.id),
     licensedByMe: viewerId === row.owner_id ? false : await hasLicense(row.id, viewerId),
     createdAt: row.created_at.toISOString(),
@@ -98,6 +101,7 @@ export default async function trackRoutes(app: FastifyInstance, opts: { ctx: App
       state: q.state,
       q: q.q,
       projectId: q.projectId,
+      kind: q.kind,
     });
     const page = rows.slice(0, q.limit);
     const items = await Promise.all(page.map((r) => toTrackView(ctx, r, req.user!.id)));
@@ -128,6 +132,8 @@ export default async function trackRoutes(app: FastifyInstance, opts: { ctx: App
       const assets = await listAssets(track.id);
       return {
         ...(await toTrackView(ctx, track, viewerId)),
+        // Opening one's own song is what starts an older song's backfill (L4b).
+        lyricSync: await lyricSyncStateOnOpen(ctx, track),
         lyrics: track.lyrics,
         exports: assets
           .filter((a) => a.kind === 'export')

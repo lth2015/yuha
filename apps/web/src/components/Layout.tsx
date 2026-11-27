@@ -3,6 +3,7 @@ import { TrialClaimAsk } from './TrialClaimAsk';
 import { GUEST_SONG_EVENT, guestSongId } from '../lib/guest';
 import { Link, NavLink, useLocation, useNavigate } from 'react-router-dom';
 import type { TrackView } from '@yuha/contracts';
+import { useLyricSyncRefresh } from '../lib/lyric-sync-refresh';
 import { apiFetch } from '../lib/api';
 import { usePlayer } from '../lib/player';
 import { useI18n } from '../lib/i18n';
@@ -230,6 +231,12 @@ export function Layout({ children }: { children: ReactNode }) {
       cancelled = true;
     };
   }, [nowPlayingOpen, playingId]);
+  // While its song syncs, the open Now Playing takes the automatic result too, without touching playback.
+  useLyricSyncRefresh(nowPlayingOpen ? (currentDetail?.trackId ?? null) : null, currentDetail?.lyricSync === 'syncing', (fresh) =>
+    setNowPlaying((s) =>
+      s && s.trackId === fresh.trackId ? { ...s, lyricSync: fresh.lyricSync, lyricTimings: fresh.lyricTimings } : s,
+    ),
+  );
 
   /*
    * The account menu closes on an outside click, on Escape, and on a route
@@ -325,6 +332,8 @@ export function Layout({ children }: { children: ReactNode }) {
         ? [{ to: `/song/${trialSong}`, key: 'nav.trialSong', end: true }]
         : []
       : [{ to: '/library', key: 'nav.library', end: false }]),
+    // AI BGM, where it is open to this viewer (docs/BGM_STUDIO_PLAN.md).
+    ...(runtime?.features?.bgmStudio && me && me.role !== 'guest' ? [{ to: '/bgm', key: 'nav.bgm', end: false }] : []),
   ];
 
   return (
@@ -532,6 +541,7 @@ export function Layout({ children }: { children: ReactNode }) {
           styles={currentDetail?.styles ?? player.current?.styles}
           lyrics={resolveNowPlayingLyrics(currentDetail?.lyrics, player.current?.lyrics, player.current?.vocalMode)}
           timings={currentDetail?.lyricTimings ?? player.current?.lyricTimings ?? null}
+          still={currentDetail?.lyricSync === 'syncing' && !currentDetail?.lyricTimings}
           onDownload={
             currentDetail && (me?.userId === currentDetail.artistId || currentDetail.licensedByMe) ? download : undefined
           }
