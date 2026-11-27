@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import type { LyricTimings } from './generation.js';
 
 /** Music Gift Invitation (docs/GIFT_INVITATION_PLAN.md). Limits in code points. */
 export const GIFT_THEMES = ['warm', 'romantic', 'celebration'] as const;
@@ -44,6 +45,13 @@ export interface PublicGiftView {
     styles: string[];
     vocalMode: 'instrumental' | 'with_vocals';
     lyrics: string | null;
+    /**
+     * The song's timeline, trusted lines only (the shared rule), so the page
+     * can follow the words as they are sung; null when nothing is trusted or
+     * the timeline is for other words. Added after recipients said they could
+     * not see the lyrics (2026-11-27).
+     */
+    lyricTimings: LyricTimings | null;
   };
 }
 

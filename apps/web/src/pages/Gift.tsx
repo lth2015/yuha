@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import type { PublicGiftView } from '@yuha/contracts';
 import { CoverArt } from '../components/CoverArt';
@@ -7,6 +7,8 @@ import { apiFetch } from '../lib/api';
 import { useI18n } from '../lib/i18n';
 import { formatTime } from '../lib/player';
 import { GIFT_ORIGIN_KEY, giftEvent } from '../lib/gift';
+import { activeLineIndex, activeTrustedLine, resolveLyricTimings, trustedFlags } from '../lib/lyrics';
+import { useSession } from '../lib/session';
 
 /**
  * A music gift invitation, opened by its link (docs/GIFT_INVITATION_PLAN.md).
@@ -28,6 +30,27 @@ export default function Gift() {
   const [loading, setLoading] = useState(false);
   const started = useRef(false);
   const resigned = useRef(false);
+  const strict = Boolean(useSession().runtime?.features?.lyricStrictTimeline);
+  const lyricBox = useRef<HTMLOListElement | null>(null);
+
+  /*
+   * The words, following the song (recipients could not see them at all,
+   * 2026-11-27). The same shared rule as the song page: only a trusted line
+   * is lit; an estimate is read, not followed.
+   */
+  const timeline = useMemo(
+    () => (gift?.song.lyrics ? resolveLyricTimings(gift.song.lyrics, gift.song.durationSeconds, gift.song.lyricTimings) : null),
+    [gift],
+  );
+  const trusted = useMemo(() => (timeline ? trustedFlags(timeline, strict) : []), [timeline, strict]);
+  const active = timeline && playing
+    ? (strict ? activeTrustedLine(timeline.lines, trusted, time) : activeLineIndex(timeline.lines, time))
+    : -1;
+  useEffect(() => {
+    const box = lyricBox.current;
+    const el = active >= 0 ? (box?.children[active] as HTMLElement | undefined) : undefined;
+    if (box && el) box.scrollTo({ top: Math.max(0, el.offsetTop - box.clientHeight / 3), behavior: 'smooth' });
+  }, [active]);
 
   useEffect(() => {
     let gone = false;
@@ -152,6 +175,22 @@ export default function Gift() {
           <button type="button" className="text-action" onClick={replay}>{t('gift.replay')}</button>
         </div>
       </section>
+
+      {timeline && timeline.lines.length > 0 && (
+        <section className="gift__lyrics" aria-label={t('gift.lyrics')}>
+          <ol ref={lyricBox} className="gift__lyric-lines">
+            {timeline.lines.map((l, i) => (
+              <li
+                key={i}
+                className={`gift__lyric${i === active ? ' is-active' : ''}${l.section && l.section !== timeline.lines[i - 1]?.section ? ' is-section-start' : ''}`}
+                aria-current={i === active ? 'true' : undefined}
+              >
+                {l.text}
+              </li>
+            ))}
+          </ol>
+        </section>
+      )}
 
       {gift.message && (
         <section className="gift__letter" aria-label={t('gift.letter')}>

@@ -9,6 +9,7 @@
  * invitation stands.
  */
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { timingsMatchLyrics } from '@yuha/contracts';
 import { createHash, randomUUID } from 'node:crypto';
 import { claimOutboxBatch, query, queryOne, withTx } from '@yuha/db';
 import { runJobStep } from '@yuha/worker/pipeline';
@@ -35,7 +36,7 @@ async function song(user: TestUser): Promise<string> {
     method: 'POST',
     url: '/v1/generations',
     headers: { ...user.authHeader, 'idempotency-key': `gi-${randomUUID()}` },
-    payload: { mode: 'simple', prompt: '秋天的傍晚', instrumental: false, durationSeconds: 30 } as never,
+    payload: { mode: 'custom', prompt: '秋天的傍晚', styles: ['ballad'], instrumental: false, durationSeconds: 30, lyrics: '[主歌]\n秋天的傍晚\n风吹过街角\n[副歌]\n我在等你' } as never,
   });
   const jobId = res.json().jobId as string;
   const rows = await withTx((tx) => claimOutboxBatch(50, tx));
@@ -106,6 +107,13 @@ describe('opening an invitation', () => {
     for (const secret of [trackId, owner.id, 'storage', 'key', 'master', 'owner', 'email']) expect(raw).not.toContain(secret);
     expect(res.headers['x-robots-tag']).toMatch(/noindex/);
     expect(res.headers['cache-control']).toMatch(/no-store/);
+
+    // The words, and the timeline to follow them by (recipients could not see
+    // the lyrics at all, 2026-11-27): the song page's own, one line per line.
+    expect(g.song.lyrics).toBeTruthy();
+    expect(g.song.lyricTimings?.lines.length).toBeGreaterThan(0);
+    expect(timingsMatchLyrics(g.song.lyrics, g.song.lyricTimings)).toBe(true);
+    expect(g.song.lyricTimings).not.toHaveProperty('fallbackReason');
 
     const a = await audio(token);
     expect(a.statusCode).toBe(200);

@@ -8,6 +8,7 @@ import {
   type PublicGiftView,
 } from '@yuha/contracts';
 import {
+  clientTimings,
   getTrackForUser,
   insertGiftInvitation,
   listGiftInvitations,
@@ -17,6 +18,7 @@ import {
   trackEvent,
   updateGiftInvitation,
   type GiftInvitationRow,
+  type StoredLyricTimings,
 } from '@yuha/db';
 import { checkPrompt, checkTitle } from '@yuha/providers';
 import type { AppContext } from '../context.js';
@@ -145,6 +147,10 @@ export default async function giftRoutes(app: FastifyInstance, opts: { ctx: AppC
         styles,
         vocalMode: g.vocal_mode,
         lyrics: g.vocal_mode === 'instrumental' ? null : g.lyrics,
+        // As the song page sends it; the page applies the shared trusted rule.
+        lyricTimings: g.vocal_mode === 'instrumental' ? null : clientTimings(
+          (typeof g.lyric_timings === 'string' ? JSON.parse(g.lyric_timings) : g.lyric_timings) as StoredLyricTimings | null,
+        ),
       },
     };
     return view;

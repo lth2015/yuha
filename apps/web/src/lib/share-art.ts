@@ -658,3 +658,111 @@ export async function frameJpeg(canvas: HTMLCanvasElement, quality = 0.86): Prom
   for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
   return btoa(bin);
 }
+
+/** What a printed or shared greeting card says, already in the sender's language. */
+export interface GreetingCardLabels {
+  /** "致 小林" */
+  to: string;
+  /** "— 小王", or empty. */
+  from: string;
+  message: string;
+  /** "扫码听这首歌" */
+  scan: string;
+  site: string;
+  lang?: ShareLabels['lang'];
+}
+
+const GREETING_WIDTH = 1080;
+const GREETING_HEIGHT = 1440;
+
+/**
+ * A greeting card for a music gift invitation: the song's sleeve, who it is
+ * for, the letter, and a QR code that opens the invitation, so it can be
+ * printed or posted as an image and still be listened to (user feedback,
+ * 2026-11-27). The QR carries the invitation link and nothing else: revoking
+ * the invitation turns the card's code off too.
+ */
+async function drawGreetingCard(
+  song: Pick<ShareSong, 'title' | 'coverSeed' | 'styles'>,
+  url: string,
+  labels: GreetingCardLabels,
+): Promise<HTMLCanvasElement> {
+  await fontsReady(`${song.title}${labels.to}${labels.from}${labels.message}${labels.scan}`, labels.lang);
+  const canvas = document.createElement('canvas');
+  canvas.width = GREETING_WIDTH;
+  canvas.height = GREETING_HEIGHT;
+  const ctx = canvas.getContext('2d')!;
+  const family = fontFamily(labels.lang);
+  const pad = 80;
+  const width = GREETING_WIDTH - pad * 2;
+
+  ctx.fillStyle = PAPER;
+  ctx.fillRect(0, 0, GREETING_WIDTH, GREETING_HEIGHT);
+  const sleeve = 520;
+  drawSleeve(ctx, (GREETING_WIDTH - sleeve) / 2, pad, sleeve, sleeve, song);
+
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'alphabetic';
+  const mid = GREETING_WIDTH / 2;
+  let y = pad + sleeve + 90;
+  ctx.fillStyle = PETAL;
+  ctx.font = `500 36px ${family}`;
+  ctx.fillText(labels.to, mid, y);
+  y += 72;
+  ctx.fillStyle = INK;
+  ctx.font = `700 50px ${family}`;
+  for (const l of wrapText(ctx, `《${song.title}》`, width, 2)) {
+    ctx.fillText(l, mid, y);
+    y += 62;
+  }
+  if (labels.message) {
+    y += 14;
+    ctx.fillStyle = INK;
+    ctx.font = `400 32px ${family}`;
+    for (const para of labels.message.split('\n')) {
+      for (const l of wrapText(ctx, para, width, 3)) {
+        if (y > GREETING_HEIGHT - 380) break;
+        ctx.fillText(l, mid, y);
+        y += 46;
+      }
+    }
+  }
+  if (labels.from) {
+    y += 10;
+    ctx.fillStyle = MUTED;
+    ctx.font = `400 30px ${family}`;
+    ctx.fillText(labels.from, mid, Math.min(y, GREETING_HEIGHT - 330));
+  }
+
+  // The QR code, bottom right; the scan line and the site beside it.
+  const QRCode = (await import('qrcode')).default;
+  const qr = document.createElement('canvas');
+  await QRCode.toCanvas(qr, url, { width: 240, margin: 1, errorCorrectionLevel: 'M', color: { dark: INK, light: '#ffffff' } });
+  const qx = GREETING_WIDTH - pad - 240;
+  const qy = GREETING_HEIGHT - pad - 240;
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(qx - 12, qy - 12, 264, 264);
+  ctx.drawImage(qr, qx, qy, 240, 240);
+
+  ctx.textAlign = 'left';
+  ctx.fillStyle = PETAL;
+  ctx.fillRect(pad, GREETING_HEIGHT - pad - 150, 48, 5);
+  ctx.fillStyle = INK;
+  ctx.font = `500 34px ${family}`;
+  for (const [i, l] of wrapText(ctx, labels.scan, qx - pad - 40, 2).entries()) ctx.fillText(l, pad, GREETING_HEIGHT - pad - 90 + i * 44);
+  ctx.fillStyle = MUTED;
+  ctx.font = `400 26px ${family}`;
+  ctx.fillText(labels.site, pad, GREETING_HEIGHT - pad);
+  return canvas;
+}
+
+/** The greeting card as a PNG file, to save or hand to the system share sheet. */
+export async function greetingCardFile(
+  song: Pick<ShareSong, 'title' | 'coverSeed' | 'styles'>,
+  url: string,
+  labels: GreetingCardLabels,
+): Promise<File> {
+  const blob = await toBlob(await drawGreetingCard(song, url, labels), 'image/png');
+  const safe = song.title.replace(/[\\/:*?"<>|\s]+/g, ' ').trim().slice(0, 40) || 'YUHA';
+  return new File([blob], `${safe}.png`, { type: 'image/png' });
+}

@@ -68,13 +68,14 @@ export async function openGiftInvitation(token: string): Promise<
       styles: string | string[] | null;
       vocal_mode: 'instrumental' | 'with_vocals';
       lyrics: string | null;
+      lyric_timings: unknown;
     })
   | null
 > {
   if (!/^[A-Za-z0-9_-]{43}$/.test(token)) return null;
-  const row = await queryOne<GiftInvitationRow & { title: string; duration_ms: number; cover_seed: number; styles: string | string[] | null; vocal_mode: 'instrumental' | 'with_vocals'; lyrics: string | null }>(
+  const row = await queryOne<GiftInvitationRow & { title: string; duration_ms: number; cover_seed: number; styles: string | string[] | null; vocal_mode: 'instrumental' | 'with_vocals'; lyrics: string | null; lyric_timings: unknown }>(
     `SELECT g.id, g.track_id, g.owner_id, g.recipient_name, g.sender_name, g.message, g.theme, g.status, g.created_at, g.updated_at, g.expires_at, g.revoked_at,
-            t.title, t.duration_ms, t.cover_seed, t.styles, t.vocal_mode, t.lyrics
+            t.title, t.duration_ms, t.cover_seed, t.styles, t.vocal_mode, t.lyrics, t.lyric_timings
        FROM gift_invitations g JOIN tracks t ON t.id = g.track_id
       WHERE g.token_hash = ? AND g.status = 'active'
         AND (g.expires_at IS NULL OR g.expires_at > UTC_TIMESTAMP(3))
