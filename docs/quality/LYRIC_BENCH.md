@@ -66,7 +66,7 @@ The annotations can come from the product itself: a staff member makes a song on
 corrects its timing in the song page, line by line, while listening. That corrected timeline is
 what a person heard.
 
-1. **Make and correct.** Staff accounts only (`admin` / `support`), 6 songs per language, covering
+1. **Make and correct** (step-by-step for the staff doing it, in Chinese: [LYRIC_TRUTH_GUIDE.md](LYRIC_TRUTH_GUIDE.md)). Staff accounts only (`admin` / `support`), 6 songs per language, covering
    the cases in "Sample" above. The DGX keeps a song's audio for `RETENTION_DAYS` (6), so run step
    3 within that.
 2. **Export** on the product owner's machine, over the production read-only connection, like
