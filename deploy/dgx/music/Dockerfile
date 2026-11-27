@@ -51,10 +51,20 @@ RUN pip install -r /opt/server-requirements.txt
 # on the container's arm64 CUDA torch. The torch constraint keeps it from
 # pulling its own.
 RUN pip install openai-whisper
-# Vocal separation for alignment (server/separate.py): Whisper listens to the
-# singer instead of the mix. Best effort — under the torch constraint above,
-# and if it cannot install, alignment runs on the mix as it always did.
-RUN pip install demucs || echo "WARN: demucs not installed; alignment will use the full mix"
+# Vocal separation for alignment (server/separate.py) and the render report
+# (server/quality.py): Whisper listens to the singer instead of the mix.
+#
+# Pinned and --no-deps, then the pure-Python dependencies by name. A plain
+# `pip install demucs` re-resolves torchaudio: the one built above has a
+# pre-release version (2.11.0a0+…), which pip does not count as satisfying
+# demucs's `torchaudio>=0.8`, so it went looking for another and, on arm64,
+# tried to compile a Rust package (sphn) and failed. That failure used to be
+# an echo, so the box ran for weeks without separation — every song aligned on
+# the mix — while every build said it succeeded. lameenc (demucs's MP3 writer)
+# is left out: nothing here writes MP3 through demucs.
+RUN pip install --no-deps "demucs==4.0.1" "openunmix==1.3.0" "dora-search==0.1.13" "julius==0.2.7" \
+ && pip install einops omegaconf pyyaml tqdm retrying submitit treetable \
+ && python -c "from demucs.pretrained import get_model; from demucs.apply import apply_model; import julius, openunmix.filtering; print('demucs importable')"
 
 # ---- 4. Hard fail the build if torch got replaced / lost CUDA, or ACE-Step can't import.
 # No GPU driver exists during `docker build`, so libcuda.so.1 is absent; transformer_engine
