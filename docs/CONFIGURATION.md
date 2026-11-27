@@ -91,6 +91,7 @@ cp .env.example .env   # 然后按需填写下表中的值
 | `STRIPE_PRICE_ID_PRO_MONTHLY` | Stripe 里的 **「CREATOR — 15 songs / month」**，¥1,980 每月。注意变量名是内部 price key（`pro_monthly`），和控制台显示的 CREATOR 不是一个词 |
 | `STRIPE_PRICE_ID_PREMIER_MONTHLY` | Stripe 里的 **「STUDIO — 45 songs / month」**，¥3,980 每月。同上，内部叫 `premier_monthly` |
 | `STRIPE_PRICE_ID_MARKET_LICENSE` | Stripe 里的 **「Licence — one song」**，¥980 一次性 |
+| `STRIPE_PRICE_ID_OFFICIAL_BGM_LICENSE` | Stripe 里的 **「Official BGM licence — one track」**，¥980 一次性。只在 `OFFICIAL_BGM_MARKETPLACE_SALES` 不是 `off` 时必填 |
 | `STRIPE_API_VERSION` | 固定为 `2025-03-31.basil`。不填时用 SDK 自带的版本（现为 `2025-02-24.acacia`），而 webhook 的 payload 形状依赖它——升一次依赖就会悄悄改变线上事件的结构。启动时校验格式，低于 `2025-03-31` 直接拒绝；生产模式不填也拒绝 |
 
 JPY 是零小数货币，Stripe 的 `unit_amount` 直接写 980，不要乘 100。

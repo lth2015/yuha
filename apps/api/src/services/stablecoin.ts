@@ -157,6 +157,10 @@ export async function createStablecoinQuote(
     throw new AppError('SERVICE_DISABLED', 'payments in that currency are paused');
   }
   const receiver = receiverFor(ctx);
+  // Bought only from the BGM library, for one track (services/billing.ts says why).
+  if (params.priceKey === 'official_bgm_license') {
+    throw new AppError('VALIDATION_FAILED', 'an official BGM licence is bought from the BGM library, for one track');
+  }
   const payer = params.payer.toLowerCase();
 
   const user = await getUser(params.userId);

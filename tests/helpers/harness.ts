@@ -222,6 +222,21 @@ async function seedCatalogue(): Promise<void> {
     active: true,
   });
   await upsertProduct({
+    price_key: 'official_bgm_license',
+    version: 1,
+    kind: 'one_time',
+    display_name: 'Official BGM licence — one track',
+    amount_minor: 980,
+    currency: 'jpy',
+    tax_included: true,
+    units: 1,
+    validity_days: null,
+    auto_renew: false,
+    billing_interval: null,
+    stripe_price_id: 'price_test_official_bgm',
+    active: true,
+  });
+  await upsertProduct({
     price_key: 'premier_monthly',
     version: 1,
     kind: 'subscription',

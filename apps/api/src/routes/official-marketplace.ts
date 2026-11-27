@@ -1,10 +1,10 @@
 import type { FastifyInstance, FastifyRequest } from 'fastify';
-import { AppError, BGM_GENRES, officialBgmAction, officialBgmCatalogEdit, officialBgmPublishAll } from '@yuha/contracts';
+import { AppError, BGM_GENRES, officialBgmAction, officialBgmCatalogEdit, officialBgmPublishAll, officialBgmSaleRightsDecision } from '@yuha/contracts';
 import { listOfficialBgm } from '@yuha/db';
 import { z } from 'zod';
 import type { AppContext } from '../context.js';
 import {
-  canBrowseOfficialBgm, changeOfficialBgm, editOfficialBgmCatalog, officialBgmAdminItem, officialBgmCover, officialBgmItem,
+  canBrowseOfficialBgm, changeOfficialBgm, decideOfficialBgmSaleRights, editOfficialBgmCatalog, officialBgmAdminItem, officialBgmCover, officialBgmItem,
   officialBgmPreview, publishAllOfficialBgm,
 } from '../services/official-marketplace.js';
 
@@ -62,6 +62,11 @@ export default async function officialMarketplaceRoutes(app: FastifyInstance, { 
   app.post('/v1/admin/marketplace/bgm/:id/catalog', { preHandler: admin }, async (req, reply) =>
     reply.header('cache-control', 'no-store').send(
       await editOfficialBgmCatalog(idParam.parse(req.params).id, req.user!.id, officialBgmCatalogEdit.parse(req.body))),
+  );
+
+  app.post('/v1/admin/marketplace/bgm/:id/sale-rights', { preHandler: admin }, async (req, reply) =>
+    reply.header('cache-control', 'no-store').send(
+      await decideOfficialBgmSaleRights(idParam.parse(req.params).id, req.user!.id, officialBgmSaleRightsDecision.parse(req.body))),
   );
 
   app.post('/v1/admin/marketplace/bgm/publish-all', { preHandler: admin }, async (req, reply) =>

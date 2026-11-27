@@ -50,6 +50,14 @@ export const officialBgmCatalogEdit = z.object({
 export type OfficialBgmCatalogEdit = z.infer<typeof officialBgmCatalogEdit>;
 export type OfficialBgmCopy = Partial<Record<OfficialBgmLang, { title: string; intro: string }>>;
 
+/** A sale-rights decision for one track (migration 0045): the basis is what the decision rests on. */
+export const OFFICIAL_BGM_SALE_RIGHTS = ['unreviewed', 'cleared', 'refused'] as const;
+export type OfficialBgmSaleRights = (typeof OFFICIAL_BGM_SALE_RIGHTS)[number];
+export const officialBgmSaleRightsDecision = z.object({
+  status: z.enum(OFFICIAL_BGM_SALE_RIGHTS),
+  basis: z.string().trim().max(500).default(''),
+}).refine((d) => d.status === 'unreviewed' || d.basis.length >= 5, { message: 'a decision needs its basis (5–500 characters)', path: ['basis'] });
+
 /** Approve and publish every draft or reviewed track at once (product owner, 2026-11-27). */
 export const officialBgmPublishAll = z.object({ reason: z.string().trim().min(5).max(500) });
 
@@ -65,6 +73,10 @@ export interface OfficialBgmItem extends OfficialBgmMetadata {
 
 export interface OfficialBgmAdminItem extends OfficialBgmItem {
   state: OfficialBgmState;
+  saleRights: OfficialBgmSaleRights;
+  saleRightsBasis: string | null;
+  /** Published with cleared sale rights: what a buyer could license once sales are on. */
+  onSale: boolean;
   sourceKey: string;
   previewStartSeconds: number;
   masterFormat: 'mp3' | 'wav';

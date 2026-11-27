@@ -59,6 +59,8 @@ export const runtimeInfo = z.object({
     /** AI BGM is available to this viewer (docs/BGM_STUDIO_PLAN.md). */
     bgmStudio: z.boolean().optional(),
     officialBgmMarketplace: z.boolean().optional(),
+    /** Whether this viewer may buy an official BGM licence (OFFICIAL_BGM_MARKETPLACE_SALES); off until the terms are reviewed. */
+    officialBgmSales: z.boolean().optional(),
     /** Only trusted lines are lit, burned in or written to an .lrc; estimates are for reading (isTrustedLine). */
     lyricStrictTimeline: z.boolean().optional(),
     /** The AI scene MV (docs/AI_SCENE_MV_SPEC.md): may this person start one. */

@@ -443,6 +443,8 @@ const envSchema = z.object({
 
   // --- Market monetization -------------------------------------------------
   STRIPE_PRICE_ID_MARKET_LICENSE: z.string().optional(),
+  /** The official BGM library's per-track licence (docs/PAYMENTS_DESIGN.md §1); needed once its sales are on. */
+  STRIPE_PRICE_ID_OFFICIAL_BGM_LICENSE: z.string().optional(),
 
   // --- operational switches (§3.2 "运营") ---------------------------------
   FEATURE_SUBSCRIPTIONS_ENABLED: bool(true),
@@ -460,6 +462,14 @@ const envSchema = z.object({
   /** AI BGM (docs/BGM_STUDIO_PLAN.md): who can make background music. Staff first. */
   BGM_STUDIO: z.enum(['off', 'staff', 'all']).default('off'),
   OFFICIAL_BGM_MARKETPLACE: z.enum(['off', 'staff', 'all']).default('off'),
+  /**
+   * Who may BUY a licence for an official BGM (docs/PAYMENTS_DESIGN.md §1).
+   * Separate from who may listen: the library opened to everyone for previews
+   * on 2026-11-27, while sales wait for the terms and checkout copy to be
+   * reviewed. A track is on sale only when it is also published and its own
+   * sale rights were reviewed and cleared.
+   */
+  OFFICIAL_BGM_MARKETPLACE_SALES: z.enum(['off', 'staff', 'all']).default('off'),
   /**
    * Automatic lyric sync for new sung songs (docs/AUTOMATIC_LYRIC_SYNC_TICKETS.md L4a).
    * off: aligned during delivery, as before. staff: only staff members' songs
@@ -1063,6 +1073,9 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
      * stripe-with-subscriptions-off configuration.
      */
     if (!e.STRIPE_PRICE_ID_DROP_5) problems.push('STRIPE_PRICE_ID_DROP_5 is required for the stripe payments adapter');
+    if (e.OFFICIAL_BGM_MARKETPLACE_SALES !== 'off' && !e.STRIPE_PRICE_ID_OFFICIAL_BGM_LICENSE) {
+      problems.push('STRIPE_PRICE_ID_OFFICIAL_BGM_LICENSE is required for the stripe payments adapter once OFFICIAL_BGM_MARKETPLACE_SALES is on');
+    }
     if (!e.STRIPE_PRICE_ID_MARKET_LICENSE) {
       problems.push('STRIPE_PRICE_ID_MARKET_LICENSE is required for the stripe payments adapter (the market licence is on sale and has no feature switch)');
     }

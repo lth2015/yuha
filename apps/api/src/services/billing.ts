@@ -95,6 +95,11 @@ export async function createCheckout(
   if (!features.cardPaymentsEnabled) {
     throw new AppError('CARD_PAYMENTS_CLOSED', 'card payment is not open on this deployment');
   }
+  // An official BGM licence names a track and is bought only from the library,
+  // where the track, its master and its sale rights are checked first.
+  if (params.priceKey === 'official_bgm_license') {
+    throw new AppError('VALIDATION_FAILED', 'an official BGM licence is bought from the BGM library, for one track');
+  }
   const product = await getActiveProduct(params.priceKey);
   if (!product || !product.active) throw new AppError('NOT_FOUND', 'unknown product');
   if (product.kind === 'subscription' && !features.subscriptionsEnabled) {

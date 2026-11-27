@@ -14,6 +14,9 @@ export interface OfficialBgmRow {
   copy: OfficialBgmCopy | null;
   tags: string[] | null;
   rating: string | number | null;
+  /** Migration 0045: whether a licence may be sold, reviewed per track with a recorded basis. */
+  sale_rights: 'unreviewed' | 'cleared' | 'refused';
+  sale_rights_basis: string | null;
   master_key: string;
   master_format: 'mp3' | 'wav';
   master_ms: number;
@@ -61,6 +64,20 @@ export async function setOfficialBgmCatalog(
   );
 }
 
+/** Records a sale-rights decision for one track; the basis is required for any decision but "unreviewed". */
+export async function setOfficialBgmSaleRights(
+  id: string,
+  decision: { status: 'unreviewed' | 'cleared' | 'refused'; basis: string | null; actorId: string },
+  tx: PoolConnection,
+): Promise<void> {
+  await execute(
+    `UPDATE official_bgm SET sale_rights = ?, sale_rights_basis = ?, sale_rights_by = ?, sale_rights_at = UTC_TIMESTAMP(3),
+            updated_at = UTC_TIMESTAMP(3) WHERE id = ?`,
+    [decision.status, decision.basis, decision.actorId, id],
+    tx,
+  );
+}
+
 /** Ids of every track not yet published or archived, oldest first: what "publish all" acts on. */
 export async function unpublishedOfficialBgmIds(): Promise<string[]> {
   return (await query<{ id: string }>(
@@ -73,7 +90,7 @@ export function findOfficialBgmImport(sourceKey: string, sha256: string) {
 }
 
 export async function insertOfficialBgm(
-  row: Omit<OfficialBgmRow, 'state' | 'copy' | 'tags' | 'rating'> & { tags?: string[]; rating?: number },
+  row: Omit<OfficialBgmRow, 'state' | 'copy' | 'tags' | 'rating' | 'sale_rights' | 'sale_rights_basis'> & { tags?: string[]; rating?: number },
   tx: PoolConnection,
 ): Promise<void> {
   await execute(

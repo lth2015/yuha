@@ -77,6 +77,7 @@ data:
   # missing from the ConfigMap entirely, so `stripe_price_id` seeded as NULL
   # and buying a licence 500'd on the checkout call.
   STRIPE_PRICE_ID_MARKET_LICENSE: {{ .Values.config.stripe.priceIdMarketLicense | quote }}
+  STRIPE_PRICE_ID_OFFICIAL_BGM_LICENSE: {{ .Values.config.stripe.priceIdOfficialBgmLicense | quote }}
   # Pinned, not inherited from the SDK. The API refuses to start in production
   # without it, because the webhook payload shape depends on it.
   STRIPE_API_VERSION: {{ .Values.config.stripe.apiVersion | quote }}
