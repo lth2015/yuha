@@ -83,6 +83,16 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile --prefer-offline
 
+      # ffmpeg backs the output checks and export rendering; the audio tests
+      # exercise it for real rather than mocking it out, the music service's
+      # render-report tests (deploy/dgx/music/server/test_render.py) included,
+      # so it is installed before them.
+      # Not apt alone, and not a third-party action: scripts/ci-install-ffmpeg.sh
+      # says why (each has failed a run on its own).
+      - name: Install ffmpeg
+        timeout-minutes: 8
+        run: scripts/ci-install-ffmpeg.sh
+
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
@@ -91,14 +101,6 @@ jobs:
         run: |
           python -m pip install -r deploy/dgx/music/server/requirements.txt
           python -m unittest discover -s deploy/dgx/music/server -p 'test_*.py'
-
-      # ffmpeg backs the output checks and export rendering; the audio tests
-      # exercise it for real rather than mocking it out.
-      # Not apt alone, and not a third-party action: scripts/ci-install-ffmpeg.sh
-      # says why (each has failed a run on its own).
-      - name: Install ffmpeg
-        timeout-minutes: 8
-        run: scripts/ci-install-ffmpeg.sh
 
       - name: Start MySQL from docker-compose.yml
         # The test database only — `pnpm db:up` would also start the
