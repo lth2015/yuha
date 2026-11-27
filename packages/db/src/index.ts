@@ -27,3 +27,4 @@ export * from './issue-reports.js';
 export * from './invariants.js';
 export * from './quality.js';
 export * from './guest-trials.js';
+export * from './gift-invitations.js';
