@@ -8,9 +8,9 @@
  * videos and the .lrc cannot disagree about a line.
  */
 import { describe, expect, it } from 'vitest';
-import { isTrustedLine, trustedTimeline, type LyricTimings } from '@yuha/contracts';
+import { isTrustedLine, trustedMask, trustedTimeline, type LyricTimings } from '@yuha/contracts';
 import { buildAss, subtitleLines } from '@yuha/worker/scene-mv-compose';
-import { activeLineIndex, activeTrustedLine, timedLinesFor } from '../apps/web/src/lib/lyrics';
+import { activeLineIndex, activeTrustedLine, timedLinesFor, trustedFlags } from '../apps/web/src/lib/lyrics';
 import { planShareClip } from '../apps/web/src/lib/share-art';
 
 const lines = [
@@ -40,6 +40,31 @@ describe('which lines are trusted', () => {
     expect(trustedTimeline(aligned([1, 0.2, 1]))?.lines.map((l) => l.text)).toEqual(['one', 'three']);
     expect(trustedTimeline(estimated)?.lines).toEqual([]);
     expect(trustedTimeline(null)).toBeNull();
+  });
+});
+
+describe('lines piled onto one instant (production, 2026-11-27)', () => {
+  // An aligner out of voice stacked the rest of a song at 93.5 s, each "sure".
+  const piled: LyricTimings = {
+    source: 'aligned',
+    lines: [
+      { section: '', text: 'a', start: 80, end: 93.3, confidence: 1 },
+      { section: '', text: 'b', start: 93.36, end: 93.96, confidence: 1 },
+      { section: '', text: 'c', start: 93.52, end: 94.12, confidence: 1 },
+      { section: '', text: 'd', start: 93.52, end: 94.12, confidence: 1 },
+      { section: '', text: 'e', start: 93.52, end: 94.12, confidence: 1 },
+      { section: '', text: 'f', start: 97, end: 99, confidence: 1 },
+    ],
+  };
+
+  it('lights none of the stacked lines, and the rest as before', () => {
+    expect(trustedMask(piled)).toEqual([true, true, true, false, false, true]);
+    expect(trustedFlags(piled, true)).toEqual([true, true, true, false, false, true]);
+    expect(trustedTimeline(piled)!.lines.map((l) => l.text)).toEqual(['a', 'b', 'c', 'f']);
+  });
+
+  it('leaves a person’s timeline alone, stacked or not', () => {
+    expect(trustedMask({ ...piled, source: 'corrected' })).toEqual([true, true, true, true, true, true]);
   });
 });
 

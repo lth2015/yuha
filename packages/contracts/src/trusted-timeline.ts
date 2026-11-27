@@ -26,11 +26,30 @@ export function isTrustedLine(
   return opts.estimates === true;
 }
 
+/**
+ * An aligned line that starts on top of the one before it: a forced aligner
+ * that ran out of voice piles the remaining lines onto one instant, each
+ * marked sure (seen in production, 2026-11-27: nineteen lines at 93.5 s).
+ * The DGX now marks those unsure itself; this keeps timelines stored before
+ * that from flashing nineteen lines at once.
+ */
+export const STACKED_LINE_SECONDS = 0.05;
+
+/** Per line, whether it may be lit: isTrustedLine, and not stacked on the line before it. */
+export function trustedMask(timings: LyricTimings, opts: { estimates?: boolean } = {}): boolean[] {
+  return timings.lines.map((l, i) => {
+    if (!isTrustedLine(timings, l, opts)) return false;
+    if (timings.source !== 'aligned' || i === 0) return true;
+    return l.start - timings.lines[i - 1]!.start >= STACKED_LINE_SECONDS;
+  });
+}
+
 /** The timeline with only its trusted lines; null for no timeline. */
 export function trustedTimeline(
   timings: LyricTimings | null | undefined,
   opts: { estimates?: boolean } = {},
 ): LyricTimings | null {
   if (!timings) return null;
-  return { ...timings, lines: timings.lines.filter((l) => isTrustedLine(timings, l, opts)) };
+  const mask = trustedMask(timings, opts);
+  return { ...timings, lines: timings.lines.filter((_, i) => mask[i]) };
 }

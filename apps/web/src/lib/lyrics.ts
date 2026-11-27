@@ -7,7 +7,7 @@
  * proxy, sections as pauses) and lay the lines across the song's duration.
  * The result syncs well enough for karaoke display and is deterministic.
  */
-import { SECTION_GAP_SECONDS, isTrustedLine, sectionName, timingsMatchLyrics, trustedTimeline, type LyricTimings } from '@yuha/contracts';
+import { SECTION_GAP_SECONDS, sectionName, timingsMatchLyrics, trustedMask, trustedTimeline, type LyricTimings } from '@yuha/contracts';
 
 /** Choose the timeline used by both the player and its LRC export. */
 export function resolveLyricTimings(lyrics: string, duration: number, timings?: LyricTimings | null): LyricTimings {
@@ -171,5 +171,5 @@ export function timedLinesFor(timeline: LyricTimings, strict: boolean): LyricLin
 
 /** Per line, whether it may be lit (isTrustedLine; the earlier rule trusts estimates too). */
 export function trustedFlags(timeline: LyricTimings, strict: boolean): boolean[] {
-  return timeline.lines.map((l) => isTrustedLine(timeline, l, { estimates: !strict }));
+  return trustedMask(timeline, { estimates: !strict });
 }

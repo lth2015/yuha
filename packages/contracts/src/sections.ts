@@ -41,6 +41,17 @@ export const SECTION_GAP_SECONDS = 2;
 
 const SQUARE_RE = /^\s*\[\s*([^\]]{1,40}?)\s*\]\s*$/;
 const PAREN_RE = /^\s*\(\s*([^)]{1,40}?)\s*\)\s*$/;
+/*
+ * Lyrics pasted from a chat assistant come in Markdown: `# 晚霞依旧` for the
+ * title and `**主歌一**` for a section. Both were sung lines until 2026-11-27:
+ * laid on the timeline, shown as lyrics and, at a confident time, lit. A
+ * heading is never sung, so any `#` heading is a marker. A bold line is only
+ * when the name inside is a section we recognise — `**我爱你**` stays a line.
+ */
+const MD_HEADING_RE = /^\s*#{1,6}\s+(.{1,40}?)\s*#*\s*$/u;
+const MD_BOLD_RE = /^\s*(\*\*|__)\s*(.{1,40}?)\s*\1\s*$/u;
+/** A section's own number, which numbers it rather than naming another: `Verse 2`, `主歌1`, `主歌一`. */
+const SECTION_NUMBER_RE = /[\s_-]*(\d+|[一二三四五六七八九十]+)$/u;
 
 /**
  * Canonical English tags, with the names creators actually type for each.
@@ -59,7 +70,7 @@ const SYNONYMS: Array<[RegExp, string]> = [
   [/^(interlude|间奏|間奏|中间节奏|中間節奏)$/iu, 'interlude'],
   [/^(instrumental|inst|纯音乐|純音樂|演奏)$/iu, 'instrumental'],
   [/^(solo|独奏|獨奏|ソロ)$/iu, 'solo'],
-  [/^(outro|ending|尾奏|结尾|結尾|アウトロ)$/iu, 'outro'],
+  [/^(outro|ending|尾奏|尾声|尾聲|结尾|結尾|アウトロ)$/iu, 'outro'],
 ];
 
 /**
@@ -73,12 +84,16 @@ export function sectionName(line: string): string | null {
   if (square) return square[1]!;
   const paren = PAREN_RE.exec(line);
   if (paren && canonicalSectionTag(paren[1]!) !== null) return paren[1]!;
+  const heading = MD_HEADING_RE.exec(line);
+  if (heading) return heading[1]!;
+  const bold = MD_BOLD_RE.exec(line);
+  if (bold && canonicalSectionTag(bold[2]!) !== null) return bold[2]!;
   return null;
 }
 
 /** The English tag a marker means, or null when we do not recognise the name. */
 export function canonicalSectionTag(name: string): string | null {
-  const bare = name.trim().replace(/[\s_-]*\d+$/u, '').trim();
+  const bare = name.trim().replace(SECTION_NUMBER_RE, '').trim();
   for (const [re, tag] of SYNONYMS) {
     if (re.test(bare)) return tag;
   }

@@ -27,7 +27,7 @@ SECTION_NAMES = re.compile(
     r"chorus|hook|refrain|副歌|高潮|高潮部分|サビ|verse|主歌|詩|バース|aメロ|"
     r"bridge|桥段|橋段|过渡|過渡|ブリッジ|cメロ|rap|说唱|說唱|饶舌|饒舌|ラップ|"
     r"interlude|间奏|間奏|中间节奏|中間節奏|instrumental|inst|纯音乐|純音樂|演奏|"
-    r"solo|独奏|獨奏|ソロ|outro|ending|尾奏|结尾|結尾|アウトロ)$", re.IGNORECASE,
+    r"solo|独奏|獨奏|ソロ|outro|ending|尾奏|尾声|尾聲|结尾|結尾|アウトロ)$", re.IGNORECASE,
 )
 
 
@@ -36,15 +36,30 @@ SECTION_NAMES = re.compile(
 MAX_HELD_GAP = 4.0
 
 
+# Markdown from a chat assistant (sections.ts says why): any `#` heading is a
+# marker; a bold line only when it names a section we recognise.
+MD_HEADING_RE = re.compile(r"^\s*#{1,6}\s+(.{1,40}?)\s*#*\s*$")
+MD_BOLD_RE = re.compile(r"^\s*(\*\*|__)\s*(.{1,40}?)\s*\1\s*$")
+SECTION_NUMBER_RE = re.compile(r"[\s_-]*(\d+|[一二三四五六七八九十]+)$")
+
+
+def _known_section(name: str) -> bool:
+    return bool(SECTION_NAMES.fullmatch(SECTION_NUMBER_RE.sub("", name.strip()).strip()))
+
+
 def section_name(line: str) -> Optional[str]:
     square = SQUARE_RE.match(line)
     if square:
         return square.group(1)
     paren = PAREN_RE.match(line)
-    if paren:
-        name = re.sub(r"[\s_-]*\d+$", "", paren.group(1)).strip()
-        if SECTION_NAMES.fullmatch(name):
-            return paren.group(1)
+    if paren and _known_section(paren.group(1)):
+        return paren.group(1)
+    heading = MD_HEADING_RE.match(line)
+    if heading:
+        return heading.group(1)
+    bold = MD_BOLD_RE.match(line)
+    if bold and _known_section(bold.group(2)):
+        return bold.group(2)
     return None
 
 
@@ -378,6 +393,11 @@ def place_units(lyrics: str, units: Sequence[Tuple[str, float, float]]) -> List[
 QWEN_VOICE_SLACK = 0.3   # a start this close before the voice comes back still counts as on it
 QWEN_DISAGREE = 1.5      # seconds from where Whisper heard the line whole: one of them is wrong
 QWEN_UNSURE = 0.3        # the confidence such a line gets (under the shared 0.5)
+# Past this many characters a second nobody sings: the aligner ran out of
+# voice and piled the remaining lines onto one instant (seen on a production
+# song, 2026-11-27: nineteen lines at 93.5 s, each 0.6 s long, all "1.0").
+QWEN_MAX_CHARS_PER_SEC = 15.0
+QWEN_STACKED = 0.05      # a line starting this close to the line before it is stacked on it
 
 
 def qwen_lines(lyrics: str, units: Sequence[Tuple[str, float, float]], duration: float,
@@ -409,6 +429,21 @@ def qwen_lines(lyrics: str, units: Sequence[Tuple[str, float, float]], duration:
             spans[i], conf[i] = None, 0.0
             continue
         last = spans[i][1]
+
+    # Crammed or stacked lines are a forced aligner with no voice left to
+    # place them on: they keep their time (the line still shows) but are never
+    # lit. Checked on the aligner's own spans, before any floor stretches them.
+    prev_start: Optional[float] = None
+    for i in range(n):
+        if spans[i] is None:
+            continue
+        s0, e0 = spans[i]
+        chars = sum(1 for ch in placed[i]["text"] if norm_char(ch))
+        crammed = chars > 1 and chars / max(e0 - s0, 1e-3) > QWEN_MAX_CHARS_PER_SEC
+        stacked = prev_start is not None and s0 - prev_start < QWEN_STACKED
+        if crammed or stacked:
+            conf[i] = 0.0
+        prev_start = s0
 
     i = 0
     while i < n:
