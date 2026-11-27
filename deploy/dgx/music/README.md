@@ -76,6 +76,30 @@ Then update `AUDIO_BASE_URL` in `.env` and `docker compose up -d`.
 - Jobs/mp3: `./data/` · Weights: `~/.cache/ace-step/checkpoints`
 - Quality/speed knob: `ACE_INFER_STEPS` in `.env` (default 60; 27 is ACE-Step's fast setting)
 
+## Choosing an aligner (`server/bench_align.py`)
+
+Runs beside the service, never in it: separates each recent sung song once,
+aligns it with Whisper (today's path) and with Qwen3-ForcedAligner-0.6B
+(Apache-2.0 weights and code), and reports how many lines each timed and how
+far Qwen's starts are from the lines Whisper heard whole. Per-song JSON goes
+to the output folder for listening. On the Spark:
+
+```bash
+mkdir -p ~/yuha-bench/out   # bench_align.py and align.py copied here
+cd ~/yuha-spark
+docker compose run --rm --no-deps -v ~/yuha-bench:/bench --entrypoint "" music bash -lc '
+  python -m venv --system-site-packages /tmp/q &&
+  /tmp/q/bin/pip install -q --no-deps qwen-asr==0.0.6 accelerate==1.12.0 &&
+  /tmp/q/bin/pip install -q transformers==4.57.6 nagisa==0.2.11 soynlp==0.0.493 qwen-omni-utils psutil &&
+  /tmp/q/bin/python -c "import torch; print(torch.__version__, torch.cuda.is_available())" &&
+  cd /bench && PYTHONPATH=/bench:/opt/server /tmp/q/bin/python bench_align.py --songs 10 --out /bench/out'
+```
+
+The venv is gone when the container exits; the Qwen weights (~1.8 GB) stay
+in `~/.cache/huggingface`. Agreement with Whisper is a proxy (Whisper's own
+starts run early in places); human-corrected timelines are the ground truth
+to score against next.
+
 ## Retention (`RETENTION_DAYS`, default 6)
 
 `data/jobs/*.json` holds what YUHA sent (the brief and the lyrics) and

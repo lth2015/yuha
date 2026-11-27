@@ -322,3 +322,53 @@ def align_lines(
             out.append({"w": text[ci], "start": round(max(line["start"], s), 3), "end": round(min(line["end"], max(s, e)), 3)})
         line["words"] = out
     return {"lines": lines, "coverage": round(coverage, 3)}
+
+
+def place_units(lyrics: str, units: Sequence[Tuple[str, float, float]]) -> List[Dict]:
+    """A forced aligner's timed units (characters or words) placed back on the lyric lines.
+
+    The aligner was given the lyrics, so its units are the lyrics again, minus
+    punctuation and spacing and perhaps split differently; matching character
+    by character puts each one on its own line. A line takes the time of its
+    first and last placed character; `confidence` is the share of its
+    characters the aligner placed. A line it left out gets no time (None),
+    not a guess.
+    """
+    parsed = parse_lyrics(lyrics)
+    lyr_chars: List[str] = []
+    owner: List[int] = []
+    for li, (_, text) in enumerate(parsed):
+        for ch in text:
+            c = norm_char(ch)
+            if c:
+                lyr_chars.append(c)
+                owner.append(li)
+    u_chars: List[str] = []
+    u_time: List[Tuple[float, float]] = []
+    for text, start, end in units:
+        cs = [norm_char(ch) for ch in text]
+        cs = [c for c in cs if c]
+        for k, c in enumerate(cs):
+            # A word's characters share its span, in order.
+            step = (float(end) - float(start)) / len(cs)
+            u_chars.append(c)
+            u_time.append((float(start) + k * step, float(start) + (k + 1) * step))
+    placed: Dict[int, Tuple[float, float]] = {}
+    if lyr_chars and u_chars:
+        sm = difflib.SequenceMatcher(None, lyr_chars, u_chars, autojunk=False)
+        for a, b, size in sm.get_matching_blocks():
+            for k in range(size):
+                placed[a + k] = u_time[b + k]
+    total = [0] * len(parsed)
+    for li in owner:
+        total[li] += 1
+    lines: List[Dict] = []
+    for li, (section, text) in enumerate(parsed):
+        own = [placed[i] for i, o in enumerate(owner) if o == li and i in placed]
+        lines.append({
+            "text": text, "section": section,
+            "start": round(min(s for s, _ in own), 3) if own else None,
+            "end": round(max(e for _, e in own), 3) if own else None,
+            "confidence": round(len(own) / total[li], 3) if total[li] else 0.0,
+        })
+    return lines
