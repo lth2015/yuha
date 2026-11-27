@@ -26,6 +26,8 @@ const PINNED: Record<string, string> = {
   '2026-11-24': '7ca85dba786a34ab7ae669bcd837274b2ba727305a409be9f49004f0bff3969f',
   // The free trial and photo videos disclosed on the legal page (marked under review).
   '2026-11-24b': 'db659b93146c28a402c7b64f3b3c434907abdca38a8fb539cbca4569d4f1aae2',
+  // BGM's limited commercial use, Terms §4a (marked under review).
+  '2026-11-27': 'adcaaf8cbe8db0a7058a91a246536a37dc1a6a69e008d1ac82224ac227d7d7cf',
 };
 
 function fingerprint(): string {
