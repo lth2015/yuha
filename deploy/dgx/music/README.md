@@ -104,6 +104,56 @@ in `~/.cache/huggingface`. Agreement with Whisper is a proxy (Whisper's own
 starts run early in places); human-corrected timelines are the ground truth
 to score against next.
 
+## Qwen3-ForcedAligner (`ALIGN_METHOD=qwen`, off by default)
+
+The known lyrics placed on the vocal stem by Qwen3-ForcedAligner-0.6B
+(Apache-2.0 weights and code). It times every line where Whisper on the stem
+heard about 70% of them. On dgxa's first six songs (2026-11-27) its starts ran a
+steady +0.32 s behind Whisper's on the lines Whisper heard whole, in 84% of
+them. That reads as Whisper's known early word clock rather than Qwen being
+late, but it is only settled by hand-timed songs (docs/quality/LYRIC_BENCH.md).
+
+- **Where it runs.** It needs transformers 4.57 and ACE-Step pins 4.50, so it
+  has its own venv, `/opt/qwenv` (Dockerfile). The service runs it as one
+  long-lived worker process (`server/qwen_worker.py`, started by
+  `server/qwen_align.py` on first use). The model loads once, in about 15 s,
+  and its weights (1.8 GB) are cached in `~/.cache/huggingface`. After that,
+  a song takes well under a second.
+- **Per-line confidence (`align.qwen_lines`).** A forced aligner times every
+  line, right or not, and it fails by putting a line where nobody sings. A
+  line is set to 0.3 confidence, under YUHA's 0.5 rule, when:
+  - it starts where the vocal stem is silent; or
+  - Whisper, which still runs on the stem, heard that line whole more than
+    1.5 s away.
+
+  A line it left out is filled in with 0 confidence.
+- **Qwen and Whisper averaged (`ALIGN_QWEN_WEIGHT`, default 0.5; product owner's suggestion,
+  2026-11-27).** Where both trust a line and agree within 1 s, its start is the weighted
+  average of the two (`align.fuse_lines`). Whisper's steady early offset is taken out first,
+  using the median per song over at least 3 shared lines. Without that step, the average
+  would put every line halfway into Whisper's earliness. A line they disagree on, or one
+  Whisper did not hear whole, keeps Qwen's time. `1.0` means Qwen alone. The weight is
+  meant to be set from hand-timed songs, where `bench_align.py` scores `fused` as a third
+  route. The response carries `qwen_weight` and the song's `whisper_offset`.
+- **When Whisper's answer is used instead.** Below `ALIGN_QWEN_MIN_TRUSTED`
+  (0.6) of the lines trusted, the result falls back to Whisper's, unchanged.
+  So does any failure: a worker that dies, times out
+  (`QWEN_TIMEOUT`, 300 s), or is not installed.
+- **The response.** `method: qwen`, `model: qwen3-forced-aligner-0.6b`,
+  `coverage` (the share of trusted lines), `whisper_coverage`, and
+  `partial: true` when some lines are unsure.
+- **Health.** `/healthz` reports `align_method` and, under `qwen`, whether
+  the worker is installed and running, with its last error.
+
+Turn it on only after the hand-timed scores agree, and only once
+`LYRIC_STRICT_TIMELINE=all` in YUHA. Until then, a customer's view would
+light the unsure lines.
+
+```bash
+cd ~/yuha-spark && grep -q '^ALIGN_METHOD=' .env && sed -i 's/^ALIGN_METHOD=.*/ALIGN_METHOD=qwen/' .env || echo 'ALIGN_METHOD=qwen' >> .env
+docker compose up -d music
+```
+
 ## Retention (`RETENTION_DAYS`, default 6)
 
 `data/jobs/*.json` holds what YUHA sent (the brief and the lyrics) and

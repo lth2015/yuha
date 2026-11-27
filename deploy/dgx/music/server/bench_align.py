@@ -115,7 +115,7 @@ def main() -> None:
     out.mkdir(parents=True, exist_ok=True)
 
     import separate
-    from align import align_lines, guess_language, parse_lyrics, place_units, voiced_intervals
+    from align import align_lines, fuse_lines, guess_language, parse_lyrics, qwen_lines, voiced_intervals
     qwen = None
     if "qwen" in methods:
         import torch
@@ -123,6 +123,8 @@ def main() -> None:
         qwen = Qwen3ForcedAligner.from_pretrained("Qwen/Qwen3-ForcedAligner-0.6B", dtype=torch.bfloat16,
                                                   device_map="cuda:0" if torch.cuda.is_available() else "cpu")
 
+    if "qwen" in methods and "fused" not in methods:
+        methods.append("fused")  # Qwen and Whisper averaged where they agree (align.fuse_lines)
     totals = {m: {"timed": 0, "lines": 0, "diffs": [], "seconds": 0.0} for m in methods}
     truth = Path(args.truth) if args.truth else None
     picked = truth_songs(truth, Path(args.data)) if truth else songs(Path(args.data), args.songs)
@@ -157,17 +159,23 @@ def main() -> None:
             text = " ".join(line for _, line in parse_lyrics(lyrics))
             res = qwen.align(audio=(stem16, 16000), text=text, language=LANGS.get(lang, "Chinese"))
             units = [(u.text, float(u.start_time), float(u.end_time)) for u in res[0]]
-            q = place_units(lyrics, units)
+            # What the service would return: per-line confidence from the voice and from Whisper.
+            q = qwen_lines(lyrics, units, dur, voiced=voiced, heard=ref)
             record["qwen"] = {"lines": q, "seconds": round(time.time() - t, 1)}
             tq = totals["qwen"]
-            tq["timed"] += sum(l["start"] is not None for l in q)
+            tq["timed"] += sum(l["confidence"] >= 0.5 for l in q)
             tq["lines"] += len(q)
             tq["diffs"] += agreement(ref, q)
             tq["seconds"] += time.time() - t
+            fused, offset = fuse_lines(q, ref, w_qwen=float(os.environ.get("ALIGN_QWEN_WEIGHT", "0.5")))
+            record["fused"] = {"lines": fused, "whisper_offset": offset}
+            tf = totals["fused"]
+            tf["timed"] += sum(l["confidence"] >= 0.5 for l in fused)
+            tf["lines"] += len(fused)
 
         (out / f"{sid}.json").write_text(json.dumps(record, ensure_ascii=False, indent=1))
         if truth:
-            for m in ("whisper", "qwen"):
+            for m in ("whisper", "qwen", "fused"):
                 if m in record and m in methods:
                     d = truth / "routes" / m
                     d.mkdir(parents=True, exist_ok=True)
@@ -175,7 +183,8 @@ def main() -> None:
         line = f"{sid[:8]} {lang} whisper coverage={w['coverage']:.2f} heard-whole={sum(l['confidence'] >= 1.0 for l in ref)}/{len(ref)}"
         if "qwen" in record:
             d = agreement(ref, record["qwen"]["lines"])
-            line += f" | qwen timed {sum(l['start'] is not None for l in record['qwen']['lines'])}/{len(ref)}"
+            line += f" | qwen trusted {sum(l['confidence'] >= 0.5 for l in record['qwen']['lines'])}/{len(ref)}"
+            line += f" | whisper offset {record['fused']['whisper_offset']:+.2f}s"
             if d:
                 line += f", median |Δstart| {statistics.median(d):.2f}s"
         print(line, flush=True)
