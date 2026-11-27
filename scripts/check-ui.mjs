@@ -50,7 +50,7 @@
  * or integration stack only — never production, where dev login is refused.
  */
 import { chromium } from 'playwright';
-import { mkdirSync } from 'node:fs';
+import { mkdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 const BASE = process.env.UI_BASE ?? 'http://localhost:5173';
@@ -99,6 +99,13 @@ const PAGES = [
   { name: 'home', path: '/', as: null },
   { name: 'home-signed-in', path: '/', as: 'creator' },
   { name: 'pricing', path: '/pricing', as: null },
+  ...['off', 'empty', 'tracks', 'preview', 'preview-error'].map((state) => ({
+    name: `marketplace-${state}`, path: '/marketplace', as: null, allLanguages: true,
+    prepare: (page) => openMarketplace(page, state),
+  })),
+  { name: 'admin-marketplace-review', path: '/admin/marketplace', as: 'admin',
+    allLanguages: true, prepare: (page) => openMarketplace(page, 'review') },
+
   { name: 'auth', path: '/auth', as: null },
   { name: 'create', path: '/create', as: 'creator' },
   // Opened from Air composition's parameter card: the form filled from a sketch (lib/air-prefill.ts).
@@ -239,6 +246,50 @@ async function openBgm(page, state) {
   }
   await page.locator('.bgm__form .btn--primary').click();
   await page.waitForSelector(state === 'ready' ? '.bgm__actions' : '.bgm__job h2', { timeout: 15_000 });
+}
+
+const MARKET_FIXTURES = [
+  { id: 'f2ab1f57-2b53-46eb-b9d6-afc0b87cb304', title: '雨上がりの海岸線 · A Road Along the Coast',
+    genre: 'lofi', scenario: 'travel', mood: 'calm', durationSeconds: 90, previewSeconds: 59.9 },
+  { id: 'b0c89e06-86d1-4daa-a47c-8093c51dd162', title: '晨间咖啡 Coffee at First Light',
+    genre: 'jazz', scenario: 'food', mood: 'warm', durationSeconds: 75, previewSeconds: 59.9 },
+];
+
+async function openMarketplace(page, state) {
+  const admin = state === 'review';
+  const path = admin ? '/v1/admin/marketplace/bgm' : '/v1/marketplace/bgm';
+  await page.unroute('**/v1/runtime*');
+  await page.unroute(`**${path}?*`);
+  await page.route('**/v1/runtime*', (route) => route.fulfill({
+    json: { ...runtime, features: { ...features, officialBgmMarketplace: state !== 'off' } },
+  }));
+  const items = state === 'empty' || state === 'off' ? [] : admin
+    ? [{ ...MARKET_FIXTURES[0], state: 'draft', sourceKey: 'official-batch-01', previewStartSeconds: 15 }]
+    : MARKET_FIXTURES;
+  await page.route(`**${path}?*`, (route) => route.fulfill({ json: { items, nextOffset: null } }));
+  await page.reload({ waitUntil: 'networkidle' });
+  if (state === 'off' || state === 'empty') {
+    await page.waitForSelector('.market-empty');
+  } else if (admin) {
+    await page.locator('.market-admin__actions button').nth(1).click();
+    await page.waitForSelector('.market-admin__confirm textarea');
+  } else {
+    await page.waitForSelector('.market-track');
+    if (state === 'preview' || state === 'preview-error') {
+      const mediaPath = '/v1/check-ui-marketplace-preview.mp3';
+      await page.unroute(`**${path}/*/preview`);
+      await page.route(`**${path}/*/preview`, (route) => state === 'preview-error'
+        ? route.fulfill({ status: 503, json: {} })
+        : route.fulfill({ json: { url: mediaPath } }));
+      if (state === 'preview') {
+        const body = readFileSync(new URL('../assets/fixtures/audio/night_walk_calm-15s.mp3', import.meta.url));
+        await page.route(`**${mediaPath}`, (route) => route.fulfill({ contentType: 'audio/mpeg', body }));
+      }
+      await page.locator('.market-track__play').first().click();
+      await page.waitForSelector(state === 'preview' ? '.market-preview audio' : '.market-preview [role="alert"]');
+      if (state === 'preview') await page.waitForFunction(() => document.querySelector('.market-preview audio')?.readyState >= 1);
+    }
+  }
 }
 
 async function openLyricState(page, state) {
@@ -631,7 +682,6 @@ async function signIn(browser, who) {
 async function routesCovered() {
   // App.tsx is the list of pages; a route missing from both lists above is a
   // page this check would silently never look at.
-  const { readFileSync } = await import('node:fs');
   const src = readFileSync(new URL('../apps/web/src/App.tsx', import.meta.url), 'utf8');
   const routed = [...src.matchAll(/path="([^"]+)"/g)].map((m) => m[1]).filter((p) => p !== '*');
   const asRoute = (p) => p.split('?')[0].replace(/:track|:order/g, ':id').replace(':giftInvite', ':token');
@@ -825,7 +875,8 @@ const data = await fixtures(browser, states);
  * Which switches this stack has on. A state that needs one that is off is
  * skipped and said so — never failed, never silently dropped.
  */
-const features = (await (await fetch(`${BASE}/v1/runtime`)).json()).features ?? {};
+const runtime = await (await fetch(`${BASE}/v1/runtime`)).json();
+const features = runtime.features ?? {};
 const skipped = PAGES.filter((p) => p.needs && !features[p.needs]);
 for (const p of skipped) console.log(`- ${p.name}: skipped, ${p.needs} is off in this stack`);
 PAGES.splice(0, PAGES.length, ...PAGES.filter((p) => !p.needs || features[p.needs]));

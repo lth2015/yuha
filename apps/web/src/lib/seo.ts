@@ -83,6 +83,7 @@ export const PRIVATE_PREFIXES: readonly string[] = [
   '/library',
   // AI BGM (docs/BGM_STUDIO_PLAN.md): a signed-in tool, like /create.
   '/bgm',
+  '/marketplace',
   '/tracks/',
   '/settings/',
   '/checkout/',

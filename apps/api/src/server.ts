@@ -12,6 +12,7 @@ import billingRoutes from './routes/billing.js';
 import stablecoinRoutes from './routes/stablecoin.js';
 import exploreRoutes from './routes/explore.js';
 import marketRoutes from './routes/market.js';
+import officialMarketplaceRoutes from './routes/official-marketplace.js';
 import fileRoutes from './routes/files.js';
 import generationRoutes from './routes/generations.js';
 import lyricsRoutes from './routes/lyrics.js';
@@ -165,6 +166,7 @@ export async function buildServer(ctx: AppContext): Promise<FastifyInstance> {
   await app.register(lyricsRoutes, { ctx });
   await app.register(exploreRoutes, { ctx });
   await app.register(marketRoutes, { ctx });
+  await app.register(officialMarketplaceRoutes, { ctx });
   await app.register(trackRoutes, { ctx });
   await app.register(trialRoutes, { ctx });
   await app.register(shareRoutes, { ctx });

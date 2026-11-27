@@ -14,6 +14,7 @@ import { StablecoinConsole } from '../components/StablecoinConsole';
 import { Dashboard } from '../components/admin/Dashboard';
 import { OrdersPanel } from '../components/admin/OrdersPanel';
 import { AuditPanel } from '../components/admin/AuditPanel';
+import { OfficialBgmManager } from '../components/admin/OfficialBgmManager';
 
 interface Measured {
   value: number | null;
@@ -672,13 +673,15 @@ const TABS = [
   { key: 'ops', path: '/admin/ops', label: 'admin.tab.ops' },
   { key: 'review', path: '/admin/review', label: 'admin.tab.review' },
   { key: 'audit', path: '/admin/audit', label: 'admin.tab.audit' },
+  { key: 'marketplace', path: '/admin/marketplace', label: 'nav.marketplace' },
 ] as const;
 
 export default function Admin() {
   const { t } = useI18n();
   const { me } = useSession();
   const { tab = 'dashboard' } = useParams<{ tab?: string }>();
-  const known = TABS.some((x) => x.key === tab);
+  const tabs = TABS.filter((item) => item.key !== 'marketplace' || me?.role === 'admin');
+  const known = tabs.some((item) => item.key === tab);
 
   return (
     <div className="stack stack--loose admin">
@@ -687,7 +690,7 @@ export default function Admin() {
         <Badge tone={me?.role === 'admin' ? 'badge--accent' : ''}>{me?.role}</Badge>
       </div>
       <nav className="admin-tabs" aria-label={t('admin.tabs.aria')}>
-        {TABS.map((x) => (
+        {tabs.map((x) => (
           <NavLink
             key={x.key}
             to={x.path}
@@ -704,6 +707,7 @@ export default function Admin() {
       {tab === 'ops' && <OverviewPanel part="ops" />}
       {tab === 'review' && <OverviewPanel part="review" />}
       {tab === 'audit' && <AuditPanel />}
+      {tab === 'marketplace' && me?.role === 'admin' && <OfficialBgmManager />}
     </div>
   );
 }
