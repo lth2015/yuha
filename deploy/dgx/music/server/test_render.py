@@ -81,5 +81,66 @@ class RenderOutputTests(unittest.TestCase):
                     self.service.render(request, Path(directory), engine="v1")
 
 
+class RenderReportTests(unittest.TestCase):
+    """The report a finished job carries back to YUHA (quality.py; BGM B2)."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.data = tempfile.TemporaryDirectory()
+        cls.environment = patch.dict(os.environ, {"DATA_DIR": cls.data.name})
+        cls.environment.start()
+        import app
+        cls.service = app
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.environment.stop()
+        cls.data.cleanup()
+
+    def _wav(self, directory: Path, expr: str) -> Path:
+        import subprocess
+        path = directory / "take.wav"
+        subprocess.run(["ffmpeg", "-v", "error", "-y", "-f", "lavfi", "-i",
+                        f"aevalsrc={expr}|{expr}:s=48000:d=2", "-c:a", "pcm_f32le", str(path)], check=True)
+        return path
+
+    def _job(self, request: dict, wav: Path) -> dict:
+        job = {"id": "report-test", "request": request, "status": "running", "created_at": 0.0}
+        self.service.AUDIO_DIR.mkdir(parents=True, exist_ok=True)
+        with patch.object(self.service, "render", lambda *a, **k: wav), \
+             patch.object(self.service, "_master", lambda src, dst, want_seconds: dst.write_bytes(b"mp3") and {}), \
+             patch.object(self.service, "_probe_seconds", lambda p: 2.0), \
+             patch.object(self.service, "_stem_locked", lambda p: None):
+            self.service.run_generation(job)
+        return job
+
+    def test_an_instrumental_take_reports_model_time_and_clipping(self):
+        with tempfile.TemporaryDirectory() as d:
+            wav = self._wav(Path(d), "0.5*sin(2*PI*220*t)")
+            job = self._job({"duration_seconds": 30, "instrumental": True, "prompt": "calm"}, wav)
+        report = job["report"]
+        self.assertEqual(report["engine"], self.service.ENGINE)
+        self.assertTrue(report["model"].startswith("ace-step"))
+        self.assertGreaterEqual(report["render_seconds"], 0)
+        self.assertEqual(report["clipped_ratio"], 0.0)
+        self.assertAlmostEqual(report["peak_dbfs"], -6.0, delta=0.2)
+        self.assertIsNone(report["vocal_ratio"])  # the separator was unavailable: not measured, not zero
+        self.assertEqual(self.service.public_view({**job, "status": "succeeded"})["report"], report)
+
+    def test_a_squared_off_take_reports_its_clipping(self):
+        with tempfile.TemporaryDirectory() as d:
+            wav = self._wav(Path(d), "max(-1\\,min(1\\,2*sin(2*PI*220*t)))")
+            job = self._job({"duration_seconds": 30, "instrumental": True, "prompt": "calm"}, wav)
+        self.assertGreater(job["report"]["clipped_ratio"], 0.3)
+
+    def test_a_failed_measurement_still_delivers(self):
+        with tempfile.TemporaryDirectory() as d:
+            wav = Path(d) / "not-audio.wav"
+            wav.write_bytes(b"not audio")
+            job = self._job({"duration_seconds": 30, "instrumental": True, "prompt": "calm"}, wav)
+        self.assertIn("error", job["report"])
+        self.assertEqual(job["audio_bytes"], 3)
+
+
 if __name__ == "__main__":
     unittest.main()

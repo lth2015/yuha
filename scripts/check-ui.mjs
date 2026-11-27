@@ -141,7 +141,8 @@ const PAGES = [
     name: `song-scene-mv-${state}`, path: '/song/:track', as: 'creator', allLanguages: true, prepare: (page) => openSceneMv(page, state),
   })),
   // AI BGM (docs/BGM_STUDIO_PLAN.md): the form, and a job's three ends, from synthetic fixtures that spend nothing.
-  ...['form', 'making', 'ready', 'failed'].map((state) => ({
+  // 'voice': the result card when the music service heard something like a voice in it (B2).
+  ...['form', 'making', 'ready', 'voice', 'failed'].map((state) => ({
     name: `bgm-${state}`, path: '/bgm', as: 'creator', allLanguages: true, prepare: (page) => openBgm(page, state),
   })),
   // Automatic lyric sync on the song page (docs/agents/LYRIC_AUTO_SYNC_UX_HANDOFF.md), under the strict
@@ -210,6 +211,8 @@ async function openBgm(page, state) {
   await page.reload({ waitUntil: 'networkidle' });
   await page.waitForSelector('.bgm__form .chip');
   if (state === 'form') return;
+  const voice = state === 'voice';
+  if (voice) state = 'ready';
   const trackId = await page.evaluate(async () => {
     const auth = { authorization: `Bearer ${localStorage.getItem('loopscene.token')}` };
     const list = await (await fetch('/v1/tracks?limit=1', { headers: auth })).json().catch(() => null);
@@ -230,11 +233,12 @@ async function openBgm(page, state) {
       const response = await route.fetch();
       const body = await response.json();
       await route.fulfill({ response, json: { ...body, kind: 'bgm', title: 'Vlog BGM · Healing', durationSeconds: 30,
-        bgm: { scenario: 'vlog', genre: 'japanese_healing', mood: 'warm', durationSeconds: 30, tempo: 'medium', note: '' } } });
+        bgm: { scenario: 'vlog', genre: 'japanese_healing', mood: 'warm', durationSeconds: 30, tempo: 'medium', note: '' }, bgmVoiceHeard: voice } });
     });
   }
   await page.locator('.bgm__form .btn--primary').click();
   await page.waitForSelector(state === 'ready' ? '.bgm__actions' : '.bgm__job h2', { timeout: 15_000 });
+  if (voice) await page.waitForSelector('.bgm__job .alert--warn');
 }
 
 async function openLyricState(page, state) {

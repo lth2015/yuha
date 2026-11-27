@@ -563,7 +563,7 @@ async function processAudio(
     });
     return;
   }
-  log('info', 'audio verified', { jobId: job.id });
+  log('info', 'audio verified', { jobId: job.id, ...(audioRef.report ? { render: audioRef.report } : {}) });
 
   // GEN-09: the credit was already given back (a verification timeout, or a
   // failure the user was refunded for) and the result has only now arrived.
@@ -587,6 +587,7 @@ async function processAudio(
     format: audioRef.format,
     durationMs: check.probe?.durationMs ?? intent.durationSeconds * 1000,
     providerRequestId: audioRef.providerRequestId,
+    ...(audioRef.report ? { report: audioRef.report } : {}),
   });
 
   if (delivered) {

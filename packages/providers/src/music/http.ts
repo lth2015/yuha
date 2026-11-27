@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { withCanonicalSections, type MusicIntent } from '@yuha/contracts';
 import type {
+  MusicRenderReport,
   MusicCapabilities,
   MusicPollResult,
   MusicProvider,
@@ -22,6 +23,27 @@ import { rewriteAudioOrigin } from './audio-url.js';
  * key, bounded timeouts, no user-supplied URLs, and error classification into
  * the four outcomes the job state machine understands.
  */
+const num = (min: number, max: number) => (v: unknown) =>
+  typeof v === 'number' && Number.isFinite(v) && v >= min && v <= max ? v : null;
+const text = (v: unknown) => (typeof v === 'string' && v.length > 0 ? v.slice(0, 200) : null);
+
+/** The report's fields one by one: a malformed value is null (not measured) and the rest are kept. */
+function readRenderReport(raw: unknown): MusicRenderReport | undefined {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return undefined;
+  const r = raw as Record<string, unknown>;
+  const report: MusicRenderReport = {
+    engine: text(r.engine),
+    model: text(r.model),
+    renderSeconds: num(0, 86_400)(r.render_seconds),
+    peakDbfs: num(-200, 40)(r.peak_dbfs),
+    clippedRatio: num(0, 1)(r.clipped_ratio),
+    vocalRatio: num(0, 1)(r.vocal_ratio),
+    vocalSeconds: num(0, 86_400)(r.vocal_seconds),
+  };
+  const error = text(r.error);
+  return error ? { ...report, error } : report;
+}
+
 export const httpMusicProviderConfig = z.object({
   providerId: z.string().min(1),
   baseUrl: z.string().url(),
@@ -47,6 +69,8 @@ export const httpMusicProviderConfig = z.object({
    * address only its own network can reach. See music/audio-url.ts.
    */
   audioUrlRewrite: z.string().optional(),
+  /** Optional dot-path to the service's render report (BGM B2). Not read unless named. */
+  reportField: z.string().optional(),
   /** Provider status strings mapped onto our vocabulary. */
   statusMap: z.object({
     pending: z.array(z.string()),
@@ -196,6 +220,12 @@ export class HttpMusicProvider implements MusicProvider {
     }
   }
 
+  private report(json: unknown): { report?: MusicRenderReport } {
+    if (!this.cfg.reportField) return {};
+    const report = readRenderReport(readPath(json, this.cfg.reportField));
+    return report ? { report } : {};
+  }
+
   private classify(status: string): 'pending' | 'completed' | 'failed' | 'rejected' | 'unrecognised' {
     const m = this.cfg.statusMap;
     if (m.pending.includes(status)) return 'pending';
@@ -290,6 +320,7 @@ export class HttpMusicProvider implements MusicProvider {
               url: rewriteAudioOrigin(audioUrl, this.cfg.audioUrlRewrite),
               format: req.format,
               providerRequestId: requestId,
+              ...this.report(res.json),
             },
           };
         }
@@ -332,6 +363,7 @@ export class HttpMusicProvider implements MusicProvider {
             url: rewriteAudioOrigin(audioUrl, this.cfg.audioUrlRewrite),
             format: 'mp3',
             providerRequestId: ref,
+            ...this.report(res.json),
           },
         };
       }

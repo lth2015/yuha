@@ -293,6 +293,12 @@ const envSchema = z.object({
    * matches the left-hand side exactly.
    */
   MUSIC_AUDIO_URL_REWRITE: z.string().optional(),
+  /**
+   * Dot-path to the music service's render report (model, render time,
+   * clipping, voice heard in an instrumental; docs/BGM_STUDIO_PLAN.md B2).
+   * Unset, no report is read. Informational: it never gates a delivery.
+   */
+  MUSIC_REPORT_FIELD: z.string().optional(),
   MUSIC_STATUS_MAP: z.string().optional(),
   MUSIC_IDEMPOTENCY_HEADER: z.string().optional(),
   MUSIC_ALLOWED_AUDIO_HOSTS: z.string().optional(),
@@ -459,6 +465,13 @@ const envSchema = z.object({
   FEATURE_LYRIC_AUTO_ALIGN_ENABLED: bool(false),
   /** AI BGM (docs/BGM_STUDIO_PLAN.md): who can make background music. Staff first. */
   BGM_STUDIO: z.enum(['off', 'staff', 'all']).default('off'),
+  /**
+   * Seconds of voice the DGX's separator may hear in a BGM before its owner is
+   * told a voice may be in it (docs/BGM_STUDIO_PLAN.md B2). Read when the BGM
+   * is shown, so a new value applies to past BGM too. Uncalibrated until the
+   * 30-take listening review; separation always leaks a little.
+   */
+  BGM_VOICE_SECONDS_MAX: num(2),
   /**
    * Automatic lyric sync for new sung songs (docs/AUTOMATIC_LYRIC_SYNC_TICKETS.md L4a).
    * off: aligned during delivery, as before. staff: only staff members' songs
