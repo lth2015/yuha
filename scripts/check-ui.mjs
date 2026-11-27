@@ -253,9 +253,12 @@ async function openBgm(page, state) {
 
 const MARKET_FIXTURES = [
   { id: 'f2ab1f57-2b53-46eb-b9d6-afc0b87cb304', title: '雨上がりの海岸線 · A Road Along the Coast',
-    genre: 'lofi', scenario: 'travel', mood: 'calm', durationSeconds: 90, previewSeconds: 59.9 },
+    genre: 'lofi', scenario: 'travel', mood: 'calm', durationSeconds: 90, previewSeconds: 59.9,
+    copy: { zh: { title: '雨后的海岸线', intro: '雨停之后沿着海岸开车，钢琴和轻柔的鼓点陪你慢慢前进。' }, ja: { title: '雨上がりの海岸線', intro: '' } },
+    tags: ['lo-fi', 'piano', 'chill'], rating: 4.3 },
   { id: 'b0c89e06-86d1-4daa-a47c-8093c51dd162', title: '晨间咖啡 Coffee at First Light',
-    genre: 'jazz', scenario: 'food', mood: 'warm', durationSeconds: 75, previewSeconds: 59.9 },
+    genre: 'jazz', scenario: 'food', mood: 'warm', durationSeconds: 75, previewSeconds: 59.9,
+    copy: {}, tags: ['smooth jazz', 'upright bass', 'brushed drums', 'café', 'morning'], rating: 3.9 },
 ];
 
 async function openMarketplace(page, state) {

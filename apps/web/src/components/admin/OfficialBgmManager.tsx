@@ -1,5 +1,8 @@
 import { useRef, useState } from 'react';
-import { OFFICIAL_BGM_ACTIONS, OFFICIAL_BGM_TRANSITIONS, type OfficialBgmAction, type OfficialBgmAdminItem } from '@yuha/contracts';
+import {
+  OFFICIAL_BGM_ACTIONS, OFFICIAL_BGM_INTRO_MAX, OFFICIAL_BGM_LANGS, OFFICIAL_BGM_TAGS_MAX, OFFICIAL_BGM_TRANSITIONS,
+  type OfficialBgmAction, type OfficialBgmAdminItem, type OfficialBgmLang,
+} from '@yuha/contracts';
 import { apiFetch } from '../../lib/api';
 import { useI18n } from '../../lib/i18n';
 import { OFFICIAL_BGM_ADMIN, useOfficialBgmCatalog } from '../../lib/official-bgm-catalog';
@@ -7,6 +10,139 @@ import { formatTime } from '../../lib/player';
 import { Badge, Loading } from '../common';
 import { OfficialBgmPreview } from '../OfficialBgmPreview';
 import { OfficialBgmBatchImport } from './OfficialBgmBatchImport';
+
+/**
+ * An editor's words for one track (product owner, 2026-11-27): a title and an
+ * introduction in zh/ja/en, style tags, and the YUHA recommendation score. A
+ * language left empty falls back to the original title and a template intro.
+ */
+function CatalogEditor({ track, onSaved }: { track: OfficialBgmAdminItem; onSaved: (t: OfficialBgmAdminItem) => void }) {
+  const { t } = useI18n();
+  const blank = { title: '', intro: '' };
+  const [copy, setCopy] = useState<Record<OfficialBgmLang, { title: string; intro: string }>>(() => ({
+    zh: { ...blank, ...track.copy?.zh }, ja: { ...blank, ...track.copy?.ja }, en: { ...blank, ...track.copy?.en },
+  }));
+  const [tags, setTags] = useState((track.tags ?? []).join(', '));
+  const [rating, setRating] = useState(typeof track.rating === 'number' ? track.rating.toFixed(1) : '');
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState(false);
+  const score = rating.trim() === '' ? null : Number(rating);
+  const scoreOk = score === null || (Number.isFinite(score) && score >= 1 && score <= 5);
+
+  async function save() {
+    setSaving(true);
+    setError(false);
+    try {
+      const updated = await apiFetch<OfficialBgmAdminItem>(`${OFFICIAL_BGM_ADMIN}/${track.id}/catalog`, {
+        method: 'POST',
+        body: {
+          copy,
+          tags: tags.split(/[,，、]/).map((x) => x.trim()).filter(Boolean).slice(0, OFFICIAL_BGM_TAGS_MAX),
+          rating: score === null ? null : Math.round(score * 10) / 10,
+        },
+      });
+      onSaved(updated);
+    } catch {
+      setError(true);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <details className="market-source">
+      <summary>{t('market.copy.title')}</summary>
+      <form className="stack" onSubmit={(event) => { event.preventDefault(); void save(); }}>
+        {OFFICIAL_BGM_LANGS.map((lang) => (
+          <fieldset key={lang} className="market-copy">
+            <legend>{t(`market.copy.lang.${lang}`)}</legend>
+            <label className="field">
+              <span>{t('market.copy.trackTitle')}</span>
+              <input type="text" maxLength={120} value={copy[lang].title} placeholder={track.title}
+                onChange={(e) => setCopy({ ...copy, [lang]: { ...copy[lang], title: e.target.value } })} />
+            </label>
+            <label className="field">
+              <span>{t('market.copy.intro')}</span>
+              <textarea rows={2} maxLength={OFFICIAL_BGM_INTRO_MAX} value={copy[lang].intro} placeholder={t('market.copy.introPlaceholder')}
+                onChange={(e) => setCopy({ ...copy, [lang]: { ...copy[lang], intro: e.target.value } })} />
+            </label>
+          </fieldset>
+        ))}
+        <label className="field">
+          <span>{t('market.copy.tags')}</span>
+          <input type="text" value={tags} onChange={(e) => setTags(e.target.value)} />
+        </label>
+        <label className="field">
+          <span>{t('market.copy.rating')}</span>
+          <input type="number" inputMode="decimal" min={1} max={5} step={0.1} value={rating} onChange={(e) => setRating(e.target.value)} />
+        </label>
+        <p className="small muted">{t('market.rating.note')}</p>
+        {error && <p role="alert">{t('market.admin.saveError')}</p>}
+        <button type="submit" className="btn btn--primary" disabled={saving || !scoreOk}>
+          {t(saving ? 'market.admin.saving' : 'market.copy.save')}
+        </button>
+      </form>
+    </details>
+  );
+}
+
+/**
+ * "Approve and publish all" (product owner, 2026-11-27): every draft and
+ * reviewed track, in the same two steps as by hand, with one reason. Tracks
+ * whose preview is missing stay where they are and are listed.
+ */
+function PublishAll({ onDone }: { onDone: () => void }) {
+  const { t } = useI18n();
+  const [open, setOpen] = useState(false);
+  const [reason, setReason] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [outcome, setOutcome] = useState<{ published: number; failed: Array<{ id: string; error: string }> } | null>(null);
+  const [error, setError] = useState(false);
+
+  async function run() {
+    setBusy(true);
+    setError(false);
+    try {
+      const res = await apiFetch<{ published: number; failed: Array<{ id: string; error: string }> }>(
+        `${OFFICIAL_BGM_ADMIN}/publish-all`, { method: 'POST', body: { reason: reason.trim() } });
+      setOutcome(res);
+      setOpen(false);
+      onDone();
+    } catch {
+      setError(true);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="market-publish-all stack">
+      {!open && <button type="button" className="btn btn--primary" onClick={() => { setOpen(true); setOutcome(null); }}>{t('market.publishAll')}</button>}
+      {open && (
+        <form className="market-admin__confirm stack" onSubmit={(event) => { event.preventDefault(); void run(); }}>
+          <p className="small">{t('market.publishAll.help')}</p>
+          <label className="field">
+            <span>{t('market.admin.reason')}</span>
+            <textarea required minLength={5} maxLength={500} rows={2} value={reason} disabled={busy} onChange={(e) => setReason(e.target.value)} />
+          </label>
+          {error && <p role="alert">{t('market.admin.saveError')}</p>}
+          <div className="market-admin__actions">
+            <button type="submit" className="btn btn--primary" disabled={busy || reason.trim().length < 5}>
+              {t(busy ? 'market.publishAll.running' : 'market.publishAll.confirm')}
+            </button>
+            <button type="button" className="btn" disabled={busy} onClick={() => setOpen(false)}>{t('market.close')}</button>
+          </div>
+        </form>
+      )}
+      {outcome && (
+        <p role="status" className="market-admin__result">
+          {t('market.publishAll.done', { count: outcome.published })}
+          {outcome.failed.length > 0 && ` ${t('market.publishAll.failed', { count: outcome.failed.length })}`}
+        </p>
+      )}
+    </div>
+  );
+}
 
 function ImportedBgmDetails({ track }: { track: OfficialBgmAdminItem }) {
   const { t } = useI18n();
@@ -89,6 +225,7 @@ export function OfficialBgmManager() {
         <p className="muted">{t('market.admin.lede')}</p>
       </header>
       <OfficialBgmBatchImport onImported={catalog.reload} />
+      <PublishAll onDone={catalog.reload} />
       {preview && <OfficialBgmPreview key={preview.id} track={preview} endpoint={OFFICIAL_BGM_ADMIN}
         onClose={() => { setPreview(null); previewButton.current?.focus(); }} />}
       {result && <p role="status" className="market-admin__result">{result}</p>}
@@ -106,6 +243,10 @@ export function OfficialBgmManager() {
                 start: formatTime(track.previewStartSeconds), length: formatTime(track.previewSeconds),
               })}</p>
               <ImportedBgmDetails track={track} />
+              <CatalogEditor track={track} onSaved={(updated) => {
+                catalog.replace(updated);
+                setResult(t('market.copy.saved', { title: updated.title }));
+              }} />
             </div>
             <div className="market-admin__actions">
               <button type="button" className="btn" aria-pressed={preview?.id === track.id}

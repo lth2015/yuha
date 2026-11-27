@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import type { OfficialBgmItem } from '@yuha/contracts';
 import { apiFetch } from '../lib/api';
 import { useI18n } from '../lib/i18n';
+import { catalogTitle } from '../lib/official-bgm-copy';
 import { formatTime, usePlayer } from '../lib/player';
 
 export function OfficialBgmPreview({ track, endpoint, onClose }: {
@@ -9,7 +10,8 @@ export function OfficialBgmPreview({ track, endpoint, onClose }: {
   endpoint: string;
   onClose: () => void;
 }) {
-  const { t } = useI18n();
+  const { t, lang } = useI18n();
+  const title = catalogTitle(track, lang);
   const player = usePlayer();
   // Preview playback is confined to this route. The song player and this
   // excerpt player yield to each other when the user starts playback.
@@ -35,10 +37,10 @@ export function OfficialBgmPreview({ track, endpoint, onClose }: {
   }, [player.status, player.activeId]);
 
   return (
-    <section className="market-preview" ref={panel} tabIndex={-1} aria-label={t('market.previewTrack', { title: track.title })}>
+    <section className="market-preview" ref={panel} tabIndex={-1} aria-label={t('market.previewTrack', { title })}>
       <div className="market-preview__top">
         <div className="market-preview__name">
-          <strong>{track.title}</strong>
+          <strong>{title}</strong>
           <span className="small muted">{t('market.previewLength', { time: formatTime(track.previewSeconds) })}</span>
         </div>
         <button type="button" className="btn" onClick={onClose}>{t('market.close')}</button>
@@ -54,7 +56,7 @@ export function OfficialBgmPreview({ track, endpoint, onClose }: {
         </div>
       ) : url ? (
         <>
-          <audio ref={audio} aria-label={t('market.previewTrack', { title: track.title })}
+          <audio ref={audio} aria-label={t('market.previewTrack', { title })}
             src={url} controls preload="metadata" loop={loop} controlsList="nodownload"
             onPlay={() => { if (player.status === 'playing' || player.status === 'loading') player.stop(); }}
             onError={() => setFailed(true)} />

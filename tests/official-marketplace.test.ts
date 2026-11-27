@@ -6,6 +6,8 @@ import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { importOfficialBgm } from '../apps/api/src/services/official-bgm-import.js';
+import { officialBgmStyleTags } from '@yuha/contracts';
+import { startingRating } from '@yuha/db';
 import { createHarness, resetData, teardown, type Harness } from './helpers/harness.js';
 
 let off: Harness;
@@ -157,7 +159,11 @@ describe('official BGM catalogue', () => {
     const list = await publicMarket.app.inject({ url: '/v1/marketplace/bgm?genre=lofi&q=morning' });
     const item = list.json().items[0];
     expect(item).toEqual({ id: created.id, title: input.title, genre: 'lofi', scenario: 'travel', mood: 'calm',
-      durationSeconds: expect.any(Number), previewSeconds: expect.any(Number) });
+      durationSeconds: expect.any(Number), previewSeconds: expect.any(Number),
+      copy: {}, tags: [], rating: expect.any(Number) });
+    // A new track's editorial score starts in 3.8–4.5 (product owner, 2026-11-27).
+    expect(item.rating).toBeGreaterThanOrEqual(3.8);
+    expect(item.rating).toBeLessThanOrEqual(4.5);
     expect(item.durationSeconds).toBeGreaterThan(60);
     expect((await publicMarket.app.inject({ url: '/v1/marketplace/bgm?q=%25' })).json().items).toEqual([]);
 
@@ -216,4 +222,60 @@ describe('official BGM catalogue', () => {
     expect((await state('publish')).statusCode).toBe(409);
     expect((await state('review')).json().state).toBe('reviewed');
   }, 30_000);
+
+  it('describes a track in three languages with tags and a score, and publishes every draft at once', async () => {
+    const admin = await publicMarket.createUser({ role: 'admin' });
+    const support = await publicMarket.createUser({ role: 'support' });
+    const tone = (hz: number) => execFileSync('ffmpeg', ['-hide_banner', '-v', 'error', '-f', 'lavfi', '-i',
+      `sine=frequency=${hz}:sample_rate=44100`, '-t', '62', '-b:a', '128k', '-f', 'mp3', 'pipe:1'], { maxBuffer: 8_000_000 });
+    const a = await importOfficialBgm(publicMarket.ctx, { sourceKey: 'cat-01', title: 'Harbour', genre: 'jazz', scenario: 'travel', mood: 'warm' }, tone(330));
+    const b = await importOfficialBgm(publicMarket.ctx, { sourceKey: 'cat-02', title: 'Lanterns', genre: 'ambient', scenario: 'vlog', mood: 'calm' }, tone(550));
+    const base = '/v1/admin/marketplace/bgm';
+
+    const edit = { copy: { zh: { title: '港湾', intro: '傍晚港口的爵士。' }, ja: { title: '港', intro: '' } }, tags: ['jazz', 'piano'], rating: 4.7 };
+    expect((await publicMarket.app.inject({ method: 'POST', url: `${base}/${a.id}/catalog`, headers: support.authHeader, payload: edit })).statusCode).toBe(403);
+    const saved = await publicMarket.app.inject({ method: 'POST', url: `${base}/${a.id}/catalog`, headers: admin.authHeader, payload: edit });
+    expect(saved.statusCode).toBe(200);
+    // A language with neither title nor intro is not stored, so it falls back.
+    expect(saved.json()).toMatchObject({ copy: { zh: { title: '港湾', intro: '傍晚港口的爵士。' }, ja: { title: '港', intro: '' } }, tags: ['jazz', 'piano'], rating: 4.7 });
+    expect(saved.json().copy.en).toBeUndefined();
+    for (const bad of [{ ...edit, rating: 5.5 }, { ...edit, rating: 4.25 }, { ...edit, tags: Array(9).fill('x') }]) {
+      expect((await publicMarket.app.inject({ method: 'POST', url: `${base}/${a.id}/catalog`, headers: admin.authHeader, payload: bad })).statusCode).toBe(400);
+    }
+
+    // Nothing is public before "publish all", and it needs a reason and an admin.
+    expect((await publicMarket.app.inject({ url: '/v1/marketplace/bgm' })).json().items).toEqual([]);
+    expect((await publicMarket.app.inject({ method: 'POST', url: `${base}/publish-all`, headers: support.authHeader, payload: { reason: 'All checked by ear' } })).statusCode).toBe(403);
+    expect((await publicMarket.app.inject({ method: 'POST', url: `${base}/publish-all`, headers: admin.authHeader, payload: { reason: 'ok' } })).statusCode).toBe(400);
+    const all = await publicMarket.app.inject({ method: 'POST', url: `${base}/publish-all`, headers: admin.authHeader, payload: { reason: 'All checked by ear' } });
+    expect(all.json()).toEqual({ published: 2, failed: [] });
+    const items = (await publicMarket.app.inject({ url: '/v1/marketplace/bgm' })).json().items as Array<{ id: string }>;
+    expect(items.map((i) => i.id).sort()).toEqual([a.id, b.id].sort());
+    // Each track went through review then publish, each with its own audit row.
+    const audit = await publicMarket.app.inject({ url: '/v1/admin/audit?subjectType=official_bgm', headers: admin.authHeader });
+    expect(audit.statusCode).toBe(200);
+    const { query } = await import('@yuha/db');
+    const rows = await query<{ subject_id: string; action: string }>(
+      `SELECT subject_id, action FROM audit_logs WHERE subject_type = 'official_bgm' AND action IN ('official_bgm.review','official_bgm.publish')`, []);
+    expect(rows.filter((r) => r.subject_id === a.id).map((r) => r.action).sort()).toEqual(['official_bgm.publish', 'official_bgm.review']);
+    expect(rows.filter((r) => r.subject_id === b.id)).toHaveLength(2);
+    // Run again: nothing left to publish.
+    expect((await publicMarket.app.inject({ method: 'POST', url: `${base}/publish-all`, headers: admin.authHeader, payload: { reason: 'All checked by ear' } })).json())
+      .toEqual({ published: 0, failed: [] });
+    // An edited title is searchable.
+    expect((await publicMarket.app.inject({ url: `/v1/marketplace/bgm?q=${encodeURIComponent('港湾')}` })).json().items.map((i: { id: string }) => i.id)).toEqual([a.id]);
+  }, 120_000);
+
+  it('starts scores in 3.8–4.5 and reads style tags from the batch', () => {
+    expect(startingRating(() => 0)).toBe(3.8);
+    expect(startingRating(() => 0.999)).toBe(4.5);
+    for (let i = 0; i < 200; i += 1) {
+      const r = startingRating();
+      expect(r).toBeGreaterThanOrEqual(3.8);
+      expect(r).toBeLessThanOrEqual(4.5);
+      expect(Math.round(r * 10)).toBe(r * 10);
+    }
+    expect(officialBgmStyleTags('lo-fi, piano / Chill，lo-fi、')).toEqual(['lo-fi', 'piano', 'Chill']);
+    expect(officialBgmStyleTags(null)).toEqual([]);
+  });
 });
