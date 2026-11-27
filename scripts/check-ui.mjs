@@ -50,7 +50,7 @@
  * or integration stack only — never production, where dev login is refused.
  */
 import { chromium } from 'playwright';
-import { mkdirSync } from 'node:fs';
+import { mkdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 const BASE = process.env.UI_BASE ?? 'http://localhost:5173';
@@ -99,7 +99,7 @@ const PAGES = [
   { name: 'home', path: '/', as: null },
   { name: 'home-signed-in', path: '/', as: 'creator' },
   { name: 'pricing', path: '/pricing', as: null },
-  ...['off', 'empty', 'tracks', 'preview'].map((state) => ({
+  ...['off', 'empty', 'tracks', 'preview', 'preview-error'].map((state) => ({
     name: `marketplace-${state}`, path: '/marketplace', as: null, allLanguages: true,
     prepare: (page) => openMarketplace(page, state),
   })),
@@ -260,12 +260,9 @@ async function openMarketplace(page, state) {
   const path = admin ? '/v1/admin/marketplace/bgm' : '/v1/marketplace/bgm';
   await page.unroute('**/v1/runtime*');
   await page.unroute(`**${path}?*`);
-  await page.route('**/v1/runtime*', async (route) => {
-    const response = await route.fetch();
-    const body = await response.json();
-    body.features.officialBgmMarketplace = state !== 'off';
-    await route.fulfill({ response, json: body });
-  });
+  await page.route('**/v1/runtime*', (route) => route.fulfill({
+    json: { ...runtime, features: { ...features, officialBgmMarketplace: state !== 'off' } },
+  }));
   const items = state === 'empty' || state === 'off' ? [] : admin
     ? [{ ...MARKET_FIXTURES[0], state: 'draft', sourceKey: 'official-batch-01', previewStartSeconds: 15 }]
     : MARKET_FIXTURES;
@@ -278,10 +275,19 @@ async function openMarketplace(page, state) {
     await page.waitForSelector('.market-admin__confirm textarea');
   } else {
     await page.waitForSelector('.market-track');
-    if (state === 'preview') {
-      await page.route(`**${path}/*/preview`, (route) => route.fulfill({ status: 503, json: {} }));
+    if (state === 'preview' || state === 'preview-error') {
+      const mediaPath = '/v1/check-ui-marketplace-preview.mp3';
+      await page.unroute(`**${path}/*/preview`);
+      await page.route(`**${path}/*/preview`, (route) => state === 'preview-error'
+        ? route.fulfill({ status: 503, json: {} })
+        : route.fulfill({ json: { url: mediaPath } }));
+      if (state === 'preview') {
+        const body = readFileSync(new URL('../assets/fixtures/audio/night_walk_calm-15s.mp3', import.meta.url));
+        await page.route(`**${mediaPath}`, (route) => route.fulfill({ contentType: 'audio/mpeg', body }));
+      }
       await page.locator('.market-track__play').first().click();
-      await page.waitForSelector('.market-preview [role="alert"]');
+      await page.waitForSelector(state === 'preview' ? '.market-preview audio' : '.market-preview [role="alert"]');
+      if (state === 'preview') await page.waitForFunction(() => document.querySelector('.market-preview audio')?.readyState >= 1);
     }
   }
 }
@@ -676,7 +682,6 @@ async function signIn(browser, who) {
 async function routesCovered() {
   // App.tsx is the list of pages; a route missing from both lists above is a
   // page this check would silently never look at.
-  const { readFileSync } = await import('node:fs');
   const src = readFileSync(new URL('../apps/web/src/App.tsx', import.meta.url), 'utf8');
   const routed = [...src.matchAll(/path="([^"]+)"/g)].map((m) => m[1]).filter((p) => p !== '*');
   const asRoute = (p) => p.split('?')[0].replace(/:track|:order/g, ':id').replace(':giftInvite', ':token');
@@ -870,7 +875,8 @@ const data = await fixtures(browser, states);
  * Which switches this stack has on. A state that needs one that is off is
  * skipped and said so — never failed, never silently dropped.
  */
-const features = (await (await fetch(`${BASE}/v1/runtime`)).json()).features ?? {};
+const runtime = await (await fetch(`${BASE}/v1/runtime`)).json();
+const features = runtime.features ?? {};
 const skipped = PAGES.filter((p) => p.needs && !features[p.needs]);
 for (const p of skipped) console.log(`- ${p.name}: skipped, ${p.needs} is off in this stack`);
 PAGES.splice(0, PAGES.length, ...PAGES.filter((p) => !p.needs || features[p.needs]));

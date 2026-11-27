@@ -31,4 +31,4 @@ pnpm marketplace:bgm --dir /absolute/YUHA-BGM-30 --apply --only 01,02
 pnpm marketplace:bgm --dir /absolute/YUHA-BGM-30 --apply --all-candidates
 ```
 
-写入前先应用数据库迁移。相同批次、编号、音频和元数据可重跑。同一母带只对应一条目录记录，试听起点在首次导入前确定。更换母带时使用新批次标识，保留旧记录的审计历史。审核时也应听原文件，确认整首曲目的音质。管理员在 `/admin/marketplace` 留档审核，之后才可单独上架试听。试听开关 `OFFICIAL_BGM_MARKETPLACE` 默认 `off`，可按顺序切到 `staff` 或 `all`。已签出的试听链接至多再有效五分钟，确认下架即停止签发新链接。
+写入前先应用数据库迁移。已构建的 API 镜像可运行 `node api/dist/import-official-bgm.js`，接受同样的参数。相同批次、编号、音频和元数据可重跑。同一母带只对应一条目录记录，试听起点在首次导入前确定。更换母带时使用新批次标识，保留旧记录的审计历史。审核时也应听原文件，确认整首曲目的音质。管理员在 `/admin/marketplace` 留档审核，之后才可单独上架试听。试听开关 `OFFICIAL_BGM_MARKETPLACE` 默认 `off`，可按顺序切到 `staff` 或 `all`。已签出的试听链接至多再有效五分钟，确认下架即停止签发新链接。
