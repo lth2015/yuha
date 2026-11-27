@@ -169,6 +169,39 @@ cd ~/yuha-spark && grep -q '^ALIGN_METHOD=' .env && sed -i 's/^ALIGN_METHOD=.*/A
 docker compose up -d music
 ```
 
+## Official BGM batches (`server/bench_official_inventory.py`)
+
+The Marketplace's official BGM are made outside the service, by a script run by
+hand, and kept on the Spark in a folder of their own — **not** under
+`~/yuha-spark/data/`, which retention empties after six days, and never in the
+repository, which is public:
+
+```
+~/yuha-official-bgm/batch-01/
+  manifest.csv   id,file,title,series,style,mood,scenario,cover,model,model_version,seed,prompt,generated_at,note
+  masters/       the audio exactly as generated; not converted, not trimmed
+  covers/        <id>.jpg|png|webp, or the file the manifest's cover column names
+  generation/    whatever the generating script left, as is
+```
+
+Keep a copy on the Mac too: `rsync -a dgxa:yuha-official-bgm/batch-01 ~/yuha-official-bgm/`.
+
+What is in it and what is still missing, read-only (the batch mounted `:ro`):
+
+```bash
+cd ~/yuha-spark && docker compose run --rm --no-deps \
+  -v ~/yuha-official-bgm:/bgm:ro --entrypoint "" music \
+  python bench_official_inventory.py /bgm/batch-01
+```
+
+Per track: format, sample rate, channels, bit depth, bit rate, real length,
+peak and RMS level, clipped samples, silence at either edge, sha256, the
+manifest columns still empty and whether a cover exists. Per batch: a master no
+row names, a row whose file is gone, a repeated id, the same audio twice, and a
+count other than 30. Exit 0 only when every track is complete; 2 when there was
+nothing to check. `--json` prints the whole report for keeping; the sha256s are
+what later proves the master YUHA sells is the one reviewed.
+
 ## Retention (`RETENTION_DAYS`, default 6)
 
 `data/jobs/*.json` holds what YUHA sent (the brief and the lyrics) and
