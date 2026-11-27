@@ -64,7 +64,7 @@ class AlignRouteTests(unittest.TestCase):
         cls.environment.stop()
         cls.data.cleanup()
 
-    def run_align(self, separate_mod, heard, forced_mod=None):
+    def run_align(self, separate_mod, heard, forced_mod=None, method="forced"):
         calls = []
 
         def transcribe(audio, lyrics):
@@ -77,9 +77,21 @@ class AlignRouteTests(unittest.TestCase):
         # which is also what an image without its model weights does.
         with patch.dict(sys.modules, {"separate": separate_mod, "forced": forced_mod or fake_forced(error=True)}), \
                 patch.object(self.app, "API_KEY", "k"), \
+                patch.object(self.app, "ALIGN_METHOD", method), \
                 patch.object(self.app, "transcribe_words", transcribe):
             out = self.app.align(body, authorization="Bearer k")
         return out, calls
+
+    def test_forced_alignment_is_off_unless_asked_for(self):
+        # MMS_FA's weights are CC-BY-NC (docs/legal/MUSIC_LICENSE_AUDIT_2026-11-27.md):
+        # the product owner chose Whisper on the vocal stem (2026-11-27, option A).
+        # A box built from this repository must not start using them by default.
+        self.assertEqual(self.app.ALIGN_METHOD, "whisper")
+        forced = fake_forced(coverage=0.95)
+        out, _ = self.run_align(fake_separate(), lambda audio: STEM_WORDS, forced, method=self.app.ALIGN_METHOD)
+        self.assertEqual(forced.calls, [])
+        self.assertNotEqual(out.get("method"), "forced")
+        self.assertEqual(out["heard"], "vocal_stem")
 
     def test_forced_alignment_is_used_when_it_found_the_lyrics(self):
         out, calls = self.run_align(fake_separate(), lambda audio: MIX_WORDS, fake_forced(coverage=0.9))

@@ -77,7 +77,11 @@ ALIGN_MIN_COVERAGE = float(os.environ.get("ALIGN_MIN_COVERAGE", "0.85"))
 # transcribe-and-match path alone. Forced coverage is the share of lettered
 # units the model found with some confidence — a different measure from
 # Whisper's, so it has its own gate.
-ALIGN_METHOD = os.environ.get("ALIGN_METHOD", "forced").lower()
+#
+# Default `whisper` (product owner, 2026-11-27): MMS_FA's weights are CC-BY-NC
+# (docs/legal/MUSIC_LICENSE_AUDIT_2026-11-27.md), so a box built from this
+# repository does not run them unless `.env` says ALIGN_METHOD=forced.
+ALIGN_METHOD = os.environ.get("ALIGN_METHOD", "whisper").lower()
 ALIGN_FORCED_MIN_COVERAGE = float(os.environ.get("ALIGN_FORCED_MIN_COVERAGE", "0.6"))
 # Vocal-quality knobs, chosen from bench_vocals.py results rather than by ear.
 TAG_STYLE = os.environ.get("TAG_STYLE", "v1")            # v1 = original prompt, v2 = short tags + vocal descriptor

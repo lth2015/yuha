@@ -94,8 +94,13 @@ deployed by the Deploy QA workflow.
 
 ## Lyric alignment (`POST /v1/align`)
 
-**First, forced alignment (`server/forced.py`, `ALIGN_METHOD=forced`, the
-default).** Whisper was being asked to transcribe a song whose words we
+**Off by default since 2026-11-27.** MMS_FA's weights are CC-BY-NC
+(docs/legal/MUSIC_LICENSE_AUDIT_2026-11-27.md); the product owner chose
+Whisper on the vocal stem until that is settled, so `ALIGN_METHOD` defaults
+to `whisper` and the paragraph below describes what `ALIGN_METHOD=forced`
+turns back on.
+
+**Forced alignment (`server/forced.py`, `ALIGN_METHOD=forced`).** Whisper was being asked to transcribe a song whose words we
 already know. Now the known lyrics are romanised (fugashi + cutlet, pypinyin
 and hangul-romanize are already in the image for ACE-Step) and placed on the
 vocal stem by torchaudio's MMS_FA CTC model.
@@ -108,8 +113,8 @@ vocal stem by torchaudio's MMS_FA CTC model.
   Otherwise everything below runs as before.
 - The log line is `forced alignment <job> coverage=…`.
 - The weights (~1.2GB) download to `~/.cache/torch` on the first alignment.
-- `ALIGN_METHOD=whisper` in `.env` turns forced alignment off without a
-  rebuild.
+- `ALIGN_METHOD=forced` in `.env` turns it on, `whisper` off, without a
+  rebuild (`docker compose up -d music`).
 
 **Then, or instead:** Whisper (`WHISPER_MODEL`, default `turbo`) supplies the clock; the known
 lyrics are matched onto its words character by character (`server/align.py`).
