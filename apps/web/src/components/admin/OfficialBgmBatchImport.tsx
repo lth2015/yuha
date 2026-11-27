@@ -3,6 +3,7 @@ import {
   BGM_GENRES, BGM_MOODS, BGM_SCENARIOS, OFFICIAL_BGM_COVER_BYTES, OFFICIAL_BGM_DOCUMENT_BYTES, OFFICIAL_BGM_MASTER_BYTES,
   officialBgmCoverFor, officialBgmInventoryFor, officialBgmInventoryReport, parseOfficialBgmManifest,
   type OfficialBgmBatchTrack, type OfficialBgmInventoryReport, type OfficialBgmManifestIssue, type OfficialBgmUploadResult,
+  officialBgmMissingProvenance,
 } from '@yuha/contracts';
 import { apiFetch } from '../../lib/api';
 import { useI18n } from '../../lib/i18n';
@@ -179,6 +180,9 @@ export function OfficialBgmBatchImport({ onImported }: { onImported: () => void 
                   <li key={row.id}>
                     <strong>{row.entry.title}</strong>
                     <span className="small muted">{row.entry.provenance.masterFilename}</span>
+                    {officialBgmMissingProvenance(row.entry.provenance).length > 0 && (
+                      <p className="small muted">{t('market.import.missing', { fields: officialBgmMissingProvenance(row.entry.provenance).join(', ') })}</p>
+                    )}
                     {(!row.entry.genre || !row.entry.scenario || !row.entry.mood || tags[row.id]) && !done && (
                       <div className="market-import__tags">
                         {LABELS.map((key) => (

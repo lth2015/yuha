@@ -11,6 +11,7 @@ const ja: Dict = {
   "market.import.folder": "バッチフォルダ",
   "market.import.report": "棚卸しレポート（任意のJSON）",
   "market.import.clearReport": "レポートを外す",
+  "market.import.missing": "生成記録の未記入：{fields}（そのまま取り込み、補完しません）",
   "market.import.rowError": "マニフェストの{row}行目を読み込めませんでした · {message}",
   "market.import.manifest": "manifest.csv が入ったバッチフォルダを選択してください。",
   "market.import.badReport": "棚卸しレポートを読み込めませんでした。差し替えるか外してください。",
