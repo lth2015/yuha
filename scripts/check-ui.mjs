@@ -99,6 +99,13 @@ const PAGES = [
   { name: 'home', path: '/', as: null },
   { name: 'home-signed-in', path: '/', as: 'creator' },
   { name: 'pricing', path: '/pricing', as: null },
+  ...['off', 'empty', 'tracks', 'preview'].map((state) => ({
+    name: `marketplace-${state}`, path: '/marketplace', as: null, allLanguages: true,
+    prepare: (page) => openMarketplace(page, state),
+  })),
+  { name: 'admin-marketplace-review', path: '/admin/marketplace', as: 'admin',
+    allLanguages: true, prepare: (page) => openMarketplace(page, 'review') },
+
   { name: 'auth', path: '/auth', as: null },
   { name: 'create', path: '/create', as: 'creator' },
   // Opened from Air composition's parameter card: the form filled from a sketch (lib/air-prefill.ts).
@@ -239,6 +246,44 @@ async function openBgm(page, state) {
   }
   await page.locator('.bgm__form .btn--primary').click();
   await page.waitForSelector(state === 'ready' ? '.bgm__actions' : '.bgm__job h2', { timeout: 15_000 });
+}
+
+const MARKET_FIXTURES = [
+  { id: 'f2ab1f57-2b53-46eb-b9d6-afc0b87cb304', title: '雨上がりの海岸線 · A Road Along the Coast',
+    genre: 'lofi', scenario: 'travel', mood: 'calm', durationSeconds: 90, previewSeconds: 59.9 },
+  { id: 'b0c89e06-86d1-4daa-a47c-8093c51dd162', title: '晨间咖啡 Coffee at First Light',
+    genre: 'jazz', scenario: 'food', mood: 'warm', durationSeconds: 75, previewSeconds: 59.9 },
+];
+
+async function openMarketplace(page, state) {
+  const admin = state === 'review';
+  const path = admin ? '/v1/admin/marketplace/bgm' : '/v1/marketplace/bgm';
+  await page.unroute('**/v1/runtime*');
+  await page.unroute(`**${path}?*`);
+  await page.route('**/v1/runtime*', async (route) => {
+    const response = await route.fetch();
+    const body = await response.json();
+    body.features.officialBgmMarketplace = state !== 'off';
+    await route.fulfill({ response, json: body });
+  });
+  const items = state === 'empty' || state === 'off' ? [] : admin
+    ? [{ ...MARKET_FIXTURES[0], state: 'draft', sourceKey: 'official-batch-01', previewStartSeconds: 15 }]
+    : MARKET_FIXTURES;
+  await page.route(`**${path}?*`, (route) => route.fulfill({ json: { items, nextOffset: null } }));
+  await page.reload({ waitUntil: 'networkidle' });
+  if (state === 'off' || state === 'empty') {
+    await page.waitForSelector('.market-empty');
+  } else if (admin) {
+    await page.locator('.market-admin__actions button').nth(1).click();
+    await page.waitForSelector('.market-admin__confirm textarea');
+  } else {
+    await page.waitForSelector('.market-track');
+    if (state === 'preview') {
+      await page.route(`**${path}/*/preview`, (route) => route.fulfill({ status: 503, json: {} }));
+      await page.locator('.market-track__play').first().click();
+      await page.waitForSelector('.market-preview [role="alert"]');
+    }
+  }
 }
 
 async function openLyricState(page, state) {

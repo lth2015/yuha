@@ -40,6 +40,7 @@ export function pageTitleKey(path: string): string | null {
     [/^\/create(\/|$)/, 'nav.create'],
     [/^\/library(\/|$)/, 'account.mySongs'],
     [/^\/pricing(\/|$)/, 'title.pricing'],
+    [/^\/marketplace$/, 'nav.marketplace'],
     [/^\/song\//, 'title.song'],
     [/^\/tracks\/[^/]+\/export/, 'title.export'],
     [/^\/tracks\/[^/]+\/license/, 'title.license'],
