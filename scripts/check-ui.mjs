@@ -279,6 +279,15 @@ async function openLyricState(page, state) {
   await page.waitForFunction(() => (document.querySelector('.lyrics-sync__status')?.textContent ?? '').trim().length > 0, null, { timeout: 15_000 });
 }
 
+async function openGiftMake(page) {
+  await page.waitForSelector('.gift-make');
+  await page.fill('#gift-to', '亲爱的你');
+  await page.fill('#gift-message', '有些话说不出口，就写成一首歌送给你。');
+  await page.fill('#gift-from', '小林');
+  await page.waitForSelector('.gift-preview');
+  await page.locator('.gift-make').scrollIntoViewIfNeeded();
+}
+
 async function openSceneMv(page, state) {
   await page.unroute('**/v1/runtime*');
   await page.unroute('**/v1/tracks/*/scene-mvs');
