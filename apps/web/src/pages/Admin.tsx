@@ -668,12 +668,14 @@ function OverviewPanel({ part }: { part: 'ops' | 'review' }) {
  */
 const TABS = [
   { key: 'dashboard', path: '/admin', label: 'admin.tab.dashboard' },
+  // Second, and named for what it manages: under the visitor's "BGM 曲库" name
+  // and last in the row it was overlooked (product owner, 2026-11-27).
+  { key: 'marketplace', path: '/admin/marketplace', label: 'admin.tab.marketplace' },
   { key: 'users', path: '/admin/users', label: 'admin.tab.users' },
   { key: 'orders', path: '/admin/orders', label: 'admin.tab.orders' },
   { key: 'ops', path: '/admin/ops', label: 'admin.tab.ops' },
   { key: 'review', path: '/admin/review', label: 'admin.tab.review' },
   { key: 'audit', path: '/admin/audit', label: 'admin.tab.audit' },
-  { key: 'marketplace', path: '/admin/marketplace', label: 'nav.marketplace' },
 ] as const;
 
 export default function Admin() {

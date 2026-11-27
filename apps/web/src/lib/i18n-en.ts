@@ -765,7 +765,7 @@ const en: Dict = {
   'admin.tab.orders': 'Orders',
   'admin.tab.ops': 'Operations',
   'admin.tab.review': 'Review',
-  'admin.tab.audit': 'Audit log',
+  'admin.tab.audit': 'Audit log', 'admin.tab.marketplace': 'Official BGM',
   'admin.more': 'Load more',
   'admin.dash.granularity': 'Granularity',
   'admin.dash.g.day': 'Day',

@@ -765,7 +765,7 @@ const ja: Dict = {
   'admin.tab.orders': '注文',
   'admin.tab.ops': '運用指標',
   'admin.tab.review': '審査',
-  'admin.tab.audit': '監査ログ',
+  'admin.tab.audit': '監査ログ', 'admin.tab.marketplace': '公式 BGM 管理',
   'admin.more': 'さらに表示',
   'admin.dash.granularity': '集計単位',
   'admin.dash.g.day': '日',
