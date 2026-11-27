@@ -72,13 +72,32 @@ WHISPER_MODEL = os.environ.get("WHISPER_MODEL", "turbo")
 # part of the vocal.  The app retains its honest estimated/unsynchronised
 # presentation when this gate refuses an alignment.
 ALIGN_MIN_COVERAGE = float(os.environ.get("ALIGN_MIN_COVERAGE", "0.85"))
+# Between this and ALIGN_MIN_COVERAGE a Whisper alignment comes back partial:
+# every line carries its own confidence (align.py), and YUHA's trusted-line
+# rule leaves the unsure ones unlit rather than the whole song estimated.
+# Off by default (equal to ALIGN_MIN_COVERAGE): YUHA applies that rule to
+# staff only while LYRIC_STRICT_TIMELINE=staff, and for everyone else an
+# unsure line would be lit as if it had been heard. Set it (e.g. 0.5) once
+# the rule is on for all.
+ALIGN_PARTIAL_MIN_COVERAGE = float(os.environ.get("ALIGN_PARTIAL_MIN_COVERAGE", str(ALIGN_MIN_COVERAGE)))
 # How the lyrics are placed on the vocal (forced.py): `forced` places the known
 # lyrics with a CTC acoustic model and falls back to Whisper; `whisper` is the
 # transcribe-and-match path alone. Forced coverage is the share of lettered
 # units the model found with some confidence — a different measure from
 # Whisper's, so it has its own gate.
-ALIGN_METHOD = os.environ.get("ALIGN_METHOD", "forced").lower()
+#
+# Default `whisper` (product owner, 2026-11-27): MMS_FA's weights are CC-BY-NC
+# (docs/legal/MUSIC_LICENSE_AUDIT_2026-11-27.md), so a box built from this
+# repository does not run them unless `.env` says ALIGN_METHOD=forced.
+ALIGN_METHOD = os.environ.get("ALIGN_METHOD", "whisper").lower()
 ALIGN_FORCED_MIN_COVERAGE = float(os.environ.get("ALIGN_FORCED_MIN_COVERAGE", "0.6"))
+# ALIGN_METHOD=qwen: below this share of trusted lines the Qwen result is not
+# used and Whisper's stands (README, "Qwen3-ForcedAligner").
+ALIGN_QWEN_MIN_TRUSTED = float(os.environ.get("ALIGN_QWEN_MIN_TRUSTED", "0.6"))
+# Where Qwen and Whisper agree, a weighted average of the two, Whisper's own
+# early offset taken out first (align.fuse_lines). 1.0 = Qwen alone. 0.5 until
+# hand-timed songs say which clock deserves more.
+ALIGN_QWEN_WEIGHT = float(os.environ.get("ALIGN_QWEN_WEIGHT", "0.5"))
 # Vocal-quality knobs, chosen from bench_vocals.py results rather than by ear.
 TAG_STYLE = os.environ.get("TAG_STYLE", "v1")            # v1 = original prompt, v2 = short tags + vocal descriptor
 VOCAL_TAKES = max(1, int(os.environ.get("VOCAL_TAKES", "1")))  # >1: render N seeds, keep the most intelligible
@@ -819,7 +838,17 @@ def healthz():
     return {"ok": True, "model_loaded": _model_state["loaded"],
             "model_error": _model_state["error"], "load_seconds": _model_state["load_seconds"],
             "queue_depth": _q.qsize(), "engine": ENGINE, "aligner_loaded": _align_state["loaded"],
-            "aligner_error": _align_state["error"], "separation": _separation_status()}
+            "aligner_error": _align_state["error"], "separation": _separation_status(),
+            "align_method": ALIGN_METHOD, "qwen": _qwen_status()}
+
+
+def _qwen_status():
+    # Always reported: a request can ask for qwen whatever ALIGN_METHOD says.
+    try:
+        import qwen_align
+        return qwen_align.status()
+    except Exception as e:
+        return {"installed": False, "error": repr(e)[:200]}
 
 
 def _separation_status():
@@ -882,6 +911,10 @@ class AlignRequest(BaseModel):
     audio_url: Optional[str] = Field(None, min_length=1, max_length=2000)
     audio_b64: Optional[str] = Field(None, min_length=4, max_length=MAX_ALIGN_AUDIO_B64)
     duration_seconds: float = Field(..., gt=0, le=600)
+    # Which aligner, for this request only (YUHA's LYRIC_ALIGNER decides per
+    # song owner). Absent: this box's ALIGN_METHOD. MMS_FA cannot be asked for
+    # here: its weights are non-commercial, so only this box's .env turns it on.
+    method: Optional[Literal["whisper", "qwen"]] = None
 
 
 @app.post("/v1/align")
@@ -918,6 +951,7 @@ def _align_path(body: AlignRequest, path: Path, label: str):
     """The alignment itself, on a file on this server."""
     from align import align_lines
     t0 = time.time()
+    method = body.method or ALIGN_METHOD
     # Listen to the singer, not the band: Whisper on the separated vocal, and
     # the stem's loudness as the record of where singing is (see separate.py).
     # If the stem hears less of the lyrics than the mix would have, the mix is
@@ -940,7 +974,7 @@ def _align_path(body: AlignRequest, path: Path, label: str):
     out = None
     # The known lyrics placed on the stem (forced.py). Whisper below is the
     # fallback, and the only path when separation is unavailable.
-    if stem16 is not None and ALIGN_METHOD == "forced":
+    if stem16 is not None and method == "forced":
         try:
             import forced
             with _gpu_lock:
@@ -958,6 +992,36 @@ def _align_path(body: AlignRequest, path: Path, label: str):
         except Exception:
             log.exception("alignment on the vocal stem failed; trying the mix")
             out = None
+    # Qwen3-ForcedAligner (ALIGN_METHOD=qwen; qwen_align.py): the known lyrics
+    # placed on the stem, every line timed; each line's confidence comes from
+    # where the voice is and from what Whisper just heard (align.qwen_lines).
+    # Any failure leaves the Whisper result below exactly as it was.
+    if stem16 is not None and method == "qwen":
+        try:
+            import qwen_align
+            from align import guess_language, qwen_lines
+            with _gpu_lock:
+                units = qwen_align.align(stem16, body.lyrics, guess_language(body.lyrics))
+            lines = qwen_lines(body.lyrics, units, body.duration_seconds, voiced=voiced,
+                               heard=(out or {}).get("lines"))
+            offset = None
+            if out and out.get("lines") and ALIGN_QWEN_WEIGHT < 1.0:
+                from align import fuse_lines
+                lines, offset = fuse_lines(lines, out["lines"], w_qwen=ALIGN_QWEN_WEIGHT)
+            trusted = sum(1 for l in lines if l["confidence"] >= 0.5) / max(1, len(lines))
+            q = {"lines": lines, "coverage": round(trusted, 3), "heard": "vocal_stem", "method": "qwen",
+                 "model": "qwen3-forced-aligner-0.6b", "voice_activity": voiced is not None,
+                 "whisper_coverage": (out or {}).get("coverage"), "whisper_offset": offset,
+                 "qwen_weight": ALIGN_QWEN_WEIGHT, "seconds": round(time.time() - t0, 1)}
+            log.info("aligned %s method=qwen trusted=%.2f whisper=%s in %.1fs", label, trusted,
+                     q["whisper_coverage"], q["seconds"])
+            if trusted >= ALIGN_QWEN_MIN_TRUSTED:
+                if trusted < 1.0:
+                    q["partial"] = True
+                return q
+            log.warning("qwen trusted only %.2f of %s; using Whisper", trusted, label)
+        except Exception:
+            log.exception("qwen alignment failed; using Whisper")
     try:
         if out is None or (out.get("method") != "forced" and out["coverage"] < ALIGN_MIN_COVERAGE):
             mix = align_lines(body.lyrics, transcribe_words(path, body.lyrics),
@@ -976,7 +1040,12 @@ def _align_path(body: AlignRequest, path: Path, label: str):
     log.info("aligned %s coverage=%.2f heard=%s voiced=%s in %.1fs", label, out["coverage"],
              out["heard"], out["voice_activity"], out["seconds"])
     if not forced_ok and out["coverage"] < ALIGN_MIN_COVERAGE:
-        # Too little of the lyrics was heard to trust the timings; YUHA keeps
+        if out["coverage"] >= ALIGN_PARTIAL_MIN_COVERAGE:
+            # Part of it was heard: the lines go back with their own
+            # confidence, and only the ones heard are trusted by YUHA.
+            out["partial"] = True
+            return out
+        # Too little of the lyrics was heard to trust any of it; YUHA keeps
         # its estimated (and labelled) timeline instead.
         return JSONResponse(status_code=422, content={"error": "low_coverage", **out})
     return out

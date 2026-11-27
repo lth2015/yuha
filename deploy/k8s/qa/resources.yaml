@@ -137,10 +137,17 @@ spec:
               value: "staff"
             # The shared lyric timing rule (docs/agents/LYRIC_AUTO_SYNC_UX_HANDOFF.md):
             # only trusted lines are lit, burned into videos or written to an .lrc;
-            # an estimate is for reading. Staff first, read by the web app through
-            # /v1/runtime; "all" after the product owner's go-ahead, "off" to undo.
+            # an estimate is for reading. Read by the web app through /v1/runtime.
+            # "all" since 2026-11-27 (product owner, with LYRIC_ALIGNER=all); "off" to undo.
             - name: LYRIC_STRICT_TIMELINE
-              value: "staff"
+              value: "all"
+            # Which aligner the DGX uses, per song owner (deploy/dgx/music README,
+            # "Qwen3-ForcedAligner"): Qwen fused with Whisper for everyone, paired
+            # with the strict rule above so an unsure line is lit for nobody.
+            # The API asks for it on a re-alignment; the worker, below, on delivery.
+            # "off" goes back to the DGX's own default (Whisper on the vocal stem).
+            - name: LYRIC_ALIGNER
+              value: "all"
           envFrom:
             - configMapRef:
                 name: qa-music-api-config
@@ -273,6 +280,9 @@ spec:
             # A DGX that sends none (not yet updated) simply records nothing.
             - name: MUSIC_REPORT_FIELD
               value: "report"
+            # Qwen fused with Whisper for every song's alignment (see the API's LYRIC_ALIGNER).
+            - name: LYRIC_ALIGNER
+              value: "all"
           envFrom:
             - configMapRef:
                 name: qa-music-worker-config

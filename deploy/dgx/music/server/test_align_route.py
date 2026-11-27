@@ -1,4 +1,5 @@
 """/v1/align's choice of what Whisper hears, without GPU models or real audio."""
+import json
 import os
 import sys
 import tempfile
@@ -64,7 +65,7 @@ class AlignRouteTests(unittest.TestCase):
         cls.environment.stop()
         cls.data.cleanup()
 
-    def run_align(self, separate_mod, heard, forced_mod=None):
+    def run_align(self, separate_mod, heard, forced_mod=None, method="forced", requested=None):
         calls = []
 
         def transcribe(audio, lyrics):
@@ -72,14 +73,26 @@ class AlignRouteTests(unittest.TestCase):
             return heard(audio)
 
         body = self.app.AlignRequest(lyrics=LYRICS, audio_url=f"https://x/v1/audio/{JOB}.mp3",
-                                     duration_seconds=20)
+                                     duration_seconds=20, **({"method": requested} if requested else {}))
         # The Whisper path's tests run with forced alignment unable to answer,
         # which is also what an image without its model weights does.
         with patch.dict(sys.modules, {"separate": separate_mod, "forced": forced_mod or fake_forced(error=True)}), \
                 patch.object(self.app, "API_KEY", "k"), \
+                patch.object(self.app, "ALIGN_METHOD", method), \
                 patch.object(self.app, "transcribe_words", transcribe):
             out = self.app.align(body, authorization="Bearer k")
         return out, calls
+
+    def test_forced_alignment_is_off_unless_asked_for(self):
+        # MMS_FA's weights are CC-BY-NC (docs/legal/MUSIC_LICENSE_AUDIT_2026-11-27.md):
+        # the product owner chose Whisper on the vocal stem (2026-11-27, option A).
+        # A box built from this repository must not start using them by default.
+        self.assertEqual(self.app.ALIGN_METHOD, "whisper")
+        forced = fake_forced(coverage=0.95)
+        out, _ = self.run_align(fake_separate(), lambda audio: STEM_WORDS, forced, method=self.app.ALIGN_METHOD)
+        self.assertEqual(forced.calls, [])
+        self.assertNotEqual(out.get("method"), "forced")
+        self.assertEqual(out["heard"], "vocal_stem")
 
     def test_forced_alignment_is_used_when_it_found_the_lyrics(self):
         out, calls = self.run_align(fake_separate(), lambda audio: MIX_WORDS, fake_forced(coverage=0.9))
@@ -136,6 +149,95 @@ class AlignRouteTests(unittest.TestCase):
         out, calls = self.run_align(fake_separate(), heard)
         self.assertEqual(out["heard"], "mix")
         self.assertEqual(out["coverage"], 1.0)
+
+    def run_qwen(self, qwen_mod, heard=lambda audio: STEM_WORDS, weight=1.0):
+        with patch.dict(sys.modules, {"qwen_align": qwen_mod}), patch.object(self.app, "ALIGN_QWEN_WEIGHT", weight):
+            return self.run_align(fake_separate(), heard, method="qwen")
+
+    def test_qwen_times_every_line_and_whisper_still_runs_for_its_confidence(self):
+        mod = types.ModuleType("qwen_align")
+        mod.align = lambda stem, lyrics, lang: [(c, 1.0 + i * 0.3, 1.3 + i * 0.3) for i, c in enumerate("晚风吹过街角")] + \
+            [(c, 10.4 + i * 0.3, 10.7 + i * 0.3) for i, c in enumerate("我等你回来")]
+        out, calls = self.run_qwen(mod)
+        self.assertEqual(out["method"], "qwen")
+        self.assertEqual(out["model"], "qwen3-forced-aligner-0.6b")
+        self.assertEqual([l["start"] for l in out["lines"]], [1.0, 10.4])
+        self.assertTrue(all("confidence" in l for l in out["lines"]))
+        self.assertEqual(len(calls), 1)  # Whisper heard the stem, for the agreement check
+        self.assertIn("whisper_coverage", out)
+
+    def test_by_default_qwen_and_whisper_are_averaged_where_they_agree(self):
+        self.assertEqual(self.app.ALIGN_QWEN_WEIGHT, 0.5)
+        mod = types.ModuleType("qwen_align")
+        mod.align = lambda stem, lyrics, lang: [(c, 1.0 + i * 0.3, 1.3 + i * 0.3) for i, c in enumerate("晚风吹过街角")] + \
+            [(c, 10.4 + i * 0.3, 10.7 + i * 0.3) for i, c in enumerate("我等你回来")]
+        alone, _ = self.run_qwen(mod)
+        fused, _ = self.run_qwen(mod, weight=0.5)
+        self.assertEqual(fused["qwen_weight"], 0.5)
+        whisper_start = fused["lines"][1]["start"] * 2 - alone["lines"][1]["start"]  # what the average was taken with
+        self.assertNotEqual(fused["lines"][1]["start"], alone["lines"][1]["start"])
+        self.assertLess(abs(whisper_start - alone["lines"][1]["start"]), 1.0)
+
+    def qwen_mod(self):
+        mod = types.ModuleType("qwen_align")
+        mod.align = lambda stem, lyrics, lang: [(c, 1.0 + i * 0.3, 1.3 + i * 0.3) for i, c in enumerate("晚风吹过街角")] + \
+            [(c, 10.4 + i * 0.3, 10.7 + i * 0.3) for i, c in enumerate("我等你回来")]
+        return mod
+
+    def test_a_request_can_ask_for_qwen_while_the_box_default_is_whisper(self):
+        with patch.dict(sys.modules, {"qwen_align": self.qwen_mod()}), patch.object(self.app, "ALIGN_QWEN_WEIGHT", 1.0):
+            out, _ = self.run_align(fake_separate(), lambda audio: STEM_WORDS, method="whisper", requested="qwen")
+        self.assertEqual(out["method"], "qwen")
+
+    def test_a_request_can_ask_for_whisper_while_the_box_default_is_qwen(self):
+        with patch.dict(sys.modules, {"qwen_align": self.qwen_mod()}):
+            out, _ = self.run_align(fake_separate(), lambda audio: STEM_WORDS, method="qwen", requested="whisper")
+        self.assertEqual(out["method"], "whisper")
+
+    def test_no_request_can_ask_for_mms_fa(self):
+        # Its weights are non-commercial; only the box's own .env can turn it on.
+        from pydantic import ValidationError
+        with self.assertRaises(ValidationError):
+            self.app.AlignRequest(lyrics=LYRICS, audio_url="https://x/a.mp3", duration_seconds=20, method="forced")
+
+    def test_a_qwen_failure_leaves_whisper_s_answer(self):
+        mod = types.ModuleType("qwen_align")
+        def boom(*a):
+            raise RuntimeError("qwen worker timed out")
+        mod.align = boom
+        out, _ = self.run_qwen(mod)
+        self.assertEqual(out["method"], "whisper")
+        self.assertEqual(out["heard"], "vocal_stem")
+
+    def test_qwen_with_too_few_trusted_lines_leaves_whisper_s_answer(self):
+        # Both lines placed where Whisper heard them whole, far away: neither trusted.
+        mod = types.ModuleType("qwen_align")
+        mod.align = lambda stem, lyrics, lang: [(c, 30.0 + i * 0.3, 30.3 + i * 0.3) for i, c in enumerate("晚风吹过街角我等你回来")]
+        out, _ = self.run_qwen(mod, heard=lambda audio: MIX_WORDS)
+        self.assertEqual(out["method"], "whisper")
+
+    def test_a_song_partly_heard_comes_back_partial_with_each_line_s_confidence(self):
+        # Only the first line was heard: 6 of 11 characters. Below the full
+        # threshold, above the partial floor: the lines come back, the unheard
+        # one marked unsure, and YUHA's trusted-line rule leaves it unlit.
+        heard = [("晚风吹过街角", 1, 4)]
+        with patch.object(self.app, "ALIGN_PARTIAL_MIN_COVERAGE", 0.5):
+            out, _ = self.run_align(fake_separate(), lambda audio: heard, method="whisper")
+        self.assertTrue(out["partial"])
+        self.assertEqual([l["confidence"] for l in out["lines"]], [1.0, 0.0])
+
+    def test_partial_results_are_off_until_the_box_is_told(self):
+        # Off by default: YUHA's trusted-line rule is staff-only for now, and
+        # anyone else would see the unheard line lit.
+        self.assertEqual(self.app.ALIGN_PARTIAL_MIN_COVERAGE, self.app.ALIGN_MIN_COVERAGE)
+        out, _ = self.run_align(fake_separate(), lambda audio: [("晚风吹过街角", 1, 4)], method="whisper")
+        self.assertEqual(out.status_code, 422)
+
+    def test_a_song_barely_heard_is_still_refused(self):
+        with patch.object(self.app, "ALIGN_PARTIAL_MIN_COVERAGE", 0.5):
+            out, _ = self.run_align(fake_separate(), lambda audio: [("晚风", 1, 2)], method="whisper")
+        self.assertEqual(out.status_code, 422)
+        self.assertEqual(json.loads(out.body)["error"], "low_coverage")
 
     def test_a_stem_with_no_singing_is_not_reported_as_voice_activity(self):
         silent = fake_separate()

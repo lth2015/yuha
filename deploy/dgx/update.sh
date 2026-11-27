@@ -152,6 +152,20 @@ else
   echo "      the estimator rather than heard: ssh $DGX 'docker logs --tail 40 yuha-music'"
 fi
 
+# Vocal separation (demucs), reported under "separation" by /healthz. Without
+# it every song is aligned on the full mix and the render report cannot hear a
+# voice in a BGM — and nothing said so: the Dockerfile's install used to fall
+# back to an echo, and the box ran for weeks on the mix while this script
+# printed ok. It loads on first use, so "available" may still be null here;
+# only an error is a finding.
+SEP=$(printf '%s' "$HEALTH" | grep -o '"separation":{[^}]*}' || true)
+if [[ "$SEP" == *'"available":false'* || "$SEP" == *'"enabled":false'* ]]; then
+  echo "   !! vocal separation unavailable: $SEP"
+  echo "      lyrics will be aligned on the full mix. Re-run with MUSIC=yes to rebuild the image."
+else
+  echo "   separation ok (loads on first alignment)"
+fi
+
 # ------------------------------------------------------------------ 2. the app
 if [[ "${SKIP_APP:-}" == "1" ]]; then
   say "app: skipped (SKIP_APP=1)"

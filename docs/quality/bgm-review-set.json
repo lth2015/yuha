@@ -1,0 +1,246 @@
+{
+ "version": 1,
+ "note": "Make each with /bgm on a staff account, note empty. docs/quality/BGM_REVIEW.md",
+ "set": [
+  {
+   "n": 1,
+   "scenario": "vlog",
+   "genre": "japanese_healing",
+   "mood": "warm",
+   "durationSeconds": 30,
+   "tempo": "medium"
+  },
+  {
+   "n": 2,
+   "scenario": "food",
+   "genre": "pop",
+   "mood": "mysterious",
+   "durationSeconds": 30,
+   "tempo": "slow"
+  },
+  {
+   "n": 3,
+   "scenario": "pet",
+   "genre": "cinematic",
+   "mood": "energetic",
+   "durationSeconds": 60,
+   "tempo": "slow"
+  },
+  {
+   "n": 4,
+   "scenario": "vlog",
+   "genre": "jazz",
+   "mood": "calm",
+   "durationSeconds": 15,
+   "tempo": "medium"
+  },
+  {
+   "n": 5,
+   "scenario": "ad",
+   "genre": "electronic",
+   "mood": "cheerful",
+   "durationSeconds": 30,
+   "tempo": "medium"
+  },
+  {
+   "n": 6,
+   "scenario": "tech",
+   "genre": "lofi",
+   "mood": "romantic",
+   "durationSeconds": 60,
+   "tempo": "medium"
+  },
+  {
+   "n": 7,
+   "scenario": "holiday",
+   "genre": "ambient",
+   "mood": "warm",
+   "durationSeconds": 15,
+   "tempo": "fast"
+  },
+  {
+   "n": 8,
+   "scenario": "travel",
+   "genre": "japanese_healing",
+   "mood": "mysterious",
+   "durationSeconds": 30,
+   "tempo": "fast"
+  },
+  {
+   "n": 9,
+   "scenario": "food",
+   "genre": "pop",
+   "mood": "energetic",
+   "durationSeconds": 60,
+   "tempo": "fast"
+  },
+  {
+   "n": 10,
+   "scenario": "pet",
+   "genre": "cinematic",
+   "mood": "calm",
+   "durationSeconds": 15,
+   "tempo": "slow"
+  },
+  {
+   "n": 11,
+   "scenario": "vlog",
+   "genre": "jazz",
+   "mood": "cheerful",
+   "durationSeconds": 30,
+   "tempo": "slow"
+  },
+  {
+   "n": 12,
+   "scenario": "ad",
+   "genre": "electronic",
+   "mood": "romantic",
+   "durationSeconds": 60,
+   "tempo": "slow"
+  },
+  {
+   "n": 13,
+   "scenario": "tech",
+   "genre": "lofi",
+   "mood": "warm",
+   "durationSeconds": 15,
+   "tempo": "medium"
+  },
+  {
+   "n": 14,
+   "scenario": "holiday",
+   "genre": "ambient",
+   "mood": "mysterious",
+   "durationSeconds": 30,
+   "tempo": "medium"
+  },
+  {
+   "n": 15,
+   "scenario": "travel",
+   "genre": "japanese_healing",
+   "mood": "energetic",
+   "durationSeconds": 60,
+   "tempo": "medium"
+  },
+  {
+   "n": 16,
+   "scenario": "food",
+   "genre": "pop",
+   "mood": "calm",
+   "durationSeconds": 15,
+   "tempo": "fast"
+  },
+  {
+   "n": 17,
+   "scenario": "pet",
+   "genre": "cinematic",
+   "mood": "cheerful",
+   "durationSeconds": 30,
+   "tempo": "fast"
+  },
+  {
+   "n": 18,
+   "scenario": "vlog",
+   "genre": "jazz",
+   "mood": "romantic",
+   "durationSeconds": 60,
+   "tempo": "fast"
+  },
+  {
+   "n": 19,
+   "scenario": "ad",
+   "genre": "electronic",
+   "mood": "warm",
+   "durationSeconds": 15,
+   "tempo": "slow"
+  },
+  {
+   "n": 20,
+   "scenario": "tech",
+   "genre": "lofi",
+   "mood": "mysterious",
+   "durationSeconds": 30,
+   "tempo": "slow"
+  },
+  {
+   "n": 21,
+   "scenario": "holiday",
+   "genre": "ambient",
+   "mood": "energetic",
+   "durationSeconds": 60,
+   "tempo": "slow"
+  },
+  {
+   "n": 22,
+   "scenario": "travel",
+   "genre": "japanese_healing",
+   "mood": "calm",
+   "durationSeconds": 15,
+   "tempo": "medium"
+  },
+  {
+   "n": 23,
+   "scenario": "food",
+   "genre": "pop",
+   "mood": "cheerful",
+   "durationSeconds": 30,
+   "tempo": "medium"
+  },
+  {
+   "n": 24,
+   "scenario": "pet",
+   "genre": "cinematic",
+   "mood": "romantic",
+   "durationSeconds": 60,
+   "tempo": "medium"
+  },
+  {
+   "n": 25,
+   "scenario": "vlog",
+   "genre": "jazz",
+   "mood": "warm",
+   "durationSeconds": 15,
+   "tempo": "fast"
+  },
+  {
+   "n": 26,
+   "scenario": "ad",
+   "genre": "electronic",
+   "mood": "mysterious",
+   "durationSeconds": 30,
+   "tempo": "fast"
+  },
+  {
+   "n": 27,
+   "scenario": "tech",
+   "genre": "lofi",
+   "mood": "energetic",
+   "durationSeconds": 60,
+   "tempo": "fast"
+  },
+  {
+   "n": 28,
+   "scenario": "holiday",
+   "genre": "ambient",
+   "mood": "calm",
+   "durationSeconds": 15,
+   "tempo": "slow"
+  },
+  {
+   "n": 29,
+   "scenario": "travel",
+   "genre": "japanese_healing",
+   "mood": "cheerful",
+   "durationSeconds": 30,
+   "tempo": "slow"
+  },
+  {
+   "n": 30,
+   "scenario": "food",
+   "genre": "pop",
+   "mood": "romantic",
+   "durationSeconds": 60,
+   "tempo": "slow"
+  }
+ ]
+}

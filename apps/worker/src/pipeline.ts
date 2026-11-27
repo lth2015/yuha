@@ -1,5 +1,5 @@
 import type { AppContext } from '@yuha/api';
-import { deliver, failJob, handleLateResult, quarantineKey } from '@yuha/api';
+import { alignerFor, deliver, failJob, handleLateResult, quarantineKey } from '@yuha/api';
 import { bgmIntent, bgmRequest, musicIntent, withDedication, type Dedication, type MusicIntent, type VoiceChoice } from '@yuha/contracts';
 import {
   extendLease,
@@ -620,7 +620,9 @@ async function processAudio(
     // vocal-sync model configured this is the estimator, labelled as such;
     // failure never affects delivery itself.
     if (intent.lyrics && intent.vocalMode === 'with_vocals') {
+      const method = await alignerFor(ctx, job.user_id);
       const alignment = await ctx.alignment.align({
+        ...(method ? { method } : {}),
         lyrics: intent.lyrics,
         /*
          * The probed length of the file, not the length that was requested.

@@ -479,6 +479,13 @@ const envSchema = z.object({
    */
   LYRIC_AUTO_SYNC: z.enum(['off', 'staff', 'all']).default('off'),
   /**
+   * Whose songs the DGX aligns with Qwen3-ForcedAligner fused with Whisper
+   * (`method: qwen` per request; deploy/dgx/music README). off: the DGX's own
+   * default (Whisper on the vocal stem). staff | all. Pair `all` with
+   * LYRIC_STRICT_TIMELINE=all, so an unsure line is lit for nobody.
+   */
+  LYRIC_ALIGNER: z.enum(['off', 'staff', 'all']).default('off'),
+  /**
    * Backfill of older songs with no heard timeline, when their owner opens
    * them (L4b). Sends YUHA's master, so the aligner must take sent audio
    * (deploy/dgx/update.sh). off | staff | all; at most LYRIC_BACKFILL_DAILY a JST day.

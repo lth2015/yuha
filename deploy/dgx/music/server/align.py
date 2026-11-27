@@ -13,6 +13,7 @@ Pure functions here (no torch) so the matching can be tested on its own.
 from __future__ import annotations
 
 import difflib
+import statistics
 import re
 import unicodedata
 from typing import Dict, List, Optional, Sequence, Tuple
@@ -209,6 +210,19 @@ def align_lines(
     for li, idxs in trusted.items():
         spans[li] = (min(char_time[i][0] for i in idxs), max(char_time[i][1] for i in idxs))
 
+    # How much of each line was heard (the shared trusted-line rule reads it:
+    # under 0.5 a line is not lit, burned in or written to an .lrc). A
+    # character in a run of two or more is evidence; a lone match is half of
+    # one; a line whose span is dropped below or filled in between its
+    # neighbours was not heard at all.
+    line_chars = [0] * n
+    for li, _ in lyr_owner:
+        line_chars[li] += 1
+    confidence = [0.0] * n
+    for li, idxs in trusted.items():
+        evidence = sum(1.0 if char_run[i] >= 2 else 0.5 for i in idxs)
+        confidence[li] = min(1.0, evidence / max(1, line_chars[li]))
+
     # A recogniser can match a stray character far away; drop spans that break
     # the order of their neighbours, then fill the holes proportionally.
     last_end = 0.0
@@ -218,6 +232,7 @@ def align_lines(
             continue
         if sp[0] < last_end - 0.25:
             spans[i] = None
+            confidence[i] = 0.0
             continue
         last_end = sp[1]
 
@@ -276,7 +291,8 @@ def align_lines(
         if 0 < nxt - e < 1.5:
             e = nxt
         e = max(e, s + min_line)
-        lines.append({"text": text, "section": section, "start": round(s, 3), "end": round(min(e, duration), 3)})
+        lines.append({"text": text, "section": section, "start": round(s, 3), "end": round(min(e, duration), 3),
+                      "confidence": round(confidence[i], 3)})
 
     # Per-character "words" for the karaoke fill: matched characters carry
     # their own time, the rest are interpolated inside the line.
@@ -307,3 +323,164 @@ def align_lines(
             out.append({"w": text[ci], "start": round(max(line["start"], s), 3), "end": round(min(line["end"], max(s, e)), 3)})
         line["words"] = out
     return {"lines": lines, "coverage": round(coverage, 3)}
+
+
+def place_units(lyrics: str, units: Sequence[Tuple[str, float, float]]) -> List[Dict]:
+    """A forced aligner's timed units (characters or words) placed back on the lyric lines.
+
+    The aligner was given the lyrics, so its units are the lyrics again, minus
+    punctuation and spacing and perhaps split differently; matching character
+    by character puts each one on its own line. A line takes the time of its
+    first and last placed character; `confidence` is the share of its
+    characters the aligner placed. A line it left out gets no time (None),
+    not a guess.
+    """
+    parsed = parse_lyrics(lyrics)
+    lyr_chars: List[str] = []
+    owner: List[int] = []
+    for li, (_, text) in enumerate(parsed):
+        for ch in text:
+            c = norm_char(ch)
+            if c:
+                lyr_chars.append(c)
+                owner.append(li)
+    u_chars: List[str] = []
+    u_time: List[Tuple[float, float]] = []
+    for text, start, end in units:
+        cs = [norm_char(ch) for ch in text]
+        cs = [c for c in cs if c]
+        for k, c in enumerate(cs):
+            # A word's characters share its span, in order.
+            step = (float(end) - float(start)) / len(cs)
+            u_chars.append(c)
+            u_time.append((float(start) + k * step, float(start) + (k + 1) * step))
+    placed: Dict[int, Tuple[float, float]] = {}
+    if lyr_chars and u_chars:
+        sm = difflib.SequenceMatcher(None, lyr_chars, u_chars, autojunk=False)
+        for a, b, size in sm.get_matching_blocks():
+            for k in range(size):
+                placed[a + k] = u_time[b + k]
+    total = [0] * len(parsed)
+    for li in owner:
+        total[li] += 1
+    lines: List[Dict] = []
+    for li, (section, text) in enumerate(parsed):
+        own = [placed[i] for i, o in enumerate(owner) if o == li and i in placed]
+        lines.append({
+            "text": text, "section": section,
+            "start": round(min(s for s, _ in own), 3) if own else None,
+            "end": round(max(e for _, e in own), 3) if own else None,
+            "confidence": round(len(own) / total[li], 3) if total[li] else 0.0,
+        })
+    return lines
+
+
+QWEN_VOICE_SLACK = 0.3   # a start this close before the voice comes back still counts as on it
+QWEN_DISAGREE = 1.5      # seconds from where Whisper heard the line whole: one of them is wrong
+QWEN_UNSURE = 0.3        # the confidence such a line gets (under the shared 0.5)
+
+
+def qwen_lines(lyrics: str, units: Sequence[Tuple[str, float, float]], duration: float,
+               voiced: Optional[Sequence[Tuple[float, float]]] = None,
+               heard: Optional[Sequence[Dict]] = None, min_line: float = 0.6) -> List[Dict]:
+    """Lines from a forced aligner (Qwen3-ForcedAligner), each with a confidence of its own.
+
+    A forced aligner times every line, right or not; the way it fails is a
+    line placed where nobody sings. Two independent checks say when:
+    the separated vocal (`voiced`): a line that starts where the stem is
+    silent is not trusted; and Whisper (`heard`, align_lines' lines): a
+    line Whisper heard whole somewhere more than QWEN_DISAGREE away is not
+    trusted either. A line Whisper did not hear gets no say from it. A line
+    the aligner left out is filled in between its neighbours with no
+    confidence, so the shared rule never lights it.
+    """
+    placed = place_units(lyrics, units)
+    n = len(placed)
+    spans: List[Optional[Tuple[float, float]]] = [
+        (float(l["start"]), float(l["end"])) if l["start"] is not None else None for l in placed]
+    conf = [float(l["confidence"]) if l["start"] is not None else 0.0 for l in placed]
+
+    # Out-of-order spans are a misplacement, not a timing: dropped and filled.
+    last = 0.0
+    for i in range(n):
+        if spans[i] is None:
+            continue
+        if spans[i][0] < last - 0.25:
+            spans[i], conf[i] = None, 0.0
+            continue
+        last = spans[i][1]
+
+    i = 0
+    while i < n:
+        if spans[i] is not None:
+            i += 1
+            continue
+        j = i
+        while j < n and spans[j] is None:
+            j += 1
+        left = spans[i - 1][1] if i > 0 and spans[i - 1] else 0.0
+        right = spans[j][0] if j < n and spans[j] else duration
+        if right <= left:
+            right = min(duration, left + min_line * (j - i))
+        step = (right - left) / (j - i)
+        for k in range(i, j):
+            spans[k] = (left + step * (k - i), left + step * (k - i + 1))
+        i = j
+
+    for i in range(n):
+        if conf[i] <= 0:
+            continue
+        s = spans[i][0]  # type: ignore[index]
+        if voiced and not any(vs - QWEN_VOICE_SLACK <= s < ve for vs, ve in voiced):
+            conf[i] = min(conf[i], QWEN_UNSURE)
+        h = heard[i] if heard and i < len(heard) else None
+        if h and h.get("confidence", 0) >= 1.0 and h.get("start") is not None and abs(float(h["start"]) - s) > QWEN_DISAGREE:
+            conf[i] = min(conf[i], QWEN_UNSURE)
+
+    lines = []
+    for i, l in enumerate(placed):
+        s, e = spans[i]  # type: ignore[misc]
+        nxt = spans[i + 1][0] if i + 1 < n else duration  # type: ignore[index]
+        if 0 < nxt - e < 1.5:
+            e = nxt  # hold until the next line, as align_lines does: no blink between breaths
+        e = min(max(e, s + min_line), duration)
+        lines.append({"text": l["text"], "section": l["section"], "start": round(float(s), 3),
+                      "end": round(float(e), 3), "confidence": round(conf[i], 3)})
+    return lines
+
+
+FUSE_MAX_GAP = 1.0     # past this (after the offset), the two disagree: someone is wrong, so no average
+FUSE_MIN_SHARED = 3    # fewer shared lines than this and a song's offset is not trusted
+
+
+def fuse_lines(qwen: Sequence[Dict], whisper: Sequence[Dict], w_qwen: float = 0.5) -> Tuple[List[Dict], float]:
+    """Qwen's lines with Whisper averaged in where the two agree (product owner, 2026-11-27).
+
+    Two independent clocks averaged lose some of each one's random error. But
+    Whisper's word clock runs early by a steady amount (+0.32 s median on dgxa's
+    songs), and averaging that in would put every line halfway into it. So
+    the song's own offset is taken out first: the median of Qwen minus
+    Whisper over the lines both heard, given FUSE_MIN_SHARED of them. Then a
+    line both trust and agree on, within FUSE_MAX_GAP, gets the weighted
+    average. A line they disagree on, or one Whisper did not hear whole,
+    keeps Qwen's time and confidence: an average of a right and a wrong
+    answer is neither. `w_qwen` 1.0 is Qwen alone. Returns (lines, offset).
+    """
+    pairs = [(q, w) for q, w in zip(qwen, whisper)
+             if q.get("start") is not None and w.get("start") is not None
+             and float(q.get("confidence", 0)) >= 0.5 and float(w.get("confidence", 0)) >= 1.0]
+    diffs = [float(q["start"]) - float(w["start"]) for q, w in pairs]
+    offset = statistics.median(diffs) if len(diffs) >= FUSE_MIN_SHARED else 0.0
+    out: List[Dict] = []
+    for i, q in enumerate(qwen):
+        line = dict(q)
+        w = whisper[i] if i < len(whisper) else None
+        if (w is not None and q.get("start") is not None and w.get("start") is not None
+                and float(q.get("confidence", 0)) >= 0.5 and float(w.get("confidence", 0)) >= 1.0):
+            shifted = float(w["start"]) + offset
+            if abs(float(q["start"]) - shifted) <= FUSE_MAX_GAP:
+                start = w_qwen * float(q["start"]) + (1 - w_qwen) * shifted
+                line["start"] = round(start, 3)
+                line["end"] = round(max(float(q["end"]), start + 0.3), 3)
+        out.append(line)
+    return out, round(offset, 3)

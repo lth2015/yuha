@@ -59,3 +59,37 @@ The sample follows the review: 18 songs, 6 per language, with 6 held out for the
 run. The songs need to cover a repeated chorus, an interlude, a dropped line and a changed
 word. The first run scores the current production path (`routes/current`), and it is the
 baseline that the absolute targets are agreed on.
+
+## Ground truth from staff songs, and the aligners on the DGX (2026-11-27)
+
+The annotations can come from the product itself: a staff member makes a song on yuha.studio and
+corrects its timing in the song page, line by line, while listening. That corrected timeline is
+what a person heard.
+
+1. **Make and correct** (step-by-step for the staff doing it, in Chinese: [LYRIC_TRUTH_GUIDE.md](LYRIC_TRUTH_GUIDE.md)). Staff accounts only (`admin` / `support`), 6 songs per language, covering
+   the cases in "Sample" above. The DGX keeps a song's audio for `RETENTION_DAYS` (6), so run step
+   3 within that.
+2. **Export** on the product owner's machine, over the production read-only connection, like
+   `pnpm check:invariants`:
+
+   ```bash
+   pnpm bench:lyric-truth quality-probes/lyric-bench
+   ```
+
+   This writes `annotations/staff/<songId>.json` and `songs.json` (song id, DGX job id, language,
+   lyrics). The query cannot return a customer's song: a customer's song is their own private work,
+   and testing aligners on it is not what they made it for (`tests/lyric-truth.test.ts`, with a
+   mutation check on the staff filter). It refuses to write anything when no staff song is
+   corrected.
+3. **Align on the DGX.** Copy the folder to `~/yuha-bench/truth`, then run
+   `bench_align.py --truth /bench/truth` (the command is in `deploy/dgx/music/README.md`). It
+   writes `routes/whisper/` and `routes/qwen/` beside the annotations.
+4. **Score** anywhere: `node scripts/lyric-bench.mjs quality-probes/lyric-bench --base whisper`.
+
+There are two limits to keep in mind:
+
+- A correction starts from the timeline the song already had. People tend to accept a start that
+  is close enough, so the truth leans towards whichever route made the first timeline. Correct
+  every line by listening, not only the ones that look wrong.
+- A correction cannot say that a line was never sung. Every exported line is `sung: true`, so
+  "falsely lit" is not measured this way.
