@@ -145,6 +145,14 @@ late, but it is only settled by hand-timed songs (docs/quality/LYRIC_BENCH.md).
 - **Health.** `/healthz` reports `align_method` and, under `qwen`, whether
   the worker is installed and running, with its last error.
 
+To check the service's own path on the Spark (the worker in `/opt/qwenv`,
+the fusion, the fallbacks) without switching the running service:
+
+```bash
+cd ~/yuha-spark
+docker compose run --rm --no-deps -e ALIGN_METHOD=qwen --entrypoint "" music python bench_service_align.py --songs 3
+```
+
 Turn it on only after the hand-timed scores agree, and only once
 `LYRIC_STRICT_TIMELINE=all` in YUHA. Until then, a customer's view would
 light the unsure lines.
