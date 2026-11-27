@@ -1,6 +1,6 @@
 """No model/GPU dependency: exercise the same alignment contract as /v1/align."""
 import unittest
-from align import align_lines, guess_language, voiced_intervals
+from align import align_lines, guess_language, place_units, voiced_intervals
 
 
 class SyncedLyricsTests(unittest.TestCase):
@@ -66,6 +66,60 @@ class SyncedLyricsTests(unittest.TestCase):
         self.assertAlmostEqual(got[0][0], 1.0, places=2)
         self.assertAlmostEqual(got[0][1], 5.1, places=2)
         self.assertEqual(voiced_intervals([-90.0] * 100, hop), [])
+
+
+class LineConfidenceTests(unittest.TestCase):
+    """Per-line confidence on the Whisper path, for the shared trusted-line rule (LINE_CONFIDENT 0.5)."""
+
+    def test_a_line_heard_whole_is_confident(self):
+        lines = align_lines('晚风吹过街角\n我等你回来', [('晚风吹过街角', 1, 4), ('我等你回来', 6, 9)], 12)['lines']
+        self.assertEqual([l['confidence'] for l in lines], [1.0, 1.0])
+
+    def test_a_line_nobody_heard_has_no_confidence(self):
+        # The middle line's times are filled in between its neighbours: a guess, not a hearing.
+        lines = align_lines('晚风吹过街角\n天上的星星\n我等你回来',
+                            [('晚风吹过街角', 1, 4), ('我等你回来', 9, 12)], 15)['lines']
+        self.assertEqual(lines[1]['confidence'], 0.0)
+        self.assertEqual(lines[0]['confidence'], 1.0)
+
+    def test_a_line_half_heard_is_counted_by_its_characters(self):
+        lines = align_lines('晚风吹过街角\n我等你回来了吗', [('晚风吹过街角', 1, 4), ('我等你', 6, 7.5), ('哈哈', 7.5, 9)], 12)['lines']
+        self.assertAlmostEqual(lines[1]['confidence'], 3 / 7, places=2)
+
+    def test_a_lone_matched_character_is_weak_evidence(self):
+        # One stray 我 in a mumble is a match, but not a hearing of the line.
+        lines = align_lines('晚风吹过街角\n我等你', [('晚风吹过街角', 1, 4), ('哦', 6, 6.4), ('我', 6.5, 6.8)], 12)['lines']
+        self.assertLess(lines[1]['confidence'], 0.5)
+
+    def test_a_span_dropped_for_breaking_the_order_is_not_trusted(self):
+        # 等你回来 "heard" at 2 s, before the first line: dropped and filled in, so not confident.
+        lines = align_lines('晚风吹过街角\n等你回来',
+                            [('等你回来', 0.5, 2.0), ('晚风吹过街角', 3, 6)], 12)['lines']
+        self.assertEqual(lines[1]['confidence'], 0.0)
+
+
+class PlaceUnitsTests(unittest.TestCase):
+    """A forced aligner's timed units placed back on the lyric lines (bench_align.py; a future aligner)."""
+
+    def test_characters_land_on_their_lines(self):
+        units = [(c, 1 + i * 0.3, 1.25 + i * 0.3) for i, c in enumerate('晚风吹过')] + \
+                [(c, 6 + i * 0.3, 6.25 + i * 0.3) for i, c in enumerate('等你回来')]
+        lines = place_units('[verse]\n晚风吹过\n等你回来', units)
+        self.assertEqual([l['text'] for l in lines], ['晚风吹过', '等你回来'])
+        self.assertAlmostEqual(lines[0]['start'], 1.0)
+        self.assertAlmostEqual(lines[1]['start'], 6.0)
+        self.assertAlmostEqual(lines[1]['end'], 7.15)
+        self.assertEqual([l['confidence'] for l in lines], [1.0, 1.0])
+
+    def test_english_words_and_punctuation(self):
+        lines = place_units('Stay with me,\nnight', [('Stay', 1, 1.4), ('with', 1.4, 1.7), ('me', 1.7, 2.2), ('night', 4, 5)])
+        self.assertEqual([l['start'] for l in lines], [1, 4])
+        self.assertEqual(lines[0]['confidence'], 1.0)
+
+    def test_a_line_the_aligner_left_out_has_no_time(self):
+        lines = place_units('晚风吹过\n天上\n等你', [('晚', 1, 1.2), ('风', 1.2, 1.4), ('吹', 1.4, 1.6), ('过', 1.6, 1.8), ('等', 5, 5.2), ('你', 5.2, 5.4)])
+        self.assertIsNone(lines[1]['start'])
+        self.assertEqual(lines[1]['confidence'], 0.0)
 
 
 if __name__ == '__main__':

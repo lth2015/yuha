@@ -72,6 +72,14 @@ WHISPER_MODEL = os.environ.get("WHISPER_MODEL", "turbo")
 # part of the vocal.  The app retains its honest estimated/unsynchronised
 # presentation when this gate refuses an alignment.
 ALIGN_MIN_COVERAGE = float(os.environ.get("ALIGN_MIN_COVERAGE", "0.85"))
+# Between this and ALIGN_MIN_COVERAGE a Whisper alignment comes back partial:
+# every line carries its own confidence (align.py), and YUHA's trusted-line
+# rule leaves the unsure ones unlit rather than the whole song estimated.
+# Off by default (equal to ALIGN_MIN_COVERAGE): YUHA applies that rule to
+# staff only while LYRIC_STRICT_TIMELINE=staff, and for everyone else an
+# unsure line would be lit as if it had been heard. Set it (e.g. 0.5) once
+# the rule is on for all.
+ALIGN_PARTIAL_MIN_COVERAGE = float(os.environ.get("ALIGN_PARTIAL_MIN_COVERAGE", str(ALIGN_MIN_COVERAGE)))
 # How the lyrics are placed on the vocal (forced.py): `forced` places the known
 # lyrics with a CTC acoustic model and falls back to Whisper; `whisper` is the
 # transcribe-and-match path alone. Forced coverage is the share of lettered
@@ -930,7 +938,12 @@ def _align_path(body: AlignRequest, path: Path, label: str):
     log.info("aligned %s coverage=%.2f heard=%s voiced=%s in %.1fs", label, out["coverage"],
              out["heard"], out["voice_activity"], out["seconds"])
     if not forced_ok and out["coverage"] < ALIGN_MIN_COVERAGE:
-        # Too little of the lyrics was heard to trust the timings; YUHA keeps
+        if out["coverage"] >= ALIGN_PARTIAL_MIN_COVERAGE:
+            # Part of it was heard: the lines go back with their own
+            # confidence, and only the ones heard are trusted by YUHA.
+            out["partial"] = True
+            return out
+        # Too little of the lyrics was heard to trust any of it; YUHA keeps
         # its estimated (and labelled) timeline instead.
         return JSONResponse(status_code=422, content={"error": "low_coverage", **out})
     return out

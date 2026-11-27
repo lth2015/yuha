@@ -76,6 +76,30 @@ Then update `AUDIO_BASE_URL` in `.env` and `docker compose up -d`.
 - Jobs/mp3: `./data/` · Weights: `~/.cache/ace-step/checkpoints`
 - Quality/speed knob: `ACE_INFER_STEPS` in `.env` (default 60; 27 is ACE-Step's fast setting)
 
+## Choosing an aligner (`server/bench_align.py`)
+
+Runs beside the service, never in it: separates each recent sung song once,
+aligns it with Whisper (today's path) and with Qwen3-ForcedAligner-0.6B
+(Apache-2.0 weights and code), and reports how many lines each timed and how
+far Qwen's starts are from the lines Whisper heard whole. Per-song JSON goes
+to the output folder for listening. On the Spark:
+
+```bash
+mkdir -p ~/yuha-bench/out   # bench_align.py and align.py copied here
+cd ~/yuha-spark
+docker compose run --rm --no-deps -v ~/yuha-bench:/bench --entrypoint "" music bash -lc '
+  python -m venv --system-site-packages /tmp/q &&
+  /tmp/q/bin/pip install -q --no-deps qwen-asr==0.0.6 accelerate==1.12.0 &&
+  /tmp/q/bin/pip install -q transformers==4.57.6 nagisa==0.2.11 soynlp==0.0.493 qwen-omni-utils psutil &&
+  /tmp/q/bin/python -c "import torch; print(torch.__version__, torch.cuda.is_available())" &&
+  cd /bench && PYTHONPATH=/bench:/opt/server /tmp/q/bin/python bench_align.py --songs 10 --out /bench/out'
+```
+
+The venv is gone when the container exits; the Qwen weights (~1.8 GB) stay
+in `~/.cache/huggingface`. Agreement with Whisper is a proxy (Whisper's own
+starts run early in places); human-corrected timelines are the ground truth
+to score against next.
+
 ## Retention (`RETENTION_DAYS`, default 6)
 
 `data/jobs/*.json` holds what YUHA sent (the brief and the lyrics) and
@@ -121,6 +145,18 @@ lyrics are matched onto its words character by character (`server/align.py`).
 On the full mix that clock smears across instrumentals: the first line after
 an interlude lit up while the band was still playing, and the last line before
 one stayed lit through it. So the vocal is taken out first:
+
+**Per-line confidence on the Whisper path (2026-11-27).** Every line now
+carries `confidence`: the share of its characters Whisper heard in runs of two
+or more (a lone matched character counts half), and 0 for a line whose time
+was filled in between its neighbours or dropped for breaking their order.
+YUHA's shared rule leaves a line under 0.5 unlit, out of videos and out of the
+`.lrc`. With `ALIGN_PARTIAL_MIN_COVERAGE` set below `ALIGN_MIN_COVERAGE`
+(0.85), a song in between comes back `partial: true` instead of 422. It is
+**off by default** (equal to 0.85): YUHA applies the rule to staff only while
+`LYRIC_STRICT_TIMELINE=staff`, and anyone else would see an unheard line lit.
+Set it, e.g. `ALIGN_PARTIAL_MIN_COVERAGE=0.5` in `.env`, once the rule is on
+for everyone.
 
 - **Demucs (`htdemucs`) separates the vocal** (`server/separate.py`) and
   Whisper transcribes the stem. If the stem hears less of the lyrics than the
