@@ -3200,6 +3200,7 @@ textarea.is-full { border-color: var(--danger); }
 }
 .market-track.is-active { border-color: var(--focus); background: var(--lavender); }
 .market-track__sleeve { display: flex; }
+.market-track__sleeve .cover-art__index { display: none; }
 .market-track__text { min-width: 0; overflow-wrap: anywhere; }
 .market-track__text h2, .market-admin__info h3 { margin: 0 0 3px; font-size: 1rem; }
 .market-track__text p, .market-admin__info p, .market-admin header p { margin: 4px 0 0; }
