@@ -220,6 +220,20 @@ def read_results(out: Path) -> dict[str, dict]:
     return latest
 
 
+# What makes two renders of the same entry comparable: what was asked, at
+# which seed, through which engine, settings, code and mastering. A build SHA
+# or the service's own TAG_STYLE (v15 ignores it; the bench forces v2) is not.
+FINGERPRINT_KEYS = ("engine", "bench_tag_style", "v15_model", "v15_steps", "v15_thinking", "infer_steps",
+                    "lyric_guidance", "master_polish", "master_lufs", "app_py_sha256")
+
+
+def fingerprint(input_version: str, seed: int, environment: dict) -> str:
+    """Computed from fields every record already stores, so a run in progress needs no migration."""
+    basis = {"input_version": input_version, "seed": seed,
+             "environment": {k: environment.get(k) for k in FINGERPRINT_KEYS}}
+    return hashlib.sha256(json.dumps(basis, sort_keys=True).encode()).hexdigest()[:16]
+
+
 def run(manifest: dict, out: Path, tools: Tools, *, only: Optional[list[str]] = None,
         clock: Callable[[], float] = time.monotonic, log: Callable[[str], None] = print) -> dict[str, dict]:
     problems = parity_problems(manifest, tools.build_tags)
@@ -227,8 +241,21 @@ def run(manifest: dict, out: Path, tools: Tools, *, only: Optional[list[str]] = 
         raise SystemExit("refusing to render; the service and the compiler disagree:\n  " + "\n  ".join(problems))
     out.mkdir(parents=True, exist_ok=True)
     env = dict(tools.environment)
+    # A finished render is reused only when it was made from the same request
+    # and configuration as this run would make it. Otherwise the directory
+    # holds another experiment: mixing it in would compare two models while
+    # claiming to compare two prompts (review of #191, 2026-11-28).
+    existing = read_results(out)
+    want = {e["id"]: fingerprint(e["input_version"], e["seed"], env) for e in manifest["entries"]}
+    stale = sorted(i for i, r in existing.items() if r["status"] == "ok" and i in want
+                   and fingerprint(r.get("input_version", ""), r.get("seed"), r.get("environment") or {}) != want[i])
+    if stale:
+        raise SystemExit(
+            f"refusing to continue in {out}: {len(stale)} finished render(s) were made with a different request "
+            f"or configuration ({', '.join(stale[:4])}{'…' if len(stale) > 4 else ''}). Use a new output directory "
+            "(BENCH_OUT=/bench/<name>) or move this one aside.")
     (out / "environment.json").write_text(json.dumps(env, indent=2), encoding="utf-8")
-    done = {i for i, r in read_results(out).items() if r["status"] == "ok"}
+    done = {i for i, r in existing.items() if r["status"] == "ok"}
     todo = [e for e in manifest["entries"] if e["id"] not in done and (not only or e["brief"] in only)]
     log(f"{len(done)} done, {len(todo)} to render")
     with (out / "results.jsonl").open("a", encoding="utf-8") as fh:
@@ -367,69 +394,152 @@ def engineer_page(manifest: dict, results: dict, key: dict, gains: dict) -> str:
 
 
 # ---------------------------------------------------------------------- score
-def score(key: dict, judgments: list[dict], *, iterations: int = 2000, seed: int = 7) -> dict:
-    """
-    Unblind and aggregate (spec step 2).
+LANGUAGE_WORDS = {
+    "zh": ("中文", "汉语", "漢語", "普通话", "国语", "chinese", "mandarin", "zh"),
+    "ja": ("日语", "日語", "日本語", "japanese", "ja"),
+    "en": ("英语", "英語", "english", "en"),
+}
 
-    Per pair: each listener's X/Y/same becomes A/B/tie. Two listeners agree ->
-    that; disagree -> a third breaks it if present (three different -> tie),
-    else tie. Per brief: its two seeds; one win each way -> tie, otherwise the
-    net direction. A brief with a missing B render is not a B win; a missing A
-    is not an A win. CI: brief bootstrap of (B win rate - A win rate).
+
+def knows(languages: str, lang: str) -> bool:
+    text = (languages or "").lower()
+    return any(w in text for w in LANGUAGE_WORDS.get(lang, (lang,)))
+
+
+def score(key: dict, judgments: list[dict], *, languages: Optional[dict[str, str]] = None,
+          iterations: int = 2000, seed: int = 7) -> dict:
     """
+    Unblind and aggregate (spec step 2; review of #191).
+
+    Two results come out, and only one of them is a conclusion:
+
+      formal  — a pair is decided only by two independent reviewers who
+                agree, at least one of whom knows the song's language; a
+                disagreement needs a third (three different picks: a tie).
+                Anything short of that is `pending`, never a win. A brief is
+                decided only when both its seeds are; a brief with a render
+                missing on either arm stays in the denominator and is never
+                a B win. Pending briefs stay in the denominator too.
+      preview — whatever the votes so far say, for watching a review in
+                progress. Not a result.
+
+    Counts of missing renders, missing reviews, pending, ties and decided
+    pairs are reported separately so none of them hides in a rate.
+    """
+    languages = languages or {}
     by_pair = {p["pair"]: p for p in key["pairs"]}
-    votes: dict[str, dict[str, list[str]]] = {}
+    arm_of = lambda p, side: "A" if p[side].endswith("-A") else "B"  # noqa: E731
+    votes: dict[str, dict[str, list[tuple[str, str]]]] = {}   # pair -> crit -> [(reviewer, arm|tie)]
+    reviewers: dict[str, set[str]] = {}
     for j in judgments:
+        who = (j.get("reviewer") or "").strip() or f"anonymous-{id(j)}"
         for token, v in (j.get("pairs") or {}).items():
             p = by_pair.get(token)
             if not p or not p.get("comparable"):
                 continue
-            for crit, pick in (v.get("criteria") or {}).items():
-                arm = {"X": "A" if p["X"].endswith("-A") else "B", "Y": "A" if p["Y"].endswith("-A") else "B"}.get(pick, "tie")
-                votes.setdefault(token, {}).setdefault(crit, []).append(arm)
+            reviewers.setdefault(token, set())
+            crits = v.get("criteria") or {}
+            if crits:
+                reviewers[token].add(who)
+            for crit, pick in crits.items():
+                arm = arm_of(p, pick) if pick in ("X", "Y") else "tie"
+                # One vote per reviewer per pair: a re-export replaces, never adds.
+                cur = [x for x in votes.setdefault(token, {}).setdefault(crit, []) if x[0] != who]
+                votes[token][crit] = cur + [(who, arm)]
+    fluent = {who for j in judgments for who in [(j.get("reviewer") or "").strip()]
+              if who and any(knows(j.get("languages", ""), l) for l in ("zh", "ja", "en"))}
+    lang_of_reviewer = {(j.get("reviewer") or "").strip(): j.get("languages", "") for j in judgments}
 
-    def settle(vs: list[str]) -> str:
-        if not vs:
+    def formal_pair(p: dict, crit: str) -> tuple[str, str]:
+        vs = votes.get(p["pair"], {}).get(crit, [])
+        if len(vs) < 2:
+            return "pending", "needs two independent reviews"
+        lang = languages.get(p["brief"]) or p["brief"].split("-")[0]
+        if not any(knows(lang_of_reviewer.get(w, ""), lang) for w, _ in vs):
+            return "pending", f"no reviewer who knows {lang}"
+        picks = [a for _, a in vs]
+        if picks[0] == picks[1]:
+            return picks[0], "agreed"
+        if len(picks) < 3:
+            return "pending", "disagreement: needs a third reviewer"
+        counts = {x: picks[:3].count(x) for x in set(picks[:3])}
+        top = max(counts.values())
+        return (next(x for x, c in counts.items() if c == top), "third reviewer") if top >= 2 else ("tie", "three ways")
+
+    def preview_pair(p: dict, crit: str) -> str:
+        picks = [a for _, a in votes.get(p["pair"], {}).get(crit, [])]
+        if not picks:
             return "none"
-        if len(vs) >= 2 and vs[0] == vs[1]:
-            return vs[0]
-        if len(vs) >= 3:
-            counts = {x: vs[:3].count(x) for x in set(vs[:3])}
-            best = max(counts.values())
-            return next(x for x, c in counts.items() if c == best) if best >= 2 else "tie"
-        return vs[0] if len(vs) == 1 else "tie"
-
-    briefs: dict[str, dict[str, list[str]]] = {}
-    for p in key["pairs"]:
-        for crit, *_ in CRITERIA:
-            if p.get("comparable"):
-                r = settle(votes.get(p["pair"], {}).get(crit, []))
-            else:
-                missing = p.get("missing", [])
-                r = "A" if any(m.endswith("-B") for m in missing) and not any(m.endswith("-A") for m in missing) else "tie"
-            briefs.setdefault(crit, {}).setdefault(p["brief"], []).append(r)
-
-    def brief_result(rs: list[str]) -> str:
-        net = rs.count("B") - rs.count("A")
+        net = picks.count("B") - picks.count("A")
         return "B" if net > 0 else "A" if net < 0 else "tie"
 
-    out = {}
+    briefs = sorted({p["brief"] for p in key["pairs"]})
+    out: dict = {}
     rng = random.Random(seed)
-    for crit, per in briefs.items():
-        res = {b: brief_result(rs) for b, rs in per.items() if any(r != "none" for r in rs)}
-        n = len(res)
-        if not n:
-            out[crit] = {"briefs": 0}
-            continue
-        vals = [1 if r == "B" else -1 if r == "A" else 0 for r in res.values()]
-        diffs = sorted(sum(rng.choice(vals) for _ in range(n)) / n for _ in range(iterations))
+    for crit, *_ in CRITERIA:
+        counts = {"missing_render": 0, "missing_review": 0, "pending": 0, "tie": 0, "decided": 0}
+        formal: dict[str, str] = {}
+        preview: dict[str, str] = {}
+        why: dict[str, list[str]] = {}
+        for b in briefs:
+            ps = [p for p in key["pairs"] if p["brief"] == b]
+            fr, pr, missing_b = [], [], False
+            for p in ps:
+                if not p.get("comparable"):
+                    counts["missing_render"] += 1
+                    missing = p.get("missing", [])
+                    missing_b = missing_b or any(m.endswith("-B") for m in missing)
+                    a_only = any(m.endswith("-B") for m in missing) and not any(m.endswith("-A") for m in missing)
+                    fr.append("A" if a_only else "tie")
+                    pr.append("A" if a_only else "tie")
+                    why.setdefault(b, []).append(f"seed {p['seed']}: render missing ({', '.join(missing)})")
+                    continue
+                r, reason = formal_pair(p, crit)
+                if not votes.get(p["pair"], {}).get(crit):
+                    counts["missing_review"] += 1
+                elif r == "pending":
+                    counts["pending"] += 1
+                elif r == "tie":
+                    counts["tie"] += 1
+                else:
+                    counts["decided"] += 1
+                if r == "pending":
+                    why.setdefault(b, []).append(f"seed {p['seed']}: {reason}")
+                fr.append(r)
+                pr.append(preview_pair(p, crit))
+
+            def combine(rs: list[str]) -> str:
+                net = rs.count("B") - rs.count("A")
+                return "B" if net > 0 else "A" if net < 0 else "tie"
+
+            formal[b] = "pending" if "pending" in fr else combine(fr)
+            preview[b] = combine([r for r in pr if r != "none"]) if any(r != "none" for r in pr) else "none"
+            if missing_b:
+                # A candidate that did not deliver on every seed cannot win the brief.
+                formal[b] = "tie" if formal[b] == "B" else formal[b]
+                preview[b] = "tie" if preview[b] == "B" else preview[b]
+
+        n = len(briefs)
+        vals = [1 if formal[b] == "B" else -1 if formal[b] == "A" else 0 for b in briefs]
+        diffs = sorted(sum(rng.choice(vals) for _ in range(n)) / n for _ in range(iterations)) if n else [0.0]
         out[crit] = {
-            "briefs": n, "B": vals.count(1), "A": vals.count(-1), "tie": vals.count(0),
-            "b_win_rate": round(vals.count(1) / n, 3),
-            "diff": round(sum(vals) / n, 3),
-            "ci95": [round(diffs[int(0.025 * iterations)], 3), round(diffs[int(0.975 * iterations) - 1], 3)],
-            "per_brief": res,
+            "briefs": n,
+            "formal": {
+                "per_brief": formal,
+                "B": vals.count(1), "A": vals.count(-1),
+                "tie": sum(1 for b in briefs if formal[b] == "tie"),
+                "pending": sum(1 for b in briefs if formal[b] == "pending"),
+                "b_win_rate": round(vals.count(1) / n, 3) if n else None,
+                "diff": round(sum(vals) / n, 3) if n else None,
+                "ci95": [round(diffs[int(0.025 * iterations)], 3), round(diffs[int(0.975 * iterations) - 1], 3)] if n else None,
+                "complete": n > 0 and all(formal[b] != "pending" for b in briefs),
+            },
+            "preview": {"per_brief": preview, "note": "votes so far; not a result"},
+            "pairs": counts,
+            "why_pending": why,
         }
+    out["reviewers"] = sorted({w for ws in reviewers.values() for w in ws})
+    out["reviewers_with_a_language"] = sorted(fluent)
     return out
 
 
@@ -455,7 +565,7 @@ def main(argv: list[str]) -> None:
     elif cmd == "score":
         key = json.loads((OUT / "key.json").read_text(encoding="utf-8"))
         judgments = [json.loads(Path(p).read_text(encoding="utf-8")) for p in argv[2:]]
-        result = score(key, judgments)
+        result = score(key, judgments, languages={e["brief"]: e["language"] for e in manifest["entries"]})
         (OUT / "score.json").write_text(json.dumps(result, indent=2, ensure_ascii=False), encoding="utf-8")
         print(json.dumps(result, indent=2, ensure_ascii=False))
     else:
