@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { getToken } from '../lib/api';
 import { TRIAL_CLAIMED_EVENT, claimPendingTrial, declinePendingTrial, guestSongId, hasPendingTrial } from '../lib/guest';
 import { useI18n } from '../lib/i18n';
 import { useSession } from '../lib/session';
@@ -20,23 +21,29 @@ export function TrialClaimAsk() {
   const { me, refreshMe, refreshEntitlements } = useSession();
   const navigate = useNavigate();
   const location = useLocation();
-  const [state, setState] = useState<'ask' | 'adding' | 'done' | 'gone' | 'closed' | 'confirmNo' | 'declined'>('ask');
+  const [state, setState] = useState<'ask' | 'adding' | 'done' | 'gone' | 'closed' | 'confirmNo' | 'declined' | 'retry' | 'waiting'>('ask');
 
   if (state === 'closed' || !me || me.role === 'guest' || !me.ageConfirmed) return null;
   // Read each render, not once: the trial is usually started on this very page load, after mount.
   if (state === 'ask' && !hasPendingTrial()) return null;
 
   const add = async () => {
+    const accountToken = getToken();
+    const trialSong = guestSongId();
     setState('adding');
-    const claimed = await claimPendingTrial();
-    if (claimed) {
-      await Promise.all([refreshMe(), refreshEntitlements()]);
+    const result = await claimPendingTrial();
+    if (getToken() !== accountToken) {
+      setState('ask');
+      return;
+    }
+    if (result === 'claimed') {
       // The song page it may be sitting on was "not found" a moment ago.
       window.dispatchEvent(new Event(TRIAL_CLAIMED_EVENT));
       setState('done');
+      void Promise.allSettled([refreshMe(), refreshEntitlements()]);
     } else {
-      // Spent either way (lib/guest.ts): expired, taken by another account, or never valid.
-      setState(hasPendingTrial() ? 'ask' : 'gone');
+      setState(result);
+      if (result === 'gone' && trialSong && window.location.pathname === `/song/${trialSong}`) navigate('/library', { replace: true });
     }
   };
 
@@ -67,6 +74,8 @@ export function TrialClaimAsk() {
         <>
           <h2 id="trial-claim-title">{t('trial.claim.title')}</h2>
           <p className="trial-claim__body">{t('trial.claim.body')}</p>
+          {state === 'retry' && <p className="trial-claim__warn" role="alert">{t('trial.claim.retry')}</p>}
+          {state === 'waiting' && <p className="trial-claim__warn" role="status">{t('trial.claim.waiting')}</p>}
           <div className="trial-claim__actions">
             <button
               type="button"

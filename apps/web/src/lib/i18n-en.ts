@@ -676,6 +676,8 @@ const en: Dict = {
   'trial.claim.adding': "Adding…",
   'trial.claim.done': "Added to your account.",
   'trial.claim.open': "Go to my songs",
+  'trial.claim.waiting': "Your song is still being made. Try adding it again when it is ready.",
+  'trial.claim.retry': "Temporarily unable to add the song. Please try again.",
   'trial.claim.gone': "This song can no longer be added (it expired, or another account added it).",
   'trial.claim.declined': "Done: it was not added to your account. The trial song is deleted seven days after it was made.",
   'trial.claim.pendingHere': "This is the song you made on this device before signing in. Choose \"Add to my account\" above to open it.",

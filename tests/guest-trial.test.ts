@@ -207,6 +207,35 @@ describe('keeping the song, or losing it after seven days', () => {
   const claim = (user: { authHeader: Record<string, string> }, guestToken: string) =>
     on.app.inject({ method: 'POST', url: '/v1/trial/claim', headers: user.authHeader, payload: { guestToken } as never });
 
+  it('does not settle an empty trial or transfer a job before its song is delivered', async () => {
+    const { token, userId } = (await start(on, {})).json();
+    const user = await on.createUser();
+    await consentOf(user);
+    expect((await claim(user, token)).statusCode).toBe(404);
+    const queued = await on.app.inject({
+      method: 'POST', url: '/v1/generations',
+      headers: { ...bearer(token), 'idempotency-key': `pending-${randomUUID()}` },
+      payload: { mode: 'simple', prompt: '帰り道の歌', instrumental: false, durationSeconds: 60 } as never,
+    });
+    expect(queued.statusCode).toBe(202);
+    const pending = await claim(user, token);
+    expect(pending.statusCode).toBe(409);
+    expect(pending.json().error.code).toBe('TRACK_NOT_DELIVERABLE');
+    expect((await queryOne<{ user_id: string }>('SELECT user_id FROM generation_jobs WHERE id = ?', [queued.json().jobId]))?.user_id).toBe(userId);
+    expect((await queryOne<{ claimed_by: string | null }>('SELECT claimed_by FROM guest_trials WHERE user_id = ?', [userId]))?.claimed_by).toBeNull();
+    expect((await getBalance(user.id)).available).toBe(2);
+  });
+
+  it('does not announce a song for a legacy empty trial already marked claimed', async () => {
+    const { execute } = await import('@yuha/db');
+    const { token, userId } = (await start(on, {})).json();
+    const user = await on.createUser();
+    await consentOf(user);
+    await execute('UPDATE guest_trials SET claimed_by = ?, claimed_at = UTC_TIMESTAMP(3) WHERE user_id = ?', [user.id, userId]);
+    expect((await claim(user, token)).statusCode).toBe(404);
+    expect((await getBalance(user.id)).available).toBe(2);
+  });
+
   it('tells a guest which song is its trial, even if this browser never saw it finish', async () => {
     const fresh = (await start(on, {}, '10.88.1.1')).json() as { token: string };
     const none = await on.app.inject({ method: 'GET', url: '/v1/trial/song', headers: bearer(fresh.token) });
@@ -268,8 +297,11 @@ describe('keeping the song, or losing it after seven days', () => {
     const second = await on.createUser();
     await consentOf(first);
     await consentOf(second);
-    expect((await claim(first, g.token)).statusCode).toBe(200);
-    expect((await claim(first, g.token)).json().claimed).toBe(0);
+    const responses = await Promise.all([claim(first, g.token), claim(first, g.token)]);
+    expect(responses.map((response) => response.statusCode)).toEqual([200, 200]);
+    expect(responses.map((response) => response.json()).sort((a, b) => a.claimed - b.claimed))
+      .toEqual([{ claimed: 0, alreadyClaimed: true }, { claimed: 1 }]);
+    expect((await getBalance(first.id)).available).toBe(1);
     expect((await claim(second, g.token)).statusCode).toBe(409);
   }, 60_000);
 

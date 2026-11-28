@@ -7,12 +7,13 @@ import { deleteLyricProposals,
   findByExternalId,
   forgetAsset,
   forgetShareCard,
-  getGuestTrial,
+  lockGuestTrial,
   getMasterAsset,
   getShareCard,
   grantUnits,
   insertGuest,
   insertLicenseSnapshot,
+  listOpenJobs,
   listExpiredGuestTrials,
   markGuestClaimed,
   clearClaimedTrialRefs,
@@ -23,10 +24,20 @@ import { deleteLyricProposals,
   revokeUnusedUnits,
   trialCounts,
   withTx,
+  type Tx,
 } from '@yuha/db';
 import { licenseSnapshotFor } from './delivery.js';
 import type { AppContext } from '../context.js';
 import { GUEST_PROVIDER, guestSessionIssuer } from '../auth/guest.js';
+
+async function hasSpentTrialCredit(guestId: string, tx: Tx): Promise<boolean> {
+  const spent = await queryOne<{ n: number }>(
+    `SELECT COALESCE(SUM(consumed_units), 0) AS n FROM entitlement_batches WHERE user_id = ? AND source = 'promo_trial'`,
+    [guestId],
+    tx,
+  );
+  return Number(spent?.n ?? 0) > 0;
+}
 
 /**
  * Opening a trial without an account (docs/GROWTH_SPEC.md, part three).
@@ -119,23 +130,31 @@ export async function openGuestTrial(
 export async function claimGuestTrial(
   ctx: AppContext,
   params: { guestToken: string; userId: string },
-): Promise<{ claimed: number }> {
+): Promise<{ claimed: number; alreadyClaimed?: true }> {
   const issuer = guestSessionIssuer(ctx.config);
   const claims = issuer?.verify(params.guestToken, GUEST_PROVIDER);
   if (!claims) throw new AppError('NOT_FOUND', 'no such trial');
   const guest = await findByExternalId(GUEST_PROVIDER, claims.sub);
   if (!guest || guest.role !== 'guest') throw new AppError('NOT_FOUND', 'no such trial');
-  const trial = await getGuestTrial(guest.id);
-  if (!trial || trial.purged_at) throw new AppError('NOT_FOUND', 'this trial has ended');
-  if (trial.claimed_by) {
-    if (trial.claimed_by === params.userId) return { claimed: 0 };
-    throw new AppError('CONFLICT', 'this trial already belongs to another account');
-  }
   const features = await ctx.features();
 
-  const moved = await withTx(async (tx) => {
+  return withTx(async (tx) => {
+    // A retry can arrive before the original request has finished. Read the
+    // outcome under the same lock that protects the transfer and welcome grant.
+    const trial = await lockGuestTrial(guest.id, tx);
+    if (!trial || trial.purged_at) throw new AppError('NOT_FOUND', 'this trial has ended');
+    if (trial.claimed_by) {
+      if (trial.claimed_by !== params.userId) throw new AppError('CONFLICT', 'this trial already belongs to another account');
+      // Older servers could close an empty trial without transferring a song.
+      if (!await hasSpentTrialCredit(guest.id, tx)) throw new AppError('NOT_FOUND', 'this trial has no song to claim');
+      return { claimed: 0, alreadyClaimed: true };
+    }
     const tracks = await moveGuestOwnership({ guestId: guest.id, userId: params.userId }, tx);
-    for (const t of tracks.filter((x) => x.state === 'deliverable')) {
+    if (!tracks.length) {
+      if ((await listOpenJobs(guest.id, 1, tx)).length) throw new AppError('TRACK_NOT_DELIVERABLE', 'this trial song is still being made');
+      throw new AppError('NOT_FOUND', 'this trial has no song to claim');
+    }
+    for (const t of tracks) {
       const master = await getMasterAsset(t.id, tx);
       if (!master) continue;
       await insertLicenseSnapshot(
@@ -156,12 +175,7 @@ export async function claimGuestTrial(
       );
     }
 
-    const spent = await queryOne<{ n: number }>(
-      `SELECT COALESCE(SUM(consumed_units), 0) AS n FROM entitlement_batches WHERE user_id = ? AND source = 'promo_trial'`,
-      [guest.id],
-      tx,
-    );
-    if (Number(spent?.n ?? 0) > 0) {
+    if (await hasSpentTrialCredit(guest.id, tx)) {
       const welcome = await queryOne<{ id: string }>(
         `SELECT id FROM entitlement_batches WHERE user_id = ? AND source = 'promo_trial' AND source_ref = ?`,
         [params.userId, `trial:${params.userId}`],
@@ -171,9 +185,8 @@ export async function claimGuestTrial(
         await revokeUnusedUnits({ userId: params.userId, batchId: welcome.id, reason: 'guest_trial_claimed', maxUnits: 1 }, tx);
       }
     }
-    return tracks.length;
+    return { claimed: tracks.length };
   });
-  return { claimed: moved };
 }
 
 /**
