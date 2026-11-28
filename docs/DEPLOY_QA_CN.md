@@ -222,15 +222,23 @@ ECR 仓库是 **不可变（IMMUTABLE）** 的，同一个 commit 重新部署�
 
 ## 3a. API 角色的存储写权限（2026-11-28，待处理）
 
-官方 BGM 导入由 **API** 直接写私有交付桶（delivery bucket），在生产上被拒：
+**一句话：** 请给 IAM 角色 `qa-music-api-k8s-pod-role` 加上对 S3 桶
+`qa-music-media-delivery` 的 `s3:PutObject`、`s3:GetObject`、`s3:DeleteObject`，
+资源 `arn:aws:s3:::qa-music-media-delivery/*`（桶用 KMS 加密的话，再加对应 key 的
+`kms:GenerateDataKey` / `kms:Decrypt`）。
 
-```
-AccessDenied: User: …assumed-role/qa-music-api-k8s-pod-role/… is not authorized to perform: s3:PutObject
-```
+**已确认的现状**（2026-11-28 "Deploy QA" 最后一步，在 API pod 里用这个角色实测）：
+下表 5 个前缀**全部**被拒，AWS 的原话是
+`no identity-based policy allows the s3:PutObject action`。也就是说这个角色在交付桶
+上没有任何写权限，不只是新目录。受影响的线上功能：
 
-请给角色 `qa-music-api-k8s-pod-role` 加上对交付桶以下前缀的
-`s3:PutObject`、`s3:GetObject`、`s3:DeleteObject`（桶用 KMS 加密的话，也需要对应
-key 的 `kms:GenerateDataKey` / `kms:Decrypt`）：
+- 歌曲导出（裁剪片段、换格式）：每一个新导出都写不进去，用户点了会报错；
+- 分享卡片：写入失败但不报错，分享出去的链接预览退回网站默认图；
+- 官方 BGM 导入：500。
+
+歌曲生成和播放不受影响（成品由 worker 的角色写入）。
+
+API 写入的前缀，也就是部署检查逐个测试的那几行：
 
 | 前缀 | 用途 |
 | --- | --- |
@@ -241,8 +249,8 @@ key 的 `kms:GenerateDataKey` / `kms:Decrypt`）：
 - Get：生成试听 / 下载的签名链接，签名链接用的是这个角色的权限。
 - Delete：导入失败时清理半成品，以及账户删除。
 
-后两行是 API 早就在写的地方。如果这个角色对它们也没有写权限，那么用户的
-分享卡片和音频导出在生产上同样一直失败——请一并确认。
+后两行是 API 早就在写的地方，已确认同样被拒（见上）。前缀之外，API 不在这个桶里写
+别的东西，所以直接授权整个桶（`/*`）最简单，也不会漏掉以后新加的前缀。
 
 **怎么验证改好了**：从 2026-11-28 起，"Deploy QA" 最后一步
 **Check storage permissions (API role)** 会在 API pod 里用这个角色，对上表每个
