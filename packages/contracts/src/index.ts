@@ -2,6 +2,8 @@ export * from './enums.js';
 export * from './errors.js';
 export * from './generation.js';
 export * from './sections.js';
+export * from './engine-tags.js';
+export * from './production-plan.js';
 export * from './lrc.js';
 export * from './timing-edit.js';
 export * from './warmth.js';

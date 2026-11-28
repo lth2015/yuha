@@ -1,0 +1,169 @@
+{
+  "version": 1,
+  "note": "Six benchmark briefs for docs/MUSIC_PRODUCTION_SPEC.md §1: zh/ja/en x pop/ballad. Descriptions are synthetic and the lyrics were written for this benchmark (original, no third-party text). `intent` is the A side: what the text-intent step produces today for such a description — tagged lyrics, English brief, styles, instruments. B is derived from it by compileProductionPlan and differs only in brief and lyrics.",
+  "seeds": [
+    11,
+    22
+  ],
+  "briefs": [
+    {
+      "id": "zh-pop",
+      "language": "zh",
+      "template": "pop",
+      "description": "下班后坐末班车回家，城市的灯一盏盏往后退，有点累但很温柔",
+      "intent": {
+        "scene": "night_walk",
+        "mood": "warm",
+        "energy": 0.55,
+        "tempoHint": "medium",
+        "instruments": [
+          "electric_piano",
+          "bass",
+          "soft_drums"
+        ],
+        "durationSeconds": 120,
+        "vocalMode": "with_vocals",
+        "voice": "female",
+        "styles": [
+          "city pop",
+          "mandopop"
+        ],
+        "brief": "late night city pop, warm and a little tired",
+        "title": "末班车",
+        "lyrics": "[verse]\n车窗里映着一张疲倦的脸\n站名一个一个往后面退\n耳机里放着昨天那首歌\n今天也算安静地过完\n\n[chorus]\n末班车 慢一点\n让这夜再长一点\n灯火一盏一盏 替我说晚安\n末班车 慢一点\n\n[verse]\n便利店的光落在台阶边\n有人在电话里笑得很甜\n我把心事折成一张车票\n下一站 就快到家\n\n[chorus]\n末班车 慢一点\n让这夜再长一点\n灯火一盏一盏 替我说晚安\n末班车 慢一点"
+      }
+    },
+    {
+      "id": "zh-ballad",
+      "language": "zh",
+      "template": "ballad",
+      "description": "写给已经搬走的老邻居奶奶，楼下那棵桂花树每年还开",
+      "intent": {
+        "scene": "daily_log",
+        "mood": "melancholic",
+        "energy": 0.3,
+        "tempoHint": "slow",
+        "instruments": [
+          "piano",
+          "strings"
+        ],
+        "durationSeconds": 120,
+        "vocalMode": "with_vocals",
+        "voice": "male",
+        "styles": [
+          "ballad",
+          "mandopop"
+        ],
+        "brief": "gentle piano ballad, tender memory of an old neighbour",
+        "title": "桂花",
+        "lyrics": "[verse]\n楼下那棵桂花又开了\n香气还是绕到三楼的窗\n你晒的被子 你喊我吃饭\n那些午后 好像没走远\n\n[chorus]\n奶奶 桂花开了\n你在新家 闻得到吗\n风把秋天 送到你身旁\n我在这里 替你看着它\n\n[verse]\n你的门牌换了新名字\n阳台上没有了那盆葱\n我路过的时候 还会停一停\n像小时候 等你开门\n\n[chorus]\n奶奶 桂花开了\n你在新家 闻得到吗\n风把秋天 送到你身旁\n我在这里 替你看着它"
+      }
+    },
+    {
+      "id": "ja-pop",
+      "language": "ja",
+      "template": "pop",
+      "description": "週末の朝、自転車で海沿いを走る。何も決めていない一日のはじまり",
+      "intent": {
+        "scene": "daily_log",
+        "mood": "uplifting",
+        "energy": 0.7,
+        "tempoHint": "medium",
+        "instruments": [
+          "electric_guitar",
+          "bass",
+          "drums"
+        ],
+        "durationSeconds": 120,
+        "vocalMode": "with_vocals",
+        "voice": "female",
+        "styles": [
+          "j-pop",
+          "pop rock"
+        ],
+        "brief": "bright j-pop, seaside bicycle morning",
+        "title": "海沿いの朝",
+        "lyrics": "[verse]\nペダルをこいで 潮の匂い\nまだ誰もいない 坂の上\n予定なんて ひとつもない\nそれだけで 胸が軽い\n\n[chorus]\n風をつかまえて 走り出そう\n青い空が 追いかけてくる\n今日のことは 今日決めればいい\n海沿いの朝\n\n[verse]\nパン屋の窓に 光がゆれる\n手を振る人に 手を振りかえす\n昨日の悩み ポケットの中\nもう少しだけ そのままで\n\n[chorus]\n風をつかまえて 走り出そう\n青い空が 追いかけてくる\n今日のことは 今日決めればいい\n海沿いの朝"
+      }
+    },
+    {
+      "id": "ja-ballad",
+      "language": "ja",
+      "template": "ballad",
+      "description": "遠くに住む母へ。電話ではうまく言えないありがとう",
+      "intent": {
+        "scene": "daily_log",
+        "mood": "warm",
+        "energy": 0.3,
+        "tempoHint": "slow",
+        "instruments": [
+          "acoustic_guitar",
+          "strings"
+        ],
+        "durationSeconds": 120,
+        "vocalMode": "with_vocals",
+        "voice": "male",
+        "styles": [
+          "ballad",
+          "j-pop"
+        ],
+        "brief": "warm acoustic ballad, thanks to a mother far away",
+        "title": "受話器",
+        "lyrics": "[verse]\n受話器のむこう いつもの声\n元気にしてると くりかえす\n本当はもっと 話したいのに\n天気の話で 終わってしまう\n\n[chorus]\nありがとう 言えないまま\n季節だけが 先に行く\n遠い町の あなたの台所に\nこの歌が 届けばいい\n\n[verse]\n送ってくれた 段ボールに\n手書きのメモが 入っていた\nちゃんと食べてね それだけの字に\n夜中ひとり 泣いてしまった\n\n[chorus]\nありがとう 言えないまま\n季節だけが 先に行く\n遠い町の あなたの台所に\nこの歌が 届けばいい"
+      }
+    },
+    {
+      "id": "en-pop",
+      "language": "en",
+      "template": "pop",
+      "description": "Friday night, finally done with the week, dancing alone in the kitchen",
+      "intent": {
+        "scene": "daily_log",
+        "mood": "playful",
+        "energy": 0.75,
+        "tempoHint": "fast",
+        "instruments": [
+          "synth",
+          "bass",
+          "drums"
+        ],
+        "durationSeconds": 120,
+        "vocalMode": "with_vocals",
+        "voice": "female",
+        "styles": [
+          "dance pop",
+          "pop"
+        ],
+        "brief": "upbeat dance pop, friday night freedom",
+        "title": "Kitchen Floor",
+        "lyrics": "[verse]\nShoes off by the door at last\nLaptop closed, the week is past\nRadio up, the kettle sings\nI forgot how good this feels\n\n[chorus]\nOn the kitchen floor tonight\nSpinning under one warm light\nNobody watching, nothing to prove\nJust me and the groove\n\n[verse]\nSocks are sliding, spoon in hand\nI'm the singer and the band\nNeighbours knocking, let them knock\nI'm not looking at the clock\n\n[chorus]\nOn the kitchen floor tonight\nSpinning under one warm light\nNobody watching, nothing to prove\nJust me and the groove"
+      }
+    },
+    {
+      "id": "en-ballad",
+      "language": "en",
+      "template": "ballad",
+      "description": "For a best friend moving to another country next month",
+      "intent": {
+        "scene": "daily_log",
+        "mood": "melancholic",
+        "energy": 0.3,
+        "tempoHint": "slow",
+        "instruments": [
+          "piano",
+          "cello"
+        ],
+        "durationSeconds": 120,
+        "vocalMode": "with_vocals",
+        "voice": "male",
+        "styles": [
+          "ballad",
+          "indie folk"
+        ],
+        "brief": "bittersweet piano ballad, a friend leaving",
+        "title": "Different Time Zone",
+        "lyrics": "[verse]\nBoxes in the hallway with your name\nHalf the room already feels the change\nWe keep laughing like it's any other day\nBut neither of us knows what we should say\n\n[chorus]\nGo on and find your morning\nWhile I'm still holding night\nCall me from a different time zone\nTell me you're alright\n\n[verse]\nI'll keep the spare key on the windowsill\nIn case you ever need a place to fill\nThe city will be quieter, I know\nBut you were always meant to go\n\n[chorus]\nGo on and find your morning\nWhile I'm still holding night\nCall me from a different time zone\nTell me you're alright"
+      }
+    }
+  ]
+}

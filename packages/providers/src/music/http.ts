@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { withCanonicalSections, type MusicIntent } from '@yuha/contracts';
+import { briefWithVoice, withCanonicalSections, type MusicIntent } from '@yuha/contracts';
 import type {
   MusicCapabilities,
   MusicPollResult,
@@ -88,32 +88,41 @@ function readPath(obj: unknown, path: string): unknown {
 }
 
 /**
- * The English words the music service recognises as a voice.
+ * The JSON body the music service receives for one intent. Exported so the
+ * production benchmark (scripts/production-bench.mjs) sends byte-for-byte
+ * what a real job sends, and a change to one cannot leave the other behind.
  *
- * It finds them by scanning the production brief with word-boundary regexes
- * (deploy/dgx/music/server/app.py, _VOICE_WORDS) and emits the matching tag.
- * So the way to ask for a duet is to make sure the brief says "duet" — which
- * means a creator can choose one without that service being redeployed.
- *
- * `auto` is absent on purpose: it means "do not ask", and the service then
- * tags a generic lead vocal exactly as it did before this existed.
+ * Only parameters the provider actually supports are sent. AI-05: we do not
+ * pretend a control was honoured just because the user set it locally. The
+ * voice choice goes in through the brief (`briefWithVoice`): the service
+ * reads it from there.
  */
-const VOICE_WORDS: Record<string, string> = {
-  female: 'female vocals',
-  male: 'male vocals',
-  duet: 'duet',
-  choir: 'choir',
-};
-
-function briefWithVoice(intent: MusicIntent): string {
-  if (intent.vocalMode === 'instrumental') return intent.brief;
-  const word = VOICE_WORDS[intent.voice ?? 'auto'];
-  if (!word) return intent.brief;
-  if (intent.brief.toLowerCase().includes(word)) return intent.brief;
-  // Prepended, not appended: the tag builder keeps only the first four
-  // phrases of the brief, so a voice added at the end can fall off the back.
-  // Still capped at the brief's contract maximum.
-  return `${word}, ${intent.brief}`.slice(0, 400);
+export function engineSubmitBody(
+  intent: MusicIntent,
+  format: string,
+  cfg: Pick<HttpMusicProviderConfig, 'model' | 'supportsInstrumentalOnly' | 'supportsVocals'>,
+): Record<string, unknown> {
+  const body: Record<string, unknown> = {
+    model: cfg.model,
+    duration_seconds: intent.durationSeconds,
+    prompt: briefWithVoice(intent),
+    tempo: intent.tempoHint,
+    energy: intent.energy,
+    instruments: intent.instruments,
+    style_tags: intent.styles,
+    format,
+  };
+  if (intent.vocalMode === 'instrumental' && cfg.supportsInstrumentalOnly) {
+    body['instrumental'] = true;
+  } else if (cfg.supportsVocals) {
+    body['instrumental'] = false;
+    // The creator's own markers stay on the song page; the model is given
+    // the English tags it was prompted with. `[高潮部分]` means nothing to
+    // it, `[chorus]` does, and an unrecognised marker is passed through
+    // rather than guessed at.
+    if (intent.lyrics) body['lyrics'] = withCanonicalSections(intent.lyrics);
+  }
+  return body;
 }
 
 /**
@@ -206,28 +215,7 @@ export class HttpMusicProvider implements MusicProvider {
   }
 
   async submit(req: MusicSubmitRequest): Promise<MusicSubmitResult> {
-    // Only parameters the provider actually supports are sent. AI-05: we do not
-    // pretend a control was honoured just because the user set it locally.
-    const body: Record<string, unknown> = {
-      model: this.cfg.model,
-      duration_seconds: req.intent.durationSeconds,
-      prompt: briefWithVoice(req.intent),
-      tempo: req.intent.tempoHint,
-      energy: req.intent.energy,
-      instruments: req.intent.instruments,
-      style_tags: req.intent.styles,
-      format: req.format,
-    };
-    if (req.intent.vocalMode === 'instrumental' && this.cfg.supportsInstrumentalOnly) {
-      body['instrumental'] = true;
-    } else if (this.cfg.supportsVocals) {
-      body['instrumental'] = false;
-      // The creator's own markers stay on the song page; the model is given
-      // the English tags it was prompted with. `[高潮部分]` means nothing to
-      // it, `[chorus]` does, and an unrecognised marker is passed through
-      // rather than guessed at.
-      if (req.intent.lyrics) body['lyrics'] = withCanonicalSections(req.intent.lyrics);
-    }
+    const body = engineSubmitBody(req.intent, req.format, this.cfg);
 
     let res;
     try {

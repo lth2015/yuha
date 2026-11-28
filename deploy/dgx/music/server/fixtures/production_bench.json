@@ -1,0 +1,1201 @@
+{
+  "version": 1,
+  "briefs_version": 1,
+  "seeds": [
+    11,
+    22
+  ],
+  "entries": [
+    {
+      "id": "zh-pop-s11-A",
+      "brief": "zh-pop",
+      "language": "zh",
+      "template": "pop",
+      "seed": 11,
+      "arm": "A",
+      "request": {
+        "duration_seconds": 120,
+        "prompt": "female vocals, late night city pop, warm and a little tired",
+        "tempo": "medium",
+        "energy": 0.55,
+        "instruments": [
+          "electric_piano",
+          "bass",
+          "soft_drums"
+        ],
+        "style_tags": [
+          "city pop",
+          "mandopop"
+        ],
+        "instrumental": false,
+        "lyrics": "[verse]\n车窗里映着一张疲倦的脸\n站名一个一个往后面退\n耳机里放着昨天那首歌\n今天也算安静地过完\n\n[chorus]\n末班车 慢一点\n让这夜再长一点\n灯火一盏一盏 替我说晚安\n末班车 慢一点\n\n[verse]\n便利店的光落在台阶边\n有人在电话里笑得很甜\n我把心事折成一张车票\n下一站 就快到家\n\n[chorus]\n末班车 慢一点\n让这夜再长一点\n灯火一盏一盏 替我说晚安\n末班车 慢一点",
+        "format": "mp3"
+      },
+      "expected_tags_v2": "city pop, mandopop, electric piano, bass, soft drums, female vocals, clear vocals, mid-tempo, late night city pop, warm and a little tired",
+      "input_version": "c27fa2d24856"
+    },
+    {
+      "id": "zh-pop-s11-B",
+      "brief": "zh-pop",
+      "language": "zh",
+      "template": "pop",
+      "seed": 11,
+      "arm": "B",
+      "request": {
+        "duration_seconds": 120,
+        "prompt": "female vocals, late night city pop, warm and a little tired, electric piano hook returns in chorus",
+        "tempo": "medium",
+        "energy": 0.55,
+        "instruments": [
+          "electric_piano",
+          "bass",
+          "soft_drums"
+        ],
+        "style_tags": [
+          "city pop",
+          "mandopop"
+        ],
+        "instrumental": false,
+        "lyrics": "[intro]\n\n[verse]\n车窗里映着一张疲倦的脸\n站名一个一个往后面退\n耳机里放着昨天那首歌\n今天也算安静地过完\n\n[chorus]\n末班车 慢一点\n让这夜再长一点\n灯火一盏一盏 替我说晚安\n末班车 慢一点\n\n[verse]\n便利店的光落在台阶边\n有人在电话里笑得很甜\n我把心事折成一张车票\n下一站 就快到家\n\n[chorus]\n末班车 慢一点\n让这夜再长一点\n灯火一盏一盏 替我说晚安\n末班车 慢一点\n\n[outro]",
+        "format": "mp3"
+      },
+      "expected_tags_v2": "city pop, mandopop, electric piano, bass, soft drums, female vocals, clear vocals, mid-tempo, late night city pop, warm and a little tired, electric piano hook returns in chorus",
+      "input_version": "692bddf1d118"
+    },
+    {
+      "id": "zh-pop-s22-A",
+      "brief": "zh-pop",
+      "language": "zh",
+      "template": "pop",
+      "seed": 22,
+      "arm": "A",
+      "request": {
+        "duration_seconds": 120,
+        "prompt": "female vocals, late night city pop, warm and a little tired",
+        "tempo": "medium",
+        "energy": 0.55,
+        "instruments": [
+          "electric_piano",
+          "bass",
+          "soft_drums"
+        ],
+        "style_tags": [
+          "city pop",
+          "mandopop"
+        ],
+        "instrumental": false,
+        "lyrics": "[verse]\n车窗里映着一张疲倦的脸\n站名一个一个往后面退\n耳机里放着昨天那首歌\n今天也算安静地过完\n\n[chorus]\n末班车 慢一点\n让这夜再长一点\n灯火一盏一盏 替我说晚安\n末班车 慢一点\n\n[verse]\n便利店的光落在台阶边\n有人在电话里笑得很甜\n我把心事折成一张车票\n下一站 就快到家\n\n[chorus]\n末班车 慢一点\n让这夜再长一点\n灯火一盏一盏 替我说晚安\n末班车 慢一点",
+        "format": "mp3"
+      },
+      "expected_tags_v2": "city pop, mandopop, electric piano, bass, soft drums, female vocals, clear vocals, mid-tempo, late night city pop, warm and a little tired",
+      "input_version": "c27fa2d24856"
+    },
+    {
+      "id": "zh-pop-s22-B",
+      "brief": "zh-pop",
+      "language": "zh",
+      "template": "pop",
+      "seed": 22,
+      "arm": "B",
+      "request": {
+        "duration_seconds": 120,
+        "prompt": "female vocals, late night city pop, warm and a little tired, electric piano hook returns in chorus",
+        "tempo": "medium",
+        "energy": 0.55,
+        "instruments": [
+          "electric_piano",
+          "bass",
+          "soft_drums"
+        ],
+        "style_tags": [
+          "city pop",
+          "mandopop"
+        ],
+        "instrumental": false,
+        "lyrics": "[intro]\n\n[verse]\n车窗里映着一张疲倦的脸\n站名一个一个往后面退\n耳机里放着昨天那首歌\n今天也算安静地过完\n\n[chorus]\n末班车 慢一点\n让这夜再长一点\n灯火一盏一盏 替我说晚安\n末班车 慢一点\n\n[verse]\n便利店的光落在台阶边\n有人在电话里笑得很甜\n我把心事折成一张车票\n下一站 就快到家\n\n[chorus]\n末班车 慢一点\n让这夜再长一点\n灯火一盏一盏 替我说晚安\n末班车 慢一点\n\n[outro]",
+        "format": "mp3"
+      },
+      "expected_tags_v2": "city pop, mandopop, electric piano, bass, soft drums, female vocals, clear vocals, mid-tempo, late night city pop, warm and a little tired, electric piano hook returns in chorus",
+      "input_version": "692bddf1d118"
+    },
+    {
+      "id": "zh-ballad-s11-A",
+      "brief": "zh-ballad",
+      "language": "zh",
+      "template": "ballad",
+      "seed": 11,
+      "arm": "A",
+      "request": {
+        "duration_seconds": 120,
+        "prompt": "male vocals, gentle piano ballad, tender memory of an old neighbour",
+        "tempo": "slow",
+        "energy": 0.3,
+        "instruments": [
+          "piano",
+          "strings"
+        ],
+        "style_tags": [
+          "ballad",
+          "mandopop"
+        ],
+        "instrumental": false,
+        "lyrics": "[verse]\n楼下那棵桂花又开了\n香气还是绕到三楼的窗\n你晒的被子 你喊我吃饭\n那些午后 好像没走远\n\n[chorus]\n奶奶 桂花开了\n你在新家 闻得到吗\n风把秋天 送到你身旁\n我在这里 替你看着它\n\n[verse]\n你的门牌换了新名字\n阳台上没有了那盆葱\n我路过的时候 还会停一停\n像小时候 等你开门\n\n[chorus]\n奶奶 桂花开了\n你在新家 闻得到吗\n风把秋天 送到你身旁\n我在这里 替你看着它",
+        "format": "mp3"
+      },
+      "expected_tags_v2": "ballad, mandopop, piano, strings, male vocals, clear vocals, slow tempo, mellow, gentle piano ballad, tender memory of an old neighbour",
+      "input_version": "5158f4331e1b"
+    },
+    {
+      "id": "zh-ballad-s11-B",
+      "brief": "zh-ballad",
+      "language": "zh",
+      "template": "ballad",
+      "seed": 11,
+      "arm": "B",
+      "request": {
+        "duration_seconds": 120,
+        "prompt": "male vocals, gentle piano ballad, tender memory of an old neighbour, piano motif opens and closes",
+        "tempo": "slow",
+        "energy": 0.3,
+        "instruments": [
+          "piano",
+          "strings"
+        ],
+        "style_tags": [
+          "ballad",
+          "mandopop"
+        ],
+        "instrumental": false,
+        "lyrics": "[intro]\n\n[verse]\n楼下那棵桂花又开了\n香气还是绕到三楼的窗\n你晒的被子 你喊我吃饭\n那些午后 好像没走远\n\n[chorus]\n奶奶 桂花开了\n你在新家 闻得到吗\n风把秋天 送到你身旁\n我在这里 替你看着它\n\n[verse]\n你的门牌换了新名字\n阳台上没有了那盆葱\n我路过的时候 还会停一停\n像小时候 等你开门\n\n[chorus]\n奶奶 桂花开了\n你在新家 闻得到吗\n风把秋天 送到你身旁\n我在这里 替你看着它\n\n[outro]",
+        "format": "mp3"
+      },
+      "expected_tags_v2": "ballad, mandopop, piano, strings, male vocals, clear vocals, slow tempo, mellow, gentle piano ballad, tender memory of an old neighbour, piano motif opens and closes",
+      "input_version": "1911be24c5a2"
+    },
+    {
+      "id": "zh-ballad-s22-A",
+      "brief": "zh-ballad",
+      "language": "zh",
+      "template": "ballad",
+      "seed": 22,
+      "arm": "A",
+      "request": {
+        "duration_seconds": 120,
+        "prompt": "male vocals, gentle piano ballad, tender memory of an old neighbour",
+        "tempo": "slow",
+        "energy": 0.3,
+        "instruments": [
+          "piano",
+          "strings"
+        ],
+        "style_tags": [
+          "ballad",
+          "mandopop"
+        ],
+        "instrumental": false,
+        "lyrics": "[verse]\n楼下那棵桂花又开了\n香气还是绕到三楼的窗\n你晒的被子 你喊我吃饭\n那些午后 好像没走远\n\n[chorus]\n奶奶 桂花开了\n你在新家 闻得到吗\n风把秋天 送到你身旁\n我在这里 替你看着它\n\n[verse]\n你的门牌换了新名字\n阳台上没有了那盆葱\n我路过的时候 还会停一停\n像小时候 等你开门\n\n[chorus]\n奶奶 桂花开了\n你在新家 闻得到吗\n风把秋天 送到你身旁\n我在这里 替你看着它",
+        "format": "mp3"
+      },
+      "expected_tags_v2": "ballad, mandopop, piano, strings, male vocals, clear vocals, slow tempo, mellow, gentle piano ballad, tender memory of an old neighbour",
+      "input_version": "5158f4331e1b"
+    },
+    {
+      "id": "zh-ballad-s22-B",
+      "brief": "zh-ballad",
+      "language": "zh",
+      "template": "ballad",
+      "seed": 22,
+      "arm": "B",
+      "request": {
+        "duration_seconds": 120,
+        "prompt": "male vocals, gentle piano ballad, tender memory of an old neighbour, piano motif opens and closes",
+        "tempo": "slow",
+        "energy": 0.3,
+        "instruments": [
+          "piano",
+          "strings"
+        ],
+        "style_tags": [
+          "ballad",
+          "mandopop"
+        ],
+        "instrumental": false,
+        "lyrics": "[intro]\n\n[verse]\n楼下那棵桂花又开了\n香气还是绕到三楼的窗\n你晒的被子 你喊我吃饭\n那些午后 好像没走远\n\n[chorus]\n奶奶 桂花开了\n你在新家 闻得到吗\n风把秋天 送到你身旁\n我在这里 替你看着它\n\n[verse]\n你的门牌换了新名字\n阳台上没有了那盆葱\n我路过的时候 还会停一停\n像小时候 等你开门\n\n[chorus]\n奶奶 桂花开了\n你在新家 闻得到吗\n风把秋天 送到你身旁\n我在这里 替你看着它\n\n[outro]",
+        "format": "mp3"
+      },
+      "expected_tags_v2": "ballad, mandopop, piano, strings, male vocals, clear vocals, slow tempo, mellow, gentle piano ballad, tender memory of an old neighbour, piano motif opens and closes",
+      "input_version": "1911be24c5a2"
+    },
+    {
+      "id": "ja-pop-s11-A",
+      "brief": "ja-pop",
+      "language": "ja",
+      "template": "pop",
+      "seed": 11,
+      "arm": "A",
+      "request": {
+        "duration_seconds": 120,
+        "prompt": "female vocals, bright j-pop, seaside bicycle morning",
+        "tempo": "medium",
+        "energy": 0.7,
+        "instruments": [
+          "electric_guitar",
+          "bass",
+          "drums"
+        ],
+        "style_tags": [
+          "j-pop",
+          "pop rock"
+        ],
+        "instrumental": false,
+        "lyrics": "[verse]\nペダルをこいで 潮の匂い\nまだ誰もいない 坂の上\n予定なんて ひとつもない\nそれだけで 胸が軽い\n\n[chorus]\n風をつかまえて 走り出そう\n青い空が 追いかけてくる\n今日のことは 今日決めればいい\n海沿いの朝\n\n[verse]\nパン屋の窓に 光がゆれる\n手を振る人に 手を振りかえす\n昨日の悩み ポケットの中\nもう少しだけ そのままで\n\n[chorus]\n風をつかまえて 走り出そう\n青い空が 追いかけてくる\n今日のことは 今日決めればいい\n海沿いの朝",
+        "format": "mp3"
+      },
+      "expected_tags_v2": "j-pop, pop rock, electric guitar, bass, drums, female vocals, clear vocals, mid-tempo, bright j-pop, seaside bicycle morning",
+      "input_version": "8a76ac50372b"
+    },
+    {
+      "id": "ja-pop-s11-B",
+      "brief": "ja-pop",
+      "language": "ja",
+      "template": "pop",
+      "seed": 11,
+      "arm": "B",
+      "request": {
+        "duration_seconds": 120,
+        "prompt": "female vocals, bright j-pop, seaside bicycle morning, electric guitar hook returns in chorus",
+        "tempo": "medium",
+        "energy": 0.7,
+        "instruments": [
+          "electric_guitar",
+          "bass",
+          "drums"
+        ],
+        "style_tags": [
+          "j-pop",
+          "pop rock"
+        ],
+        "instrumental": false,
+        "lyrics": "[intro]\n\n[verse]\nペダルをこいで 潮の匂い\nまだ誰もいない 坂の上\n予定なんて ひとつもない\nそれだけで 胸が軽い\n\n[chorus]\n風をつかまえて 走り出そう\n青い空が 追いかけてくる\n今日のことは 今日決めればいい\n海沿いの朝\n\n[verse]\nパン屋の窓に 光がゆれる\n手を振る人に 手を振りかえす\n昨日の悩み ポケットの中\nもう少しだけ そのままで\n\n[chorus]\n風をつかまえて 走り出そう\n青い空が 追いかけてくる\n今日のことは 今日決めればいい\n海沿いの朝\n\n[outro]",
+        "format": "mp3"
+      },
+      "expected_tags_v2": "j-pop, pop rock, electric guitar, bass, drums, female vocals, clear vocals, mid-tempo, bright j-pop, seaside bicycle morning, electric guitar hook returns in chorus",
+      "input_version": "2f69901638dc"
+    },
+    {
+      "id": "ja-pop-s22-A",
+      "brief": "ja-pop",
+      "language": "ja",
+      "template": "pop",
+      "seed": 22,
+      "arm": "A",
+      "request": {
+        "duration_seconds": 120,
+        "prompt": "female vocals, bright j-pop, seaside bicycle morning",
+        "tempo": "medium",
+        "energy": 0.7,
+        "instruments": [
+          "electric_guitar",
+          "bass",
+          "drums"
+        ],
+        "style_tags": [
+          "j-pop",
+          "pop rock"
+        ],
+        "instrumental": false,
+        "lyrics": "[verse]\nペダルをこいで 潮の匂い\nまだ誰もいない 坂の上\n予定なんて ひとつもない\nそれだけで 胸が軽い\n\n[chorus]\n風をつかまえて 走り出そう\n青い空が 追いかけてくる\n今日のことは 今日決めればいい\n海沿いの朝\n\n[verse]\nパン屋の窓に 光がゆれる\n手を振る人に 手を振りかえす\n昨日の悩み ポケットの中\nもう少しだけ そのままで\n\n[chorus]\n風をつかまえて 走り出そう\n青い空が 追いかけてくる\n今日のことは 今日決めればいい\n海沿いの朝",
+        "format": "mp3"
+      },
+      "expected_tags_v2": "j-pop, pop rock, electric guitar, bass, drums, female vocals, clear vocals, mid-tempo, bright j-pop, seaside bicycle morning",
+      "input_version": "8a76ac50372b"
+    },
+    {
+      "id": "ja-pop-s22-B",
+      "brief": "ja-pop",
+      "language": "ja",
+      "template": "pop",
+      "seed": 22,
+      "arm": "B",
+      "request": {
+        "duration_seconds": 120,
+        "prompt": "female vocals, bright j-pop, seaside bicycle morning, electric guitar hook returns in chorus",
+        "tempo": "medium",
+        "energy": 0.7,
+        "instruments": [
+          "electric_guitar",
+          "bass",
+          "drums"
+        ],
+        "style_tags": [
+          "j-pop",
+          "pop rock"
+        ],
+        "instrumental": false,
+        "lyrics": "[intro]\n\n[verse]\nペダルをこいで 潮の匂い\nまだ誰もいない 坂の上\n予定なんて ひとつもない\nそれだけで 胸が軽い\n\n[chorus]\n風をつかまえて 走り出そう\n青い空が 追いかけてくる\n今日のことは 今日決めればいい\n海沿いの朝\n\n[verse]\nパン屋の窓に 光がゆれる\n手を振る人に 手を振りかえす\n昨日の悩み ポケットの中\nもう少しだけ そのままで\n\n[chorus]\n風をつかまえて 走り出そう\n青い空が 追いかけてくる\n今日のことは 今日決めればいい\n海沿いの朝\n\n[outro]",
+        "format": "mp3"
+      },
+      "expected_tags_v2": "j-pop, pop rock, electric guitar, bass, drums, female vocals, clear vocals, mid-tempo, bright j-pop, seaside bicycle morning, electric guitar hook returns in chorus",
+      "input_version": "2f69901638dc"
+    },
+    {
+      "id": "ja-ballad-s11-A",
+      "brief": "ja-ballad",
+      "language": "ja",
+      "template": "ballad",
+      "seed": 11,
+      "arm": "A",
+      "request": {
+        "duration_seconds": 120,
+        "prompt": "male vocals, warm acoustic ballad, thanks to a mother far away",
+        "tempo": "slow",
+        "energy": 0.3,
+        "instruments": [
+          "acoustic_guitar",
+          "strings"
+        ],
+        "style_tags": [
+          "ballad",
+          "j-pop"
+        ],
+        "instrumental": false,
+        "lyrics": "[verse]\n受話器のむこう いつもの声\n元気にしてると くりかえす\n本当はもっと 話したいのに\n天気の話で 終わってしまう\n\n[chorus]\nありがとう 言えないまま\n季節だけが 先に行く\n遠い町の あなたの台所に\nこの歌が 届けばいい\n\n[verse]\n送ってくれた 段ボールに\n手書きのメモが 入っていた\nちゃんと食べてね それだけの字に\n夜中ひとり 泣いてしまった\n\n[chorus]\nありがとう 言えないまま\n季節だけが 先に行く\n遠い町の あなたの台所に\nこの歌が 届けばいい",
+        "format": "mp3"
+      },
+      "expected_tags_v2": "ballad, j-pop, acoustic guitar, strings, male vocals, clear vocals, slow tempo, mellow, warm acoustic ballad, thanks to a mother far away",
+      "input_version": "83fdc2566033"
+    },
+    {
+      "id": "ja-ballad-s11-B",
+      "brief": "ja-ballad",
+      "language": "ja",
+      "template": "ballad",
+      "seed": 11,
+      "arm": "B",
+      "request": {
+        "duration_seconds": 120,
+        "prompt": "male vocals, warm acoustic ballad, thanks to a mother far away, acoustic guitar motif opens and closes",
+        "tempo": "slow",
+        "energy": 0.3,
+        "instruments": [
+          "acoustic_guitar",
+          "strings"
+        ],
+        "style_tags": [
+          "ballad",
+          "j-pop"
+        ],
+        "instrumental": false,
+        "lyrics": "[intro]\n\n[verse]\n受話器のむこう いつもの声\n元気にしてると くりかえす\n本当はもっと 話したいのに\n天気の話で 終わってしまう\n\n[chorus]\nありがとう 言えないまま\n季節だけが 先に行く\n遠い町の あなたの台所に\nこの歌が 届けばいい\n\n[verse]\n送ってくれた 段ボールに\n手書きのメモが 入っていた\nちゃんと食べてね それだけの字に\n夜中ひとり 泣いてしまった\n\n[chorus]\nありがとう 言えないまま\n季節だけが 先に行く\n遠い町の あなたの台所に\nこの歌が 届けばいい\n\n[outro]",
+        "format": "mp3"
+      },
+      "expected_tags_v2": "ballad, j-pop, acoustic guitar, strings, male vocals, clear vocals, slow tempo, mellow, warm acoustic ballad, thanks to a mother far away, acoustic guitar motif opens and closes",
+      "input_version": "c0383fe4e664"
+    },
+    {
+      "id": "ja-ballad-s22-A",
+      "brief": "ja-ballad",
+      "language": "ja",
+      "template": "ballad",
+      "seed": 22,
+      "arm": "A",
+      "request": {
+        "duration_seconds": 120,
+        "prompt": "male vocals, warm acoustic ballad, thanks to a mother far away",
+        "tempo": "slow",
+        "energy": 0.3,
+        "instruments": [
+          "acoustic_guitar",
+          "strings"
+        ],
+        "style_tags": [
+          "ballad",
+          "j-pop"
+        ],
+        "instrumental": false,
+        "lyrics": "[verse]\n受話器のむこう いつもの声\n元気にしてると くりかえす\n本当はもっと 話したいのに\n天気の話で 終わってしまう\n\n[chorus]\nありがとう 言えないまま\n季節だけが 先に行く\n遠い町の あなたの台所に\nこの歌が 届けばいい\n\n[verse]\n送ってくれた 段ボールに\n手書きのメモが 入っていた\nちゃんと食べてね それだけの字に\n夜中ひとり 泣いてしまった\n\n[chorus]\nありがとう 言えないまま\n季節だけが 先に行く\n遠い町の あなたの台所に\nこの歌が 届けばいい",
+        "format": "mp3"
+      },
+      "expected_tags_v2": "ballad, j-pop, acoustic guitar, strings, male vocals, clear vocals, slow tempo, mellow, warm acoustic ballad, thanks to a mother far away",
+      "input_version": "83fdc2566033"
+    },
+    {
+      "id": "ja-ballad-s22-B",
+      "brief": "ja-ballad",
+      "language": "ja",
+      "template": "ballad",
+      "seed": 22,
+      "arm": "B",
+      "request": {
+        "duration_seconds": 120,
+        "prompt": "male vocals, warm acoustic ballad, thanks to a mother far away, acoustic guitar motif opens and closes",
+        "tempo": "slow",
+        "energy": 0.3,
+        "instruments": [
+          "acoustic_guitar",
+          "strings"
+        ],
+        "style_tags": [
+          "ballad",
+          "j-pop"
+        ],
+        "instrumental": false,
+        "lyrics": "[intro]\n\n[verse]\n受話器のむこう いつもの声\n元気にしてると くりかえす\n本当はもっと 話したいのに\n天気の話で 終わってしまう\n\n[chorus]\nありがとう 言えないまま\n季節だけが 先に行く\n遠い町の あなたの台所に\nこの歌が 届けばいい\n\n[verse]\n送ってくれた 段ボールに\n手書きのメモが 入っていた\nちゃんと食べてね それだけの字に\n夜中ひとり 泣いてしまった\n\n[chorus]\nありがとう 言えないまま\n季節だけが 先に行く\n遠い町の あなたの台所に\nこの歌が 届けばいい\n\n[outro]",
+        "format": "mp3"
+      },
+      "expected_tags_v2": "ballad, j-pop, acoustic guitar, strings, male vocals, clear vocals, slow tempo, mellow, warm acoustic ballad, thanks to a mother far away, acoustic guitar motif opens and closes",
+      "input_version": "c0383fe4e664"
+    },
+    {
+      "id": "en-pop-s11-A",
+      "brief": "en-pop",
+      "language": "en",
+      "template": "pop",
+      "seed": 11,
+      "arm": "A",
+      "request": {
+        "duration_seconds": 120,
+        "prompt": "female vocals, upbeat dance pop, friday night freedom",
+        "tempo": "fast",
+        "energy": 0.75,
+        "instruments": [
+          "synth",
+          "bass",
+          "drums"
+        ],
+        "style_tags": [
+          "dance pop",
+          "pop"
+        ],
+        "instrumental": false,
+        "lyrics": "[verse]\nShoes off by the door at last\nLaptop closed, the week is past\nRadio up, the kettle sings\nI forgot how good this feels\n\n[chorus]\nOn the kitchen floor tonight\nSpinning under one warm light\nNobody watching, nothing to prove\nJust me and the groove\n\n[verse]\nSocks are sliding, spoon in hand\nI'm the singer and the band\nNeighbours knocking, let them knock\nI'm not looking at the clock\n\n[chorus]\nOn the kitchen floor tonight\nSpinning under one warm light\nNobody watching, nothing to prove\nJust me and the groove",
+        "format": "mp3"
+      },
+      "expected_tags_v2": "dance pop, pop, synth, bass, drums, female vocals, clear vocals, fast tempo, energetic, upbeat dance pop, friday night freedom",
+      "input_version": "3fd60837e181"
+    },
+    {
+      "id": "en-pop-s11-B",
+      "brief": "en-pop",
+      "language": "en",
+      "template": "pop",
+      "seed": 11,
+      "arm": "B",
+      "request": {
+        "duration_seconds": 120,
+        "prompt": "female vocals, upbeat dance pop, friday night freedom, synth hook returns in chorus",
+        "tempo": "fast",
+        "energy": 0.75,
+        "instruments": [
+          "synth",
+          "bass",
+          "drums"
+        ],
+        "style_tags": [
+          "dance pop",
+          "pop"
+        ],
+        "instrumental": false,
+        "lyrics": "[intro]\n\n[verse]\nShoes off by the door at last\nLaptop closed, the week is past\nRadio up, the kettle sings\nI forgot how good this feels\n\n[chorus]\nOn the kitchen floor tonight\nSpinning under one warm light\nNobody watching, nothing to prove\nJust me and the groove\n\n[verse]\nSocks are sliding, spoon in hand\nI'm the singer and the band\nNeighbours knocking, let them knock\nI'm not looking at the clock\n\n[chorus]\nOn the kitchen floor tonight\nSpinning under one warm light\nNobody watching, nothing to prove\nJust me and the groove\n\n[outro]",
+        "format": "mp3"
+      },
+      "expected_tags_v2": "dance pop, pop, synth, bass, drums, female vocals, clear vocals, fast tempo, energetic, upbeat dance pop, friday night freedom, synth hook returns in chorus",
+      "input_version": "37a2e21522c3"
+    },
+    {
+      "id": "en-pop-s22-A",
+      "brief": "en-pop",
+      "language": "en",
+      "template": "pop",
+      "seed": 22,
+      "arm": "A",
+      "request": {
+        "duration_seconds": 120,
+        "prompt": "female vocals, upbeat dance pop, friday night freedom",
+        "tempo": "fast",
+        "energy": 0.75,
+        "instruments": [
+          "synth",
+          "bass",
+          "drums"
+        ],
+        "style_tags": [
+          "dance pop",
+          "pop"
+        ],
+        "instrumental": false,
+        "lyrics": "[verse]\nShoes off by the door at last\nLaptop closed, the week is past\nRadio up, the kettle sings\nI forgot how good this feels\n\n[chorus]\nOn the kitchen floor tonight\nSpinning under one warm light\nNobody watching, nothing to prove\nJust me and the groove\n\n[verse]\nSocks are sliding, spoon in hand\nI'm the singer and the band\nNeighbours knocking, let them knock\nI'm not looking at the clock\n\n[chorus]\nOn the kitchen floor tonight\nSpinning under one warm light\nNobody watching, nothing to prove\nJust me and the groove",
+        "format": "mp3"
+      },
+      "expected_tags_v2": "dance pop, pop, synth, bass, drums, female vocals, clear vocals, fast tempo, energetic, upbeat dance pop, friday night freedom",
+      "input_version": "3fd60837e181"
+    },
+    {
+      "id": "en-pop-s22-B",
+      "brief": "en-pop",
+      "language": "en",
+      "template": "pop",
+      "seed": 22,
+      "arm": "B",
+      "request": {
+        "duration_seconds": 120,
+        "prompt": "female vocals, upbeat dance pop, friday night freedom, synth hook returns in chorus",
+        "tempo": "fast",
+        "energy": 0.75,
+        "instruments": [
+          "synth",
+          "bass",
+          "drums"
+        ],
+        "style_tags": [
+          "dance pop",
+          "pop"
+        ],
+        "instrumental": false,
+        "lyrics": "[intro]\n\n[verse]\nShoes off by the door at last\nLaptop closed, the week is past\nRadio up, the kettle sings\nI forgot how good this feels\n\n[chorus]\nOn the kitchen floor tonight\nSpinning under one warm light\nNobody watching, nothing to prove\nJust me and the groove\n\n[verse]\nSocks are sliding, spoon in hand\nI'm the singer and the band\nNeighbours knocking, let them knock\nI'm not looking at the clock\n\n[chorus]\nOn the kitchen floor tonight\nSpinning under one warm light\nNobody watching, nothing to prove\nJust me and the groove\n\n[outro]",
+        "format": "mp3"
+      },
+      "expected_tags_v2": "dance pop, pop, synth, bass, drums, female vocals, clear vocals, fast tempo, energetic, upbeat dance pop, friday night freedom, synth hook returns in chorus",
+      "input_version": "37a2e21522c3"
+    },
+    {
+      "id": "en-ballad-s11-A",
+      "brief": "en-ballad",
+      "language": "en",
+      "template": "ballad",
+      "seed": 11,
+      "arm": "A",
+      "request": {
+        "duration_seconds": 120,
+        "prompt": "male vocals, bittersweet piano ballad, a friend leaving",
+        "tempo": "slow",
+        "energy": 0.3,
+        "instruments": [
+          "piano",
+          "cello"
+        ],
+        "style_tags": [
+          "ballad",
+          "indie folk"
+        ],
+        "instrumental": false,
+        "lyrics": "[verse]\nBoxes in the hallway with your name\nHalf the room already feels the change\nWe keep laughing like it's any other day\nBut neither of us knows what we should say\n\n[chorus]\nGo on and find your morning\nWhile I'm still holding night\nCall me from a different time zone\nTell me you're alright\n\n[verse]\nI'll keep the spare key on the windowsill\nIn case you ever need a place to fill\nThe city will be quieter, I know\nBut you were always meant to go\n\n[chorus]\nGo on and find your morning\nWhile I'm still holding night\nCall me from a different time zone\nTell me you're alright",
+        "format": "mp3"
+      },
+      "expected_tags_v2": "ballad, indie folk, piano, cello, male vocals, clear vocals, slow tempo, mellow, bittersweet piano ballad, friend leaving",
+      "input_version": "8240e68e1d62"
+    },
+    {
+      "id": "en-ballad-s11-B",
+      "brief": "en-ballad",
+      "language": "en",
+      "template": "ballad",
+      "seed": 11,
+      "arm": "B",
+      "request": {
+        "duration_seconds": 120,
+        "prompt": "male vocals, bittersweet piano ballad, a friend leaving, piano motif opens and closes",
+        "tempo": "slow",
+        "energy": 0.3,
+        "instruments": [
+          "piano",
+          "cello"
+        ],
+        "style_tags": [
+          "ballad",
+          "indie folk"
+        ],
+        "instrumental": false,
+        "lyrics": "[intro]\n\n[verse]\nBoxes in the hallway with your name\nHalf the room already feels the change\nWe keep laughing like it's any other day\nBut neither of us knows what we should say\n\n[chorus]\nGo on and find your morning\nWhile I'm still holding night\nCall me from a different time zone\nTell me you're alright\n\n[verse]\nI'll keep the spare key on the windowsill\nIn case you ever need a place to fill\nThe city will be quieter, I know\nBut you were always meant to go\n\n[chorus]\nGo on and find your morning\nWhile I'm still holding night\nCall me from a different time zone\nTell me you're alright\n\n[outro]",
+        "format": "mp3"
+      },
+      "expected_tags_v2": "ballad, indie folk, piano, cello, male vocals, clear vocals, slow tempo, mellow, bittersweet piano ballad, friend leaving, piano motif opens and closes",
+      "input_version": "c5d7038a411d"
+    },
+    {
+      "id": "en-ballad-s22-A",
+      "brief": "en-ballad",
+      "language": "en",
+      "template": "ballad",
+      "seed": 22,
+      "arm": "A",
+      "request": {
+        "duration_seconds": 120,
+        "prompt": "male vocals, bittersweet piano ballad, a friend leaving",
+        "tempo": "slow",
+        "energy": 0.3,
+        "instruments": [
+          "piano",
+          "cello"
+        ],
+        "style_tags": [
+          "ballad",
+          "indie folk"
+        ],
+        "instrumental": false,
+        "lyrics": "[verse]\nBoxes in the hallway with your name\nHalf the room already feels the change\nWe keep laughing like it's any other day\nBut neither of us knows what we should say\n\n[chorus]\nGo on and find your morning\nWhile I'm still holding night\nCall me from a different time zone\nTell me you're alright\n\n[verse]\nI'll keep the spare key on the windowsill\nIn case you ever need a place to fill\nThe city will be quieter, I know\nBut you were always meant to go\n\n[chorus]\nGo on and find your morning\nWhile I'm still holding night\nCall me from a different time zone\nTell me you're alright",
+        "format": "mp3"
+      },
+      "expected_tags_v2": "ballad, indie folk, piano, cello, male vocals, clear vocals, slow tempo, mellow, bittersweet piano ballad, friend leaving",
+      "input_version": "8240e68e1d62"
+    },
+    {
+      "id": "en-ballad-s22-B",
+      "brief": "en-ballad",
+      "language": "en",
+      "template": "ballad",
+      "seed": 22,
+      "arm": "B",
+      "request": {
+        "duration_seconds": 120,
+        "prompt": "male vocals, bittersweet piano ballad, a friend leaving, piano motif opens and closes",
+        "tempo": "slow",
+        "energy": 0.3,
+        "instruments": [
+          "piano",
+          "cello"
+        ],
+        "style_tags": [
+          "ballad",
+          "indie folk"
+        ],
+        "instrumental": false,
+        "lyrics": "[intro]\n\n[verse]\nBoxes in the hallway with your name\nHalf the room already feels the change\nWe keep laughing like it's any other day\nBut neither of us knows what we should say\n\n[chorus]\nGo on and find your morning\nWhile I'm still holding night\nCall me from a different time zone\nTell me you're alright\n\n[verse]\nI'll keep the spare key on the windowsill\nIn case you ever need a place to fill\nThe city will be quieter, I know\nBut you were always meant to go\n\n[chorus]\nGo on and find your morning\nWhile I'm still holding night\nCall me from a different time zone\nTell me you're alright\n\n[outro]",
+        "format": "mp3"
+      },
+      "expected_tags_v2": "ballad, indie folk, piano, cello, male vocals, clear vocals, slow tempo, mellow, bittersweet piano ballad, friend leaving, piano motif opens and closes",
+      "input_version": "c5d7038a411d"
+    }
+  ],
+  "plans": {
+    "zh-pop": {
+      "plan": {
+        "version": 1,
+        "template": "pop",
+        "motif": {
+          "instrument": "electric piano",
+          "idea": "a four-note hook"
+        },
+        "coreInstruments": [
+          "electric piano",
+          "bass"
+        ],
+        "sections": [
+          {
+            "role": "intro",
+            "lines": null,
+            "share": 0.07,
+            "job": "state the hook alone on the motif instrument",
+            "change": "the hook, alone",
+            "entry": "from silence"
+          },
+          {
+            "role": "verse",
+            "lines": [
+              0,
+              3
+            ],
+            "share": 0.21,
+            "job": "tell the story; leave room for the voice",
+            "change": "thinner drums, bass sits low",
+            "entry": "drop the density"
+          },
+          {
+            "role": "chorus",
+            "lines": [
+              4,
+              7
+            ],
+            "share": 0.21,
+            "job": "sing the hook in full",
+            "change": "bass and drums open up; harmonies on the last one",
+            "entry": "a drum fill or a held breath"
+          },
+          {
+            "role": "verse",
+            "lines": [
+              8,
+              11
+            ],
+            "share": 0.21,
+            "job": "tell the story; leave room for the voice",
+            "change": "thinner drums, bass sits low",
+            "entry": "drop the density"
+          },
+          {
+            "role": "chorus",
+            "lines": [
+              12,
+              15
+            ],
+            "share": 0.21,
+            "job": "sing the hook in full",
+            "change": "everything in; add harmonies",
+            "entry": "a drum fill or a held breath"
+          },
+          {
+            "role": "outro",
+            "lines": null,
+            "share": 0.09,
+            "job": "the motif instrument alone, returning to the hook",
+            "change": "band falls away",
+            "entry": "straight from the last line"
+          }
+        ],
+        "ending": "end on the hook, motif instrument alone, no fade"
+      },
+      "report": {
+        "productionPhrases": [
+          "electric piano hook returns in chorus"
+        ],
+        "displacedPhrases": [],
+        "addedTags": [
+          "intro",
+          "outro"
+        ],
+        "engineTags": "city pop, mandopop, electric piano, bass, soft drums, female vocals, clear vocals, mid-tempo, late night city pop, warm and a little tired, electric piano hook returns in chorus"
+      }
+    },
+    "zh-ballad": {
+      "plan": {
+        "version": 1,
+        "template": "ballad",
+        "motif": {
+          "instrument": "piano",
+          "idea": "a slow two-bar phrase"
+        },
+        "coreInstruments": [
+          "piano",
+          "strings"
+        ],
+        "sections": [
+          {
+            "role": "intro",
+            "lines": null,
+            "share": 0.07,
+            "job": "the motif, sparse, on the motif instrument",
+            "change": "the hook, alone",
+            "entry": "from silence"
+          },
+          {
+            "role": "verse",
+            "lines": [
+              0,
+              3
+            ],
+            "share": 0.21,
+            "job": "close, intimate voice; the words carry it",
+            "change": "piano or guitar and voice, little else",
+            "entry": "drop the density"
+          },
+          {
+            "role": "chorus",
+            "lines": [
+              4,
+              7
+            ],
+            "share": 0.21,
+            "job": "open the register; the melody of the motif",
+            "change": "strings or pad enter; higher register",
+            "entry": "a drum fill or a held breath"
+          },
+          {
+            "role": "verse",
+            "lines": [
+              8,
+              11
+            ],
+            "share": 0.21,
+            "job": "close, intimate voice; the words carry it",
+            "change": "piano or guitar and voice, little else",
+            "entry": "drop the density"
+          },
+          {
+            "role": "chorus",
+            "lines": [
+              12,
+              15
+            ],
+            "share": 0.21,
+            "job": "open the register; the melody of the motif",
+            "change": "strings or pad enter; higher register",
+            "entry": "a drum fill or a held breath"
+          },
+          {
+            "role": "outro",
+            "lines": null,
+            "share": 0.09,
+            "job": "the motif again, slower, and let it ring",
+            "change": "band falls away",
+            "entry": "straight from the last line"
+          }
+        ],
+        "ending": "resolve on the motif and let the last chord ring"
+      },
+      "report": {
+        "productionPhrases": [
+          "piano motif opens and closes"
+        ],
+        "displacedPhrases": [],
+        "addedTags": [
+          "intro",
+          "outro"
+        ],
+        "engineTags": "ballad, mandopop, piano, strings, male vocals, clear vocals, slow tempo, mellow, gentle piano ballad, tender memory of an old neighbour, piano motif opens and closes"
+      }
+    },
+    "ja-pop": {
+      "plan": {
+        "version": 1,
+        "template": "pop",
+        "motif": {
+          "instrument": "electric guitar",
+          "idea": "a four-note hook"
+        },
+        "coreInstruments": [
+          "electric guitar",
+          "bass"
+        ],
+        "sections": [
+          {
+            "role": "intro",
+            "lines": null,
+            "share": 0.07,
+            "job": "state the hook alone on the motif instrument",
+            "change": "the hook, alone",
+            "entry": "from silence"
+          },
+          {
+            "role": "verse",
+            "lines": [
+              0,
+              3
+            ],
+            "share": 0.21,
+            "job": "tell the story; leave room for the voice",
+            "change": "thinner drums, bass sits low",
+            "entry": "drop the density"
+          },
+          {
+            "role": "chorus",
+            "lines": [
+              4,
+              7
+            ],
+            "share": 0.21,
+            "job": "sing the hook in full",
+            "change": "bass and drums open up; harmonies on the last one",
+            "entry": "a drum fill or a held breath"
+          },
+          {
+            "role": "verse",
+            "lines": [
+              8,
+              11
+            ],
+            "share": 0.21,
+            "job": "tell the story; leave room for the voice",
+            "change": "thinner drums, bass sits low",
+            "entry": "drop the density"
+          },
+          {
+            "role": "chorus",
+            "lines": [
+              12,
+              15
+            ],
+            "share": 0.21,
+            "job": "sing the hook in full",
+            "change": "everything in; add harmonies",
+            "entry": "a drum fill or a held breath"
+          },
+          {
+            "role": "outro",
+            "lines": null,
+            "share": 0.09,
+            "job": "the motif instrument alone, returning to the hook",
+            "change": "band falls away",
+            "entry": "straight from the last line"
+          }
+        ],
+        "ending": "end on the hook, motif instrument alone, no fade"
+      },
+      "report": {
+        "productionPhrases": [
+          "electric guitar hook returns in chorus"
+        ],
+        "displacedPhrases": [],
+        "addedTags": [
+          "intro",
+          "outro"
+        ],
+        "engineTags": "j-pop, pop rock, electric guitar, bass, drums, female vocals, clear vocals, mid-tempo, bright j-pop, seaside bicycle morning, electric guitar hook returns in chorus"
+      }
+    },
+    "ja-ballad": {
+      "plan": {
+        "version": 1,
+        "template": "ballad",
+        "motif": {
+          "instrument": "acoustic guitar",
+          "idea": "a slow two-bar phrase"
+        },
+        "coreInstruments": [
+          "acoustic guitar",
+          "strings"
+        ],
+        "sections": [
+          {
+            "role": "intro",
+            "lines": null,
+            "share": 0.07,
+            "job": "the motif, sparse, on the motif instrument",
+            "change": "the hook, alone",
+            "entry": "from silence"
+          },
+          {
+            "role": "verse",
+            "lines": [
+              0,
+              3
+            ],
+            "share": 0.21,
+            "job": "close, intimate voice; the words carry it",
+            "change": "piano or guitar and voice, little else",
+            "entry": "drop the density"
+          },
+          {
+            "role": "chorus",
+            "lines": [
+              4,
+              7
+            ],
+            "share": 0.21,
+            "job": "open the register; the melody of the motif",
+            "change": "strings or pad enter; higher register",
+            "entry": "a drum fill or a held breath"
+          },
+          {
+            "role": "verse",
+            "lines": [
+              8,
+              11
+            ],
+            "share": 0.21,
+            "job": "close, intimate voice; the words carry it",
+            "change": "piano or guitar and voice, little else",
+            "entry": "drop the density"
+          },
+          {
+            "role": "chorus",
+            "lines": [
+              12,
+              15
+            ],
+            "share": 0.21,
+            "job": "open the register; the melody of the motif",
+            "change": "strings or pad enter; higher register",
+            "entry": "a drum fill or a held breath"
+          },
+          {
+            "role": "outro",
+            "lines": null,
+            "share": 0.09,
+            "job": "the motif again, slower, and let it ring",
+            "change": "band falls away",
+            "entry": "straight from the last line"
+          }
+        ],
+        "ending": "resolve on the motif and let the last chord ring"
+      },
+      "report": {
+        "productionPhrases": [
+          "acoustic guitar motif opens and closes"
+        ],
+        "displacedPhrases": [],
+        "addedTags": [
+          "intro",
+          "outro"
+        ],
+        "engineTags": "ballad, j-pop, acoustic guitar, strings, male vocals, clear vocals, slow tempo, mellow, warm acoustic ballad, thanks to a mother far away, acoustic guitar motif opens and closes"
+      }
+    },
+    "en-pop": {
+      "plan": {
+        "version": 1,
+        "template": "pop",
+        "motif": {
+          "instrument": "synth",
+          "idea": "a four-note hook"
+        },
+        "coreInstruments": [
+          "synth",
+          "bass"
+        ],
+        "sections": [
+          {
+            "role": "intro",
+            "lines": null,
+            "share": 0.07,
+            "job": "state the hook alone on the motif instrument",
+            "change": "the hook, alone",
+            "entry": "from silence"
+          },
+          {
+            "role": "verse",
+            "lines": [
+              0,
+              3
+            ],
+            "share": 0.21,
+            "job": "tell the story; leave room for the voice",
+            "change": "thinner drums, bass sits low",
+            "entry": "drop the density"
+          },
+          {
+            "role": "chorus",
+            "lines": [
+              4,
+              7
+            ],
+            "share": 0.21,
+            "job": "sing the hook in full",
+            "change": "bass and drums open up; harmonies on the last one",
+            "entry": "a drum fill or a held breath"
+          },
+          {
+            "role": "verse",
+            "lines": [
+              8,
+              11
+            ],
+            "share": 0.21,
+            "job": "tell the story; leave room for the voice",
+            "change": "thinner drums, bass sits low",
+            "entry": "drop the density"
+          },
+          {
+            "role": "chorus",
+            "lines": [
+              12,
+              15
+            ],
+            "share": 0.21,
+            "job": "sing the hook in full",
+            "change": "everything in; add harmonies",
+            "entry": "a drum fill or a held breath"
+          },
+          {
+            "role": "outro",
+            "lines": null,
+            "share": 0.09,
+            "job": "the motif instrument alone, returning to the hook",
+            "change": "band falls away",
+            "entry": "straight from the last line"
+          }
+        ],
+        "ending": "end on the hook, motif instrument alone, no fade"
+      },
+      "report": {
+        "productionPhrases": [
+          "synth hook returns in chorus"
+        ],
+        "displacedPhrases": [],
+        "addedTags": [
+          "intro",
+          "outro"
+        ],
+        "engineTags": "dance pop, pop, synth, bass, drums, female vocals, clear vocals, fast tempo, energetic, upbeat dance pop, friday night freedom, synth hook returns in chorus"
+      }
+    },
+    "en-ballad": {
+      "plan": {
+        "version": 1,
+        "template": "ballad",
+        "motif": {
+          "instrument": "piano",
+          "idea": "a slow two-bar phrase"
+        },
+        "coreInstruments": [
+          "piano",
+          "cello"
+        ],
+        "sections": [
+          {
+            "role": "intro",
+            "lines": null,
+            "share": 0.07,
+            "job": "the motif, sparse, on the motif instrument",
+            "change": "the hook, alone",
+            "entry": "from silence"
+          },
+          {
+            "role": "verse",
+            "lines": [
+              0,
+              3
+            ],
+            "share": 0.21,
+            "job": "close, intimate voice; the words carry it",
+            "change": "piano or guitar and voice, little else",
+            "entry": "drop the density"
+          },
+          {
+            "role": "chorus",
+            "lines": [
+              4,
+              7
+            ],
+            "share": 0.21,
+            "job": "open the register; the melody of the motif",
+            "change": "strings or pad enter; higher register",
+            "entry": "a drum fill or a held breath"
+          },
+          {
+            "role": "verse",
+            "lines": [
+              8,
+              11
+            ],
+            "share": 0.21,
+            "job": "close, intimate voice; the words carry it",
+            "change": "piano or guitar and voice, little else",
+            "entry": "drop the density"
+          },
+          {
+            "role": "chorus",
+            "lines": [
+              12,
+              15
+            ],
+            "share": 0.21,
+            "job": "open the register; the melody of the motif",
+            "change": "strings or pad enter; higher register",
+            "entry": "a drum fill or a held breath"
+          },
+          {
+            "role": "outro",
+            "lines": null,
+            "share": 0.09,
+            "job": "the motif again, slower, and let it ring",
+            "change": "band falls away",
+            "entry": "straight from the last line"
+          }
+        ],
+        "ending": "resolve on the motif and let the last chord ring"
+      },
+      "report": {
+        "productionPhrases": [
+          "piano motif opens and closes"
+        ],
+        "displacedPhrases": [],
+        "addedTags": [
+          "intro",
+          "outro"
+        ],
+        "engineTags": "ballad, indie folk, piano, cello, male vocals, clear vocals, slow tempo, mellow, bittersweet piano ballad, friend leaving, piano motif opens and closes"
+      }
+    }
+  },
+  "manifest_version": "208dcd0acdc7"
+}
