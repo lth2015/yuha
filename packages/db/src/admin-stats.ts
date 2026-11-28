@@ -287,6 +287,88 @@ export interface StatsReport {
   trials: TrialStats;
   /** Videos made in the range (song page, 「做一段视频」): from the cover, or with photos. */
   videos: { cover: number; photo: number };
+  /** The three numbers watched this phase (product owner, 2026-11-28). */
+  phase: PhaseStats;
+}
+
+/**
+ * Staff are not the audience: their songs are tests, their timelines are
+ * corrected on purpose. Guests (trials) are, so they count.
+ */
+const NOT_STAFF = `u.role NOT IN ('admin','support')`;
+
+export interface PhaseStats {
+  /**
+   * People whose first song attempt falls in the range. `completed`: a song
+   * was delivered within 24 hours of that first attempt, a retry included.
+   * `pending`: not yet, and the 24 hours are not up — neither a success nor
+   * a failure, so a rate leaves them out.
+   */
+  firstSong: { started: number; completed: number; pending: number };
+  /**
+   * Sung songs delivered in the range, by the timeline they carry now:
+   * `automatic` is used as the aligner made it; `corrected` needed a person;
+   * `unsynced` has no aligned timeline at all (estimated, failed, or none).
+   */
+  lyrics: { sung: number; automatic: number; corrected: number; unsynced: number };
+  /**
+   * Video exports, cover and photo apart. A `busy` refusal asked the person
+   * to try again in a moment; it is not a failed video, nor a made one.
+   */
+  videos: { made: { cover: number; photo: number }; failed: { cover: number; photo: number }; busy: number };
+}
+
+async function phaseStats(fromUtc: Date, toUtc: Date): Promise<PhaseStats> {
+  const [first, lyrics, videos] = await Promise.all([
+    queryOne<{ started: number; completed: number; pending: number }>(
+      `SELECT COUNT(*) AS started,
+              COALESCE(SUM(f.done), 0) AS completed,
+              COALESCE(SUM(NOT f.done AND f.first_at > DATE_SUB(UTC_TIMESTAMP(3), INTERVAL 24 HOUR)), 0) AS pending
+         FROM (SELECT g.user_id, g.first_at,
+                      EXISTS (SELECT 1 FROM generation_jobs d
+                               WHERE d.user_id = g.user_id AND d.state = 'DELIVERED'
+                                 AND d.delivered_at <= DATE_ADD(g.first_at, INTERVAL 24 HOUR)) AS done
+                 FROM (SELECT j.user_id, MIN(j.created_at) AS first_at
+                         FROM generation_jobs j JOIN users u ON u.id = j.user_id
+                        WHERE ${NOT_STAFF}
+                        GROUP BY j.user_id) g
+                WHERE g.first_at >= ? AND g.first_at < ?) f`,
+      [fromUtc, toUtc],
+    ),
+    queryOne<{ sung: number; automatic: number; corrected: number }>(
+      `SELECT COUNT(*) AS sung,
+              COALESCE(SUM(x.src = 'aligned'), 0) AS automatic,
+              COALESCE(SUM(x.src = 'corrected'), 0) AS corrected
+         FROM (SELECT JSON_UNQUOTE(JSON_EXTRACT(t.lyric_timings, '$.source')) AS src
+                 FROM tracks t JOIN users u ON u.id = t.owner_id
+                WHERE t.created_at >= ? AND t.created_at < ? AND t.deleted_at IS NULL
+                  AND t.lyrics IS NOT NULL AND TRIM(t.lyrics) <> '' AND ${NOT_STAFF}) x`,
+      [fromUtc, toUtc],
+    ),
+    query<{ name: string; kind: string | null; reason: string | null; n: number }>(
+      `SELECT e.name, JSON_UNQUOTE(JSON_EXTRACT(e.props, '$.kind')) AS kind,
+              JSON_UNQUOTE(JSON_EXTRACT(e.props, '$.reason')) AS reason, COUNT(*) AS n
+         FROM analytics_events e JOIN users u ON u.id = e.user_ref
+        WHERE e.name IN ('video_made', 'video_failed') AND e.occurred_at >= ? AND e.occurred_at < ? AND ${NOT_STAFF}
+        GROUP BY e.name, kind, reason`,
+      [fromUtc, toUtc],
+    ),
+  ]);
+  const n = (v: unknown) => Number(v ?? 0);
+  const count = (name: string, kind: string, busy: boolean) =>
+    videos.filter((r) => r.name === name && r.kind === kind && (r.reason === 'busy') === busy).reduce((s, r) => s + n(r.n), 0);
+  const sung = n(lyrics?.sung);
+  const automatic = n(lyrics?.automatic);
+  const corrected = n(lyrics?.corrected);
+  return {
+    firstSong: { started: n(first?.started), completed: n(first?.completed), pending: n(first?.pending) },
+    lyrics: { sung, automatic, corrected, unsynced: sung - automatic - corrected },
+    videos: {
+      made: { cover: count('video_made', 'cover', false), photo: count('video_made', 'photo', false) },
+      failed: { cover: count('video_failed', 'cover', false), photo: count('video_failed', 'photo', false) },
+      busy: videos.filter((r) => r.name === 'video_failed' && r.reason === 'busy').reduce((s, r) => s + n(r.n), 0),
+    },
+  };
 }
 
 export interface TrialStats {
@@ -454,13 +536,14 @@ export async function statsReport(params: { granularity: Granularity; from: stri
   const spanMs = toUtc.getTime() - fromUtc.getTime();
   const prevFromUtc = new Date(fromUtc.getTime() - spanMs);
 
-  const [series, totals, previous, sources, trials, videos] = await Promise.all([
+  const [series, totals, previous, sources, trials, videos, phase] = await Promise.all([
     collect(fromUtc, toUtc, params.granularity),
     collect(fromUtc, toUtc, null),
     collect(prevFromUtc, fromUtc, null),
     visitSources(fromUtc, toUtc),
     trialStats(fromUtc, toUtc),
     videoStats(fromUtc, toUtc),
+    phaseStats(fromUtc, toUtc),
   ]);
   const strip = (b: StatsBucket | undefined): StatsTotals => {
     const { key: _key, ...rest } = b ?? emptyBucket('all');
@@ -476,6 +559,7 @@ export async function statsReport(params: { granularity: Granularity; from: stri
     sources,
     trials,
     videos,
+    phase,
   };
 }
 

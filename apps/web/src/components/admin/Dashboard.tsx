@@ -47,6 +47,12 @@ interface Report {
   trials: { opened: number; made: number; claimed: number };
   /** Absent from an API older than the count. */
   videos?: { cover: number; photo: number };
+  /** The three numbers watched this phase (2026-11-28); absent from an older API. */
+  phase?: {
+    firstSong: { started: number; completed: number; pending: number };
+    lyrics: { sung: number; automatic: number; corrected: number; unsynced: number };
+    videos: { made: { cover: number; photo: number }; failed: { cover: number; photo: number }; busy: number };
+  };
 }
 
 /* Categorical slots 1–3 of the validated palette (blue, orange, aqua), in
@@ -324,6 +330,7 @@ export function Dashboard() {
                 </div>
               ))}
 
+            {report.phase && <PhaseLines phase={report.phase} num={num} />}
             <h3 className="dash__subhead">{t('admin.dash.trials.h')}</h3>
             <p className="small">
               {t('admin.dash.trials.line', { opened: num(report.trials.opened), made: num(report.trials.made), claimed: num(report.trials.claimed) })}
@@ -478,6 +485,51 @@ function FunnelCells({ r }: { r: FunnelRow }) {
       <td className="num">{num(r.madeAVideo ?? 0)}</td>
       <td className="num">{num(r.paid)}</td>
       <td className="num">{formatMoney(r.revenueJpy, 'jpy', LOCALES[lang])}</td>
+    </>
+  );
+}
+
+/**
+ * The phase's three numbers, each as a rate with what it was taken over, so a
+ * rate is never read without its denominator. Undecided cases (a first song
+ * still inside its 24 hours, a video refused because another was encoding)
+ * are shown beside the rate, not inside it.
+ */
+function PhaseLines({ phase, num }: { phase: NonNullable<Report['phase']>; num: (n: number) => string }) {
+  const { t } = useI18n();
+  const rate = (part: number, whole: number) => (whole > 0 ? `${Math.round((part / whole) * 100)}%` : '—');
+  const decided = phase.firstSong.started - phase.firstSong.pending;
+  const made = phase.videos.made.cover + phase.videos.made.photo;
+  const failed = phase.videos.failed.cover + phase.videos.failed.photo;
+  return (
+    <>
+      <h3 className="dash__subhead">{t('admin.dash.phase.h')}</h3>
+      <p className="small">
+        {t('admin.dash.phase.firstSong', {
+          rate: rate(phase.firstSong.completed, decided),
+          completed: num(phase.firstSong.completed),
+          decided: num(decided),
+          pending: num(phase.firstSong.pending),
+        })}
+      </p>
+      <p className="small">
+        {t('admin.dash.phase.lyrics', {
+          rate: rate(phase.lyrics.automatic, phase.lyrics.sung),
+          automatic: num(phase.lyrics.automatic),
+          sung: num(phase.lyrics.sung),
+          corrected: num(phase.lyrics.corrected),
+          unsynced: num(phase.lyrics.unsynced),
+        })}
+      </p>
+      <p className="small">
+        {t('admin.dash.phase.videos', {
+          rate: rate(made, made + failed),
+          made: num(made),
+          failed: num(failed),
+          failedPhoto: num(phase.videos.failed.photo),
+          busy: num(phase.videos.busy),
+        })}
+      </p>
     </>
   );
 }
