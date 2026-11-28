@@ -168,7 +168,7 @@ const ja: Dict = {
   "sceneMv.seconds": "{n} 秒",
   "sceneMv.start": "開始位置",
   "sceneMv.length": "長さ（最大 32 秒）",
-  "sceneMv.estimated": "歌詞の時刻は推定値のため、歌声と字幕がずれることがあります。",
+  "sceneMv.estimated": "歌詞が正確に同期されるまで、この動画には歌詞字幕が入りません。",
   "sceneMv.style": "2. 映像の雰囲気を選ぶ",
   "sceneMv.style.neon_rain": "雨のネオン街",
   "sceneMv.style.seaside_sunset": "夕暮れの海辺",

@@ -168,7 +168,7 @@ const zh: Dict = {
   "sceneMv.seconds": "{n} 秒",
   "sceneMv.start": "片段起点",
   "sceneMv.length": "片段长度（最多 32 秒）",
-  "sceneMv.estimated": "歌词时间是估算的，字幕可能与歌声不同步。",
+  "sceneMv.estimated": "这首歌还没有可靠的同步结果，这段视频将不带歌词字幕。",
   "sceneMv.style": "2. 选择画面风格",
   "sceneMv.style.neon_rain": "雨夜霓虹",
   "sceneMv.style.seaside_sunset": "日落海边",

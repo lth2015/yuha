@@ -168,7 +168,7 @@ const en: Dict = {
   "sceneMv.seconds": "{n} seconds",
   "sceneMv.start": "Start position",
   "sceneMv.length": "Length (up to 32 seconds)",
-  "sceneMv.estimated": "Lyric timing is estimated, so subtitles may differ from the singing.",
+  "sceneMv.estimated": "This video will have no lyric subtitles until the song has a reliable lyric sync.",
   "sceneMv.style": "2. Choose a visual style",
   "sceneMv.style.neon_rain": "Neon rain",
   "sceneMv.style.seaside_sunset": "Seaside sunset",
