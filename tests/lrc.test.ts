@@ -43,6 +43,27 @@ describe('the lrc it writes', () => {
     expect(toLrc(timings()).trimEnd().split('\n').pop()).toBe('[00:12.25]');
   });
 
+  it('clears a real gap without inserting a competing timestamp at a rounded boundary', () => {
+    const out = toLrc(timings({ lines: [
+      { text: 'one', section: '', start: 1, end: 2 },
+      { text: 'two', section: '', start: 5, end: 6.001 },
+      { text: 'three', section: '', start: 6.004, end: 7 },
+      { text: 'four', section: '', start: 6.8, end: 9 },
+    ] }));
+    expect(out.split('\n').filter((line) => /^\[\d/.test(line))).toEqual([
+      '[00:01.00]one', '[00:02.00]', '[00:05.00]two', '[00:06.00]three', '[00:06.80]four', '[00:09.00]',
+    ]);
+  });
+
+  it('skips cues with no representable duration and still clears the preceding line', () => {
+    const out = toLrc(timings({ lines: [
+      { text: 'heard', section: '', start: 1, end: 3 },
+      { text: 'same tick', section: '', start: 3.001, end: 3.004 },
+      { text: 'zero length', section: '', start: 5, end: 5 },
+    ] }));
+    expect(out.split('\n').filter((row) => /^\[\d/.test(row))).toEqual(['[00:01.00]heard', '[00:03.00]']);
+  });
+
   it('writes word tags only when the aligner heard words', () => {
     const plain = toLrc(timings());
     expect(plain).not.toContain('<');

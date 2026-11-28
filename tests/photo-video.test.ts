@@ -6,7 +6,7 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { randomUUID } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
-import { mkdtempSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { claimOutboxBatch, jstToday, query, queryOne, statsReport, withTx } from '@yuha/db';
@@ -71,6 +71,35 @@ const post = (h: Harness, who: TestUser, id: string, body: Record<string, unknow
   h.app.inject({ method: 'POST', url: `/v1/tracks/${id}/photo-video`, headers: who.authHeader, payload: { rightsConfirmed: true, ...body } as never });
 
 describe('the photo video', () => {
+  it('keeps later frames on the audio clock even after many sub-frame cuts', async () => {
+    const user = await on.createUser({ credits: 3 });
+    const trackId = await song(on, user);
+    const blank = jpeg('black');
+    const caption = jpeg('white');
+    const frames = [
+      { at: 0, jpeg: blank },
+      ...Array.from({ length: 55 }, (_, i) => ({ at: (10 + i) / 100, jpeg: blank })),
+      { at: 2, jpeg: caption },
+      { at: 3, jpeg: blank },
+    ];
+    const res = await post(on, user, trackId, { start: 0, duration: 5, frames });
+    expect(res.statusCode).toBe(200);
+    const dir = mkdtempSync(join(tmpdir(), 'photo-clock-'));
+    try {
+      const video = join(dir, 'video.mp4');
+      writeFileSync(video, res.rawPayload);
+      const luma = (second: string) => execFileSync('ffmpeg', [
+        '-v', 'error', '-ss', second, '-i', video, '-frames:v', '1', '-vf', 'crop=8:8:0:0,format=gray',
+        '-threads', '1', '-f', 'rawvideo', 'pipe:1',
+      ])[0]!;
+      expect(luma('1.80')).toBeLessThan(30);
+      expect(luma('2.25')).toBeGreaterThan(220);
+      expect(luma('3.25')).toBeLessThan(30);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  }, 60_000);
+
   it('puts the photo frames on the song’s audio as a portrait MP4, and keeps nothing', async () => {
     const user = await on.createUser({ credits: 3 });
     const trackId = await song(on, user);

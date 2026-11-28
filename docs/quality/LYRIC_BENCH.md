@@ -5,6 +5,7 @@ zh / ja / en songs, heard by people, against which every alignment route is
 scored the same way. Method from [LYRIC_SYNC_REVIEW_CLAUDE.md](../LYRIC_SYNC_REVIEW_CLAUDE.md) §4.
 
 ```bash
+pnpm --filter @yuha/contracts build
 node scripts/lyric-bench.mjs                       # quality-probes/lyric-bench (gitignored)
 node scripts/lyric-bench.mjs <dir> --base current --tolerance 0.3 --confident 0.5
 ```
@@ -43,8 +44,8 @@ alignment between the two.
 
 | Measure | Definition |
 | --- | --- |
-| line hit | A sung line that is confirmed (`confidence` is absent or ≥ `--confident`) and starts within ±tolerance |
-| unconfirmed | The aligner reported that it did not hear the line well enough (`confidence` < `--confident`). It is shown as unconfirmed rather than highlighted. This is not a hit, but it is not a false highlight either |
+| line hit | A sung line eligible for strict playback whose start is within ±tolerance |
+| unconfirmed | A line excluded by the shared eligibility rules. These exclude estimates, low confidence for aligned lines, stacked aligned starts and zero-duration lines |
 | falsely lit | An unsung line that the route would light up as sung. **Any increase rejects a route**, whatever its hit rate |
 | usable with no edits | A song where every sung line is a hit and no unsung line is lit: you can listen to it without anyone touching it |
 | noise floor | The median and P90 of the start differences between two annotators. The tolerance must not be below that P90 |
@@ -84,7 +85,7 @@ what a person heard.
 3. **Align on the DGX.** Copy the folder to `~/yuha-bench/truth`, then run
    `bench_align.py --truth /bench/truth` (the command is in `deploy/dgx/music/README.md`). It
    writes `routes/whisper/` and `routes/qwen/` beside the annotations.
-4. **Score** anywhere: `node scripts/lyric-bench.mjs quality-probes/lyric-bench --base whisper`.
+4. **Score** from a checkout with dependencies installed. Run `pnpm --filter @yuha/contracts build` and then `node scripts/lyric-bench.mjs quality-probes/lyric-bench --base whisper`.
 
 There are two limits to keep in mind:
 
@@ -93,3 +94,9 @@ There are two limits to keep in mind:
   every line by listening, not only the ones that look wrong.
 - A correction cannot say that a line was never sung. Every exported line is `sung: true`, so
   "falsely lit" is not measured this way.
+- For the false-highlight check, independently listen to dedicated test audio and set each
+  confirmed omitted line to `sung: false` with `start: null`. Include a repeated chorus and
+  a long instrumental gap. The strict player and captions clear the gap, and LRC writes
+  an empty timestamp at the preceding line's end when the next timestamp leaves room for one.
+- The scores compare eligible lines and their start times. The score does not resolve
+  which line is visible at each instant if two otherwise eligible timings overlap.

@@ -8,10 +8,10 @@
  * videos and the .lrc cannot disagree about a line.
  */
 import { describe, expect, it } from 'vitest';
-import { isTrustedLine, trustedMask, trustedTimeline, type LyricTimings } from '@yuha/contracts';
+import { isTrustedLine, toLrc, trustedMask, trustedTimeline, type LyricTimings } from '@yuha/contracts';
 import { buildAss, subtitleLines } from '@yuha/worker/scene-mv-compose';
 import { activeLineIndex, activeTrustedLine, timedLinesFor, trustedFlags } from '../apps/web/src/lib/lyrics';
-import { planShareClip } from '../apps/web/src/lib/share-art';
+import { planPhotoClip, planShareClip } from '../apps/web/src/lib/share-art';
 
 const lines = [
   { text: 'one', section: 'Verse', start: 2, end: 4 },
@@ -82,6 +82,56 @@ describe('the highlight', () => {
 });
 
 describe('the videos and the .lrc', () => {
+  it.each([
+    ['zh', '背着落日回家', '这一句没有唱', '晚风等等我'],
+    ['ja', '夕焼けを背に帰る', '歌われなかった行', '風よ、待って'],
+    ['en', 'I take the sunset home', 'This line was never sung', 'Wait for me, evening wind'],
+  ])('keeps both choruses and clears the omitted line and the interlude in %s', (_language, verse, omitted, chorus) => {
+    const timing: LyricTimings = { source: 'aligned', aligner: 'whisper', lines: [
+      { text: verse, section: 'verse', start: 1, end: 3, confidence: 1 },
+      { text: omitted, section: 'verse', start: 5, end: 7, confidence: 0.1 },
+      { text: chorus, section: 'chorus', start: 10, end: 13, confidence: 1 },
+      { text: chorus, section: 'chorus', start: 22, end: 25, confidence: 1 },
+    ] };
+    const flags = trustedFlags(timing, true);
+    const clip = planShareClip(timedLinesFor(timing, true), 28, 30, 28);
+    const photos = planPhotoClip(timedLinesFor(timing, true), 28, 2, 28);
+    const playerAt = (second: number) => timing.lines[activeTrustedLine(timing.lines, flags, second)]?.text ?? null;
+    const coverAt = (second: number) => clip.frames.findLast((frame) => clip.start + frame.at <= second)?.line ?? null;
+    for (const [second, expected] of [[2, verse], [6, null], [11, chorus], [17, null], [23, chorus], [26, null]] as const) {
+      expect(playerAt(second)).toBe(expected);
+      expect(coverAt(second)).toBe(expected);
+      expect(photos.frames.findLast((frame) => photos.start + frame.at <= second)?.line ?? null).toBe(expected);
+    }
+    const ass = buildAss(subtitleLines(timing), 0, 28);
+    expect(ass.split('\n').filter((row) => row.startsWith('Dialogue:'))).toEqual([
+      `Dialogue: 0,0:00:01.00,0:00:03.00,Default,,0,0,0,,${verse}`,
+      `Dialogue: 0,0:00:10.00,0:00:13.00,Default,,0,0,0,,${chorus}`,
+      `Dialogue: 0,0:00:22.00,0:00:25.00,Default,,0,0,0,,${chorus}`,
+    ]);
+    const lrc = toLrc(trustedTimeline(timing)!);
+    expect(lrc.split('\n').filter((row) => /^\[\d/.test(row))).toEqual([
+      `[00:01.00]${verse}`, '[00:03.00]', `[00:10.00]${chorus}`,
+      '[00:13.00]', `[00:22.00]${chorus}`, '[00:25.00]',
+    ]);
+  });
+
+  it('clears rounded photo caption endings and keeps clearing frames when it reaches capacity', () => {
+    const ending = planPhotoClip([{ text: 'Last word', section: '', start: 9, end: 10.004 }], 28, 2, 28);
+    expect(ending.frames.findLast((frame) => frame.at <= 12)?.line).toBeNull();
+
+    const lines = Array.from({ length: 150 }, (_, i) =>
+      ({ text: String(i), section: '', start: i / 2 + 1, end: i / 2 + 1.2 }),
+    );
+    const capped = planPhotoClip(lines, 82, 3, 82);
+    expect(capped.frames.length).toBeLessThanOrEqual(200);
+    expect(capped.frames.at(-1)).toMatchObject({ ending: true, line: null });
+    capped.frames.forEach((frame, i) => {
+      if (frame.line === null) return;
+      expect(capped.frames[i + 1]!.at).toBeLessThanOrEqual(lines[Number(frame.line)]!.end);
+    });
+  });
+
   it('draw and write only trusted lines; an estimate gives a video without words', () => {
     const a = aligned([1, 0.2, 1]);
     const text = (l: { line: string | null }) => l.line;

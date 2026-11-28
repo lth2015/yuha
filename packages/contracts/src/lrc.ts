@@ -21,19 +21,16 @@
  */
 import type { LyricTimings } from './generation.js';
 
-/** `mm:ss.xx`, centiseconds, as the format specifies. Never negative. */
-function stamp(seconds: number): string {
-  const total = Math.max(0, seconds);
-  const minutes = Math.floor(total / 60);
-  const rest = total - minutes * 60;
-  const whole = Math.floor(rest);
-  const cs = Math.round((rest - whole) * 100);
-  // Rounding 59.999 up must carry into the minute rather than print ":60.00".
-  const [s, m] = cs === 100 ? [whole + 1, minutes] : [whole, minutes];
-  const carried = s === 60 ? [0, m + 1] : [s, m];
-  return `${String(carried[1]).padStart(2, '0')}:${String(carried[0]).padStart(2, '0')}.${String(
-    cs === 100 ? 0 : cs,
-  ).padStart(2, '0')}`;
+function centiseconds(seconds: number): number {
+  return Math.max(0, Math.round(seconds * 100));
+}
+
+/** `mm:ss.xx` from an already rounded centisecond timestamp. */
+function stamp(total: number): string {
+  const minutes = Math.floor(total / 6000);
+  const seconds = Math.floor(total / 100) % 60;
+  const hundredths = total % 100;
+  return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}.${String(hundredths).padStart(2, '0')}`;
 }
 
 /** `mm:ss` — what the `[length:]` tag takes; centiseconds are not used there. */
@@ -66,22 +63,27 @@ export function toLrc(timings: LyricTimings, meta: LrcMeta = {}): string {
   out.push(`[ve:${timings.source}]`);
   out.push('');
 
-  for (const line of timings.lines) {
-    const head = `[${stamp(line.start)}]`;
+  // A cue that cannot occupy a centisecond would otherwise stay on screen
+  // until the next cue (or the end of the audio).
+  const lines = timings.lines.filter((line) => centiseconds(line.end) > centiseconds(line.start));
+  for (const [index, line] of lines.entries()) {
+    const start = centiseconds(line.start);
+    const head = `[${stamp(start)}]`;
     if (line.words?.length) {
       // Word tags carry their own times; the line keeps its leading timestamp
       // so a plain player still shows it at the right moment.
-      const body = line.words.map((w) => `<${stamp(w.start)}>${w.w}`).join(' ');
+      const body = line.words.map((w) => `<${stamp(centiseconds(w.start))}>${w.w}`).join(' ');
       out.push(`${head}${body}`);
     } else {
       out.push(`${head}${line.text}`);
     }
+    // LRC displays the last event until another timestamp replaces it. Clear
+    // a gap explicitly, but let a new line take over if its timestamp is
+    // already at or before this end, including rounding to the same tick.
+    const next = lines[index + 1];
+    const end = centiseconds(line.end);
+    if (!next || end < centiseconds(next.start)) out.push(`[${stamp(end)}]`);
   }
-
-  // A final timestamp with no text is how LRC says "the words stop here";
-  // without it a player holds the last line lit until the audio ends.
-  const last = timings.lines[timings.lines.length - 1];
-  if (last) out.push(`[${stamp(last.end)}]`);
 
   return out.join('\n') + '\n';
 }
