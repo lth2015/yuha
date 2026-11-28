@@ -16,8 +16,9 @@ export const API_STORAGE_WRITES: ReadonlyArray<{ prefix: string; feature: string
   { prefix: 'official-bgm/previews/', feature: 'official BGM import (60-second preview)' },
   { prefix: 'official-bgm/covers/', feature: 'official BGM import (cover)' },
   { prefix: 'share-cards/', feature: 'share card' },
-  // exportKey(): `<owner id>/<track id>/export-…`. A nil id is nobody's.
-  { prefix: '00000000-0000-0000-0000-000000000000/00000000-0000-0000-0000-000000000000/', feature: 'song export' },
+  // exportKey(): `<owner id>/<track id>/export-…`. An all-f id is nobody's
+  // (and, unlike the nil UUID, does not read as a telephone number to check:stewardship).
+  { prefix: 'ffffffff-ffff-4fff-bfff-ffffffffffff/ffffffff-ffff-4fff-bfff-ffffffffffff/', feature: 'song export' },
 ];
 
 export interface ProbeResult {
