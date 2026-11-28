@@ -9,7 +9,7 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { randomUUID } from 'node:crypto';
 import type { LyricTimings } from '@yuha/contracts';
-import { claimOutboxBatch, query, queryOne, withTx } from '@yuha/db';
+import { claimOutboxBatch, execute, query, queryOne, withTx } from '@yuha/db';
 import type { AlignmentProvider, AlignmentResult } from '@yuha/providers';
 import { runJobStep } from '@yuha/worker/pipeline';
 import { createHarness, resetData, teardown, type Harness, type TestUser } from './helpers/harness.js';
@@ -92,13 +92,10 @@ describe('the timeline written after delivery', () => {
   it('does not replace a correction the owner saved while it was being made', async () => {
     const user = await h.createUser({ credits: 5 });
     (h.ctx as { alignment: AlignmentProvider }).alignment = aligner(aligned, async (trackId) => {
-      const res = await h.app.inject({
-        method: 'POST',
-        url: `/v1/tracks/${trackId}/lyric-timings`,
-        headers: user.authHeader,
-        payload: { source: 'corrected', aligner: 'human', lines: mine } as never,
-      });
-      expect(res.statusCode).toBe(200);
+      await execute('UPDATE tracks SET lyric_timings = ? WHERE id = ?', [
+        JSON.stringify({ source: 'corrected', aligner: 'human', lines: mine }),
+        trackId,
+      ]);
     });
     const id = await song(user);
     const t = await stored(id);

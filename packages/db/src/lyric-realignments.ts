@@ -37,13 +37,14 @@ export interface RealignCandidate {
 /*
  * Which songs: sung, with lyrics, not deleted, and not corrected by a person.
  * A correction is somebody who sat and listened; a model's second opinion
- * does not outrank it (contracts markCorrected).
+ * does not outrank a previously saved correction.
  */
 const CANDIDATE_WHERE = `
       t.deleted_at IS NULL
   AND t.vocal_mode = 'with_vocals'
   AND t.lyrics IS NOT NULL AND TRIM(t.lyrics) <> ''
-  AND (t.lyric_timings IS NULL OR JSON_UNQUOTE(JSON_EXTRACT(t.lyric_timings, '$.source')) <> 'corrected')`;
+  AND (t.lyric_timings IS NULL OR JSON_UNQUOTE(JSON_EXTRACT(t.lyric_timings, '$.source')) <> 'corrected')
+  AND JSON_EXTRACT(t.lyric_timings, '$.appliedProposalId') IS NULL`;
 
 export async function getLyricRealignment(id: string, tx?: PoolConnection): Promise<LyricRealignmentRow | null> {
   return (await queryOne<LyricRealignmentRow>(`SELECT * FROM lyric_realignments WHERE id = ?`, [id], tx)) ?? null;
@@ -132,12 +133,14 @@ export async function finishRealignedTrack(
   if (timings && timings.source === 'aligned') {
     // Re-read inside the lock: the owner may have saved a correction while
     // the aligner was busy, and theirs wins.
-    const current = await queryOne<{ source: string | null }>(
-      `SELECT JSON_UNQUOTE(JSON_EXTRACT(lyric_timings, '$.source')) AS source FROM tracks WHERE id = ? FOR UPDATE`,
+    const current = await queryOne<{ source: string | null; applied_proposal: string | null }>(
+      `SELECT JSON_UNQUOTE(JSON_EXTRACT(lyric_timings, '$.source')) AS source,
+              JSON_UNQUOTE(JSON_EXTRACT(lyric_timings, '$.appliedProposalId')) AS applied_proposal
+         FROM tracks WHERE id = ? FOR UPDATE`,
       [trackId],
       tx,
     );
-    if (current && current.source !== 'corrected') {
+    if (current && current.source !== 'corrected' && !current.applied_proposal) {
       await execute(
         `UPDATE tracks SET lyric_timings = ?, updated_at = UTC_TIMESTAMP(3) WHERE id = ?`,
         [JSON.stringify(timings), trackId],

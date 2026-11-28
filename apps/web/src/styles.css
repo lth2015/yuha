@@ -1464,8 +1464,6 @@ textarea.is-full { border-color: var(--danger); }
 /* synced lyrics */
 .lyrics-sync { position: relative; max-height: 420px; overflow-y: auto; padding: var(--s6) 4px; -webkit-mask-image: linear-gradient(to bottom, transparent, #000 12%, #000 86%, transparent); mask-image: linear-gradient(to bottom, transparent, #000 12%, #000 86%, transparent); scrollbar-width: none; }
 .lyrics-sync::-webkit-scrollbar { display: none; }
-.lyrics-sync__pill { display: inline-flex; align-items: center; gap: 6px; margin-bottom: var(--s4); padding: 4px 12px; border-radius: 999px; font-size: var(--t-caption); font-weight: 600; letter-spacing: 0.1em; color: var(--muted); border: 1px solid var(--line); background: var(--surface-soft); }
-.lyrics-sync__pill.is-aligned { color: var(--link); border-color: color-mix(in srgb, var(--petal) 40%, transparent); }
 .lyrics-sync__marker { display: block; margin: var(--s4) 0 4px; font-size: var(--t-caption); font-weight: 600; text-transform: uppercase; letter-spacing: 0.16em; color: var(--muted); }
 /* These four rules carried --muted at 0.55 and 0.35, i.e. 2.25:1 and
    1.63:1 — the lyrics of the song, on the song page, below the 4.5:1 floor
@@ -1550,7 +1548,6 @@ textarea.is-full { border-color: var(--danger); }
   -webkit-mask-image: linear-gradient(to bottom, transparent, #000 24%, #000 76%, transparent);
   mask-image: linear-gradient(to bottom, transparent, #000 24%, #000 76%, transparent);
 }
-.now-playing__lyrics .lyrics-sync__pill { display: none; }
 .now-playing__lyrics .lyrics-sync__marker { display: none; }
 .now-playing__lyrics .lyrics-sync__line {
   font-size: clamp(22px, 2.2vw, 32px); font-weight: 600; padding: 12px 0; letter-spacing: 0.01em;
@@ -1736,15 +1733,10 @@ textarea.is-full { border-color: var(--danger); }
 .studio__dial { display: flex; flex-direction: column; gap: var(--s2); min-width: 0; }
 .studio__dial-label { font-size: var(--t-caption); font-weight: 600; letter-spacing: 0.04em; color: var(--muted); }
 .studio__dial-hint { font-size: var(--t-caption); color: var(--muted); }
-.lyrics-sync__head { display: flex; align-items: center; justify-content: space-between; gap: var(--s2); flex-wrap: wrap; }
-.lyrics-sync__note { font-size: var(--t-caption); line-height: 1.6; color: var(--muted); margin: var(--s2) 0 0; max-width: 56ch; }
+.lyrics-sync__download { display: flex; margin-top: var(--s2); }
+.lyric-auto-sync { display: grid; gap: var(--s2); justify-items: start; }
+.lyric-auto-sync p { margin: 0; }
 .lyrics-sync__status { font-size: var(--t-caption); line-height: 1.6; color: var(--muted); margin: 0 0 var(--s2); max-width: 56ch; }
-.lyrics-sync__actions { display: flex; align-items: center; gap: var(--s2); flex-wrap: wrap; }
-.lyrics-sync__offset { font-size: var(--t-caption); color: var(--muted); min-width: 4ch; text-align: center; }
-.lyrics-sync__bar { display: flex; align-items: center; gap: var(--s2); flex-wrap: wrap; margin-top: var(--s2); font-size: var(--t-caption); color: var(--ink); }
-/* Only on the line being read, so correcting does not turn the lyrics into a
-   wall of buttons; it appears while the song plays and goes when it stops. */
-.lyrics-sync__stamp { margin-top: 4px; }
 /* A creator's own style tag, and the section markers, are added under the
    control they belong to rather than in a dialog: both are things you reach
    for mid-thought, and a dialog would cost the thought. */
@@ -2922,7 +2914,6 @@ textarea.is-full { border-color: var(--danger); }
 .photo-video__alt { padding-top: var(--s4); border-top: 1px solid var(--line); display: grid; gap: var(--s3); }
 .photo-video__alt summary { cursor: pointer; min-height: 44px; display: flex; align-items: center; color: var(--link); font-size: var(--t-body); }
 .photo-video__alt[open] { gap: var(--s3); }
-.photo-video__sync { display: grid; gap: var(--s3); justify-items: start; min-width: 0; }
 /* Videos made on this device, in My songs (components/LocalVideos.tsx). */
 .local-videos { display: grid; gap: var(--s3); }
 .local-videos h2 { margin: 0; font-size: var(--t-title); font-weight: 600; }
@@ -2938,64 +2929,6 @@ textarea.is-full { border-color: var(--danger); }
 .local-videos__title { font-size: var(--t-body); font-weight: 600; color: var(--ink); text-decoration: none; overflow-wrap: anywhere; }
 .local-videos__actions { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s2); }
 .local-videos .btn { white-space: normal; text-align: center; max-width: 100%; }
-/* Lyric timing inside the video card (components/LyricSyncStudio.tsx). */
-.sync-studio { display: grid; gap: var(--s3); width: 100%; min-width: 0; padding: var(--s4); border: 1px solid var(--line); border-radius: var(--r-control); background: var(--surface-solid); }
-.sync-studio__lead { margin: 0; color: var(--muted); font-size: var(--t-body); line-height: 1.7; }
-.sync-studio__auto { display: grid; gap: var(--s2); justify-items: start; }
-.sync-studio__auto p { margin: 0; }
-.sync-studio__top { display: grid; grid-template-columns: 64px minmax(0, 1fr); gap: var(--s3); align-items: start; }
-.sync-studio__preview {
-  aspect-ratio: 9 / 16; border-radius: 10px; background: #1d1f1c center / cover no-repeat; display: flex; align-items: flex-end; overflow: hidden;
-}
-.sync-studio__preview.is-cover { background-image: linear-gradient(160deg, var(--violet), var(--petal-deep)); }
-.sync-studio__preview-line {
-  width: 100%; padding: 6px; font-size: var(--t-caption); line-height: 1.35; color: #fff; text-align: center; text-wrap: balance; overflow-wrap: anywhere;
-  background: linear-gradient(to top, rgb(0 0 0 / 70%), transparent);
-}
-.sync-studio__transport { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s2); min-width: 0; }
-.sync-studio__clock { font-size: var(--t-body); color: var(--ink); }
-/* The lane: time runs down, waveform on the left, a block per line beside it at its real start and length. */
-.sync-studio__lane {
-  position: relative; height: min(40vh, 420px); overflow-y: auto; overscroll-behavior: contain; border-radius: 10px;
-  background: var(--surface-soft); cursor: pointer; -webkit-overflow-scrolling: touch;
-}
-.sync-studio__track { position: relative; color: rgba(var(--score-neutral), 0.3); }
-.sync-studio__wave { position: absolute; top: 0; left: 40px; width: 44px; }
-.sync-studio__tick {
-  position: absolute; left: 4px; width: 34px; transform: translateY(-50%); font-size: var(--t-caption); line-height: 1;
-  color: var(--faint); pointer-events: none;
-}
-.sync-studio__tick::after { content: ''; position: absolute; left: 36px; top: 50%; width: 46px; border-top: 1px solid var(--line); }
-.sync-studio__block {
-  position: absolute; left: 92px; right: 8px; min-height: 0; padding: 0; box-sizing: border-box; overflow: clip;
-  border: 1px solid var(--line-strong); border-radius: 6px; background: var(--glass-strong); color: var(--ink);
-  font: inherit; font-size: var(--t-caption); line-height: 1.35; text-align: left; cursor: pointer;
-}
-.sync-studio__block { display: flex; flex-direction: column; justify-content: flex-start; align-items: stretch; }
-/* The text at the block's top edge, which is the line's start. */
-/* Sticky, so a line taller than the lane keeps its words in sight while
-   any of it is; `overflow: clip` above (not hidden) is what lets it stick. */
-.sync-studio__label { display: block; position: sticky; top: 0; padding: 2px 6px; pointer-events: none; overflow-wrap: anywhere; }
-/* A short line: one row, ended with an ellipsis rather than sliced through a second. */
-.sync-studio__label.is-short { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-/* The grip a finger drags the chosen line by; the rest of a tall block still scrolls the lane. */
-.sync-studio__grip {
-  float: right; pointer-events: auto; touch-action: none; cursor: grab; min-width: 32px; min-height: 22px; margin: -2px -4px 0 4px;
-  display: inline-grid; place-items: center; border-radius: 6px; background: var(--petal-deep); color: #fff; font-size: var(--t-caption); line-height: 1;
-}
-.sync-studio__at { color: var(--faint); margin-right: 4px; }
-.sync-studio__block.is-current { border-color: var(--petal); }
-.sync-studio__block.is-selected { background: var(--petal-soft); border-color: var(--petal-deep); box-shadow: inset 0 0 0 1px var(--petal-deep); cursor: grab; touch-action: pan-y; z-index: 1; }
-.sync-studio__cursor { position: absolute; left: 0; right: 0; height: 2px; margin-top: -1px; background: var(--petal-deep); pointer-events: none; z-index: 2; }
-.sync-studio__wavenote { margin: 0; }
-.sync-studio__fix { margin: 0; padding: var(--s3); border: 1px solid var(--line); border-radius: var(--r-control); display: grid; gap: var(--s2); min-width: 0; }
-.sync-studio__fix legend { padding: 0 4px; font-size: var(--t-body); font-weight: 600; }
-.sync-studio__fix p { margin: 0; }
-.sync-studio__quote { font-size: var(--t-body); color: var(--ink); overflow-wrap: anywhere; }
-.sync-studio__row { display: flex; flex-wrap: wrap; gap: var(--s2); }
-.sync-studio .btn { white-space: normal; text-align: center; max-width: 100%; }
-.sync-studio__bar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--s2); font-size: var(--t-body); }
-
 /* Trying without an account (components/TrialAsk.tsx; the keep panel on the song page). */
 .trial-ask, .trial-keep, .trial-claim { margin-top: var(--s4); padding: var(--s6); border: 1px solid var(--line); border-radius: var(--r-card); background: var(--surface); display: grid; gap: var(--s3); }
 .trial-ask h2, .trial-keep h2, .trial-claim h2 { margin: 0; font-size: var(--t-title); font-weight: 600; }
@@ -3056,10 +2989,6 @@ textarea.is-full { border-color: var(--danger); }
 .studio__edit-lyrics textarea { width: 100%; min-height: 12rem; line-height: 1.8; }
 .studio__edit-lyrics > p { margin: 0; }
 .trial-claim__warn { flex-basis: 100%; font-size: var(--t-caption); color: var(--ink); }
-/* Lyric timing tools, folded away for the owner (SyncedLyrics.tsx). */
-.lyrics-sync__toolbar { display: flex; justify-content: flex-end; }
-.lyrics-sync__tune { border: 0; background: none; color: var(--muted); font: inherit; font-size: var(--t-caption); min-height: var(--tap); padding: 0 var(--s1); cursor: pointer; }
-.lyrics-sync__tune:hover { color: var(--link); text-decoration: underline; }
 .scene__try { margin-left: var(--s3); }
 @media (max-width: 560px) { .scene__try { margin: var(--s3) 0 0; } }
 

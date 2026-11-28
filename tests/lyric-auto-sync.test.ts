@@ -9,7 +9,7 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { randomUUID } from 'node:crypto';
 import type { LyricTimings } from '@yuha/contracts';
-import { claimOutboxBatch, query, queryOne, withTx } from '@yuha/db';
+import { claimOutboxBatch, execute, query, queryOne, withTx } from '@yuha/db';
 import type { AlignmentProvider, AlignmentRequest, AlignmentResult } from '@yuha/providers';
 import { runJobStep } from '@yuha/worker/pipeline';
 import { lyricSyncTick } from '@yuha/worker/lyric-sync';
@@ -165,13 +165,10 @@ describe('a new sung song', () => {
   it('leaves a correction saved before the result arrived', async () => {
     const user = await h.createUser({ credits: 5 });
     const id = await song(user);
-    const res = await h.app.inject({
-      method: 'POST',
-      url: `/v1/tracks/${id}/lyric-timings`,
-      headers: user.authHeader,
-      payload: { source: 'corrected', aligner: 'human', lines: lines.map((l) => ({ ...l, start: l.start + 0.4 })) } as never,
-    });
-    expect(res.statusCode).toBe(200);
+    await execute('UPDATE tracks SET lyric_timings = ? WHERE id = ?', [
+      JSON.stringify({ source: 'corrected', aligner: 'human', lines: lines.map((l) => ({ ...l, start: l.start + 0.4 })) }),
+      id,
+    ]);
     await tick();
     expect((await stored(id))?.source).toBe('corrected');
     expect(await jobs(id)).toMatchObject([{ status: 'kept' }]);

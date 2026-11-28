@@ -3,7 +3,7 @@ import { TrialClaimAsk } from './TrialClaimAsk';
 import { GUEST_SONG_EVENT, guestSongId } from '../lib/guest';
 import { Link, NavLink, useLocation, useNavigate } from 'react-router-dom';
 import type { TrackView } from '@yuha/contracts';
-import { useLyricSyncRefresh } from '../lib/lyric-sync-refresh';
+import { useLyricSyncRefresh, type LyricSyncUpdate } from '../lib/lyric-sync-refresh';
 import { apiFetch } from '../lib/api';
 import { usePlayer } from '../lib/player';
 import { useI18n } from '../lib/i18n';
@@ -221,22 +221,28 @@ export function Layout({ children }: { children: ReactNode }) {
   // Keep it through the player so opening Now Playing never briefly calls a
   // vocal track an instrumental while its detail request is in flight.
   const currentDetail = nowPlaying?.trackId === playingId ? nowPlaying : null;
+  const recentSync = useRef<LyricSyncUpdate | null>(null);
   useEffect(() => {
     if (!nowPlayingOpen || !playingId) return;
     let cancelled = false;
+    recentSync.current = null;
     apiFetch<NowPlayingSong>(`/v1/tracks/${playingId}`)
-      .then((s) => !cancelled && setNowPlaying(s))
+      .then((song) => {
+        if (!cancelled) {
+          const fresh = recentSync.current;
+          setNowPlaying(fresh?.trackId === song.trackId ? { ...song, ...fresh } : song);
+        }
+      })
       .catch(() => !cancelled && setNowPlaying(null));
     return () => {
       cancelled = true;
     };
   }, [nowPlayingOpen, playingId]);
   // While its song syncs, the open Now Playing takes the automatic result too, without touching playback.
-  useLyricSyncRefresh(nowPlayingOpen ? (currentDetail?.trackId ?? null) : null, currentDetail?.lyricSync === 'syncing', (fresh) =>
-    setNowPlaying((s) =>
-      s && s.trackId === fresh.trackId ? { ...s, lyricSync: fresh.lyricSync, lyricTimings: fresh.lyricTimings } : s,
-    ),
-  );
+  useLyricSyncRefresh(nowPlayingOpen ? playingId : null, currentDetail?.lyricSync === 'syncing', (fresh) => {
+    recentSync.current = fresh;
+    setNowPlaying((song) => song && song.trackId === fresh.trackId ? { ...song, ...fresh } : song);
+  });
 
   /*
    * The account menu closes on an outside click, on Escape, and on a route

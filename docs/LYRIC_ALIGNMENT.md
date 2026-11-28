@@ -6,7 +6,7 @@ them says which:
 | `source` | Where it comes from | Pill |
 | --- | --- | --- |
 | `aligned` | The aligner on the DGX heard the song (`POST /v1/align`, `deploy/dgx/music/server/align.py`) | 已对齐 / aligned |
-| `corrected` | The song's owner fixed the timing by hand on the song page | 已校正 / corrected |
+| `corrected` | A timing saved with the former manual editor | 已校正 / corrected |
 | `estimated` | Nothing heard it; lines are laid across the song by length (`apps/web/src/lib/lyrics.ts`) | 估算同步 / estimated |
 
 A new song is aligned once, by the worker, right after delivery
@@ -110,8 +110,8 @@ SELECT JSON_UNQUOTE(JSON_EXTRACT(lyric_timings, '$.source')) AS source,
 `aligned` with lines in the wrong place is a different problem from an
 estimate: the aligner heard something and placed it wrongly, which is a sample
 for the DGX side (`deploy/dgx/music/README.md`), not a configuration fault.
-Either way the owner can fix it on the song page without making the song
-again, and nothing is charged for it.
+Where the retry feature is available, the owner can ask YUHA to listen again
+without remaking the song.
 
 The DGX keeps a render for six days (`RETENTION_DAYS`). A song older than that
 cannot be re-aligned, because the aligner fetches the audio from the DGX
@@ -119,17 +119,17 @@ cannot be re-aligned, because the aligner fetches the audio from the DGX
 
 ## Aligning one song again (the owner's button)
 
-In the timing workspace (song page → 做视频 → 检查歌词同步), the owner can press
-「重新自动对齐（免费）」. `POST /v1/tracks/:id/lyric-proposal` queues it;
-`GET` reads it (`services/lyric-proposal.ts`, migration 0035).
+In the song page's lyrics section, the signed-in owner can press “Retry lyric sync”.
+`POST /v1/tracks/:id/lyric-proposal` queues it and `GET` reads it
+(`services/lyric-proposal.ts`, migration 0035).
 
 - **The song itself goes to the aligner** (`audio_b64`), not a link to the
   DGX's copy, so a song of any age can be aligned: the DGX keeps renders
   six days, YUHA keeps every song.
-- **The answer is a proposal.** The workspace loads it as an unsaved edit;
-  the owner listens and saves it (as a correction) or discards it. Nothing
-  here writes a song's timing, and a correction the owner saved stays until
-  they replace it.
+- **The answer stays available when the owner returns.** “Use new lyric sync”
+  applies the latest matching result by proposal ID. Only the stored server
+  result can be applied. It remains labelled `aligned`, with its original
+  line confidence. A historical `corrected` timeline is preserved.
 - **Only what the aligner heard is offered.** An estimate is reported as a
   failure — `low_coverage` (heard too little), `timeout`, `unreachable` or
   `error` — and the page says so in words; the song keeps its timing.

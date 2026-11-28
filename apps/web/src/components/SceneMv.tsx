@@ -25,8 +25,8 @@ const STYLES = ['neon_rain', 'seaside_sunset', 'soft_watercolor'] as const;
 const ongoing = (mv: SceneMvView) => ['queued', 'generating', 'composing'].includes(mv.status);
 const clock = (seconds: number) => `${Math.floor(seconds / 60)}:${(seconds % 60).toFixed(1).padStart(4, '0').replace(/\.0$/, '')}`;
 
-export function SceneMv({ trackId, title, duration, timings, timingsUnsaved = false, visible = true, onListen, onVideoPlay }: {
-  trackId: string; title: string; duration: number; timings: LyricTimings | null; timingsUnsaved?: boolean;
+export function SceneMv({ trackId, title, duration, timings, visible = true, onListen, onVideoPlay }: {
+  trackId: string; title: string; duration: number; timings: LyricTimings | null;
   visible?: boolean;
   onListen?: (start: number) => void;
   onVideoPlay?: () => void;
@@ -103,7 +103,7 @@ export function SceneMv({ trackId, title, duration, timings, timingsUnsaved = fa
   };
 
   const confirm = async () => {
-    if (!mv || busy || timingsUnsaved) return;
+    if (!mv || busy) return;
     listing.current?.abort();
     setBusy(true); setError(null); setActiveId(null);
     try {
@@ -200,8 +200,7 @@ export function SceneMv({ trackId, title, duration, timings, timingsUnsaved = fa
       </label></li>)}</ol>
       <p className="small muted">{t('sceneMv.wait')}</p>
       <p className="small muted">{t('sceneMv.planNote')}</p>
-      {timingsUnsaved && <p role="note">{t('sceneMv.unsaved')}</p>}
-      <button type="button" className="btn btn--primary" onClick={() => void confirm()} disabled={busy || timingsUnsaved || shots.some((s) => !s.trim() || s.length > 300)}>{t(busy ? 'common.loading' : 'sceneMv.confirm')}</button>
+      <button type="button" className="btn btn--primary" onClick={() => void confirm()} disabled={busy || shots.some((s) => !s.trim() || s.length > 300)}>{t(busy ? 'common.loading' : 'sceneMv.confirm')}</button>
       <button className="text-action" type="button" disabled={busy} onClick={() => void remove()}>{t('sceneMv.discard')}</button>
     </div>}
     {mv && ongoing(mv) && <div className="scene-mv__progress" role="status">

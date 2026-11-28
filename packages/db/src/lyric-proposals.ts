@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import type { PoolConnection } from 'mysql2/promise';
 import type { LyricTimings } from '@yuha/contracts';
 import { execute, query, queryOne, withTx } from './pool.js';
 
@@ -14,7 +15,7 @@ export interface LyricProposalRow {
   owner_id: string;
   status: LyricProposalStatus;
   lyrics_sha: string;
-  timings: LyricTimings | null;
+  timings: (LyricTimings & { masterSha?: string }) | null;
   failure: string | null;
   created_at: Date;
   started_at: Date | null;
@@ -26,14 +27,14 @@ const PROPOSAL_STALE_MINUTES = 15;
 
 function parse(row: LyricProposalRow | null | undefined): LyricProposalRow | null {
   if (!row) return null;
-  if (typeof row.timings === 'string') row.timings = JSON.parse(row.timings) as LyricTimings;
+  if (typeof row.timings === 'string') row.timings = JSON.parse(row.timings) as LyricProposalRow['timings'];
   return row;
 }
 
 /** The song's latest request, whatever its state. */
-export async function latestLyricProposal(trackId: string): Promise<LyricProposalRow | null> {
+export async function latestLyricProposal(trackId: string, tx?: PoolConnection): Promise<LyricProposalRow | null> {
   return parse(
-    await queryOne<LyricProposalRow>(`SELECT * FROM lyric_proposals WHERE track_id = ? ORDER BY created_at DESC, id DESC LIMIT 1`, [trackId]),
+    await queryOne<LyricProposalRow>(`SELECT * FROM lyric_proposals WHERE track_id = ? ORDER BY created_at DESC, id DESC LIMIT 1`, [trackId], tx),
   );
 }
 
@@ -114,7 +115,7 @@ export async function claimNextLyricProposal(owner: string): Promise<LyricPropos
 
 export async function finishLyricProposal(
   id: string,
-  outcome: { status: 'ready'; timings: LyricTimings } | { status: 'failed'; failure: string },
+  outcome: { status: 'ready'; timings: LyricTimings & { masterSha: string } } | { status: 'failed'; failure: string },
 ): Promise<void> {
   await execute(
     `UPDATE lyric_proposals SET status = ?, timings = ?, failure = ?, finished_at = UTC_TIMESTAMP(3) WHERE id = ? AND status = 'running'`,

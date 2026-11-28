@@ -1,7 +1,7 @@
 import { TRIAL_CLAIMED_EVENT, guestSongId } from '../lib/guest';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
-import { TITLE_MAX_CODEPOINTS, markCorrected, seasonOfOccasion, type LyricTimings, type Occasion, type ProductView, type TrackView } from '@yuha/contracts';
+import { TITLE_MAX_CODEPOINTS, seasonOfOccasion, type Occasion, type ProductView, type TrackView } from '@yuha/contracts';
 import { API_BASE, ApiError, apiFetch, apiPostForBlob } from '../lib/api';
 import { drawVideoFrame, frameJpeg, planShareClip, shareCardPng } from '../lib/share-art';
 import { resolveLyricTimings, sungLyrics, timedLinesFor } from '../lib/lyrics';
@@ -26,9 +26,8 @@ import { PhotoVideo } from '../components/PhotoVideo';
 import { SceneMv } from '../components/SceneMv';
 import { useConfirm } from '../components/ConfirmDialog';
 import { SyncedLyrics } from '../components/SyncedLyrics';
-import { LyricSyncStudio } from '../components/LyricSyncStudio';
+import { LyricAutoSync } from '../components/LyricAutoSync';
 import { GiftInvitations } from '../components/GiftInvitations';
-import { emptyHistory, record, redo, undo, type EditHistory } from '../lib/sync-studio';
 import { scoreFromSeed } from '../lib/score';
 import { usePageTitle } from '../lib/title';
 import { shareCreateHref } from '../lib/create-link';
@@ -67,14 +66,6 @@ export default function SongDetail() {
     }
   }, [id, player.activeId, player.duration, player.seek]);
   const [confirm, confirmDialog] = useConfirm();
-  /*
-   * Unsaved lyric timing edits, held here so the video card's workspace and
-   * the lyrics area edit one draft with one undo (docs/MV_LYRIC_SYNC_UX_SPEC.md).
-   */
-  const [edits, setEdits] = useState<EditHistory>(emptyHistory);
-  const setTimingDraft = useCallback((next: LyricTimings | null) => setEdits((h) => (next ? record(h, next) : emptyHistory)), []);
-  // Another song's page: its draft is not this one's.
-  useEffect(() => setEdits(emptyHistory), [id]);
   const [song, setSong] = useState<SongDetailResponse | null>(null);
   // A song page is best titled by its song, not by the word "song".
   usePageTitle(song?.title);
@@ -318,18 +309,6 @@ export default function SongDetail() {
   // without words, has no lyric sync anywhere on this page (lib/lyrics.ts).
   const sung = sungLyrics(song);
   const playing = active && player.status === 'playing';
-
-  const saveTimings = async (timings: LyricTimings) => {
-    const saved = await apiFetch<{ lyricTimings: LyricTimings }>(`/v1/tracks/${song.trackId}/lyric-timings`, {
-      method: 'POST',
-      body: timings,
-    });
-    setSong((s) => (s ? { ...s, lyricTimings: saved.lyricTimings } : s));
-    // Only if nothing was changed while the request was out: a nudge made
-    // meanwhile is still unsaved, and clearing it would lose it silently.
-    const sent = JSON.stringify(timings);
-    setEdits((h) => (h.present && JSON.stringify(markCorrected(h.present)) === sent ? emptyHistory : h));
-  };
 
   const play = () => {
     if (!song.previewUrl) return;
@@ -885,34 +864,11 @@ export default function SongDetail() {
               lyricTimings={song.lyricTimings}
               makeCoverVideo={makeVideo}
               startOpen={params.get('video') === '1'}
-              timingsUnsaved={edits.present !== null}
-              studio={
-                sung
-                  ? (photos) => (
-                      <LyricSyncStudio
-                        trackId={song.trackId}
-                        lyrics={sung}
-                        savedTimings={song.lyricTimings}
-                        duration={song.durationSeconds}
-                        draft={edits.present}
-                        onDraft={setTimingDraft}
-                        onUndo={() => setEdits(undo)}
-                        onRedo={() => setEdits(redo)}
-                        canUndo={edits.past.length > 0}
-                        canRedo={edits.future.length > 0}
-                        onSave={saveTimings}
-                        active={active}
-                        onPlay={play}
-                        photos={photos}
-                      />
-                    )
-                  : undefined
-              }
               photosEnabled={runtime?.features.photoVideoEnabled === true || runtime?.features.photoVideoPreview === true}
               sceneMv={runtime?.features.sceneMv === true ? (visible) => (
                 <SceneMv key={song.trackId} trackId={song.trackId} title={song.title} duration={song.durationSeconds}
                   visible={visible}
-                  timings={song.lyricTimings ?? null} timingsUnsaved={edits.present !== null}
+                  timings={song.lyricTimings ?? null}
                   onListen={(start) => {
                     if (active && player.duration > 0) {
                       player.seek(start);
@@ -1019,6 +975,10 @@ export default function SongDetail() {
           <p className="lyrics-sync__status" role="status" aria-live="polite">
             {syncNote ? t(`lyrics.sync.${syncNote}`) : null}
           </p>
+          {manages && runtime?.features.lyricAutoAlign && song.state === 'deliverable'
+            && song.lyricTimings?.source !== 'corrected' && (
+              <LyricAutoSync key={song.trackId} trackId={song.trackId} syncing={syncing} />
+            )}
           {/*
             * Only while THIS song is the one playing. The readout above has
             * always guarded on `active`; these two props did not, so opening
@@ -1032,12 +992,10 @@ export default function SongDetail() {
             live={active}
             still={song.lyricSync === 'syncing' && !song.lyricTimings}
             timings={song.lyricTimings}
-            draft={manages ? edits.present : undefined}
-            onDraft={manages ? setTimingDraft : undefined}
             title={song.title}
             artist={song.artistName}
             onSeek={active ? player.seek : undefined}
-            onSaveTimings={manages ? saveTimings : undefined}
+            canDownload={manages}
           />
         </section>
       )}
