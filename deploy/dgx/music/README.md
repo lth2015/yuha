@@ -254,6 +254,39 @@ open ~/yuha-bench/production/listen/index.html                # blind: listen he
   with a different request or configuration (engine, model, steps, mastering,
   service code). Start a new one with `-e BENCH_OUT=/bench/<name>`.
 
+## Production quality report (`server/bench_quality.py`)
+
+Measured, not listened to: lay blind listening is no basis for production
+decisions (product owner, 2026-11-28). For each render of the production
+benchmark it separates the vocal (demucs), places every lyric line (Whisper +
+`align.align_lines`) so the sections are known in seconds, and measures what a
+pop producer checks — the intro's figure inside the chorus melody (against
+the verse as control), chorus 2 against chorus 1, chorus lift over the verse,
+vocal-to-accompaniment level, EBU R128 loudness/LRA/true peak, beat
+stability, key consistency, and whether the song ends or stops. Then B minus
+A per pair, with a sign test. Pure arithmetic is in `quality_metrics.py`
+(tested in CI); reference bands are working values for streaming pop, printed
+beside each number.
+
+```bash
+# from the Mac, after bench_production.py has rendered
+scp deploy/dgx/music/server/{bench_quality.py,quality_metrics.py,bench_production.py} dgxa:yuha-spark/server/
+
+# on the Spark
+cd ~/yuha-spark
+docker compose run --rm -v "$PWD/server:/opt/server" -v "$PWD/bench_out:/bench" music \
+    python /opt/server/bench_quality.py validate   # plants defects into one render; each must be caught
+docker compose run --rm -v "$PWD/server:/opt/server" -v "$PWD/bench_out:/bench" music \
+    python /opt/server/bench_quality.py run        # all renders; resumable
+
+# back on the Mac
+rsync -a dgxa:yuha-spark/bench_out/production/ ~/yuha-bench/production/
+open ~/yuha-bench/production/quality.html
+```
+
+`validate` must print ✓ on every line before `run`'s numbers are trusted: a
+measure that does not catch its planted defect is not used to judge anything.
+
 ## Retention (`RETENTION_DAYS`, default 6)
 
 `data/jobs/*.json` holds what YUHA sent (the brief and the lyrics) and
