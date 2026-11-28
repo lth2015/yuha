@@ -202,6 +202,49 @@ count other than 30. Exit 0 only when every track is complete; 2 when there was
 nothing to check. `--json` prints the whole report for keeping; the sha256s are
 what later proves the master YUHA sells is the one reviewed.
 
+## Production benchmark (`server/bench_production.py`)
+
+Does a production plan make a better song (docs/MUSIC_PRODUCTION_SPEC.md)?
+24 renders: six briefs (zh/ja/en × pop/ballad) × two fixed seeds × A (today's
+request) and B (the same request with the plan compiled in — only `prompt` and
+`lyrics` differ). Every request is fixed in `server/fixtures/production_bench.json`,
+written by `node scripts/production-bench.mjs` in the repository; the script
+refuses to render one whose tag string this service would build differently.
+
+Nothing about the running service changes: the script is mounted into a
+one-off container, renders through the service's own `render` and `_master`
+(so through `acestep15` on this box), and writes only under `bench_out/`.
+It also loads Whisper for the lyric-coverage clue, so run it when the GPU is
+not busy with anything else (`nvidia-smi` first).
+
+```bash
+# from your Mac, in the repository at the branch or master that has it
+scp deploy/dgx/music/server/bench_production.py dgxa:yuha-spark/server/
+scp -r deploy/dgx/music/server/fixtures dgxa:yuha-spark/server/
+
+# on the Spark
+cd ~/yuha-spark && mkdir -p bench_out
+docker compose run --rm -v "$PWD/server:/opt/server" -v "$PWD/bench_out:/bench" music \
+    python /opt/server/bench_production.py run                 # all 24; resumable
+#   ... bench_production.py run --only=zh-pop                  # one brief first, to see the time per render
+
+# back on the Mac
+rsync -a dgxa:yuha-spark/bench_out/production/ ~/yuha-bench/production/
+open ~/yuha-bench/production/listen/index.html                # blind: listen here first
+```
+
+- `run` writes each render to `results.jsonl` as it finishes. Interrupt it
+  whenever and run it again: finished renders are kept, failed ones retried.
+- `listen/index.html` is the blind page: X/Y in a random order per pair, at
+  matched loudness (gain only, −16 LUFS), with per-criterion choices and
+  timestamped notes; **导出评审结果** saves `judgments-<name>.json`.
+- `report.html` is unblinded (requests, timings, diagnostics). Open it after
+  listening. Diagnostics are clues; `?` means not measurable and counts for
+  neither arm.
+- `key.json` says which of X/Y is A. Keep it away from listeners.
+- Scoring: copy the judgment files back and run
+  `... bench_production.py score /bench/production/judgments/*.json`.
+
 ## Retention (`RETENTION_DAYS`, default 6)
 
 `data/jobs/*.json` holds what YUHA sent (the brief and the lyrics) and
