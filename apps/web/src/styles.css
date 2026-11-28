@@ -169,14 +169,22 @@
   /* Overshoots slightly — the settle is what reads as physical. */
   --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
 
-  /* M PLUS 2 carries Latin and Japanese; Chinese falls through to the
-     platform faces, which is why the stack keeps PingFang/思源 behind it. */
+  /* The brand face supplies Japanese and Latin. The Chinese page opts into its own glyphs. */
   --font: 'M PLUS 2', -apple-system, BlinkMacSystemFont, 'Segoe UI',
     'Hiragino Kaku Gothic ProN', 'Yu Gothic', 'PingFang SC', 'Microsoft YaHei',
     'Noto Sans CJK SC', sans-serif;
   --mono: ui-monospace, 'SFMono-Regular', Menlo, monospace;
 
   color-scheme: light;
+}
+
+:root:lang(zh) {
+  --font: 'Noto Sans SC Variable', 'PingFang SC', 'Microsoft YaHei', system-ui, sans-serif;
+}
+
+:is(h1, h2, h3, .song-spread__title):is(:lang(zh), :lang(ja)) {
+  letter-spacing: normal;
+  line-break: strict;
 }
 
 * {
@@ -913,6 +921,7 @@ tr:last-child td { border-bottom: none; }
   margin: 0 0 24px;
   text-wrap: balance;
 }
+.hero__title:is(:lang(zh), :lang(ja)) { line-height: 1.16; }
 .hero__intro { font-size: var(--t-lead); color: var(--muted); margin: 0 0 var(--s6); max-width: 46ch; }
 
 .composer { padding: var(--s6); box-shadow: var(--shadow-raised); }
@@ -940,7 +949,7 @@ textarea.is-full { border-color: var(--danger); }
 .composer textarea, .studio textarea, textarea#prompt, textarea#lyrics, textarea#instructions { scroll-margin-block: var(--s6); }
 .composer .chips { margin: 20px 0; }
 .composer__row { display: flex; justify-content: space-between; align-items: center; gap: 16px; }
-.composer__cost { font-size: var(--t-caption); color: var(--muted); line-height: 1.6; }
+.composer__cost { font-size: var(--t-body); color: var(--muted); line-height: 1.5; }
 .composer__feedback { min-height: 20px; font-size: var(--t-caption); color: var(--muted); margin: 12px 0 0; }
 .composer__discard { margin-top: var(--s3); }
 
@@ -1985,7 +1994,6 @@ textarea.is-full { border-color: var(--danger); }
    * stays above it.
    */
   .hero { display: block; padding: 8px 0 32px; }
-  .hero .eyebrow { display: none; }
   .hero__title { font-size: 34px; line-height: 1.15; margin-bottom: 8px; }
   .hero__intro { font-size: var(--t-body); margin-bottom: var(--s4); max-width: 320px; }
   .composer { display: flex; flex-direction: column; }
@@ -2084,7 +2092,7 @@ textarea.is-full { border-color: var(--danger); }
   to { opacity: 1; transform: translate3d(0, 0, 0); }
 }
 
-.hero__copy > *,
+.hero__copy > :not(.composer, .trial-song),
 .hero > .art-panel {
   animation: rise var(--t-enter) var(--ease-spring) both;
 }
@@ -2909,7 +2917,7 @@ textarea.is-full { border-color: var(--danger); }
 .photo-video__grid img { width: 100%; height: 100%; object-fit: cover; border-radius: var(--r-control); display: block; }
 .photo-video__remove {
   position: absolute; top: -6px; right: -6px; width: 44px; height: 44px; padding: 0; border: 0; background: none; cursor: pointer;
-  display: grid; place-items: center; font-size: 18px; line-height: 1; color: #fff;
+  display: grid; place-items: center; font-size: var(--t-lead); line-height: 1; color: #fff;
 }
 .photo-video__remove::before { content: ''; position: absolute; width: 26px; height: 26px; border-radius: 50%; background: rgb(0 0 0 / 62%); z-index: -1; }
 .photo-video__remove { isolation: isolate; }
@@ -3100,8 +3108,8 @@ textarea.is-full { border-color: var(--danger); }
   background: linear-gradient(160deg, #F7A27F 0%, #E8693F 45%, #7E2A17 100%);
   box-shadow: var(--shadow-pop); transform: rotate(4deg); overflow: hidden;
 }
-.mv-entry__line { position: absolute; left: 8px; right: 8px; bottom: 22px; font-size: 12px; line-height: 1.3; color: #fff; text-align: center; text-shadow: 0 1px 3px rgb(0 0 0 / 45%); }
-.mv-entry__play { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -60%); width: 36px; height: 36px; border-radius: 50%; display: grid; place-items: center; background: rgb(255 255 255 / 85%); color: #7E2A17; font-size: 14px; }
+.mv-entry__line { position: absolute; left: 8px; right: 8px; bottom: 22px; font-size: var(--t-caption); line-height: 1.3; color: #fff; text-align: center; text-shadow: 0 1px 3px rgb(0 0 0 / 45%); }
+.mv-entry__play { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -60%); width: 36px; height: 36px; border-radius: 50%; display: grid; place-items: center; background: rgb(255 255 255 / 85%); color: #7E2A17; font-size: var(--t-body); }
 .lib__pick-note { margin: 0 0 var(--s4); }
 @media (max-width: 480px) { .mv-entry__phone { display: none; } }
 
@@ -3120,7 +3128,7 @@ textarea.is-full { border-color: var(--danger); }
 .gift__eyebrow { font-size: var(--t-caption); letter-spacing: 0.06em; color: var(--muted); margin: 0; }
 .gift__to { font-size: clamp(26px, 7vw, 36px); line-height: 1.25; margin: var(--s1) 0 0; overflow-wrap: anywhere; }
 .gift__cover { width: min(72vw, 280px); margin: var(--s3) auto var(--s2); }
-.gift__title { font-size: 20px; margin: 0; overflow-wrap: anywhere; }
+.gift__title { font-size: var(--t-title); margin: 0; overflow-wrap: anywhere; }
 .gift__from { color: var(--muted); margin: var(--s1) 0 0; overflow-wrap: anywhere; }
 .gift__player { display: grid; gap: var(--s2); justify-items: center; }
 .gift__play { min-width: 160px; }
@@ -3146,7 +3154,7 @@ textarea.is-full { border-color: var(--danger); }
 .gift-preview { border-radius: 16px; padding: var(--s3); text-align: center; background: linear-gradient(180deg, var(--gift-a, #f6e3d3), var(--gift-b, #fdf7f1)); --gift-a: #f6e3d3; --gift-b: #fdf7f1; }
 .gift-preview.gift--romantic { --gift-a: #f7dde4; --gift-b: #fdf4f6; }
 .gift-preview.gift--celebration { --gift-a: #f6eccb; --gift-b: #fdfaf0; }
-.gift-preview .gift__to { font-size: 22px; }
+.gift-preview .gift__to { font-size: var(--t-heading); }
 .gift-preview__letter { white-space: pre-line; text-align: left; overflow-wrap: anywhere; }
 .gift-made { display: grid; gap: var(--s2); }
 .gift-made__actions { display: flex; flex-wrap: wrap; gap: var(--s2); }
@@ -3212,7 +3220,7 @@ textarea.is-full { border-color: var(--danger); }
 .market-track__text { min-width: 0; overflow-wrap: anywhere; }
 /* Catalogue words (product owner, 2026-11-27): the editorial score as stars, an intro, style tags. */
 .market-track__rating { display: flex; align-items: center; gap: 6px; margin: 2px 0 0; color: var(--muted); }
-.market-stars { position: relative; display: inline-block; font-size: 14px; line-height: 1; letter-spacing: 1px; }
+.market-stars { position: relative; display: inline-block; font-size: var(--t-body); line-height: 1; letter-spacing: 1px; }
 .market-stars::before { content: "★★★★★"; color: var(--line, #d8d6cf); }
 .market-stars::after { content: "★★★★★"; position: absolute; inset: 0 auto 0 0; overflow: hidden; white-space: nowrap; color: var(--petal); width: calc(var(--rating, 0) / 5 * 100%); }
 .market-track__intro { margin: var(--s1) 0; color: var(--ink); line-height: 1.6; }

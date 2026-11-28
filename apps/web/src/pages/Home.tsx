@@ -3,6 +3,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { PROMPT_MAX_CODEPOINTS, type JobView, type Season, type TrackView } from '@yuha/contracts';
 import { clampToCodePoints, codePointLength } from '../lib/codepoints';
+import { rememberHomeComposerDraft } from '../lib/home-composer-handoff';
 import { ApiError, apiFetch, newIdempotencyKey } from '../lib/api';
 import { messageFor } from '../lib/messages';
 import { useI18n } from '../lib/i18n';
@@ -18,6 +19,7 @@ import { JOB_PHASES, fractionOfPhase, phaseKey } from '../lib/phases';
 const DRAFT_KEY = 'yuha.home-draft';
 /** The one choice the home composer makes, kept with the words (Codex audit UX-04). */
 const MODE_KEY = 'yuha.home-instrumental';
+const MOOD_KEY = 'yuha.home-mood';
 
 const MOOD_KEYS = ['city', 'sunset', 'rain', 'night'] as const;
 /**
@@ -115,7 +117,14 @@ export default function Home() {
       return '';
     }
   });
-  const [activeMood, setActiveMood] = useState<string | null>(null);
+  const [activeMood, setActiveMood] = useState<(typeof MOOD_KEYS)[number] | null>(() => {
+    try {
+      const saved = localStorage.getItem(MOOD_KEY);
+      return MOOD_KEYS.find((mood) => mood === saved) ?? null;
+    } catch {
+      return null;
+    }
+  });
   const [instrumental, setInstrumental] = useState(() => {
     try {
       return localStorage.getItem(MODE_KEY) === '1';
@@ -157,12 +166,16 @@ export default function Home() {
   useEffect(() => {
     try {
       localStorage.setItem(MODE_KEY, instrumental ? '1' : '0');
+      if (activeMood) localStorage.setItem(MOOD_KEY, activeMood);
+      else localStorage.removeItem(MOOD_KEY);
     } catch {
       /* private browsing */
     }
-  }, [instrumental]);
+  }, [instrumental, activeMood]);
 
   const written = prompt.trim().length > 0;
+  const styles = activeMood ? MOOD_STYLES[activeMood] : [];
+  const homeDraft = written || instrumental || styles.length ? { prompt, instrumental, styles } : null;
   /** Signed in, has written something, and has nothing left to spend. */
   const outOfCredits = !!me && credits < 1;
   const canSubmit = written && !submitting && !outOfCredits;
@@ -305,7 +318,7 @@ export default function Home() {
         body: {
           mode: 'simple',
           prompt: prompt.trim(),
-          styles: activeMood ? MOOD_STYLES[activeMood as (typeof MOOD_KEYS)[number]] : [],
+          styles,
           instrumental,
           energy: 0.5,
           durationSeconds: SIMPLE_DURATION_SECONDS,
@@ -491,7 +504,6 @@ export default function Home() {
       {!IOS_BUILD && season && <GiftEntry season={season} />}
       <section className="hero">
         <div className="hero__copy">
-          <p className="eyebrow">{t('hero.eyebrow')}</p>
           <h1 className="hero__title">
             {t('hero.slogan1')}
             <br />
@@ -579,7 +591,12 @@ export default function Home() {
                 </button>
               </div>
               {/* Going on in the fuller editor: what is written here goes with it. */}
-              <Link to="/create" state={{ fromHome: { prompt, instrumental } }} className="composer__advanced">
+              <Link
+                to={homeDraft ? '/create?from=home' : '/create'}
+                state={homeDraft ? { fromHome: homeDraft } : undefined}
+                onClick={() => { if (homeDraft) rememberHomeComposerDraft(homeDraft); }}
+                className="composer__advanced"
+              >
                 {t('composer.advanced')}
               </Link>
             </div>
@@ -588,15 +605,12 @@ export default function Home() {
               <span className="composer__cost">
                 {outOfCredits ? (
                   t(isGuest ? 'trial.used' : 'composer.outOfCredits')
-                ) : isGuest || (!me && trialOpen) ? (
-                  // A trial is free and is one song: "costs 1 credit" describes an account.
+                ) : isGuest || trialOpen ? (
                   t('trial.hint')
+                ) : me ? (
+                  <>{t('composer.cost')} · {t('composer.credits', { n: credits })}</>
                 ) : (
-                  <>
-                    {t('composer.cost')}
-                    <br />
-                    {me ? t('composer.credits', { n: credits }) : t('composer.creditsLogin')}
-                  </>
+                  t('composer.signInNote')
                 )}
               </span>
               {outOfCredits && isGuest ? (
@@ -613,7 +627,8 @@ export default function Home() {
                 </Link>
               ) : (
                 <button type="button" className="btn btn--primary" onClick={submit} disabled={!canSubmit}>
-                  {submitting ? t('composer.submitting') : t('composer.submit')}
+                  {t(submitting ? 'composer.submitting' : trialOpen || isGuest
+                    ? 'composer.trySong' : me ? 'composer.submit' : 'composer.signInToCreate')}
                   <span aria-hidden="true">↗</span>
                 </button>
               )}
@@ -662,7 +677,14 @@ export default function Home() {
         </section>
       )}
 
-      {!IOS_BUILD && <MvEntry latest={recent?.[0]?.trackId ?? null} signedIn={!!me && me.role !== 'guest'} onCompose={() => promptRef.current?.focus()} />}
+      {!IOS_BUILD && (
+        <MvEntry
+          latest={recent?.[0]?.trackId ?? null}
+          trialOpen={trialOpen}
+          photosEnabled={runtime?.features.photoVideoEnabled === true || runtime?.features.photoVideoPreview === true}
+          onCompose={() => promptRef.current?.focus()}
+        />
+      )}
 
       {!IOS_BUILD && !season && <GiftEntry season={null} />}
 
@@ -740,14 +762,18 @@ function GiftEntry({ season }: { season: Season | null }) {
  * latest with the video ready, or the library to pick another; without one,
  * it says the song comes first and goes back to the composer.
  */
-function MvEntry({ latest, signedIn, onCompose }: { latest: string | null; signedIn: boolean; onCompose: () => void }) {
+function MvEntry({ latest, trialOpen, photosEnabled, onCompose }: {
+  latest: string | null;
+  trialOpen: boolean;
+  photosEnabled: boolean;
+  onCompose: () => void;
+}) {
   const { t } = useI18n();
   return (
     <section className="gift-entry mv-entry" aria-labelledby="mv-entry-heading">
       <div className="gift-entry__text">
-        <span className="gift-entry__kicker">{t('home.mv.kicker')}</span>
         <h2 id="mv-entry-heading">{t('home.mv.title')}</h2>
-        <p>{t(latest ? 'home.mv.body' : 'home.mv.bodyFirst')}</p>
+        <p>{t(photosEnabled ? 'home.mv.body' : 'home.mv.coverOnly')}</p>
         <div className="mv-entry__actions">
           {latest ? (
             <>
@@ -767,7 +793,7 @@ function MvEntry({ latest, signedIn, onCompose }: { latest: string | null; signe
                 onCompose();
               }}
             >
-              {t(signedIn ? 'home.mv.first' : 'home.mv.firstTrial')}
+              {t(trialOpen ? 'home.mv.firstTrial' : 'home.mv.first')}
             </button>
           )}
         </div>

@@ -33,7 +33,15 @@ const LOADERS: Record<Lang, () => Promise<{ default: Dict }>> = {
 const isLang = (v: string | null): v is Lang => v === 'zh' || v === 'ja' || v === 'en';
 
 export async function loadLang(lang: Lang): Promise<void> {
-  if (!DICTS[lang]) DICTS[lang] = (await LOADERS[lang]()).default;
+  if (DICTS[lang]) return;
+  const [dictionary] = await Promise.all([
+    LOADERS[lang](),
+    // The local Simplified Chinese face is only needed when the reader uses Chinese.
+    lang === 'zh' && !import.meta.env.SSR
+      ? import('@fontsource-variable/noto-sans-sc').catch(() => undefined)
+      : undefined,
+  ]);
+  DICTS[lang] = dictionary.default;
 }
 
 export async function loadAllLangs(): Promise<void> {
