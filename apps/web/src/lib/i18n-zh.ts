@@ -694,6 +694,8 @@ const zh: Dict = {
   'trial.claim.adding': "正在加入……",
   'trial.claim.done': "已加到你的账户。",
   'trial.claim.open': "去我的歌",
+  'trial.claim.waiting': "歌曲还在生成，完成后可以重试添加。",
+  'trial.claim.retry': "暂时无法将歌曲加入账户，请重试。",
   'trial.claim.gone': "这首歌已经不能加入了（可能已过期或已加到别的账户）。",
   'trial.claim.declined': "好的，没有加到你的账户。那首试做的歌会在做好 7 天后删除。",
   'trial.claim.pendingHere': "这是你没注册时在这台设备上做的歌。在上面选择「加到我的账户」后就能打开。",

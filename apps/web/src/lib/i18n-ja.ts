@@ -676,6 +676,8 @@ const ja: Dict = {
   'trial.claim.adding': "追加しています…",
   'trial.claim.done': "アカウントに追加しました。",
   'trial.claim.open': "マイソングへ",
+  'trial.claim.waiting': "曲はまだ制作中です。完成してから、もう一度追加してください。",
+  'trial.claim.retry': "今は曲を追加できません。もう一度お試しください。",
   'trial.claim.gone': "この曲はもう追加できません（期限切れか、別のアカウントに追加済みです）。",
   'trial.claim.declined': "アカウントには追加しませんでした。お試しの曲は作成から 7 日後に削除されます。",
   'trial.claim.pendingHere': "登録前にこの端末でつくった曲です。上の「アカウントに追加」を選ぶと開けます。",

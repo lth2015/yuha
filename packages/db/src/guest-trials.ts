@@ -69,9 +69,10 @@ export async function openGuestJobs(tx?: PoolConnection): Promise<number> {
   return Number(row?.n ?? 0);
 }
 
-export async function getGuestTrial(userId: string, tx?: PoolConnection): Promise<GuestTrialRow | undefined> {
+export async function lockGuestTrial(userId: string, tx: PoolConnection): Promise<GuestTrialRow | undefined> {
   return queryOne<GuestTrialRow>(
-    `SELECT user_id, device_ref, ip_ref, created_at, claimed_by, claimed_at, purged_at FROM guest_trials WHERE user_id = ?`,
+    `SELECT user_id, device_ref, ip_ref, created_at, claimed_by, claimed_at, purged_at
+      FROM guest_trials WHERE user_id = ? FOR UPDATE`,
     [userId],
     tx,
   );
@@ -87,10 +88,12 @@ export async function moveGuestOwnership(
   tx: PoolConnection,
 ): Promise<Array<{ id: string; created_at: Date; state: string }>> {
   const tracks = await query<{ id: string; created_at: Date; state: string }>(
-    `SELECT id, created_at, state FROM tracks WHERE owner_id = ? AND deleted_at IS NULL FOR UPDATE`,
+    `SELECT id, created_at, state FROM tracks
+      WHERE owner_id = ? AND state = 'deliverable' AND deleted_at IS NULL FOR UPDATE`,
     [params.guestId],
     tx,
   );
+  if (!tracks.length) return tracks;
   const move = [params.userId, params.guestId];
   await execute(`UPDATE projects SET owner_id = ? WHERE owner_id = ?`, move, tx);
   await execute(`UPDATE generation_jobs SET user_id = ? WHERE user_id = ?`, move, tx);

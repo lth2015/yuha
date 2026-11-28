@@ -500,7 +500,7 @@ export function Layout({ children }: { children: ReactNode }) {
         {/* Keyed on the path so navigating away clears a crashed route. A
             boundary that stays broken until a full reload turns one bad page
             into a bad session. */}
-        <TrialClaimAsk />
+        <TrialClaimAsk key={me?.userId} />
         <PageTitleContext.Provider value={setTitleOverride}>
           <ErrorBoundary key={location.pathname}>{children}</ErrorBoundary>
         </PageTitleContext.Provider>

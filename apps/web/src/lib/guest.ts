@@ -103,20 +103,30 @@ export function guestSongId(): string | null {
 /**
  * When the person says yes (components/TrialClaimAsk.tsx), never on its own:
  * a browser can be shared, and whoever signs in next is not necessarily
- * whoever made the song. Brings the trial's song into the account, once. Whatever the
- * answer, the kept token is spent: claimed, claimed already, ended or never
- * valid, there is nothing more it can do. Only a failure to reach the server
- * keeps it for the next sign-in.
+ * whoever made the song. Brings the trial's song into the account once. Keep
+ * the token and song until the API settles ownership. A temporary error,
+ * including a lost response after a successful claim, can be retried.
  */
-export async function claimPendingTrial(): Promise<boolean> {
+export async function claimPendingTrial(): Promise<'claimed' | 'gone' | 'retry' | 'waiting'> {
   const guestToken = pendingGuest();
-  if (!guestToken) return false;
+  if (!guestToken) return 'gone';
+  const forgetIfCurrent = () => {
+    if (pendingGuest() === guestToken) forgetGuest();
+  };
   try {
-    const res = await apiFetch<{ claimed: number }>('/v1/trial/claim', { method: 'POST', body: { guestToken } });
-    forgetGuest();
-    return res.claimed > 0;
+    const res = await apiFetch<{ claimed: number; alreadyClaimed?: true }>('/v1/trial/claim', { method: 'POST', body: { guestToken } });
+    const claimed = res?.claimed ?? 0;
+    if (!(Number.isInteger(claimed) && claimed > 0) && !(res?.claimed === 0 && res.alreadyClaimed === true)) return 'retry';
+    forgetIfCurrent();
+    return 'claimed';
   } catch (err) {
-    if (err instanceof ApiError && err.status > 0) forgetGuest();
-    return false;
+    if (err instanceof ApiError && err.code === 'TRACK_NOT_DELIVERABLE') return 'waiting';
+    if (err instanceof ApiError && (
+      (err.status === 404 && err.code === 'NOT_FOUND') || (err.status === 409 && err.code === 'CONFLICT')
+    )) {
+      forgetIfCurrent();
+      return 'gone';
+    }
+    return 'retry';
   }
 }

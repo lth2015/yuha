@@ -423,13 +423,14 @@ export async function latestAttempt(jobId: string, tx?: PoolConnection): Promise
 }
 
 /** Unfinished jobs for one user, so the studio can restore state after a reload (GEN-10). */
-export async function listOpenJobs(userId: string, limit = 20): Promise<JobRow[]> {
+export async function listOpenJobs(userId: string, limit = 20, tx?: PoolConnection): Promise<JobRow[]> {
   return query<JobRow>(
     `SELECT ${JOB_COLUMNS} FROM generation_jobs
       WHERE user_id = ? AND state NOT IN ('DELIVERED','FAILED','REJECTED','CANCELLED')
       ORDER BY created_at DESC
       LIMIT ?`,
     [userId, limit],
+    tx,
   );
 }
 
