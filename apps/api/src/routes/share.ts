@@ -184,6 +184,29 @@ export default async function shareRoutes(app: FastifyInstance, opts: { ctx: App
   }
 
   /**
+   * POST /v1/tracks/:id/video-taken — the owner took a finished video away:
+   * downloaded it, opened the share sheet with it, or completed that sheet.
+   * Three different things, counted apart (video plan 2026-11-28): a share
+   * sheet completed is not a post published — a browser is told only that
+   * the person did something in it. Which video and how; nothing of what was
+   * in it. A made video was already counted by the encode.
+   */
+  const videoTaken = z.object({ kind: z.enum(['cover', 'photo']), how: z.enum(['download', 'share_opened', 'shared']) });
+  app.post(
+    '/v1/tracks/:id/video-taken',
+    { preHandler: app.requireAuth, config: { guestAllowed: true, rateLimit: { max: 60, timeWindow: '5 minutes' } } },
+    async (req, reply) => {
+      const { id } = idParam.parse(req.params);
+      const body = videoTaken.parse(req.body);
+      const track = await getTrack(id);
+      if (!track || track.deleted_at || track.owner_id !== req.user!.id) throw new AppError('NOT_FOUND', 'no such song');
+      await trackEvent({ name: 'video_taken', userRef: req.user!.id, props: body, runMode: ctx.config.mode, isInternal: ctx.config.isDemo })
+        .catch((err) => req.log.warn({ err }, 'could not record a video taken'));
+      return reply.status(202).send();
+    },
+  );
+
+  /**
    * POST /v1/tracks/:id/share-video — the owner's frames on the song's audio,
    * returned as an MP4 to share as a file. Nothing is stored.
    */

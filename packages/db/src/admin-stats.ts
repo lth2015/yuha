@@ -315,7 +315,14 @@ export interface PhaseStats {
    * Video exports, cover and photo apart. A `busy` refusal asked the person
    * to try again in a moment; it is not a failed video, nor a made one.
    */
-  videos: { made: { cover: number; photo: number }; failed: { cover: number; photo: number }; busy: number };
+  videos: {
+    made: { cover: number; photo: number }; failed: { cover: number; photo: number }; busy: number;
+    /**
+     * A finished video taken away: downloaded, the share sheet opened with it,
+     * the share sheet completed. Not "posted": a browser is not told that.
+     */
+    taken: { download: number; shareOpened: number; shared: number };
+  };
 }
 
 async function phaseStats(fromUtc: Date, toUtc: Date): Promise<PhaseStats> {
@@ -345,18 +352,20 @@ async function phaseStats(fromUtc: Date, toUtc: Date): Promise<PhaseStats> {
                   AND t.lyrics IS NOT NULL AND TRIM(t.lyrics) <> '' AND ${NOT_STAFF}) x`,
       [fromUtc, toUtc],
     ),
-    query<{ name: string; kind: string | null; reason: string | null; n: number }>(
+    query<{ name: string; kind: string | null; reason: string | null; how: string | null; n: number }>(
       `SELECT e.name, JSON_UNQUOTE(JSON_EXTRACT(e.props, '$.kind')) AS kind,
-              JSON_UNQUOTE(JSON_EXTRACT(e.props, '$.reason')) AS reason, COUNT(*) AS n
+              JSON_UNQUOTE(JSON_EXTRACT(e.props, '$.reason')) AS reason,
+              JSON_UNQUOTE(JSON_EXTRACT(e.props, '$.how')) AS how, COUNT(*) AS n
          FROM analytics_events e JOIN users u ON u.id = e.user_ref
-        WHERE e.name IN ('video_made', 'video_failed') AND e.occurred_at >= ? AND e.occurred_at < ? AND ${NOT_STAFF}
-        GROUP BY e.name, kind, reason`,
+        WHERE e.name IN ('video_made', 'video_failed', 'video_taken') AND e.occurred_at >= ? AND e.occurred_at < ? AND ${NOT_STAFF}
+        GROUP BY e.name, kind, reason, how`,
       [fromUtc, toUtc],
     ),
   ]);
   const n = (v: unknown) => Number(v ?? 0);
   const count = (name: string, kind: string, busy: boolean) =>
     videos.filter((r) => r.name === name && r.kind === kind && (r.reason === 'busy') === busy).reduce((s, r) => s + n(r.n), 0);
+  const took = (how: string) => videos.filter((r) => r.name === 'video_taken' && r.how === how).reduce((s, r) => s + n(r.n), 0);
   const sung = n(lyrics?.sung);
   const automatic = n(lyrics?.automatic);
   const corrected = n(lyrics?.corrected);
@@ -367,6 +376,11 @@ async function phaseStats(fromUtc: Date, toUtc: Date): Promise<PhaseStats> {
       made: { cover: count('video_made', 'cover', false), photo: count('video_made', 'photo', false) },
       failed: { cover: count('video_failed', 'cover', false), photo: count('video_failed', 'photo', false) },
       busy: videos.filter((r) => r.name === 'video_failed' && r.reason === 'busy').reduce((s, r) => s + n(r.n), 0),
+      taken: {
+        download: took('download'),
+        shareOpened: took('share_opened'),
+        shared: took('shared'),
+      },
     },
   };
 }

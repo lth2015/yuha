@@ -3016,6 +3016,10 @@ textarea.is-full { border-color: var(--danger); }
 
 /* On the home page the strip follows the hero score, which already leaves room. */
 .home__recent { margin-top: var(--s6); }
+/* The excerpt a video is made from: where it is, why, and listen / move it. */
+.photo-video__excerpt { display: flex; flex-direction: column; gap: 6px; margin: 8px 0 4px; }
+.photo-video__excerpt p { margin: 0; }
+.photo-video__excerpt-actions { display: flex; flex-wrap: wrap; gap: 8px; }
 .photo-video__length { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s2); }
 
 /* The home page's 「做 MV」 card: the gift card's layout, a phone-shaped frame for its picture. */

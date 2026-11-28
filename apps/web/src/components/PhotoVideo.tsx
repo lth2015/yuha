@@ -1,5 +1,8 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react';
-import { apiPostForBlob } from '../lib/api';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { apiFetch, apiPostForBlob } from '../lib/api';
+import {
+  NUDGE_SECONDS, SHARE_SECONDS, excerptLabel, nudgeExcerpt, recommendExcerpt, resizeExcerpt, saveExcerptStart, savedExcerptStart, type Excerpt,
+} from '../lib/excerpt';
 import { useI18n } from '../lib/i18n';
 import { useSession } from '../lib/session';
 import { resolveLyricTimings, timedLinesFor } from '../lib/lyrics';
@@ -36,7 +39,7 @@ interface Picked {
  * `timings` is what the video was made with (as JSON: a refetched song is a new
  * object with the same timing), so a later sync can say this file is out of date.
  */
-type Result = { state: 'idle' | 'making' } | { state: 'ready'; file: File; url: string; timings: string };
+type Result = { state: 'idle' | 'making' } | { state: 'ready'; file: File; url: string; timings: string; kind: 'photo' | 'cover' };
 
 export function PhotoVideo({
   song,
@@ -47,13 +50,16 @@ export function PhotoVideo({
   photosEnabled,
   startOpen = false,
   sceneMv,
+  onListen,
 }: {
   song: ShareSong & { trackId: string; title: string; durationSeconds: number };
   labels: ShareLabels;
   lyrics: string | null;
   lyricTimings: Parameters<typeof resolveLyricTimings>[2];
-  /** The cover-and-lyrics video (POST /v1/tracks/:id/share-video). */
-  makeCoverVideo: (seconds: number) => Promise<File>;
+  /** The cover-and-lyrics video (POST /v1/tracks/:id/share-video), of exactly this excerpt. */
+  makeCoverVideo: (excerpt: Excerpt) => Promise<File>;
+  /** Play the song from `start` and stop at `end`: the excerpt, heard before it is made. */
+  onListen?: (start: number, end: number) => void;
   /** The photo path, behind its own switch (or the staff preview). */
   photosEnabled: boolean;
   /** Arrived from a "make a video" link (`?video=1`): open, and in view. */
@@ -81,8 +87,34 @@ export function PhotoVideo({
    * default; the whole song when it is wanted. Both ways use it.
    */
   const [length, setLength] = useState<number>(Math.min(60, Math.floor(song.durationSeconds)));
-  const lengths = [30, 60].filter((n) => n < song.durationSeconds - 1);
+  const lengths = [SHARE_SECONDS, 60].filter((n) => n < song.durationSeconds - 1);
   const strict = Boolean(runtime?.features?.lyricStrictTimeline);
+  // Only trusted lines are drawn under the shared rule (isTrustedLine); an
+  // estimate makes a video without words, and is no chorus to aim an excerpt at.
+  const lines = useMemo(
+    () => (lyrics ? timedLinesFor(resolveLyricTimings(lyrics, song.durationSeconds, lyricTimings), strict) : []),
+    [lyrics, song.durationSeconds, lyricTimings, strict],
+  );
+  /*
+   * The excerpt (video plan 2026-11-28): one choice, auditioned here and used
+   * as is by the photo MV and the cover video, so the MP4 carries the seconds
+   * that were heard. A start the person confirmed on this device comes back.
+   */
+  const [excerpt, setExcerpt] = useState<Excerpt>(() =>
+    recommendExcerpt(lines, song.durationSeconds, Math.min(60, Math.floor(song.durationSeconds)), savedExcerptStart(song.trackId)));
+  // The trusted timeline can arrive after the panel opened (auto sync, a fetch):
+  // an excerpt chosen for the person is chosen again from it; a moved one stays.
+  useEffect(() => {
+    setExcerpt((ex) => (ex.why === 'chorus' || ex.why === 'middle' ? recommendExcerpt(lines, song.durationSeconds, ex.duration) : ex));
+  }, [lines, song.durationSeconds]);
+  const chooseLength = (n: number) => {
+    setLength(n);
+    setExcerpt((ex) => resizeExcerpt(ex, n, song.durationSeconds, lines));
+  };
+  const whole = excerpt.duration >= Math.floor(song.durationSeconds);
+  /** Told only that a file left (download / share sheet), never what was in it. */
+  const took = (kind: 'photo' | 'cover', how: 'download' | 'share_opened' | 'shared') =>
+    void apiFetch(`/v1/tracks/${song.trackId}/video-taken`, { method: 'POST', body: { kind, how } }).catch(() => undefined);
   const estimated = Boolean(lyrics) && resolveLyricTimings(lyrics ?? '', song.durationSeconds, lyricTimings).source === 'estimated';
   const [error, setError] = useState<unknown>(null);
   const [coverOpen, setCoverOpen] = useState(false);
@@ -161,9 +193,8 @@ export function PhotoVideo({
     setKept(null);
     setResult({ state: 'making' });
     try {
-      // Only trusted lines are drawn under the shared rule (isTrustedLine); an estimate makes a video without words.
-      const lines = lyrics ? timedLinesFor(resolveLyricTimings(lyrics, song.durationSeconds, lyricTimings), strict) : [];
-      const plan = planPhotoClip(lines, song.durationSeconds, photos.length, length);
+      saveExcerptStart(song.trackId, excerpt.start);
+      const plan = planPhotoClip(lines, song.durationSeconds, photos.length, excerpt.duration, excerpt);
       const frames = [];
       for (const f of plan.frames) {
         const canvas = await drawPhotoFrame(song, labels, photos[f.photo]!.canvas, f.line, f.ending === true);
@@ -178,7 +209,7 @@ export function PhotoVideo({
       });
       const name = `${song.title.replace(/[\\/:*?"<>|]+/g, ' ').trim() || 'yuha'}.mp4`;
       const file = new File([blob], name, { type: 'video/mp4' });
-      setResult({ state: 'ready', file, url: URL.createObjectURL(file), timings: JSON.stringify(lyricTimings ?? null) });
+      setResult({ state: 'ready', file, url: URL.createObjectURL(file), timings: JSON.stringify(lyricTimings ?? null), kind: 'photo' });
       void keep(file, 'photo', plan.duration);
     } catch (err) {
       setError(err);
@@ -191,19 +222,22 @@ export function PhotoVideo({
     setKept(null);
     setResult({ state: 'making' });
     try {
-      const file = await makeCoverVideo(length);
-      setResult({ state: 'ready', file, url: URL.createObjectURL(file), timings: JSON.stringify(lyricTimings ?? null) });
-      void keep(file, 'cover', length);
+      saveExcerptStart(song.trackId, excerpt.start);
+      const file = await makeCoverVideo(excerpt);
+      setResult({ state: 'ready', file, url: URL.createObjectURL(file), timings: JSON.stringify(lyricTimings ?? null), kind: 'cover' });
+      void keep(file, 'cover', excerpt.duration);
     } catch (err) {
       setError(err);
       setResult({ state: 'idle' });
     }
   };
 
-  const share = async (file: File) => {
+  const share = async (file: File, kind: 'photo' | 'cover') => {
     if (typeof navigator.canShare === 'function' && navigator.canShare({ files: [file] })) {
+      took(kind, 'share_opened');
       try {
         await navigator.share({ files: [file] });
+        took(kind, 'shared');
       } catch {
         /* closed the sheet; the video is still here */
       }
@@ -244,18 +278,46 @@ export function PhotoVideo({
       <div className="photo-video__length" role="group" aria-label={t('video.length')}>
         <span className="small muted">{t('video.length')}</span>
         {lengths.map((n) => (
-          <button key={n} type="button" className="chip chip--btn" aria-pressed={length === n} onClick={() => setLength(n)}>
-            {t('video.seconds', { n })}
+          <button key={n} type="button" className="chip chip--btn" aria-pressed={length === n} onClick={() => chooseLength(n)}>
+            {t(n === SHARE_SECONDS ? 'video.secondsShare' : 'video.seconds', { n })}
           </button>
         ))}
         <button
           type="button"
           className="chip chip--btn"
           aria-pressed={length >= Math.floor(song.durationSeconds)}
-          onClick={() => setLength(Math.floor(song.durationSeconds))}
+          onClick={() => chooseLength(Math.floor(song.durationSeconds))}
         >
           {t('video.whole', { time: `${Math.floor(song.durationSeconds / 60)}:${String(Math.floor(song.durationSeconds % 60)).padStart(2, '0')}` })}
         </button>
+      </div>
+      <div className="photo-video__excerpt" role="group" aria-label={t('video.excerpt.label')}>
+        <p className="small" aria-live="polite">
+          {t('video.excerpt.range', { range: excerptLabel(excerpt) })}
+          {' · '}
+          <span className="muted">{t(`video.excerpt.why.${excerpt.why}`)}</span>
+        </p>
+        <div className="photo-video__excerpt-actions">
+          {onListen && (
+            <button type="button" className="btn btn--sm" onClick={() => onListen(excerpt.start, excerpt.start + excerpt.duration)}>
+              {t('video.excerpt.listen')}
+            </button>
+          )}
+          {!whole && (
+            <>
+              <button type="button" className="btn btn--sm btn--ghost" disabled={excerpt.start <= 0}
+                aria-label={t('video.excerpt.earlierAria', { n: NUDGE_SECONDS })}
+                onClick={() => { setResult({ state: 'idle' }); setExcerpt((ex) => nudgeExcerpt(ex, -NUDGE_SECONDS, song.durationSeconds)); }}>
+                {t('video.excerpt.earlier', { n: NUDGE_SECONDS })}
+              </button>
+              <button type="button" className="btn btn--sm btn--ghost" disabled={excerpt.start + excerpt.duration >= song.durationSeconds - 0.05}
+                aria-label={t('video.excerpt.laterAria', { n: NUDGE_SECONDS })}
+                onClick={() => { setResult({ state: 'idle' }); setExcerpt((ex) => nudgeExcerpt(ex, NUDGE_SECONDS, song.durationSeconds)); }}>
+                {t('video.excerpt.later', { n: NUDGE_SECONDS })}
+              </button>
+            </>
+          )}
+        </div>
       </div>
       {estimated && (
         <p className="photo-video__notice" role="note">
@@ -384,11 +446,12 @@ export function PhotoVideo({
                 「存储视频」 is how a video reaches Photos — so where files can be
                 shared, that is the first button, and it says how. */}
             {canShareFiles && (
-              <button type="button" className="btn btn--primary" onClick={() => void share(result.file)}>
+              <button type="button" className="btn btn--primary" onClick={() => void share(result.file, result.kind)}>
                 {t('video.saveOrShare')}
               </button>
             )}
-            <a className={`btn${canShareFiles ? '' : ' btn--primary'}`} href={result.url} download={result.file.name}>
+            <a className={`btn${canShareFiles ? '' : ' btn--primary'}`} href={result.url} download={result.file.name}
+              onClick={() => took(result.kind, 'download')}>
               {t(canShareFiles ? 'video.downloadFile' : 'photo.download')}
             </a>
           </div>
