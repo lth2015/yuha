@@ -52,6 +52,8 @@ import quality_metrics as qm
 SR = 22050
 HOP = 512
 HOP_S = HOP / SR
+# Bumped when the tempo measure changes, so `run` re-measures renders read the old way.
+TEMPO_METHOD = "halves-acf"
 DTW_STEP = 4            # ~93 ms per DTW step
 KEY_WINDOW_S = 8.0
 MIN_INTRO_S = 3.0
@@ -132,6 +134,9 @@ def measure(path: Path, lyrics: str) -> dict:
     centroid = librosa.feature.spectral_centroid(y=y, sr=SR, hop_length=HOP)[0]
     onsets = librosa.onset.onset_detect(y=y, sr=SR, hop_length=HOP, units="time")
     _, beats = librosa.beat.beat_track(y=y, sr=SR, hop_length=HOP, units="time")
+    env = librosa.onset.onset_strength(y=y, sr=SR, hop_length=HOP)
+    whole = qm.periodicity_bpm(env, HOP_S)
+    halves = (qm.periodicity_bpm(env[: env.size // 2], HOP_S, near=whole), qm.periodicity_bpm(env[env.size // 2:], HOP_S, near=whole))
 
     f = lambda t: int(round(t / HOP_S))  # noqa: E731
     cut = lambda m, s: m[:, f(s["start"]):f(s["end"])]  # noqa: E731
@@ -194,10 +199,11 @@ def measure(path: Path, lyrics: str) -> dict:
 
     key, agree = qm.key_consistency(chroma_mix, int(round(KEY_WINDOW_S / HOP_S)))
     beat_cv = qm.interval_cv(beats)
-    drift = qm.tempo_drift(beats)
+    drift = qm.tempo_drift(*halves)
     out["time_key"] = {"key": key, "key_agreement": None if agree is None else round(agree, 2),
                        "beat_cv": None if beat_cv is None else round(beat_cv, 3),
                        "tempo_drift": None if drift is None else round(drift, 3),
+                       "tempo_method": TEMPO_METHOD,
                        "tempo_bpm": round(60.0 / float(np.median(np.diff(beats))), 1) if len(beats) > 8 else None}
     out["ending"] = qm.ending(rms_db, HOP_S)
     return out
@@ -417,7 +423,7 @@ def main(argv: List[str]) -> None:
     store = out / "quality.json"
     measured: Dict[str, dict] = json.loads(store.read_text(encoding="utf-8"))["renders"] if store.exists() else {}
     # A render measured before a measure existed is measured again, not reported without it.
-    stale = lambda m: "error" not in m and "tempo_drift" not in m.get("time_key", {})  # noqa: E731
+    stale = lambda m: "error" not in m and m.get("time_key", {}).get("tempo_method") != TEMPO_METHOD  # noqa: E731
     todo = [i for i in sorted(ok) if i not in measured or stale(measured[i])]
     print(f"{len(measured)} measured, {len(todo)} to measure", flush=True)
     for n, i in enumerate(todo, 1):
