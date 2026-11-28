@@ -137,22 +137,70 @@ def key_consistency(chroma: np.ndarray, frames_per_window: int) -> Tuple[str, Op
     return (overall, agree / n)
 
 
-def tempo_drift(times: Sequence[float]) -> Optional[float]:
+def periodicity_bpm(envelope: Sequence[float], hop_s: float, lo_bpm: float = 60.0, hi_bpm: float = 200.0,
+                    near: Optional[float] = None) -> Optional[float]:
     """
-    How far the second half's tempo is from the first half's: |ratio − 1| of
-    their median beat intervals. A song that slows by 15% halfway reads 0.15.
+    The tempo an onset envelope repeats at, read from its own autocorrelation:
+    the strongest lag between ``lo_bpm`` and ``hi_bpm``, then refined to
+    0.1 BPM, because whole-frame lags are ~5% apart and the reference allows
+    3%.
 
-    Replaces the beat-interval variation as the tempo measure: that one could
-    not see a steady slowdown (each half is even on its own) and read 0.066
-    on a real render with nothing wrong — it failed its planted check on the
-    DGX (2026-11-28) and is not used to judge anything.
+    Each half of a song gets its own reading. A beat tracker cannot be used
+    for that: it fixes one tempo for the whole file and then places beats at
+    that spacing, so both halves come back identical by construction. That is
+    how the first drift measure read 0.0 → 0.0 on a planted 15% slowdown on
+    the DGX (2026-11-28).
+
+    A periodic envelope correlates as well at two beats as at one, so the
+    shortest lag within 80% of the strongest wins. ``near`` narrows the
+    search to within 25% of a tempo already read (the whole song's), so two
+    halves cannot land on different metrical levels — a half read at 3/2 the
+    other's would otherwise look like a 33% change.
     """
-    t = np.asarray(times, dtype=np.float64)
-    if t.size < 16:
+    e = np.asarray(envelope, dtype=np.float64)
+    # Onsets land on whole frames, so a beat 21.5 frames long alternates 21 and
+    # 22 and its one-beat peak smears while the two-beat one stays sharp.
+    # A ~20 ms blur makes the one-beat peak as tall as it should be.
+    e = np.convolve(e, [0.25, 0.5, 0.25], mode="same")
+    e = e - e.mean()
+    lo, hi = int(np.floor(60.0 / hi_bpm / hop_s)), int(np.ceil(60.0 / lo_bpm / hop_s))
+    if e.size < hi * 4 or not np.any(e):
         return None
-    half = t.size // 2
-    a, b = np.median(np.diff(t[:half])), np.median(np.diff(t[half:]))
-    return float(abs(b / a - 1.0)) if a > 0 else None
+    ac = np.correlate(e, e, mode="full")[e.size - 1:]
+    ac = ac / np.arange(e.size, 0, -1)  # unbiased: long lags are not penalised for overlapping less
+    if near:
+        lo = max(lo, int(np.floor(60.0 / (near * 1.25) / hop_s)))
+        hi = min(hi, int(np.ceil(60.0 / (near / 1.25) / hop_s)))
+    seg = ac[lo:hi + 1]
+    if seg.size < 3 or seg.max() <= 0:
+        return None
+    peaks = [i for i in range(1, seg.size - 1) if seg[i] >= seg[i - 1] and seg[i] >= seg[i + 1] and seg[i] >= 0.8 * seg.max()]
+    k = lo + (peaks[0] if peaks else int(np.argmax(seg)))
+    coarse = 60.0 / (k * hop_s)
+    # A lag is a whole number of frames, about 5% apart at 120 BPM: too coarse
+    # to tell a steady song from a 3% drift. Refine on a 0.1 BPM grid by how
+    # strongly the envelope oscillates at that tempo and its first harmonics
+    # (an exact-frequency DFT, which no frame grid limits).
+    n = np.arange(e.size) * hop_s
+    grid = np.arange(coarse * 0.94, coarse * 1.06, 0.1)
+    score = [sum(abs(np.dot(e, np.exp(-2j * np.pi * h * (bpm / 60.0) * n))) / h for h in (1, 2, 3)) for bpm in grid]
+    return float(grid[int(np.argmax(score))])
+
+
+def tempo_drift(first_bpm: Optional[float], second_bpm: Optional[float]) -> Optional[float]:
+    """
+    How far the second half's tempo is from the first half's: |ratio − 1|,
+    after folding octaves (a half read at double time is not a song twice as
+    fast). A song that slows by 15% halfway reads 0.15.
+    """
+    if not first_bpm or not second_bpm:
+        return None
+    r = second_bpm / first_bpm
+    while r >= 1.5:
+        r /= 2.0
+    while r < 0.75:
+        r *= 2.0
+    return float(abs(r - 1.0))
 
 
 def interval_cv(times: Sequence[float]) -> Optional[float]:

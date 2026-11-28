@@ -82,15 +82,36 @@ class TimeAndEnding(unittest.TestCase):
         self.assertLess(qm.interval_cv(steady), 0.01)
         self.assertGreater(qm.interval_cv(drag), 0.05)
 
-    def test_a_steady_slowdown_halfway_reads_as_drift_where_beat_variation_does_not(self):
-        first = np.arange(40) * 0.5
-        slower = first[-1] + 0.5 + np.arange(40) * 0.5 / 0.85
-        drag = np.concatenate([first, slower])
-        steady = np.arange(80) * 0.5
-        self.assertAlmostEqual(qm.tempo_drift(drag), 1 / 0.85 - 1, places=3)
-        self.assertLess(qm.tempo_drift(steady), 0.001)
-        # Why the old measure went: each half is even, so the variation barely moves.
-        self.assertLess(qm.interval_cv(drag), 0.1)
+    def test_each_half_is_timed_on_its_own_so_a_slowdown_halfway_reads_as_drift(self):
+        hop_s = 512 / 22050
+
+        def clicks(bpm: float, seconds: float, jitter: float = 0.0) -> np.ndarray:
+            env = np.zeros(int(seconds / hop_s))
+            rng = np.random.default_rng(3)
+            t = 0.0
+            while t < seconds - 0.1:
+                env[int((t + rng.normal(0, jitter)) / hop_s) % env.size] += 1.0
+                t += 60.0 / bpm
+            return np.convolve(env, [0.3, 1.0, 0.5, 0.2], mode="same") + rng.random(env.size) * 0.05
+
+        song = np.concatenate([clicks(120, 60), clicks(102, 60)])
+        whole = qm.periodicity_bpm(song, hop_s)
+        first = qm.periodicity_bpm(song[: song.size // 2], hop_s, near=whole)
+        slower = qm.periodicity_bpm(song[song.size // 2:], hop_s, near=whole)
+        self.assertAlmostEqual(first, 120, delta=1.5)
+        self.assertAlmostEqual(slower, 102, delta=1.5)
+        self.assertAlmostEqual(qm.tempo_drift(first, slower), 1 - 102 / 120, delta=0.01)
+        # A steady song with a little human timing reads well under the 3% reference.
+        steady = clicks(117, 120, jitter=0.01)
+        w = qm.periodicity_bpm(steady, hop_s)
+        a, b = qm.periodicity_bpm(steady[: steady.size // 2], hop_s, near=w), qm.periodicity_bpm(steady[steady.size // 2:], hop_s, near=w)
+        self.assertAlmostEqual(w, 117, delta=1.5)
+        self.assertLess(qm.tempo_drift(a, b), 0.01)
+
+    def test_a_half_read_at_double_time_is_not_drift(self):
+        self.assertAlmostEqual(qm.tempo_drift(120, 240), 0.0)
+        self.assertAlmostEqual(qm.tempo_drift(120, 61), 122 / 120 - 1, places=6)
+        self.assertIsNone(qm.tempo_drift(None, 120))
 
     def test_a_song_that_winds_down_reads_lower_at_the_close_than_one_that_stops(self):
         hop = 0.05
