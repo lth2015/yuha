@@ -8,7 +8,8 @@
  */
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { randomUUID } from 'node:crypto';
-import { execute, query } from '@yuha/db';
+import { claimOutboxBatch, execute, query, withTx } from '@yuha/db';
+import { runJobStep } from '@yuha/worker/pipeline';
 import { normalizeSource } from '@yuha/contracts';
 import { createHarness, resetData, teardown, type Harness, type TestUser } from './helpers/harness.js';
 import { allowInvariantBreach } from './helpers/invariant-guard.js';
@@ -134,13 +135,45 @@ describe('the trial and the video in the funnel', () => {
     expect(row).toMatchObject({ trials: 1, signups: 0 });
   });
 
+  /** The trial's song, made and delivered: a trial is claimed only for a song it made. */
+  async function trialSong(token: string): Promise<void> {
+    const res = await trials.app.inject({
+      method: 'POST',
+      url: '/v1/generations',
+      headers: { authorization: `Bearer ${token}`, 'idempotency-key': `src-${randomUUID()}` },
+      payload: { mode: 'simple', prompt: '夏の終わり', instrumental: false, durationSeconds: 30 } as never,
+    });
+    expect(res.statusCode).toBe(202);
+    const jobId = res.json().jobId as string;
+    const rows = await withTx((tx) => claimOutboxBatch(50, tx));
+    for (const row of rows) await trials.ctx.queue.send({ body: { ...row.payload, outboxId: row.id, eventType: row.event_type } });
+    for (let i = 0; i < 6; i += 1) {
+      await runJobStep({ ctx: trials.ctx, owner: `src-${i}`, log: () => undefined }, jobId);
+      if ((await query(`SELECT 1 AS k FROM tracks WHERE job_id = ? AND state = 'deliverable'`, [jobId])).length) return;
+    }
+    throw new Error('the trial song was not delivered');
+  }
+
   it('carries a trial’s source to the new account that keeps its song', async () => {
     const started = (await startTrial('x-travel-ja-1')).json() as { token: string; userId: string };
+    await trialSong(started.token);
     const user = await trials.createUser({ email: 'kept@example.test' });
     await trials.app.inject({ method: 'POST', url: '/v1/me/consent', headers: user.authHeader, payload: { ageConfirmed: true, termsAccepted: true } as never });
     const claim = await trials.app.inject({ method: 'POST', url: '/v1/trial/claim', headers: user.authHeader, payload: { guestToken: started.token } as never });
     expect(claim.statusCode).toBe(200);
     expect(await sourceOf(user.id)).toBe('x-travel-ja-1');
+  });
+
+  it('a trial that made no song has nothing to claim, and gives the account no source', async () => {
+    // Since the claim waits for a delivered song (Codex, 2026-11-28), an empty
+    // trial is "nothing to claim", not a claim of zero songs. The account's
+    // own first link still attributes it (the test above this describe).
+    const started = (await startTrial('x-travel-ja-2')).json() as { token: string; userId: string };
+    const user = await trials.createUser({ email: 'empty@example.test' });
+    await trials.app.inject({ method: 'POST', url: '/v1/me/consent', headers: user.authHeader, payload: { ageConfirmed: true, termsAccepted: true } as never });
+    const claim = await trials.app.inject({ method: 'POST', url: '/v1/trial/claim', headers: user.authHeader, payload: { guestToken: started.token } as never });
+    expect(claim.statusCode).toBe(404);
+    expect(await sourceOf(user.id)).toBeNull();
   });
 
   it('counts the accounts from a source that made a video', async () => {
