@@ -131,6 +131,29 @@ export default async function shareRoutes(app: FastifyInstance, opts: { ctx: App
     body: { start: number; duration: number; frames: Array<{ at: number; jpeg: string }> },
     kind: 'cover' | 'photo',
   ) {
+    try {
+      return await encodeOwned(reply, id, userId, body, kind);
+    } catch (err) {
+      // MV export success is a number watched this phase (2026-11-28); a made
+      // video was already counted, so the failures are counted too: why, and
+      // nothing of what was in it. Somebody else's song is not an attempt.
+      const code = err instanceof AppError ? err.code : 'internal';
+      if (code !== 'NOT_FOUND') {
+        const reason = code === 'RATE_LIMITED' ? 'busy' : code.toLowerCase();
+        await trackEvent({ name: 'video_failed', userRef: userId, props: { kind, reason }, runMode: ctx.config.mode, isInternal: ctx.config.isDemo })
+          .catch(() => undefined);
+      }
+      throw err;
+    }
+  }
+
+  async function encodeOwned(
+    reply: FastifyReply,
+    id: string,
+    userId: string,
+    body: { start: number; duration: number; frames: Array<{ at: number; jpeg: string }> },
+    kind: 'cover' | 'photo',
+  ) {
     const track = await getTrack(id);
     if (!track || track.deleted_at || track.owner_id !== userId) throw new AppError('NOT_FOUND', 'no such song');
     if (track.state !== 'deliverable') throw new AppError('TRACK_NOT_DELIVERABLE', 'the song is not playable');
