@@ -4,6 +4,7 @@ import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { TITLE_MAX_CODEPOINTS, markCorrected, seasonOfOccasion, type LyricTimings, type Occasion, type ProductView, type TrackView } from '@yuha/contracts';
 import { API_BASE, ApiError, apiFetch, apiPostForBlob } from '../lib/api';
 import { drawVideoFrame, frameJpeg, planShareClip, shareCardPng } from '../lib/share-art';
+import type { Excerpt } from '../lib/excerpt';
 import { resolveLyricTimings, sungLyrics, timedLinesFor } from '../lib/lyrics';
 import { useLyricSyncRefresh } from '../lib/lyric-sync-refresh';
 import { clampToCodePoints } from '../lib/codepoints';
@@ -66,6 +67,34 @@ export default function SongDetail() {
       sceneSeek.current = null;
     }
   }, [id, player.activeId, player.duration, player.seek]);
+  /*
+   * A video excerpt being auditioned (video plan 2026-11-28): stopped where it
+   * ends, so what is heard is exactly what the video will carry. Armed only
+   * once the playhead is inside the excerpt — before the seek lands it still
+   * reads wherever the song was, which may be past the end already.
+   */
+  const playerRef = useRef(player);
+  playerRef.current = player;
+  const auditionStop = useRef<(() => void) | null>(null);
+  useEffect(() => () => auditionStop.current?.(), []);
+  const stopAuditionAt = (start: number, end: number) => {
+    auditionStop.current?.();
+    let armed = false;
+    const off = playerRef.current.onTime((s) => {
+      if (!armed) {
+        armed = s >= start - 0.5 && s < end;
+        return;
+      }
+      // Moved out of it by hand: the person is listening to the song now, not the excerpt.
+      if (s < start - 1 || s > end + 2) return void (off(), (auditionStop.current = null));
+      if (s >= end) {
+        off();
+        auditionStop.current = null;
+        if (playerRef.current.status === 'playing') playerRef.current.toggle();
+      }
+    });
+    auditionStop.current = off;
+  };
   const [confirm, confirmDialog] = useConfirm();
   /*
    * Unsaved lyric timing edits, held here so the video card's workspace and
@@ -447,10 +476,11 @@ export default function SongDetail() {
    * chorus, each sung line on its own frame, drawn here and put on the song's
    * audio by the API. Returned as a file for the phone's share sheet.
    */
-  const makeVideo = async (seconds: number): Promise<File> => {
+  const makeVideo = async (excerpt: Excerpt): Promise<File> => {
     // Only trusted lines are drawn under the shared rule (isTrustedLine); an estimate makes a video without words.
     const lines = sung ? timedLinesFor(resolveLyricTimings(sung, song.durationSeconds, song.lyricTimings), strictTimeline) : [];
-    const plan = planShareClip(lines, song.durationSeconds, 200, seconds);
+    // Exactly the excerpt that was auditioned: the photo MV takes the same one.
+    const plan = planShareClip(lines, song.durationSeconds, 200, excerpt.duration, excerpt);
     const labels = shareLabels();
     const frames = [];
     for (const f of plan.frames) {
@@ -884,6 +914,13 @@ export default function SongDetail() {
               lyrics={sung}
               lyricTimings={song.lyricTimings}
               makeCoverVideo={makeVideo}
+              onListen={(start, end) => {
+                stopAuditionAt(start, end);
+                if (active && player.duration > 0) {
+                  player.seek(start);
+                  if (player.status !== 'playing') player.toggle();
+                } else { sceneSeek.current = start; play(); }
+              }}
               startOpen={params.get('video') === '1'}
               timingsUnsaved={edits.present !== null}
               studio={

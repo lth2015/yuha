@@ -144,10 +144,32 @@ describe('MV export success', () => {
 
     const { phase, videos } = await twoDays();
     expect(videos).toEqual({ cover: 0, photo: 0 });
-    expect(phase.videos).toEqual({ made: { cover: 0, photo: 0 }, failed: { cover: 0, photo: 1 }, busy: 0 });
+    expect(phase.videos).toEqual({ made: { cover: 0, photo: 0 }, failed: { cover: 0, photo: 1 }, busy: 0, taken: { download: 0, shareOpened: 0, shared: 0 } });
     const rows = await query<{ props: unknown }>(`SELECT props FROM analytics_events WHERE name = 'video_failed'`);
     expect(rows).toHaveLength(1);
     expect(JSON.parse(JSON.stringify(rows[0]!.props))).toMatchObject({ kind: 'photo', reason: 'validation_failed' });
     expect(JSON.stringify(rows[0]!.props)).not.toMatch(/jpeg|frames|not a jpeg/);
   }, 60_000);
 });
+
+describe('a video taken away', () => {
+  it('counts a download, a share sheet opened and a share completed apart, for the owner only', async () => {
+    const u = await h.createUser({ credits: 3 });
+    const jobId = await job(u);
+    const trackId = (await queryOne<{ id: string }>(`SELECT id FROM tracks WHERE job_id = ?`, [jobId]))!.id;
+    const took = (who: TestUser, body: unknown) =>
+      h.app.inject({ method: 'POST', url: `/v1/tracks/${trackId}/video-taken`, headers: who.authHeader, payload: body as never });
+    expect((await took(u, { kind: 'photo', how: 'download' })).statusCode).toBe(202);
+    expect((await took(u, { kind: 'photo', how: 'share_opened' })).statusCode).toBe(202);
+    expect((await took(u, { kind: 'cover', how: 'share_opened' })).statusCode).toBe(202);
+    expect((await took(u, { kind: 'cover', how: 'shared' })).statusCode).toBe(202);
+    // Somebody else's song, and a made-up way, are not counted.
+    const other = await h.createUser({ credits: 3 });
+    expect((await took(other, { kind: 'photo', how: 'download' })).statusCode).toBe(404);
+    expect((await took(u, { kind: 'photo', how: 'posted_to_x' })).statusCode).toBe(400);
+
+    const { phase } = await twoDays();
+    expect(phase.videos.taken).toEqual({ download: 1, shareOpened: 2, shared: 1 });
+  }, 60_000);
+});
+

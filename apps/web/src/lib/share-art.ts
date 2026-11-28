@@ -360,8 +360,15 @@ function clipWindow(lines: TimedLine[], songSeconds: number, seconds: number): {
   return { start, duration };
 }
 
-export function planShareClip(lines: TimedLine[], songSeconds: number, maxFrames = 24, seconds = CLIP_SECONDS): ClipPlan {
-  const { start, duration } = clipWindow(lines, songSeconds, seconds);
+/**
+ * `window` is the excerpt the person auditioned (lib/excerpt.ts); given, it is
+ * used exactly, so the video carries the seconds that were heard. Without one
+ * the plan picks, as it always has.
+ */
+export function planShareClip(
+  lines: TimedLine[], songSeconds: number, maxFrames = 24, seconds = CLIP_SECONDS, window?: { start: number; duration: number },
+): ClipPlan {
+  const { start, duration } = window ?? clipWindow(lines, songSeconds, seconds);
   const end = start + duration;
 
   /*
@@ -454,8 +461,10 @@ function captionAt(captions: Array<{ from: number; until: number; text: string }
  * picked, and a new frame wherever the photo or the sung line changes. A line
  * leaves the screen when it ends rather than hanging over the next photo.
  */
-export function planPhotoClip(lines: TimedLine[], songSeconds: number, photos: number, seconds = PHOTO_CLIP_SECONDS): PhotoClipPlan {
-  const { start, duration } = clipWindow(lines, songSeconds, seconds);
+export function planPhotoClip(
+  lines: TimedLine[], songSeconds: number, photos: number, seconds = PHOTO_CLIP_SECONDS, window?: { start: number; duration: number },
+): PhotoClipPlan {
+  const { start, duration } = window ?? clipWindow(lines, songSeconds, seconds);
   const round = (n: number) => Number(n.toFixed(2));
   const clipStart = round(start);
   const clipDuration = round(duration);
