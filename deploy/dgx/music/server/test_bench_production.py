@@ -216,44 +216,140 @@ class Pages(unittest.TestCase):
         self.assertEqual(entry["missing"], [p["B"]["id"]])
 
 
-class Score(unittest.TestCase):
-    """Spec step 2's rules, on a key and judgments made by hand."""
+class Resume(unittest.TestCase):
+    """Review of #191: a resumed run must not reuse renders made under another configuration."""
 
-    def key(self):
+    def setUp(self):
+        self.dir = tempfile.TemporaryDirectory()
+        self.out = Path(self.dir.name)
+        self.m = bp.load_manifest()
+
+    def tearDown(self):
+        self.dir.cleanup()
+
+    def tools(self, **env):
+        t = Fake().tools()
+        t.environment = {"engine": "v15", "v15_model": "v1", **env}
+        return t
+
+    def test_a_different_model_in_the_same_directory_is_refused_not_mixed(self):
+        bp.run(self.m, self.out, self.tools(), only=["zh-pop"], log=lambda *_: None)
+        fake = Fake()
+        other = fake.tools()
+        other.environment = {"engine": "v15", "v15_model": "v2"}
+        with self.assertRaises(SystemExit) as caught:
+            bp.run(self.m, self.out, other, only=["zh-pop", "ja-pop"], log=lambda *_: None)
+        self.assertIn("different request or configuration", str(caught.exception))
+        self.assertEqual(fake.calls, [])
+        # Nothing written: the old experiment's environment is still the one on disk.
+        self.assertEqual(json.loads((self.out / "environment.json").read_text())["v15_model"], "v1")
+
+    def test_the_same_configuration_resumes_and_only_renders_what_is_new(self):
+        bp.run(self.m, self.out, self.tools(), only=["zh-pop"], log=lambda *_: None)
+        fake = Fake()
+        same = fake.tools()
+        same.environment = {"engine": "v15", "v15_model": "v1", "build_sha": "a later build"}
+        bp.run(self.m, self.out, same, only=["zh-pop", "ja-pop"], log=lambda *_: None)
+        self.assertEqual(len(fake.calls), 4)
+        self.assertTrue(all("ja" in c["request"]["prompt"] or "j-pop" in c["request"]["prompt"] for c in fake.calls))
+
+    def test_records_written_before_the_fingerprint_existed_still_resume(self):
+        # The run on the DGX on 2026-11-28 wrote records without a fingerprint field.
+        bp.run(self.m, self.out, self.tools(), only=["zh-pop"], log=lambda *_: None)
+        self.assertNotIn("fingerprint", next(iter(bp.read_results(self.out).values())))
+        fake = Fake()
+        again = fake.tools()
+        again.environment = {"engine": "v15", "v15_model": "v1"}
+        bp.run(self.m, self.out, again, only=["zh-pop"], log=lambda *_: None)
+        self.assertEqual(fake.calls, [])
+
+
+class Score(unittest.TestCase):
+    """Spec step 2's rules, tightened by the review of #191, on keys and judgments made by hand."""
+
+    def key(self, briefs=("zh-b1", "zh-b2", "zh-b3")):
         pairs = []
-        for brief in ("b1", "b2", "b3"):
+        for brief in briefs:
             for seed, x in ((11, "A"), (22, "B")):
                 pairs.append({"pair": f"{brief}{seed}", "brief": brief, "seed": seed, "comparable": True,
                               "X": f"{brief}-s{seed}-{x}", "Y": f"{brief}-s{seed}-{'B' if x == 'A' else 'A'}"})
         return {"key_seed": 1, "pairs": pairs}
 
-    def judge(self, picks):
-        return {"pairs": {t: {"criteria": {"whole": v}} for t, v in picks.items()}}
+    def judge(self, who, picks, languages="中文"):
+        return {"reviewer": who, "languages": languages, "pairs": {t: {"criteria": {"whole": v}} for t, v in picks.items()}}
 
-    def test_per_brief_aggregation_and_listener_agreement(self):
-        key = self.key()
-        # b1: B wins both seeds. b2: one each way -> tie. b3: listeners disagree on both -> tie.
-        one = self.judge({"b111": "Y", "b122": "X", "b211": "Y", "b222": "Y", "b311": "X", "b322": "X"})
-        two = self.judge({"b111": "Y", "b122": "X", "b211": "Y", "b222": "Y", "b311": "Y", "b322": "Y"})
-        r = bp.score(key, [one, two])["whole"]
-        self.assertEqual(r["per_brief"], {"b1": "B", "b2": "tie", "b3": "tie"})
-        self.assertEqual((r["B"], r["A"], r["tie"]), (1, 0, 2))
-        self.assertAlmostEqual(r["b_win_rate"], 1 / 3, places=3)
-        lo, hi = r["ci95"]
-        self.assertLessEqual(lo, r["diff"])
-        self.assertGreaterEqual(hi, r["diff"])
+    def whole(self, key, judgments):
+        return bp.score(key, judgments)["whole"]
 
-    def test_a_third_listener_breaks_a_disagreement(self):
+    def test_two_agreeing_reviewers_decide_and_seeds_aggregate_per_brief(self):
         key = self.key()
-        picks = lambda v: self.judge({"b111": v, "b122": "same", "b211": "same", "b222": "same", "b311": "same", "b322": "same"})
-        r = bp.score(key, [picks("Y"), picks("X"), picks("Y")])["whole"]
-        self.assertEqual(r["per_brief"]["b1"], "B")
+        # zh-b1: B both seeds. zh-b2: one each way -> tie. zh-b3: the two agree on A at s11, tie at s22.
+        picks = {"zh-b111": "Y", "zh-b122": "X", "zh-b211": "Y", "zh-b222": "Y", "zh-b311": "X", "zh-b322": "same"}
+        r = self.whole(key, [self.judge("a", picks), self.judge("b", picks)])
+        self.assertEqual(r["formal"]["per_brief"], {"zh-b1": "B", "zh-b2": "tie", "zh-b3": "A"})
+        self.assertTrue(r["formal"]["complete"])
+        self.assertEqual((r["formal"]["B"], r["formal"]["A"], r["formal"]["tie"]), (1, 1, 1))
+        lo, hi = r["formal"]["ci95"]
+        self.assertLessEqual(lo, r["formal"]["diff"])
+        self.assertGreaterEqual(hi, r["formal"]["diff"])
+
+    def test_one_reviewer_is_a_preview_never_a_result(self):
+        key = self.key(("zh-b1",))
+        r = self.whole(key, [self.judge("a", {"zh-b111": "Y", "zh-b122": "X"})])
+        self.assertEqual(r["formal"]["per_brief"], {"zh-b1": "pending"})
+        self.assertEqual(r["formal"]["B"], 0)
+        self.assertFalse(r["formal"]["complete"])
+        self.assertEqual(r["preview"]["per_brief"], {"zh-b1": "B"})
+        self.assertIn("two independent reviews", " ".join(r["why_pending"]["zh-b1"]))
+
+    def test_a_disagreement_waits_for_a_third_reviewer(self):
+        key = self.key(("zh-b1",))
+        p = lambda v: {"zh-b111": v, "zh-b122": "same"}  # noqa: E731
+        two = self.whole(key, [self.judge("a", p("Y")), self.judge("b", p("X"))])
+        self.assertEqual(two["formal"]["per_brief"]["zh-b1"], "pending")
+        three = self.whole(key, [self.judge("a", p("Y")), self.judge("b", p("X")), self.judge("c", p("Y"))])
+        self.assertEqual(three["formal"]["per_brief"]["zh-b1"], "B")
+
+    def test_reviewers_who_do_not_know_the_language_cannot_decide_it(self):
+        key = self.key(("ja-b1",))
+        picks = {"ja-b111": "Y", "ja-b122": "X"}
+        r = self.whole(key, [self.judge("a", picks, "中文"), self.judge("b", picks, "English")])
+        self.assertEqual(r["formal"]["per_brief"]["ja-b1"], "pending")
+        r = self.whole(key, [self.judge("a", picks, "中文"), self.judge("b", picks, "日本語")])
+        self.assertEqual(r["formal"]["per_brief"]["ja-b1"], "B")
+
+    def test_codex_reproduction_one_seed_missing_both_renders_is_not_a_b_win(self):
+        # Review of #191: s11 complete with a single B vote; s22 rendered neither arm. Was: B, 100%.
+        key = self.key(("zh-b1",))
+        key["pairs"][1] = {"pair": "zh-b122", "brief": "zh-b1", "seed": 22, "comparable": False,
+                           "missing": ["zh-b1-s22-A", "zh-b1-s22-B"]}
+        one = self.whole(key, [self.judge("a", {"zh-b111": "Y"})])
+        self.assertNotEqual(one["formal"]["per_brief"]["zh-b1"], "B")
+        self.assertEqual(one["formal"]["b_win_rate"], 0)
+        # ...and with two reviewers agreeing on B at s11, still not a B win.
+        two = self.whole(key, [self.judge("a", {"zh-b111": "Y"}), self.judge("b", {"zh-b111": "Y"})])
+        self.assertNotEqual(two["formal"]["per_brief"]["zh-b1"], "B")
+        self.assertNotEqual(two["preview"]["per_brief"]["zh-b1"], "B")
+        self.assertEqual(two["pairs"]["missing_render"], 1)
 
     def test_a_missing_b_render_is_never_a_b_win(self):
-        key = self.key()
-        key["pairs"][1] = {"pair": "b122", "brief": "b1", "seed": 22, "comparable": False, "missing": ["b1-s22-B"]}
-        r = bp.score(key, [self.judge({"b111": "Y"}), self.judge({"b111": "Y"})])["whole"]
-        self.assertEqual(r["per_brief"]["b1"], "tie")
+        key = self.key(("zh-b1",))
+        key["pairs"][1] = {"pair": "zh-b122", "brief": "zh-b1", "seed": 22, "comparable": False, "missing": ["zh-b1-s22-B"]}
+        picks = {"zh-b111": "Y"}
+        r = self.whole(key, [self.judge("a", picks), self.judge("b", picks)])
+        self.assertEqual(r["formal"]["per_brief"]["zh-b1"], "tie")
+
+    def test_a_reexport_replaces_a_reviewers_votes_rather_than_counting_twice(self):
+        key = self.key(("zh-b1",))
+        r = self.whole(key, [self.judge("a", {"zh-b111": "Y", "zh-b122": "X"}),
+                             self.judge("a", {"zh-b111": "Y", "zh-b122": "X"})])
+        self.assertEqual(r["formal"]["per_brief"]["zh-b1"], "pending")
+
+    def test_counts_are_reported_apart(self):
+        key = self.key(("zh-b1", "zh-b2"))
+        key["pairs"][3] = {"pair": "zh-b222", "brief": "zh-b2", "seed": 22, "comparable": False, "missing": ["zh-b2-s22-A"]}
+        r = self.whole(key, [self.judge("a", {"zh-b111": "Y", "zh-b122": "X"}), self.judge("b", {"zh-b111": "Y"})])
+        self.assertEqual(r["pairs"], {"missing_render": 1, "missing_review": 1, "pending": 1, "tie": 0, "decided": 1})
 
 
 if __name__ == "__main__":

@@ -244,6 +244,15 @@ open ~/yuha-bench/production/listen/index.html                # blind: listen he
 - `key.json` says which of X/Y is A. Keep it away from listeners.
 - Scoring: copy the judgment files back and run
   `... bench_production.py score /bench/production/judgments/*.json`.
+  `formal` is the result: a pair counts only with two independent reviews
+  that agree, one of them from someone who knows the song's language (a
+  disagreement waits for a third); a brief with a render missing on either
+  arm is never a B win. Everything short of that is `pending`, and missing
+  renders, missing reviews, pending pairs and ties are counted apart.
+  `preview` is the votes so far and is not a result.
+- `run` refuses to continue in a directory whose finished renders were made
+  with a different request or configuration (engine, model, steps, mastering,
+  service code). Start a new one with `-e BENCH_OUT=/bench/<name>`.
 
 ## Retention (`RETENTION_DAYS`, default 6)
 
