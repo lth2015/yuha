@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useId, useRef, useState } from 'react';
 import { useI18n } from '../lib/i18n';
 import { copyText, isPrivateHost, shareTargets } from '../lib/share';
 import { useDismiss } from '../lib/dismiss';
@@ -43,12 +43,23 @@ export function ShareMenu({
   const [open, setOpen] = useState(autoOpen);
   const [copy, setCopy] = useState<'idle' | 'done' | 'failed'>('idle');
   const root = useRef<HTMLDivElement>(null);
+  const trigger = useRef<HTMLButtonElement>(null);
+  const link = useRef<HTMLInputElement>(null);
+  const panelId = useId();
+  const copyAttempt = useRef(0);
   const text = textOverride ?? t('song.share.text', { title });
   const internal = isPrivateHost(new URL(url).hostname);
   const canNativeShare = typeof navigator !== 'undefined' && typeof navigator.share === 'function';
 
-  const closeMenu = useCallback(() => setOpen(false), []);
+  const closeMenu = useCallback(() => {
+    copyAttempt.current += 1;
+    setOpen(false);
+  }, []);
   useDismiss(root, open, closeMenu);
+  const closeFromPanel = () => {
+    closeMenu();
+    trigger.current?.focus();
+  };
   const opened = useRef(onOpen);
   opened.current = onOpen;
   useEffect(() => {
@@ -56,60 +67,71 @@ export function ShareMenu({
   }, [open]);
 
   const doCopy = async () => {
+    const attempt = ++copyAttempt.current;
     const ok = await copyText(url);
+    if (copyAttempt.current !== attempt) return;
     setCopy(ok ? 'done' : 'failed');
-    if (ok) setTimeout(() => setCopy('idle'), 2000);
+    if (!ok) link.current?.focus();
   };
 
   const nativeShare = async () => {
     try {
       await navigator.share({ title, text, url });
-      setOpen(false);
+      closeFromPanel();
     } catch {
       /* the person closed the sheet; nothing to report */
     }
   };
 
   return (
-    <div className="share" ref={root}>
+    <div className="share" ref={root} onKeyDown={(event) => {
+      if (!open || event.key !== 'Escape') return;
+      event.stopPropagation();
+      closeFromPanel();
+    }}>
       <button
+        ref={trigger}
         type="button"
         className={`text-action${primary ? ' is-strong' : ''}`}
-        aria-haspopup="menu"
+        aria-controls={open ? panelId : undefined}
         aria-expanded={open}
         onClick={() => {
-          setOpen((v) => !v);
-          setCopy('idle');
+          if (open) closeMenu();
+          else {
+            setCopy('idle');
+            setOpen(true);
+          }
         }}
       >
         {label ?? t('song.share')}
       </button>
       {open && (
-        <div className="share__menu" role="menu">
+        <div className="share__menu" id={panelId} role="group" aria-label={label ?? t('song.share')}>
           <div className="share__link">
-            <input className="share__url" readOnly value={url} onFocus={(e) => e.currentTarget.select()} aria-label={t('song.share.link')} />
-            <button type="button" className="share__copy" role="menuitem" onClick={doCopy}>
-              {copy === 'done' ? t('song.copied') : t('song.share.copy')}
+            <input ref={link} className="share__url" readOnly value={url} onFocus={(e) => e.currentTarget.select()} aria-label={t('song.share.link')} />
+            <button type="button" className="share__copy" onClick={() => void doCopy()}>
+              {t('song.share.copy')}
             </button>
           </div>
-          {copy === 'failed' && <p className="share__note">{t('song.share.copyFailed')}</p>}
+          <p role="status" className={copy === 'idle' ? 'sr-only' : 'share__note'}>
+            {copy === 'done' ? t('song.copied') : copy === 'failed' ? t('song.share.copyFailed') : null}
+          </p>
           {internal && <p className="share__note">{t('song.share.internal')}</p>}
           <div className="share__targets">
             {shareTargets(url, text, lang).map((target) => (
               <a
                 key={target.id}
                 className={`share__target share__target--${target.id}`}
-                role="menuitem"
                 href={target.href}
                 target="_blank"
                 rel="noopener noreferrer"
-                onClick={() => setOpen(false)}
+                onClick={closeFromPanel}
               >
                 {target.id === 'weibo' ? t('song.share.weibo') : target.label}
               </a>
             ))}
             {canNativeShare && (
-              <button type="button" className="share__target" role="menuitem" onClick={nativeShare}>
+              <button type="button" className="share__target" onClick={() => void nativeShare()}>
                 {t('song.share.more')}
               </button>
             )}

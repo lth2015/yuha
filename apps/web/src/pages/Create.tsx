@@ -1,3 +1,4 @@
+import { clearHomeComposerDraft, readHomeComposerDraft, type HomeComposerDraft } from '../lib/home-composer-handoff';
 import { JobOutcome, OpenGenerations, QueueStatus, UnfinishedGenerations, WaitLyrics, etaText } from '../components/GenerationQueue';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
@@ -205,28 +206,31 @@ const DURATIONS: Array<{ value: Draft['durationSeconds']; label: string }> = [
   { value: 240, label: '4:00' },
 ];
 
-/** The creator's own stored draft, or the defaults. */
-function readStoredDraft(): Draft {
+/** Older drafts inferred the lyric-writing choice from whether the field held words. */
+function normaliseDraft(saved: Partial<Draft>): Draft {
+  const draft = { ...DEFAULT_DRAFT, ...saved };
+  if (draft.lyrics.trim() && !saved.lyricsBy) draft.lyricsBy = 'me';
+  if (!draft.gift) draft.giftOccasion = null;
+  return draft;
+}
+
+function readStudioDraft(): { draft: Draft; previous: Draft | null } {
   try {
-    const saved = localStorage.getItem(DRAFT_KEY);
-    if (!saved) return DEFAULT_DRAFT;
-    const stored = { ...DEFAULT_DRAFT, ...(JSON.parse(saved) as Partial<Draft>) };
-    /*
-     * Drafts written before `lyricsBy` existed carry lyrics and no choice, and
-     * the default is 'ai' — which would quietly drop the words someone had
-     * already written from the request. Having lyrics *was* the choice back
-     * then, so read it that way.
-     */
-    if (stored.lyrics.trim() && !(JSON.parse(saved) as Partial<Draft>).lyricsBy) {
-      stored.lyricsBy = 'me';
+    const raw = localStorage.getItem(DRAFT_KEY);
+    if (raw) {
+      const { previousStudioDraft, ...draft } = JSON.parse(raw) as Partial<Draft> & {
+        previousStudioDraft?: Draft;
+      };
+      return { draft: normaliseDraft(draft), previous: previousStudioDraft ? normaliseDraft(previousStudioDraft) : null };
     }
-    // A draft saved with the gift switched off carries the old preselected
-    // 'birthday', which was never a choice anybody made.
-    if (!stored.gift) stored.giftOccasion = null;
-    return stored;
   } catch {
-    return DEFAULT_DRAFT;
+    // An unreadable draft falls back to the blank studio.
   }
+  return { draft: DEFAULT_DRAFT, previous: null };
+}
+
+function readStoredDraft(): Draft {
+  return readStudioDraft().draft;
 }
 
 /**
@@ -329,28 +333,28 @@ export default function Create() {
    * worse than losing the draft: the overwrite is valid JSON, so the next
    * mount restores it and the creator's work silently becomes the defaults.
    */
-  /*
-   * "Write your own lyrics, set the style →" on the home composer: whatever was
-   * written there comes along (UX audit, Codex UX-06). It used to open on the
-   * studio's own draft, so the words just typed seemed to vanish. If the studio
-   * held a different description, it can be had back with one tap.
-   */
   const location = useLocation();
-  const fromHome = (location.state as { fromHome?: { prompt: string; instrumental: boolean } } | null)?.fromHome;
   const [mounted] = useState(() => {
-    let start = editTrackId ? DEFAULT_DRAFT : air.kind === 'fill' ? { ...DEFAULT_DRAFT, ...air.fields } : readStoredDraft();
-    let replaced: string | null = null;
-    if (!editTrackId && air.kind !== 'fill' && fromHome && fromHome.prompt.trim()) {
-      if (start.prompt.trim() && start.prompt !== fromHome.prompt) replaced = start.prompt;
-      start = { ...start, prompt: fromHome.prompt, instrumental: fromHome.instrumental };
+    const stored = readStudioDraft();
+    const start = editTrackId ? DEFAULT_DRAFT : air.kind === 'fill' ? { ...DEFAULT_DRAFT, ...air.fields } : stored.draft;
+    const fromHome = params.get('from') === 'home';
+    const state = location.state as { fromHome?: HomeComposerDraft } | null;
+    const homeDraft = fromHome && !editTrackId && air.kind !== 'fill'
+      ? state?.fromHome ?? readHomeComposerDraft()
+      : null;
+    if (!homeDraft || (start.prompt === homeDraft.prompt && start.instrumental === homeDraft.instrumental
+      && JSON.stringify(start.styles) === JSON.stringify(homeDraft.styles))) {
+      return { start, replaced: stored.previous, fromHome };
     }
-    return { start, replaced };
+
+    return {
+      start: { ...DEFAULT_DRAFT, ...homeDraft },
+      replaced: JSON.stringify(start) === JSON.stringify(DEFAULT_DRAFT) ? stored.previous : start,
+      fromHome,
+    };
   });
-  const [replacedPrompt, setReplacedPrompt] = useState<string | null>(mounted.replaced);
-  useEffect(() => {
-    // Taken once: a reload restores the saved draft, not the hand-off over it.
-    if (fromHome) navigate(`${location.pathname}${location.search}`, { replace: true, state: null });
-  }, []);
+  const [replacedDraft, setReplacedDraft] = useState<Draft | null>(mounted.replaced);
+  const consumeHomeDraft = useRef(mounted.fromHome);
   const [draft, setDraft] = useState<Draft>(() => {
     const start = mounted.start;
     // `?gift=1` is where "write one for somebody too" on a received song leads;
@@ -371,7 +375,7 @@ export default function Create() {
   }, [season, draft.gift, draft.giftOccasion, editTrackId]);
   const starterKeys = startersFor(draft.gift ? draft.giftOccasion : null);
   const writesOwnLyrics = draft.lyricsBy === 'me' && !draft.instrumental;
-  const [more, setMore] = useState(() => advancedTouched(readStoredDraft()) > 0);
+  const [more, setMore] = useState(() => advancedTouched(mounted.start) > 0);
   const [job, setJob] = useState<JobView | null>(null);
   const [result, setResult] = useState<TrackView | null>(null);
   const [error, setError] = useState<unknown>(null);
@@ -466,11 +470,20 @@ export default function Create() {
     // holding the rewrite session's empty draft with the guard already down.
     if (editTrackId || editSource) return;
     try {
-      localStorage.setItem(DRAFT_KEY, JSON.stringify(draft));
+      const stored = replacedDraft ? { ...draft, previousStudioDraft: replacedDraft } : draft;
+      localStorage.setItem(DRAFT_KEY, JSON.stringify(stored));
     } catch {
-      /* private browsing */
+      // Keep the handoff available on reload when the studio draft could not be saved.
+      return;
     }
-  }, [draft, editTrackId, editSource]);
+    if (consumeHomeDraft.current) {
+      consumeHomeDraft.current = false;
+      clearHomeComposerDraft();
+      const next = new URLSearchParams(location.search);
+      next.delete('from');
+      navigate({ pathname: location.pathname, search: next.toString() }, { replace: true, state: null });
+    }
+  }, [draft, replacedDraft, editTrackId, editSource, location.pathname, location.search, navigate]);
 
   const patch = useCallback((p: Partial<Draft>) => setDraft((d) => ({ ...d, ...p })), []);
 
@@ -1495,15 +1508,16 @@ export default function Create() {
             )}
           </span>
         </div>
-        {replacedPrompt !== null && !cleared && (
+        {replacedDraft !== null && !cleared && (
           <p className="composer__cleared" role="status">
             {t('create.fromHome')}{' '}
             <button
               type="button"
               className="composer__clear"
               onClick={() => {
-                setDraft((d) => ({ ...d, prompt: replacedPrompt }));
-                setReplacedPrompt(null);
+                setDraft(replacedDraft);
+                setMore(advancedTouched(replacedDraft) > 0);
+                setReplacedDraft(null);
               }}
             >
               {t('create.fromHomeRestore')}

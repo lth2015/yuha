@@ -64,20 +64,24 @@ export async function copyText(text: string): Promise<boolean> {
   } catch {
     /* fall through to the selection copy */
   }
+  if (typeof document === 'undefined') return false;
+  const area = document.createElement('textarea');
+  const focused = document.activeElement;
   try {
-    const area = document.createElement('textarea');
     area.value = text;
-    area.setAttribute('readonly', '');
+    area.readOnly = true;
+    area.tabIndex = -1;
     area.style.position = 'fixed';
     area.style.opacity = '0';
     area.style.pointerEvents = 'none';
     document.body.appendChild(area);
     area.select();
     area.setSelectionRange(0, text.length);
-    const ok = document.execCommand('copy');
-    area.remove();
-    return ok;
+    return document.execCommand('copy');
   } catch {
     return false;
+  } finally {
+    area.remove();
+    if (focused instanceof HTMLElement) focused.focus({ preventScroll: true });
   }
 }
