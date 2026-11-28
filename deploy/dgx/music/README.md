@@ -287,6 +287,28 @@ open ~/yuha-bench/production/quality.html
 `validate` must print ✓ on every line before `run`'s numbers are trusted: a
 measure that does not catch its planted defect is not used to judge anything.
 
+## Mastering A/B (`server/bench_master.py`)
+
+Today's master ends in single-pass `loudnorm`, which is its dynamic mode: a
+gain that follows the music over ~3 s windows. On a test signal with a chorus
+6 dB above its verse it leaves 2.9 dB. `bench_master.py` renders each bench
+entry once more, keeps the WAV, and masters it twice — today's chain, and the
+same EQ/compressor/fades with one fixed gain and a limiter
+(`mastering.build_linear_filters`) — then measures chorus lift, LRA, LUFS,
+true peak and how much of the lyric Whisper hears in the full mix.
+
+```bash
+# from the Mac
+scp deploy/dgx/music/server/{bench_master.py,mastering.py,bench_quality.py,quality_metrics.py,bench_production.py} dgxa:yuha-spark/server/
+
+# on the Spark (renders 24 songs again: ~1.5 h; --only=zh-pop,ja-ballad for a subset)
+docker compose run --rm -v "$PWD/server:/opt/server" -v "$PWD/bench_out:/bench" music \
+    python /opt/server/bench_master.py run
+```
+
+Nothing here changes what the service delivers; `app.py` still calls
+`build_filters`.
+
 ## Retention (`RETENTION_DAYS`, default 6)
 
 `data/jobs/*.json` holds what YUHA sent (the brief and the lyrics) and
