@@ -195,7 +195,8 @@ def main() -> None:
         print(summary(m, t["timed"], t["lines"], t["diffs"], t["seconds"]))
     print(f"\nper-song detail in {out}/<id>.json (line starts from each method, for listening)")
     if truth:
-        print(f"routes written to {truth}/routes/; score them: node scripts/lyric-bench.mjs {truth} --base whisper")
+        print(f"routes written to {truth}/routes/")
+        print(f"In a YUHA checkout: pnpm --filter @yuha/contracts build && node scripts/lyric-bench.mjs {truth} --base whisper")
 
 
 if __name__ == "__main__":

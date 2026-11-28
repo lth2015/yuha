@@ -1,6 +1,7 @@
 import { LINE_CONFIDENT, type LyricTimings } from './generation.js';
 
 type Line = LyricTimings['lines'][number];
+type TimelineTrustOptions = { estimates?: boolean; minConfidence?: number };
 
 /**
  * Whether a lyric line may be lit, burned into a video or written to an .lrc
@@ -19,10 +20,12 @@ type Line = LyricTimings['lines'][number];
 export function isTrustedLine(
   timings: Pick<LyricTimings, 'source'>,
   line: Pick<Line, 'confidence'>,
-  opts: { estimates?: boolean } = {},
+  opts: TimelineTrustOptions = {},
 ): boolean {
   if (timings.source === 'corrected') return true;
-  if (timings.source === 'aligned') return !(typeof line.confidence === 'number' && line.confidence < LINE_CONFIDENT);
+  if (timings.source === 'aligned') {
+    return !(typeof line.confidence === 'number' && line.confidence < (opts.minConfidence ?? LINE_CONFIDENT));
+  }
   return opts.estimates === true;
 }
 
@@ -35,10 +38,10 @@ export function isTrustedLine(
  */
 export const STACKED_LINE_SECONDS = 0.05;
 
-/** Per line, whether it may be lit: isTrustedLine, and not stacked on the line before it. */
-export function trustedMask(timings: LyricTimings, opts: { estimates?: boolean } = {}): boolean[] {
+/** Per line: trust, nonzero duration, and no stacked aligned start. */
+export function trustedMask(timings: LyricTimings, opts: TimelineTrustOptions = {}): boolean[] {
   return timings.lines.map((l, i) => {
-    if (!isTrustedLine(timings, l, opts)) return false;
+    if (l.end <= l.start || !isTrustedLine(timings, l, opts)) return false;
     if (timings.source !== 'aligned' || i === 0) return true;
     return l.start - timings.lines[i - 1]!.start >= STACKED_LINE_SECONDS;
   });
@@ -47,7 +50,7 @@ export function trustedMask(timings: LyricTimings, opts: { estimates?: boolean }
 /** The timeline with only its trusted lines; null for no timeline. */
 export function trustedTimeline(
   timings: LyricTimings | null | undefined,
-  opts: { estimates?: boolean } = {},
+  opts: TimelineTrustOptions = {},
 ): LyricTimings | null {
   if (!timings) return null;
   const mask = trustedMask(timings, opts);

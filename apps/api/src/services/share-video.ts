@@ -24,6 +24,8 @@ export const VIDEO_HEIGHT = 1280;
 /** Where the frames leave room for the waveform (share-art.ts draws around it). */
 const WAVE = { x: 80, y: 1072, w: 560, h: 96 };
 const TIMEOUT_MS = 50_000;
+// The JPEG concat input uses a 25 fps clock before the resample to 24 fps.
+const FRAME_CLOCK = 25;
 
 /** One encode at a time per process: it is CPU, and the API serves everything else too. */
 let busy = false;
@@ -63,7 +65,16 @@ export async function renderShareVideo(params: {
     // Inside the try: a /tmp that will not make a directory must not leave
     // `busy` set, which would refuse every video on this pod until it restarts.
     dir = await mkdtemp(join(tmpdir(), 'yuha-video-'));
-    const frames = [...params.frames].sort((a, b) => a.at - b.at);
+    // Quantize absolute times once. Stretching each short interval to a full
+    // frame adds a delay to every following photo and caption. For cuts on the
+    // same tick, the last picture describes the state after those cuts.
+    const byTick = new Map<number, Buffer>();
+    for (const frame of [...params.frames].sort((a, b) => a.at - b.at)) {
+      const tick = Math.round(frame.at * FRAME_CLOCK);
+      if (tick / FRAME_CLOCK < params.duration) byTick.set(tick, frame.jpeg);
+    }
+    const frames = [...byTick];
+    const endTick = Math.ceil(params.duration * FRAME_CLOCK);
     const audioPath = join(dir, 'audio');
     await writeFile(audioPath, params.audio);
     // The concat demuxer: each frame lasts until the next one; the last is
@@ -71,9 +82,10 @@ export async function renderShareVideo(params: {
     const lines: string[] = [];
     for (let i = 0; i < frames.length; i += 1) {
       const name = `f${String(i).padStart(3, '0')}.jpg`;
-      await writeFile(join(dir, name), frames[i]!.jpeg);
-      const until = i + 1 < frames.length ? frames[i + 1]!.at : params.duration;
-      lines.push(`file '${name}'`, `duration ${Math.max(0.04, until - frames[i]!.at).toFixed(3)}`);
+      const [tick, jpeg] = frames[i]!;
+      await writeFile(join(dir, name), jpeg);
+      const until = frames[i + 1]?.[0] ?? endTick;
+      lines.push(`file '${name}'`, `duration ${((until - tick) / FRAME_CLOCK).toFixed(3)}`);
     }
     lines.push(`file 'f${String(frames.length - 1).padStart(3, '0')}.jpg'`);
     await writeFile(join(dir, 'frames.txt'), lines.join('\n'));

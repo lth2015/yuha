@@ -32,6 +32,34 @@ describe('scoring one song', () => {
     ]);
   });
 
+  it('uses the same strict visibility as playback for estimates and stacked aligned starts', () => {
+    const annotation = truth('a', 'ja', [1, null, 6]);
+    const estimated = scoreSong(annotation, { ...pred([1, 2, 6]), source: 'estimated' });
+    expect(estimated.map((row) => [row.hit, row.falseHighlight])).toEqual([
+      [false, false], [null, false], [false, false],
+    ]);
+
+    const stacked = scoreSong(annotation, pred([1, 1, 6], [1, 1, 1]));
+    expect(stacked.map((row) => [row.hit, row.falseHighlight])).toEqual([
+      [true, false], [null, false], [true, false],
+    ]);
+    expect(stacked[1]!.unconfirmed).toBe(true);
+  });
+
+  it('keeps the selectable confidence threshold and trusts manually corrected timings', () => {
+    const annotation = truth('a', 'zh', [1, 2]);
+    const aligned = pred([1, 2], [0.6, 0.2]);
+    expect(scoreSong(annotation, aligned, { confident: 0.7 }).map((row) => row.hit)).toEqual([false, false]);
+    expect(scoreSong(annotation, { ...aligned, source: 'corrected' }).map((row) => row.hit)).toEqual([true, true]);
+  });
+
+  it('does not count a zero-length cue as a false highlight', () => {
+    const prediction = pred([1, 4]);
+    prediction.lines[1]!.end = 4;
+    const rows = scoreSong(truth('a', 'en', [1, null]), prediction);
+    expect(rows[1]).toMatchObject({ unconfirmed: true, falseHighlight: false });
+  });
+
   it('refuses a prediction whose lines are not the song’s lines', () => {
     expect(() => scoreSong(truth('a', 'en', [1, 2]), pred([1]))).toThrow(/line count/);
   });

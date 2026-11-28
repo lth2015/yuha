@@ -440,6 +440,14 @@ export interface PhotoClipPlan {
   frames: Array<{ at: number; photo: number; line: string | null; ending?: true }>;
 }
 
+/** The caption on screen at `at`: from its start, up to but not including its end. */
+function captionAt(captions: Array<{ from: number; until: number; text: string }>, at: number) {
+  for (const caption of captions) {
+    if (caption.from <= at && at < caption.until) return caption;
+  }
+  return undefined;
+}
+
 /**
  * The photo video's timeline (docs/PHOTO_MV_SPEC.md): the same thirty seconds
  * the share video would choose, the photos sharing it out evenly in the order
@@ -448,40 +456,44 @@ export interface PhotoClipPlan {
  */
 export function planPhotoClip(lines: TimedLine[], songSeconds: number, photos: number, seconds = PHOTO_CLIP_SECONDS): PhotoClipPlan {
   const { start, duration } = clipWindow(lines, songSeconds, seconds);
-  const end = start + duration;
+  const round = (n: number) => Number(n.toFixed(2));
+  const clipStart = round(start);
+  const clipDuration = round(duration);
+  const hasEnding = duration >= 8;
+  const captionEnd = hasEnding ? round(duration - ENDING_SECONDS) : clipDuration;
   const count = Math.max(1, photos);
   // Each photo once in a short clip; in a long one they take turns, so none
   // holds the screen for long (a minute of three photos was twenty seconds each).
   const slots = duration <= PHOTO_CLIP_SECONDS ? count : Math.max(count, Math.ceil(duration / PHOTO_MAX_HOLD));
   const slot = duration / slots;
-  const round = (n: number) => Number(n.toFixed(2));
   const cuts = new Set<number>([0]);
-  for (let i = 1; i < slots; i += 1) cuts.add(round(i * slot));
-  for (const l of lines) {
-    if (l.end <= start || l.start >= end) continue;
-    if (l.start > start) cuts.add(round(l.start - start));
-    if (l.end < end) cuts.add(round(l.end - start));
+  for (let i = 1; i < slots; i += 1) {
+    const cut = round(i * slot);
+    if (cut < captionEnd) cuts.add(cut);
   }
-  const times = [...cuts].filter((t) => t < duration - 0.25).sort((a, b) => a - b);
+  const captions: Array<{ from: number; until: number; text: string }> = [];
+  const frameBudget = PHOTO_MAX_FRAMES - Number(hasEnding);
+  for (const line of lines) {
+    // These cuts are what the encoder receives. Round starts up and ends down
+    // so a rounded cut never keeps a caption on into the next instrumental beat.
+    const from = Math.max(0, Math.ceil((line.start - clipStart) * 100 - 1e-6) / 100);
+    const until = Math.min(captionEnd, Math.floor((line.end - clipStart) * 100 + 1e-6) / 100);
+    if (from >= until) continue;
+    const newCuts = [from, until].filter((cut) => cut < captionEnd && !cuts.has(cut));
+    // Keep both edges or skip this and later captions. Dropping a clearing
+    // frame alone would leave an earlier lyric on screen.
+    if (cuts.size + newCuts.length > frameBudget) break;
+    newCuts.forEach((cut) => cuts.add(cut));
+    captions.push({ from, until, text: line.text });
+  }
+  const times = [...cuts].sort((a, b) => a - b);
   const frames: PhotoClipPlan['frames'] = times.map((at) => {
-    const t = start + at;
-    const sung = lines.find((l) => l.start <= t + 0.001 && l.end > t + 0.001);
+    const sung = captionAt(captions, at);
     return { at, photo: Math.min(slots - 1, Math.floor((at + 0.001) / slot)) % count, line: sung?.text ?? null };
   });
-  // Every photo keeps its cut; lyric cuts give way first when there are too many.
-  while (frames.length > PHOTO_MAX_FRAMES) {
-    const i = frames.findIndex((f, k) => k > 0 && f.photo === frames[k - 1]!.photo);
-    if (i < 0) break;
-    frames.splice(i, 1);
-  }
   // The closing two seconds: the last photo, the end frame and the logo, nothing sung.
-  if (duration >= 8) {
-    const endAt = round(duration - ENDING_SECONDS);
-    const kept = frames.filter((f) => f.at < endAt);
-    kept.push({ at: endAt, photo: (slots - 1) % count, line: null, ending: true });
-    return { start: round(start), duration: round(duration), frames: kept };
-  }
-  return { start: round(start), duration: round(duration), frames };
+  if (hasEnding) frames.push({ at: captionEnd, photo: (slots - 1) % count, line: null, ending: true });
+  return { start: clipStart, duration: clipDuration, frames };
 }
 
 /** One frame of the share video: the sleeve above, who and what below, the line being sung. */

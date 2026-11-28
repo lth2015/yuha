@@ -14,14 +14,14 @@
  */
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { annotatorFloor, compareRoutes, scoreSong, summarize } from './lib/lyric-bench.mjs';
+import { DEFAULT_CONFIDENT, DEFAULT_TOLERANCE, annotatorFloor, compareRoutes, scoreSong, summarize } from './lib/lyric-bench.mjs';
 
 const args = process.argv.slice(2);
 const flag = (name) => (args.includes(name) ? args[args.indexOf(name) + 1] : undefined);
 const dir = args[0] && !args[0].startsWith('--') ? args[0] : 'quality-probes/lyric-bench';
 const opts = {
-  tolerance: Number(flag('--tolerance') ?? 0.3),
-  confident: Number(flag('--confident') ?? 0.5),
+  tolerance: Number(flag('--tolerance') ?? DEFAULT_TOLERANCE),
+  confident: Number(flag('--confident') ?? DEFAULT_CONFIDENT),
   seed: 1,
 };
 
@@ -49,7 +49,7 @@ const pct = (x) => (x === null ? '–' : `${(x * 100).toFixed(1)}%`);
 const sec = (x) => (x === null ? '–' : `${x.toFixed(2)} s`);
 const ci = ([lo, hi]) => (lo === null ? '' : ` (${pct(lo)}–${pct(hi)})`);
 
-const out = [`# Lyric sync benchmark`, '', `${reference.length} songs, reference annotator \`${annotators[0]}\`, tolerance ±${opts.tolerance}s, unconfirmed below ${opts.confident}.`, ''];
+const out = [`# Lyric sync benchmark`, '', `${reference.length} songs, reference annotator \`${annotators[0]}\`, tolerance ±${opts.tolerance}s. Strict eligibility, with aligned-line confidence threshold ${opts.confident}.`, ''];
 
 if (annotators.length > 1) {
   const second = jsonFiles(join(dir, 'annotations', annotators[1])).map((f) => ({ ...f.body, songId: f.body.songId ?? f.id }));

@@ -12,15 +12,17 @@
  * share a tempo, a mix and an aligner run and are not independent.
  */
 
+import { LINE_CONFIDENT, trustedMask } from '@yuha/contracts';
+
 /** Tolerance on a line's start, seconds. Not below the annotators' own P90 disagreement. */
 export const DEFAULT_TOLERANCE = 0.3;
-/** Below this, a line the aligner reports is shown as unconfirmed, not highlighted. */
-export const DEFAULT_CONFIDENT = 0.5;
+/** Keep the default used in the actual player. */
+export const DEFAULT_CONFIDENT = LINE_CONFIDENT;
 
 /**
  * One row per line.
  *   hit            sung line, confirmed, start within tolerance (null for an unsung line)
- *   unconfirmed    the aligner said it did not hear this line well enough to show it
+ *   unconfirmed    the strict player would leave this line unlit
  *   falseHighlight unsung line that the prediction would light up as sung
  *   error          |predicted − heard| start for a sung line, seconds
  */
@@ -33,9 +35,10 @@ export function scoreSong(annotation, prediction, opts = {}) {
       `${annotation.songId}: line count differs (annotation ${lines.length}, prediction ${prediction?.lines?.length ?? 'none'})`,
     );
   }
+  const visible = trustedMask(prediction, { minConfidence: confident });
   return lines.map((truth, i) => {
     const p = prediction.lines[i];
-    const unconfirmed = typeof p.confidence === 'number' && p.confidence < confident;
+    const unconfirmed = !visible[i];
     const base = { songId: annotation.songId, language: annotation.language, idx: i, sung: truth.sung, unconfirmed };
     if (!truth.sung) {
       return { ...base, hit: null, error: null, falseHighlight: !unconfirmed };
