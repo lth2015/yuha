@@ -4,7 +4,7 @@ import {
   officialBgmCoverFor, officialBgmInventoryFor, officialBgmInventoryReport, officialBgmMissingProvenance, parseOfficialBgmManifest,
   type OfficialBgmBatchTrack, type OfficialBgmInventoryReport, type OfficialBgmManifestIssue, type OfficialBgmUploadResult,
 } from '@yuha/contracts';
-import { ApiError, apiFetch } from '../../lib/api';
+import { ApiError, NetworkError, apiFetch } from '../../lib/api';
 import { useI18n } from '../../lib/i18n';
 import { OFFICIAL_BGM_ADMIN } from '../../lib/official-bgm-catalog';
 
@@ -13,7 +13,21 @@ type Tags = Pick<Entry, 'genre' | 'mood' | 'scenario'>;
 type Batch = { entries: Entry[]; rejected: OfficialBgmManifestIssue[]; files: Map<string, File>; name: string };
 type Prepared = { id: string; entry: Entry; master?: File; cover?: File; track?: OfficialBgmBatchTrack;
   needsTags: boolean; issue?: string; notes?: string[] };
-type Outcome = { status: 'checking' | 'sending' | 'imported' | 'existing' | 'failed'; problem?: string };
+/**
+ * `detail` is what the server (or the browser) actually said, shown verbatim
+ * under the translated sentence: a failure nobody can read cannot be fixed
+ * without the server's logs, and the people uploading do not have them.
+ */
+type Outcome = { status: 'checking' | 'sending' | 'imported' | 'existing' | 'failed'; problem?: string; detail?: string };
+
+function failureDetail(error: unknown): string {
+  if (error instanceof ApiError) {
+    return [`HTTP ${error.status} ${error.code}: ${error.message}`, error.requestId && `request ${error.requestId}`]
+      .filter(Boolean).join(' · ');
+  }
+  if (error instanceof NetworkError) return `network: ${String((error.cause as Error | undefined)?.message ?? error.cause)}`;
+  return error instanceof Error ? `${error.name}: ${error.message}` : String(error);
+}
 const TAGS = { genre: BGM_GENRES, scenario: BGM_SCENARIOS, mood: BGM_MOODS } as const;
 const LABELS = ['genre', 'scenario', 'mood'] as const;
 const MANIFEST_FIELDS: Record<string, string> = {
@@ -206,7 +220,7 @@ export function OfficialBgmBatchImport({ onImported, onReview }: { onImported: (
             : error instanceof ApiError && error.code === 'VALIDATION_FAILED'
               ? 'market.import.invalidMedia' : 'market.import.retryUpload';
           setOutcomes((current) => ({ ...current, [row.id]: {
-            status: 'failed', problem,
+            status: 'failed', problem, detail: failureDetail(error),
           } }));
         }
       }
@@ -294,6 +308,7 @@ export function OfficialBgmBatchImport({ onImported, onReview }: { onImported: (
                     {outcome ? t(`market.import.${outcome.status}`) : t(row.issue ?? 'market.import.ready')}
                   </span>
                   {outcome?.problem && <p className="small" role="alert">{t(outcome.problem)}</p>}
+                  {outcome?.detail && <p className="small muted market-import__detail"><code>{outcome.detail}</code></p>}
                   {outcome?.status === 'failed' && row.track && (
                     <button type="button" className="btn market-import__clear" disabled={busy || loading || badReport}
                       onClick={() => void upload([row])}>{t('market.retry')}</button>

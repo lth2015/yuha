@@ -3311,6 +3311,7 @@ textarea.is-full { border-color: var(--danger); }
 .market-source summary { cursor: pointer; font-weight: 500; padding-block: 9px; }
 .market-import .field { min-width: 0; }
 .market-import__clear, .market-import__submit { align-self: start; }
+.market-import__detail code { overflow-wrap: anywhere; white-space: pre-wrap; }
 .market-import__rows {
   list-style: none;
   padding: 0;
