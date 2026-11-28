@@ -11,7 +11,7 @@ def measured(motif: float, lift: float, close: float, coverage: float = 0.9) -> 
         "structure": {"motif_margin": motif, "chorus_recurrence": 0.8},
         "lift": {"chorus_lift_db": lift},
         "vocal": {"vocal_ratio_db": 3.0},
-        "time_key": {"beat_cv": 0.02, "key_agreement": 0.9},
+        "time_key": {"tempo_drift": 0.01, "key_agreement": 0.9},
         "ending": {"close_minus_body_db": close},
         "loudness": {"lufs": -14.0, "lra": 6.0, "true_peak_db": -1.2},
     }
@@ -65,6 +65,14 @@ class Summary(unittest.TestCase):
             self.assertIn(label, page)
         self.assertIn("测不到的", page)
         self.assertIn("p 是符号检验", page)
+
+    def test_the_page_says_which_measures_passed_their_planted_check(self):
+        s = bq.summarise(self.m, self.all_pairs(measured(0.1, 3.0, -2.0), measured(0.4, 3.0, -8.0)))
+        page = bq.page(s, 24, {"lra": True, "tempo_drift": False})
+        row = lambda label: page[page.index(label):page.index("</tr>", page.index(label))]  # noqa: E731
+        self.assertIn("✓ 已验证", row(bq.LABELS["lra"]))
+        self.assertIn("✗ 未通过，不作判断", row(bq.LABELS["tempo_drift"]))
+        self.assertIn("未验证", row(bq.LABELS["vocal_ratio_db"]))
 
 
 if __name__ == "__main__":

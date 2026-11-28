@@ -82,6 +82,16 @@ class TimeAndEnding(unittest.TestCase):
         self.assertLess(qm.interval_cv(steady), 0.01)
         self.assertGreater(qm.interval_cv(drag), 0.05)
 
+    def test_a_steady_slowdown_halfway_reads_as_drift_where_beat_variation_does_not(self):
+        first = np.arange(40) * 0.5
+        slower = first[-1] + 0.5 + np.arange(40) * 0.5 / 0.85
+        drag = np.concatenate([first, slower])
+        steady = np.arange(80) * 0.5
+        self.assertAlmostEqual(qm.tempo_drift(drag), 1 / 0.85 - 1, places=3)
+        self.assertLess(qm.tempo_drift(steady), 0.001)
+        # Why the old measure went: each half is even, so the variation barely moves.
+        self.assertLess(qm.interval_cv(drag), 0.1)
+
     def test_a_song_that_winds_down_reads_lower_at_the_close_than_one_that_stops(self):
         hop = 0.05
         body = np.full(2000, -14.0)
