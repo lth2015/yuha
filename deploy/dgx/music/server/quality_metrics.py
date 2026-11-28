@@ -137,6 +137,24 @@ def key_consistency(chroma: np.ndarray, frames_per_window: int) -> Tuple[str, Op
     return (overall, agree / n)
 
 
+def tempo_drift(times: Sequence[float]) -> Optional[float]:
+    """
+    How far the second half's tempo is from the first half's: |ratio − 1| of
+    their median beat intervals. A song that slows by 15% halfway reads 0.15.
+
+    Replaces the beat-interval variation as the tempo measure: that one could
+    not see a steady slowdown (each half is even on its own) and read 0.066
+    on a real render with nothing wrong — it failed its planted check on the
+    DGX (2026-11-28) and is not used to judge anything.
+    """
+    t = np.asarray(times, dtype=np.float64)
+    if t.size < 16:
+        return None
+    half = t.size // 2
+    a, b = np.median(np.diff(t[:half])), np.median(np.diff(t[half:]))
+    return float(abs(b / a - 1.0)) if a > 0 else None
+
+
 def interval_cv(times: Sequence[float]) -> Optional[float]:
     """Coefficient of variation of the gaps between beats: 0 is a metronome."""
     t = np.asarray(times, dtype=np.float64)

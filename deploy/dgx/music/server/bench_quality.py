@@ -64,7 +64,7 @@ REFERENCE = {
     "lra": (3.0, 10.0, "流行歌 LRA 常见 3–10 LU；过小是压得过死，过大是不稳"),
     "chorus_lift_db": (1.0, 5.0, "副歌通常比主歌高 1–5 dB"),
     "vocal_ratio_db": (-3.0, 8.0, "主流流行人声在前：人声与伴奏电平差约 −3 到 +8 dB"),
-    "beat_cv": (None, 0.06, "拍间隔变异系数 < 0.06 视为稳定"),
+    "tempo_drift": (None, 0.03, "后半速度与前半相差不超过 3%"),
     "key_agreement": (0.6, None, "≥60% 的 8 秒窗口与全曲调性一致"),
     "close_minus_body_db": (None, -3.0, "结尾前 4 秒比主体低 ≥3 dB，视为有收束"),
     "lyric_coverage": (0.7, None, "Whisper 能按顺序对上 ≥70% 的歌词字符"),
@@ -194,8 +194,10 @@ def measure(path: Path, lyrics: str) -> dict:
 
     key, agree = qm.key_consistency(chroma_mix, int(round(KEY_WINDOW_S / HOP_S)))
     beat_cv = qm.interval_cv(beats)
+    drift = qm.tempo_drift(beats)
     out["time_key"] = {"key": key, "key_agreement": None if agree is None else round(agree, 2),
                        "beat_cv": None if beat_cv is None else round(beat_cv, 3),
+                       "tempo_drift": None if drift is None else round(drift, 3),
                        "tempo_bpm": round(60.0 / float(np.median(np.diff(beats))), 1) if len(beats) > 8 else None}
     out["ending"] = qm.ending(rms_db, HOP_S)
     return out
@@ -212,7 +214,7 @@ def flat(m: dict) -> Dict[str, Optional[float]]:
         "chorus_lift_db": l.get("chorus_lift_db"), "chorus_brightness_ratio": l.get("chorus_brightness_ratio"),
         "chorus_density_ratio": l.get("chorus_density_ratio"), "vocal_ratio_db": v.get("vocal_ratio_db"),
         "lyric_coverage": m.get("lyric_coverage"), "lufs": ld.get("lufs"), "lra": ld.get("lra"), "true_peak_db": ld.get("true_peak_db"),
-        "beat_cv": tk.get("beat_cv"), "key_agreement": tk.get("key_agreement"), "close_minus_body_db": e.get("close_minus_body_db"),
+        "tempo_drift": tk.get("tempo_drift"), "key_agreement": tk.get("key_agreement"), "close_minus_body_db": e.get("close_minus_body_db"),
     }
 
 
@@ -225,7 +227,7 @@ def in_band(name: str, value: Optional[float]) -> Optional[bool]:
 
 # Which way is better for the A/B question; None = a band, not a direction.
 BETTER = {"motif_margin": 1, "motif_in_chorus": 1, "chorus_recurrence": 1, "chorus_recurrence_margin": 1, "outro_vs_intro": 1,
-          "lyric_coverage": 1, "key_agreement": 1, "beat_cv": -1, "close_minus_body_db": -1}
+          "lyric_coverage": 1, "key_agreement": 1, "tempo_drift": -1, "close_minus_body_db": -1}
 
 LABELS = {
     "motif_margin": "前奏动机回到副歌（相对主歌的余量）", "motif_in_chorus": "前奏动机与副歌旋律的最佳匹配",
@@ -233,7 +235,7 @@ LABELS = {
     "outro_vs_intro": "尾奏与前奏的呼应", "intro_s": "前奏长度（秒）", "outro_s": "尾奏长度（秒）",
     "chorus_lift_db": "副歌比主歌高（dB）", "chorus_brightness_ratio": "副歌亮度 / 主歌", "chorus_density_ratio": "副歌音符密度 / 主歌",
     "vocal_ratio_db": "人声与伴奏电平差（dB）", "lyric_coverage": "歌词听清比例", "lufs": "整体响度（LUFS）", "lra": "响度范围（LU）",
-    "true_peak_db": "真峰值（dBTP）", "beat_cv": "拍子稳定度（越小越稳）", "key_agreement": "调性一致的比例", "close_minus_body_db": "结尾比主体（dB，越低越像收束）",
+    "true_peak_db": "真峰值（dBTP）", "tempo_drift": "速度漂移（后半对前半，越小越稳）", "key_agreement": "调性一致的比例", "close_minus_body_db": "结尾比主体（dB，越低越像收束）",
 }
 
 
@@ -267,7 +269,7 @@ def _mean(xs):
     return round(float(np.mean(xs)), 3) if xs else None
 
 
-def page(summary: dict, n_renders: int) -> str:
+def page(summary: dict, n_renders: int, validated: Optional[Dict[str, Optional[bool]]] = None) -> str:
     def fmt(x):
         return "—" if x is None else (f"{x:+.3f}" if isinstance(x, float) and abs(x) < 10 else f"{x}")
 
@@ -278,7 +280,9 @@ def page(summary: dict, n_renders: int) -> str:
         st = o["sign_test"]
         verdict = "" if not st else f"B 更好 {st['b_higher']} 对 · 更差 {st['b_lower']} 对 · p={st['p']}"
         band = f"{o['in_band_A']}/{o['measured']} → {o['in_band_B']}/{o['measured']}" if ref else ""
-        rows.append(f"<tr><td>{html.escape(label)}</td><td class=n>{fmt(o['mean_A'])}</td><td class=n>{fmt(o['mean_B'])}</td>"
+        v = (validated or {}).get(k, "none")
+        mark = "✓ 已验证" if v is True else "✗ 未通过，不作判断" if v is False else "未验证"
+        rows.append(f"<tr><td>{html.escape(label)}<br><span class=small>{mark}</span></td><td class=n>{fmt(o['mean_A'])}</td><td class=n>{fmt(o['mean_B'])}</td>"
                     f"<td class=n>{fmt(o['mean_delta'])}</td><td>{html.escape(verdict)}</td><td class=n>{band}</td>"
                     f"<td class=small>{html.escape(ref[2]) if ref else ''}</td></tr>")
     pairs = "".join(
@@ -333,24 +337,56 @@ def validate(source: Path, lyrics: str, work: Path) -> List[dict]:
     half = n // 2
     shifted = np.stack([librosa.effects.pitch_shift(ch[half:], sr=44100, n_steps=3) for ch in y])
     write("key_jump", np.concatenate([y[:, :half], shifted], axis=1))
-    # Second half dragging: each beat a little later than the last.
+    # Second half 15% slower: a song that drags.
     second = np.stack([librosa.effects.time_stretch(ch[half:], rate=0.85) for ch in y])
     write("drag", np.concatenate([y[:, :half], second], axis=1))
 
-    got = {name: flat(measure(path, lyrics)) for name, path in variants.items()}
+    # The two a producer hears first, planted with the same tools the measures use.
+    original = measure(variants["original"], lyrics)
+    import app
+    with app._gpu_lock:
+        stem = separate.vocal_stem(variants["original"])
+    if stem is not None:
+        v, vsr = stem
+        if vsr != 44100:
+            v = librosa.resample(v, orig_sr=vsr, target_sr=44100)
+        m = min(n, v.size)
+        buried = y[:, :m].copy()
+        buried -= v[None, :m] * (1 - 10 ** (-8 / 20))  # the vocal 8 dB down, the band untouched
+        write("buried_vocal", buried)
+    flat_chorus = y.copy()
+    for sec in original.get("sections", []):
+        if sec["name"] != "chorus":
+            continue
+        a, b = int(sec["start"] * 44100), min(n, int(sec["end"] * 44100))
+        gain = np.full(b - a, 10 ** (-4 / 20))
+        ramp = min(2205, (b - a) // 4)
+        gain[:ramp] = np.linspace(1, gain[0], ramp)
+        gain[-ramp:] = np.linspace(gain[0], 1, ramp)
+        flat_chorus[:, a:b] *= gain
+    write("flat_chorus", flat_chorus)
+
+    got = {name: flat(original if name == "original" else measure(path, lyrics)) for name, path in variants.items()}
     o = got["original"]
+    # (variant, measure, direction, at least this much movement, why). Moving
+    # the right way by a hair is not catching the defect.
     checks = [
-        ("hard_cut", "close_minus_body_db", "higher", "被切断的结尾，结尾电平应接近主体"),
-        ("crushed", "true_peak_db", "higher", "削波后真峰值应升高"),
-        ("crushed", "lra", "lower", "压死后响度范围应变小"),
-        ("key_jump", "key_agreement", "lower", "中途升调后，调性一致比例应下降"),
-        ("drag", "beat_cv", "higher", "后半拖拍，拍间隔变异应增大"),
+        ("hard_cut", "close_minus_body_db", "higher", 6.0, "被切断的结尾，结尾电平应接近主体"),
+        ("crushed", "true_peak_db", "higher", 1.0, "削波后真峰值应升高"),
+        ("crushed", "lra", "lower", 0.5, "压死后响度范围应变小"),
+        ("key_jump", "key_agreement", "lower", 0.15, "中途升调后，调性一致比例应下降"),
+        ("drag", "tempo_drift", "higher", 0.08, "后半慢 15%，速度漂移应明显增大"),
+        ("buried_vocal", "vocal_ratio_db", "lower", 4.0, "人声压低 8 dB，人声与伴奏电平差应明显下降"),
+        ("flat_chorus", "chorus_lift_db", "lower", 2.0, "副歌压低 4 dB，副歌抬升应明显下降"),
     ]
     results = []
-    for variant, metric, way, why in checks:
-        before, after = o.get(metric), got[variant].get(metric)
-        ok = None if before is None or after is None else (after > before if way == "higher" else after < before)
-        results.append({"variant": variant, "metric": metric, "original": before, "defect": after, "caught": ok, "why": why})
+    for variant, metric, way, need, why in checks:
+        before = o.get(metric)
+        after = got[variant].get(metric) if variant in got else None
+        moved = None if before is None or after is None else (after - before if way == "higher" else before - after)
+        results.append({"variant": variant, "metric": metric, "original": before, "defect": after,
+                        "moved": None if moved is None else round(moved, 3), "needed": need,
+                        "caught": None if moved is None else moved >= need, "why": why})
     return results
 
 
@@ -376,11 +412,13 @@ def main(argv: List[str]) -> None:
         (out / "quality-validate.json").write_text(json.dumps(checks, indent=2, ensure_ascii=False), encoding="utf-8")
         for c in checks:
             mark = {True: "✓", False: "✗", None: "?"}[c["caught"]]
-            print(f"{mark} {c['variant']:<9} {c['metric']:<22} {c['original']} → {c['defect']}  ({c['why']})")
+            print(f"{mark} {c['variant']:<13} {c['metric']:<22} {c['original']} → {c['defect']}  moved {c['moved']} (needs {c['needed']})  {c['why']}")
         return
     store = out / "quality.json"
     measured: Dict[str, dict] = json.loads(store.read_text(encoding="utf-8"))["renders"] if store.exists() else {}
-    todo = [i for i in sorted(ok) if i not in measured]
+    # A render measured before a measure existed is measured again, not reported without it.
+    stale = lambda m: "error" not in m and "tempo_drift" not in m.get("time_key", {})  # noqa: E731
+    todo = [i for i in sorted(ok) if i not in measured or stale(measured[i])]
     print(f"{len(measured)} measured, {len(todo)} to measure", flush=True)
     for n, i in enumerate(todo, 1):
         try:
@@ -391,7 +429,14 @@ def main(argv: List[str]) -> None:
         store.write_text(json.dumps({"renders": measured}, indent=1, ensure_ascii=False), encoding="utf-8")
     summary = summarise(manifest, measured)
     store.write_text(json.dumps({"renders": measured, "summary": summary}, indent=1, ensure_ascii=False), encoding="utf-8")
-    (out / "quality.html").write_text(page(summary, len(measured)), encoding="utf-8")
+    checks = out / "quality-validate.json"
+    validated: Dict[str, Optional[bool]] = {}
+    if checks.exists():
+        for c in json.loads(checks.read_text(encoding="utf-8")):
+            # A measure with two checks is validated only if both caught.
+            prev = validated.get(c["metric"], True)
+            validated[c["metric"]] = None if c["caught"] is None else (prev is not False and c["caught"])
+    (out / "quality.html").write_text(page(summary, len(measured), validated), encoding="utf-8")
     print(f"wrote {out / 'quality.html'}")
 
 
