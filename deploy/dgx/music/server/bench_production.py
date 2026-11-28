@@ -317,6 +317,7 @@ def build_pages(manifest: dict, out: Path, tools: Tools, *, key_seed: Optional[i
         for p in fresh["pairs"]:
             if p["comparable"] and (p["brief"], p["seed"]) not in known:
                 old = next(q for q in key["pairs"] if (q["brief"], q["seed"]) == (p["brief"], p["seed"]))
+                old.pop("missing", None)  # it is not missing any more
                 old.update(p)
     else:
         key = blind_key(manifest, results, key_seed if key_seed is not None else random.SystemRandom().randrange(1 << 30))

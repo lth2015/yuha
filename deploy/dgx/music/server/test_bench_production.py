@@ -206,6 +206,18 @@ class Pages(unittest.TestCase):
         second = bp.build_pages(self.m, self.out, self.fake.tools())
         self.assertEqual(first, second)
 
+    def test_a_pair_rendered_later_joins_the_key_without_its_old_missing_note(self):
+        p = bp.pairs(self.m)[0]
+        with (self.out / "results.jsonl").open("a") as fh:
+            fh.write(json.dumps({"id": p["B"]["id"], "status": "failed", "reason": "boom"}) + "\n")
+        bp.build_pages(self.m, self.out, self.fake.tools(), key_seed=1)
+        with (self.out / "results.jsonl").open("a") as fh:
+            fh.write(json.dumps({"id": p["B"]["id"], "status": "ok", "audio": f"audio/{p['B']['id']}.mp3"}) + "\n")
+        key = bp.build_pages(self.m, self.out, self.fake.tools())
+        entry = next(q for q in key["pairs"] if q["brief"] == p["brief"] and q["seed"] == p["seed"])
+        self.assertTrue(entry["comparable"])
+        self.assertNotIn("missing", entry)
+
     def test_a_pair_with_a_failed_render_is_not_put_in_front_of_listeners(self):
         p = bp.pairs(self.m)[0]
         with (self.out / "results.jsonl").open("a") as fh:
