@@ -440,9 +440,11 @@ def main(argv: list[str]) -> None:
     if cmd == "run":
         import app
         tools = service_tools()
-        if app.ENGINE != "v15" or app.TAG_STYLE != "v2":
-            print(f"note: the service runs ENGINE={app.ENGINE} TAG_STYLE={app.TAG_STYLE}; the bench renders with v2 tags. "
-                  "Results describe the v2 path.", flush=True)
+        # v15 always builds v2 tags (render: `tag_style or "v2"`); TAG_STYLE only
+        # steers the v1 engine. Warn only when production is not on the v2 path.
+        if app.ENGINE != "v15" and app.TAG_STYLE != "v2":
+            print(f"note: the service runs ENGINE={app.ENGINE} TAG_STYLE={app.TAG_STYLE}, i.e. v1 tags; the bench "
+                  "renders with v2 tags, so results do not describe what production sends.", flush=True)
         only = [a.split("=", 1)[1].split(",") for a in argv if a.startswith("--only=")]
         app.get_whisper()
         run(manifest, OUT, tools, only=only[0] if only else None)
