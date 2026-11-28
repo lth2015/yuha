@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { lrcFileName, markCorrected, setLineStart, shiftTimings, toLrc, type LyricTimings } from '@yuha/contracts';
+import { lrcFileName, toLrc, type LyricTimings } from '@yuha/contracts';
 import { useI18n } from '../lib/i18n';
 import { activeLineIndex, activeTrustedLine, resolveLyricTimings, lineProgress, trustedFlags } from '../lib/lyrics';
 import { usePlayer } from '../lib/player';
@@ -42,12 +42,10 @@ export function SyncedLyrics({
   onSeek,
   title,
   artist,
-  onSaveTimings,
+  canDownload = false,
   compact = false,
   live = true,
   still = false,
-  draft: sharedDraft,
-  onDraft,
 }: {
   lyrics: string;
   duration: number;
@@ -56,15 +54,8 @@ export function SyncedLyrics({
   onSeek?: (seconds: number) => void;
   title?: string | null;
   artist?: string | null;
-  /** Owner only. Absent means the correction controls are not offered. */
-  onSaveTimings?: (timings: LyricTimings) => Promise<void>;
-  /**
-   * The page's unsaved timing edit, shared with the video card's workspace
-   * (LyricSyncStudio) so both edit one draft. Without `onDraft` the draft is
-   * this component's own.
-   */
-  draft?: LyricTimings | null;
-  onDraft?: (next: LyricTimings | null) => void;
+  /** The signed-in owner can download from the song page. */
+  canDownload?: boolean;
   compact?: boolean;
   /**
    * Whether the player is playing THIS song. The frame-rate clock below is
@@ -89,41 +80,15 @@ export function SyncedLyrics({
     () => resolveLyricTimings(lyrics, duration, timings),
     [timings, lyrics, duration],
   );
-  /*
-   * Correction is the only half of lyric timing a person can fix.
-   *
-   * Nothing can be corrected before the song is made: the music service takes
-   * no timing input, so a timestamp edited beforehand would be a wish it
-   * never reads. Afterwards the audio is fixed, a late line is a fact, and
-   * fixing it costs nothing — no credit, no re-generation, no waiting.
-   */
-  const [ownDraft, setOwnDraft] = useState<LyricTimings | null>(null);
-  const draft = onDraft ? (sharedDraft ?? null) : ownDraft;
-  const setDraft = (next: LyricTimings | null) => (onDraft ? onDraft(next) : setOwnDraft(next));
-  const [saving, setSaving] = useState(false);
-  const [offset, setOffset] = useState(0);
-  /** The owner opened the timing tools (folded away by default). */
-  const [tuning, setTuning] = useState(false);
-  // Undone, discarded or saved from the video card: nothing is offset any more.
-  useEffect(() => {
-    if (!draft) setOffset(0);
-  }, [draft]);
-  const shown = draft ?? timeline;
-  const lines = shown.lines;
-  const source = shown.source;
-  /*
-   * The shared rule (isTrustedLine): only trusted lines are lit or written to
-   * an .lrc, and an estimate is for reading. Not while the owner edits a
-   * draft by hand: the editor lights what it is being told.
-   */
-  const strict = Boolean(useSession().runtime?.features?.lyricStrictTimeline) && !draft;
-  const trusted = useMemo(() => trustedFlags(shown, strict), [shown, strict]);
+  const { lines, source } = timeline;
+  const { runtime } = useSession();
+  const strict = Boolean(runtime?.features?.lyricStrictTimeline);
+  const trusted = useMemo(() => trustedFlags(timeline, strict), [timeline, strict]);
   const lrcLines = strict ? lines.filter((_, i) => trusted[i]) : lines;
-
 
   const downloadLrc = () => {
     const url = URL.createObjectURL(
-      new Blob([toLrc({ ...shown, lines: lrcLines }, { title, artist, durationSeconds: duration })], {
+      new Blob([toLrc({ ...timeline, lines: lrcLines }, { title, artist, durationSeconds: duration })], {
         type: 'text/plain;charset=utf-8',
       }),
     );
@@ -162,7 +127,6 @@ export function SyncedLyrics({
    * In a holiday season, a line about snow brings a little snow while it is
    * sung (docs/HOLIDAY_SPEC.md). Once per line, and only while playing.
    */
-  const { runtime } = useSession();
   const snowed = useRef(new Set<number>());
   const [snowing, setSnowing] = useState(false);
   useEffect(() => {
@@ -173,27 +137,6 @@ export function SyncedLyrics({
     const id = window.setTimeout(() => setSnowing(false), 6000);
     return () => window.clearTimeout(id);
   }, [active, live, runtime?.season, lines]);
-
-  const nudge = (seconds: number) => {
-    setDraft(shiftTimings(draft ?? timeline, seconds, duration));
-    setOffset((o) => Number((o + seconds).toFixed(1)));
-  };
-
-  const stampLine = (index: number) => {
-    setDraft(setLineStart(draft ?? timeline, index, liveTime, duration));
-  };
-
-  const saveTimings = async () => {
-    if (!draft || !onSaveTimings) return;
-    setSaving(true);
-    try {
-      await onSaveTimings(markCorrected(draft));
-      setDraft(null);
-      setOffset(0);
-    } finally {
-      setSaving(false);
-    }
-  };
 
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const lineRefs = useRef<Array<HTMLButtonElement | null>>([]);
@@ -216,6 +159,13 @@ export function SyncedLyrics({
   return (
     <>
     {snowing && <Snow flakes={14} />}
+    {canDownload && !compact && lrcLines.length > 0 && (
+      <div className="lyrics-sync__download">
+        <button type="button" className="btn btn--ghost btn--sm" onClick={downloadLrc}>
+          {t('lyrics.download')}
+        </button>
+      </div>
+    )}
     <div
       ref={scrollRef}
       className={`lyrics-sync${compact ? ' lyrics-sync--compact' : ''}`}
@@ -223,72 +173,6 @@ export function SyncedLyrics({
       aria-label={t('song.lyrics')}
       data-source={source}
     >
-      {/*
-        Timing tools are the owner's, and folded away until asked for. A
-        listener — the owner most of the time, a friend who was sent the link
-        the rest — came to read the words; "估算同步", ±0.5 s buttons and an
-        explanation of forced alignment were in the way for both.
-      */}
-      {onSaveTimings && !compact && (
-        <div className="lyrics-sync__toolbar">
-          <button type="button" className="lyrics-sync__tune" aria-expanded={tuning} onClick={() => setTuning((v) => !v)}>
-            {t(tuning ? 'lyrics.tune.close' : 'lyrics.tune.open')}
-          </button>
-        </div>
-      )}
-      {tuning && onSaveTimings && (
-      <div className="lyrics-sync__head">
-        <span className={`lyrics-sync__pill${source === 'estimated' ? '' : ' is-aligned'}`}>
-          {t(source === 'corrected' ? 'lyrics.corrected' : source === 'aligned' ? 'lyrics.aligned' : 'lyrics.estimated')}
-        </span>
-        {!compact && lines.length > 0 && (
-          <span className="lyrics-sync__actions">
-            <button type="button" className="btn btn--ghost btn--sm" onClick={() => nudge(-0.5)}>
-              {t('lyrics.earlier')}
-            </button>
-            <span className="lyrics-sync__offset num" aria-live="polite">
-              {offset > 0 ? `+${offset.toFixed(1)}` : offset.toFixed(1)}s
-            </span>
-            <button type="button" className="btn btn--ghost btn--sm" onClick={() => nudge(0.5)}>
-              {t('lyrics.later')}
-            </button>
-            {lrcLines.length > 0 && (
-              <button type="button" className="btn btn--ghost btn--sm" onClick={downloadLrc}>
-                {t('lyrics.download')}
-              </button>
-            )}
-          </span>
-        )}
-      </div>
-      )}
-      {draft && onSaveTimings && (
-        <div className="lyrics-sync__bar">
-          <span>{t('lyrics.unsaved')}</span>
-          <button type="button" className="btn btn--primary btn--sm" onClick={saveTimings} disabled={saving}>
-            {t(saving ? 'lyrics.saving' : 'lyrics.save')}
-          </button>
-          <button
-            type="button"
-            className="btn btn--ghost btn--sm"
-            onClick={() => {
-              setDraft(null);
-              setOffset(0);
-            }}
-            disabled={saving}
-          >
-            {t('lyrics.revert')}
-          </button>
-        </div>
-      )}
-      {/*
-        Said in full, on the songs that have the problem, rather than left to
-        a two-word pill. "Estimated" is the answer to every report that the
-        words run ahead of the voice, and nobody reads a pill — this has been
-        reported three times against songs that were never aligned at all.
-      */}
-      {tuning && !compact && source === 'estimated' && (
-        <p className="lyrics-sync__note">{t('lyrics.estimated.why')}</p>
-      )}
       {lines.map((line, i) => {
         // Strictly, a line is past only once it was trusted and sung: a gap lights nothing and dims nothing.
         const state = strict
@@ -317,24 +201,6 @@ export function SyncedLyrics({
                 {line.text}
               </span>
             </button>
-            {/*
-              Tap a line at the moment it is sung. One line at a time and the
-              neighbours stay put, because correcting by ear is a sequence of
-              small decisions and a control that dragged the rest would undo
-              the ones already made. Only while the song is playing — pinning
-              a line to a stopped playhead is not a correction, it is a way to
-              lose one.
-            */}
-            {onSaveTimings && tuning && live && player.status === 'playing' && (
-              <button
-                type="button"
-                className="btn btn--ghost btn--sm lyrics-sync__stamp"
-                onClick={() => stampLine(i)}
-                title={t('lyrics.stamp.hint')}
-              >
-                {t('lyrics.stamp')}
-              </button>
-            )}
           </div>
         );
       })}

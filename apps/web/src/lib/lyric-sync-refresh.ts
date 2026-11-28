@@ -56,6 +56,10 @@ export function startLyricSyncRefresh(trackId: string, apply: (u: LyricSyncUpdat
   };
 }
 
+export function publishLyricSyncUpdate(detail: LyricSyncUpdate): void {
+  window.dispatchEvent(new CustomEvent(EVENT, { detail }));
+}
+
 const browserEnv = (): RefreshEnv => ({
   fetchTrack: async (id) => {
     const t = await apiFetch<TrackView>(`/v1/tracks/${id}`);
@@ -69,10 +73,7 @@ const browserEnv = (): RefreshEnv => ({
     document.addEventListener('visibilitychange', on);
     return () => document.removeEventListener('visibilitychange', on);
   },
-  broadcast: (u) => {
-    const detail: LyricSyncUpdate = u;
-    window.dispatchEvent(new CustomEvent(EVENT, { detail }));
-  },
+  broadcast: publishLyricSyncUpdate,
 });
 
 /**
