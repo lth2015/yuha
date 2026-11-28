@@ -10,7 +10,7 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { randomUUID } from 'node:crypto';
 import type { LyricTimings } from '@yuha/contracts';
-import { claimOutboxBatch, qualityReport, query, queryOne, withTx } from '@yuha/db';
+import { claimOutboxBatch, execute, qualityReport, query, queryOne, withTx } from '@yuha/db';
 import type { AlignmentProvider, AlignmentResult } from '@yuha/providers';
 import { runJobStep } from '@yuha/worker/pipeline';
 import { createHarness, resetData, teardown, type Harness, type TestUser } from './helpers/harness.js';
@@ -84,13 +84,10 @@ describe('why a song’s lyric timing is an estimate', () => {
       fallbackReason: 'aligner_timeout',
     });
     const id = await song(user);
-    const res = await h.app.inject({
-      method: 'POST',
-      url: `/v1/tracks/${id}/lyric-timings`,
-      headers: user.authHeader,
-      payload: { source: 'corrected', aligner: 'human', lines } as never,
-    });
-    expect(res.statusCode).toBe(200);
+    await execute('UPDATE tracks SET lyric_timings = ? WHERE id = ?', [
+      JSON.stringify({ source: 'corrected', aligner: 'human', lines: lines }),
+      id,
+    ]);
     expect(await stored(id)).not.toHaveProperty('fallbackReason');
   }, 60_000);
 });

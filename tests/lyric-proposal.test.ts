@@ -11,7 +11,7 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { createHash, randomUUID } from 'node:crypto';
 import type { LyricTimings } from '@yuha/contracts';
-import { claimOutboxBatch, insertLyricProposal, qualityReport, queryOne, withTx } from '@yuha/db';
+import { claimOutboxBatch, execute, insertLyricProposal, qualityReport, queryOne, storeDeliveredLyricTimings, withTx } from '@yuha/db';
 import type { AlignmentProvider, AlignmentRequest, AlignmentResult } from '@yuha/providers';
 import { runJobStep } from '@yuha/worker/pipeline';
 import { balanceOf, createHarness, resetData, teardown, type Harness, type TestUser } from './helpers/harness.js';
@@ -72,13 +72,15 @@ async function song(user: TestUser, body: Record<string, unknown> = {}): Promise
 
 const ask = (who: TestUser, id: string) =>
   h.app.inject({ method: 'POST', url: `/v1/tracks/${id}/lyric-proposal`, headers: who.authHeader });
+const apply = (who: TestUser, id: string, proposalId: string) =>
+  h.app.inject({ method: 'POST', url: `/v1/tracks/${id}/lyric-proposal/${proposalId}/apply`, headers: who.authHeader });
 const read = (who: TestUser, id: string) =>
   h.app.inject({ method: 'GET', url: `/v1/tracks/${id}/lyric-proposal`, headers: who.authHeader });
 
 /** Until the queue has answered this song's request. */
 async function settled(who: TestUser, id: string) {
   for (let i = 0; i < 100; i += 1) {
-    const body = (await read(who, id)).json() as { status: string; timings?: LyricTimings; failure?: string };
+    const body = (await read(who, id)).json() as { id: string; status: string; timings?: LyricTimings; failure?: string };
     if (body.status === 'ready' || body.status === 'failed') return body;
     await new Promise((r) => setTimeout(r, 50));
   }
@@ -109,6 +111,70 @@ describe('aligning one song again', () => {
     // Nothing saved, nothing charged.
     expect(await savedTimings(id)).toBe(before);
     expect(await balanceOf(user.id)).toEqual(credits);
+  }, 60_000);
+
+  it('retires client-supplied timings and lets only the owner adopt the aligner result', async () => {
+    const owner = await h.createUser({ credits: 5 });
+    const other = await h.createUser();
+    const id = await song(owner);
+    const before = await savedTimings(id);
+    const write = await h.app.inject({
+      method: 'POST',
+      url: `/v1/tracks/${id}/lyric-timings`,
+      headers: owner.authHeader,
+      payload: { source: 'corrected', aligner: 'human', lines: LINES },
+    });
+    expect(write.statusCode).toBe(409);
+    expect(write.json().error.message).toMatch(/refresh/i);
+    expect(await savedTimings(id)).toBe(before);
+    setAligner(answering({ status: 'ok', timings: { source: 'aligned', aligner: 'spark-whisper', lines: LINES } }));
+    await ask(owner, id);
+    const proposal = await settled(owner, id);
+    expect((await apply(other, id, proposal.id)).statusCode).toBe(404);
+    expect((await apply(owner, id, randomUUID())).statusCode).toBe(409);
+    const adopted = await apply(owner, id, proposal.id);
+    expect(adopted.statusCode).toBe(200);
+    expect(adopted.json()).toMatchObject({ trackId: id, lyricSync: 'synced', lyricTimings: proposal.timings });
+    expect(JSON.parse((await savedTimings(id))!)).toMatchObject({ ...proposal.timings, appliedProposalId: proposal.id });
+    const view = await h.app.inject({ method: 'GET', url: `/v1/tracks/${id}`, headers: owner.authHeader });
+    expect(view.json().lyricTimings).toEqual(proposal.timings);
+    expect((await read(owner, id)).json()).toMatchObject({ applied: true });
+    expect((await apply(owner, id, proposal.id)).statusCode).toBe(200);
+    expect(await storeDeliveredLyricTimings({
+      trackId: id, lyrics: LYRICS, timings: { source: 'aligned', aligner: 'late-worker', lines: LINES },
+    })).toBe(false);
+    expect(JSON.parse((await savedTimings(id))!)).toHaveProperty('appliedProposalId', proposal.id);
+  }, 60_000);
+
+  it('keeps corrected timings and rejects a proposal for a replaced master or changed lyrics', async () => {
+    const owner = await h.createUser({ credits: 5 });
+    const id = await song(owner);
+    setAligner(answering({ status: 'ok', timings: { source: 'aligned', aligner: 'spark-whisper', lines: LINES } }));
+    await ask(owner, id);
+    const proposal = await settled(owner, id);
+    const corrected = { source: 'corrected', aligner: 'human', lines: LINES };
+    await execute('UPDATE tracks SET lyric_timings = ? WHERE id = ?', [JSON.stringify(corrected), id]);
+    expect((await apply(owner, id, proposal.id)).statusCode).toBe(409);
+    expect(JSON.parse((await savedTimings(id))!)).toEqual(corrected);
+    await execute('UPDATE tracks SET lyric_timings = NULL, lyrics = ? WHERE id = ?', [LYRICS + '\nMore words', id]);
+    expect((await apply(owner, id, proposal.id)).statusCode).toBe(409);
+    await execute('UPDATE tracks SET lyrics = ? WHERE id = ?', [LYRICS, id]);
+    await execute("UPDATE asset_versions SET sha256 = ? WHERE track_id = ? AND kind = 'master'", ['f'.repeat(64), id]);
+    expect((await apply(owner, id, proposal.id)).statusCode).toBe(409);
+    expect(await savedTimings(id)).toBeNull();
+  }, 60_000);
+
+  it('rejects an alignment with a line starting outside the song', async () => {
+    const owner = await h.createUser({ credits: 5 });
+    const id = await song(owner);
+    setAligner(answering({
+      status: 'ok', timings: { source: 'aligned', aligner: 'spark-whisper',
+        lines: [LINES[0]!, { ...LINES[1]!, start: 1000, end: 1001 }] },
+    }));
+    await ask(owner, id);
+    const proposal = await settled(owner, id);
+    expect(proposal).toMatchObject({ status: 'failed', failure: 'error' });
+    expect((await apply(owner, id, proposal.id)).statusCode).toBe(409);
   }, 60_000);
 
   it('does not offer an estimate as an alignment, and says why it could not hear', async () => {

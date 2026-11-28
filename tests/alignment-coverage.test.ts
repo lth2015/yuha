@@ -1,5 +1,4 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { markCorrected } from '@yuha/contracts';
 import { HttpAlignmentProvider } from '@yuha/providers';
 
 const provider = new HttpAlignmentProvider({
@@ -62,11 +61,6 @@ describe('HTTP alignment coverage', () => {
     vi.stubGlobal('fetch', async () => Response.json({ lines: complete.map((l) => ({ ...l, confidence: 1.5 })) }));
     const out = await withConfidence.align(request);
     if (out.status === 'ok') expect(out.timings.lines.every((l) => l.confidence === undefined)).toBe(true);
-  });
-
-  it('a person’s correction carries no model confidence', () => {
-    const t = markCorrected({ source: 'aligned', aligner: 'mms-fa', lines: [{ ...complete[0], section: '', confidence: 0.2 }] });
-    expect(t.lines[0]).not.toHaveProperty('confidence');
   });
 
   /*

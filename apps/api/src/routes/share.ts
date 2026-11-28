@@ -266,8 +266,8 @@ export default async function shareRoutes(app: FastifyInstance, opts: { ctx: App
   );
 
   /**
-   * GET /v1/tracks/:id/waveform — the song's loudness over time, for the lyric
-   * timing workspace (services/waveform.ts). The owner's, like the audio.
+   * GET /v1/tracks/:id/waveform — the song's loudness over time.
+   * The owner's, like the audio.
    */
   app.get('/v1/tracks/:id/waveform', { preHandler: app.requireAuth }, async (req, reply) => {
     const { id } = idParam.parse(req.params);

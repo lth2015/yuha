@@ -18,7 +18,7 @@ import { posterOf, saveLocalVideo, setLocalPoster, type SaveOutcome } from '../l
  * picks 3–10 photos and gets this song over them as a portrait MP4. Then,
  * folded beneath it, straight from the cover (the share video,
  * docs/GIFT_AND_SHARE_SPEC.md). Same length choice, same result: preview,
- * share, save. Lyric timing is checked in the same card (LyricSyncStudio).
+ * share, save. Both take lyric timing from the song.
  *
  * The photos stay in this tab. They are decoded here, turned upright, scaled
  * down and drawn into whole frames; only the frames go to the server, which
@@ -37,7 +37,7 @@ interface Picked {
 
 /**
  * `timings` is what the video was made with (as JSON: a refetched song is a new
- * object with the same timing), so a later save can say this file is out of date.
+ * object with the same timing), so a later sync can say this file is out of date.
  */
 type Result = { state: 'idle' | 'making' } | { state: 'ready'; file: File; url: string; timings: string; kind: 'photo' | 'cover' };
 
@@ -49,8 +49,6 @@ export function PhotoVideo({
   makeCoverVideo,
   photosEnabled,
   startOpen = false,
-  studio,
-  timingsUnsaved = false,
   sceneMv,
   onListen,
 }: {
@@ -66,13 +64,6 @@ export function PhotoVideo({
   photosEnabled: boolean;
   /** Arrived from a "make a video" link (`?video=1`): open, and in view. */
   startOpen?: boolean;
-  /**
-   * The lyric timing workspace (LyricSyncStudio), given the photos chosen so
-   * its preview can show them. Absent for a song without lyrics.
-   */
-  studio?: (photos: string[]) => ReactNode;
-  /** Timing edits are waiting to be saved: a video now would not have them. */
-  timingsUnsaved?: boolean;
   /** The separately gated, asynchronous scene MV; photo processing is unchanged. */
   sceneMv?: (visible: boolean) => ReactNode;
 }) {
@@ -97,8 +88,6 @@ export function PhotoVideo({
    */
   const [length, setLength] = useState<number>(Math.min(60, Math.floor(song.durationSeconds)));
   const lengths = [SHARE_SECONDS, 60].filter((n) => n < song.durationSeconds - 1);
-  // Lyrics placed by counting characters drift from the singing; say so before
-  // the video is made, and where to fix it (the song page's timing tool).
   const strict = Boolean(runtime?.features?.lyricStrictTimeline);
   // Only trusted lines are drawn under the shared rule (isTrustedLine); an
   // estimate makes a video without words, and is no chorus to aim an excerpt at.
@@ -128,8 +117,6 @@ export function PhotoVideo({
     void apiFetch(`/v1/tracks/${song.trackId}/video-taken`, { method: 'POST', body: { kind, how } }).catch(() => undefined);
   const estimated = Boolean(lyrics) && resolveLyricTimings(lyrics ?? '', song.durationSeconds, lyricTimings).source === 'estimated';
   const [error, setError] = useState<unknown>(null);
-  /** The timing workspace is open (in this card, beside what it changes). */
-  const [syncing, setSyncing] = useState(false);
   const [coverOpen, setCoverOpen] = useState(false);
   // Counsel (docs/legal/COUNSEL_RESPONSE_2026-11.md, 2): the right to use the
   // photos and the images of the people in them, confirmed before any is chosen.
@@ -332,31 +319,11 @@ export function PhotoVideo({
           )}
         </div>
       </div>
-      {/*
-        Lyric timing, here rather than down the page: the place to judge
-        whether a line lands is next to the video it will land in
-        (docs/MV_LYRIC_SYNC_UX_SPEC.md). Opening it costs nothing and makes
-        nothing.
-      */}
-      {studio && (
-        <div className="photo-video__sync">
-          {estimated && !syncing && (
-            <p className="photo-video__notice" role="note">
-              {t('video.estimated')}
-            </p>
-          )}
-          <button
-            type="button"
-            className={`btn btn--sm${estimated && !syncing ? '' : ' btn--ghost'}`}
-            aria-expanded={syncing}
-            onClick={() => setSyncing((v) => !v)}
-          >
-            {t(syncing ? 'sync.close' : 'sync.open')}
-          </button>
-          {syncing && studio(photos.map((p) => p.thumb))}
-        </div>
+      {estimated && (
+        <p className="photo-video__notice" role="note">
+          {t(strict ? 'video.lyricsUnavailable' : 'video.estimated')}
+        </p>
       )}
-      {timingsUnsaved && <p className="photo-video__notice" role="note">{t('video.saveTimingFirst')}</p>}
 
       {photosEnabled && (
       <div className="photo-video__way">
@@ -412,7 +379,7 @@ export function PhotoVideo({
         <button
           type="button"
           className="btn btn--primary"
-          disabled={photos.length < MIN_PHOTOS || !rights || result.state === 'making' || timingsUnsaved}
+          disabled={photos.length < MIN_PHOTOS || !rights || result.state === 'making'}
           aria-busy={result.state === 'making'}
           onClick={() => void make()}
         >
@@ -440,7 +407,7 @@ export function PhotoVideo({
                 <button
                   type="button"
                   className="btn"
-                  disabled={result.state === 'making' || timingsUnsaved}
+                  disabled={result.state === 'making'}
                   aria-busy={result.state === 'making'}
                   onClick={() => void makeFromCover()}
                 >
@@ -458,7 +425,7 @@ export function PhotoVideo({
           <button
             type="button"
             className="btn"
-            disabled={result.state === 'making' || timingsUnsaved}
+            disabled={result.state === 'making'}
             aria-busy={result.state === 'making'}
             onClick={() => void makeFromCover()}
           >

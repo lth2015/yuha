@@ -137,7 +137,7 @@ export function lineProgress(lines: LyricLine[], index: number, seconds: number)
  * The words a song sings, or nothing.
  *
  * Every place that times lyrics to the voice asks this one question first —
- * the timing workspace, the "estimated" notice, the lyrics on the song page and
+ * the "estimated" notice, the lyrics on the song page and
  * the lyrics drawn into either video. An instrumental has no voice to follow,
  * and a song sung without words (or with only section tags) has nothing to
  * place; neither shows any lyric sync at all (product owner, 2026-11-26).

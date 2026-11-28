@@ -82,13 +82,6 @@ it('reconciles a lost start response without replaying the write', async () => {
   expect(host.querySelector('[role="alert"]')).toBeNull();
 });
 
-it('requires saved lyric edits before queuing a draft', async () => {
-  vi.stubGlobal('fetch', async () => Response.json({ items: [{ ...job, status: 'draft', shots: [{ idx: 0, status: 'pending', prompt: 'A quiet sea' }] }] }));
-  await mount({ timingsUnsaved: true });
-  expect(host.textContent).toContain('Save changes in the lyric timing tool');
-  expect([...host.querySelectorAll('button')].find((b) => b.textContent === 'Confirm and generate')?.disabled).toBe(true);
-});
-
 it('does not offer an expired video for download', async () => {
   vi.stubGlobal('fetch', async () => Response.json({ items: [{ ...job, status: 'ready', expiresAt: '2000-01-01T00:00:00Z' }] }));
   await mount();

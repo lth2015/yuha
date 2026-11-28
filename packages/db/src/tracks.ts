@@ -19,7 +19,7 @@ export interface TrackRow {
   visibility: Visibility;
   play_count: number;
   cover_seed: number;
-  lyric_timings: LyricTimings | null;
+  lyric_timings: StoredLyricTimings | null;
   /** Who the song was written for (migration 0026); null for most songs. */
   dedication: Dedication | null;
   /** A song or background music (migration 0040). */
@@ -89,39 +89,26 @@ function normaliseRow<T>(row: T): T {
 }
 
 /**
- * A stored timeline may carry why it is an estimate (`fallbackReason`, set by
- * the worker when the aligner could not hear the song). That is for the
- * console, not for anyone's browser: `clientTimings` is what a view sends.
+ * Stored timelines may also carry an estimate's diagnostic reason or the ID
+ * of an adopted retry, which protects it from background writes. Public song
+ * views expose only the lyric data through `clientTimings`.
  */
-export type StoredLyricTimings = LyricTimings & { fallbackReason?: string };
+export type StoredLyricTimings = LyricTimings & { fallbackReason?: string; appliedProposalId?: string };
 
 export function clientTimings(t: StoredLyricTimings | null | undefined): LyricTimings | null {
   if (!t) return null;
-  const { fallbackReason: _why, ...rest } = t;
+  const { fallbackReason: _why, appliedProposalId: _proposal, ...rest } = t;
   return rest;
 }
 
-/** Stores the worker's alignment output (source-labelled inside the JSON). */
-export async function setTrackLyricTimings(
-  params: { trackId: string; timings: StoredLyricTimings },
-  tx?: PoolConnection,
-): Promise<void> {
-  await execute(
-    `UPDATE tracks SET lyric_timings = ?, updated_at = UTC_TIMESTAMP(3) WHERE id = ?`,
-    [JSON.stringify(params.timings), params.trackId],
-    tx,
-  );
-}
-
 /**
- * Stores the timeline the worker made right after delivery — only if nothing
+ * Stores a timeline after alignment — only if nothing
  * more trustworthy landed while the aligner was busy (it can take a minute).
  *
  * One conditional UPDATE, so there is no window between the check and the
- * write. It is refused when the song was deleted, when its lyrics are no
- * longer the ones the timeline was made from, when the owner has saved a
- * correction, and when the new timeline is an estimate and the stored one was
- * heard by the aligner. The WHERE clause is the whole decision, so a matched
+ * write. The song must still have the same lyrics, and the master must match
+ * when supplied. A legacy correction always wins. An adopted result can only
+ * be replaced by another adoption. An estimate cannot replace heard timing. The WHERE clause is the whole decision, so a matched
  * row is a written row (CLIENT_FOUND_ROWS counts matches, and that is what is
  * wanted here).
  */
@@ -135,17 +122,22 @@ export async function storeDeliveredLyricTimings(params: {
    * refused unless the song's master is still that file.
    */
   masterSha?: string;
-}): Promise<boolean> {
+}, tx?: PoolConnection): Promise<boolean> {
   const estimate = params.timings.source !== 'aligned';
   const audio = params.masterSha
-    ? ` AND EXISTS (SELECT 1 FROM asset_versions av WHERE av.track_id = tracks.id AND av.kind = 'master' AND av.sha256 = ?)`
+    ? ` AND ? = (SELECT av.sha256 FROM asset_versions av
+                  WHERE av.track_id = tracks.id AND av.kind = 'master' ORDER BY av.created_at, av.id LIMIT 1)`
     : '';
+  const preserveAdopted = params.timings.appliedProposalId
+    ? ''
+    : " AND JSON_EXTRACT(lyric_timings, '$.appliedProposalId') IS NULL";
   const r = await execute(
     `UPDATE tracks SET lyric_timings = ?, updated_at = UTC_TIMESTAMP(3)
       WHERE id = ? AND deleted_at IS NULL AND lyrics = ?
         AND (lyric_timings IS NULL
-             OR JSON_UNQUOTE(JSON_EXTRACT(lyric_timings, '$.source')) IN (${estimate ? "'estimated'" : "'estimated', 'aligned'"}))${audio}`,
+             OR JSON_UNQUOTE(JSON_EXTRACT(lyric_timings, '$.source')) IN (${estimate ? "'estimated'" : "'estimated', 'aligned'"}))${audio}${preserveAdopted}`,
     [JSON.stringify(params.timings), params.trackId, params.lyrics, ...(params.masterSha ? [params.masterSha] : [])],
+    tx,
   );
   return r.affectedRows > 0;
 }
@@ -558,7 +550,7 @@ export async function findAsset(
 export async function getMasterAsset(trackId: string, tx?: PoolConnection): Promise<AssetRow | undefined> {
   return queryOne<AssetRow>(
     `SELECT ${ASSET_COLUMNS} FROM asset_versions
-      WHERE track_id = ? AND kind = 'master' ORDER BY created_at LIMIT 1`,
+      WHERE track_id = ? AND kind = 'master' ORDER BY created_at, id LIMIT 1`,
     [trackId],
     tx,
   );

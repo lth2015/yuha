@@ -159,7 +159,7 @@ const PAGES = [
   ...['syncing', 'partial', 'deferred', 'unavailable', 'synced'].map((state) => ({
     name: `song-lyric-state-${state}`, path: '/song/:sungTrack', as: 'creator', allLanguages: true, prepare: (page) => openLyricState(page, state),
   })),
-  { name: 'song-lyric-sync', path: '/song/:sungTrack', as: 'creator', prepare: openLyricSync },
+  { name: 'song-lyrics-download', path: '/song/:sungTrack', as: 'creator', prepare: checkLyricDownloadEntry },
   { name: 'song-lyric-sync-auto', path: '/song/:sungTrack', as: 'creator', prepare: openLyricSyncAuto },
   // Three versions of the lyrics (docs/LYRIC_COWRITE_SPEC.md).
   { name: 'create-cowrite', path: '/create', as: 'creator', prepare: writeThreeVersions },
@@ -412,15 +412,8 @@ async function openSceneMv(page, state) {
   else await page.waitForSelector(state === 'draft' ? '.scene-mv__shots' : state === 'progress' ? '.scene-mv__progress' : state === 'ready' ? '.scene-mv__result' : '.scene-mv [role="status"]');
 }
 
-// The lyric timing workspace inside the video card (components/LyricSyncStudio.tsx).
-async function openLyricSync(page) {
-  await page.click('.photo-video__open');
-  // Only a song with sung, written lyrics has a timeline to adjust (fixtures: `sung`).
-  if (!(await page.locator('.photo-video__sync > .btn').count())) {
-    throw new Error('song-lyric-sync: the fixture song has no sung lyrics, so there is no timing workspace to check');
-  }
-  await page.click('.photo-video__sync > .btn');
-  await page.waitForSelector('.sync-studio__block', { timeout: 10_000 });
+async function checkLyricDownloadEntry(page) {
+  await page.waitForSelector('.lyrics-sync__download button', { timeout: 10_000 });
 }
 
 /*
@@ -467,7 +460,7 @@ async function keepDeviceVideos(page) {
 }
 
 /*
- * The same, with "align it again" offered. CI runs the estimator with the
+ * The lyrics section, with "retry lyric sync" offered. CI runs the estimator with the
  * switch off, where the block never appears, so this page's runtime answer is
  * told it is on: the block is drawn and measured, and nothing is asked of it.
  */
@@ -479,8 +472,7 @@ async function openLyricSyncAuto(page) {
     await route.fulfill({ response: res, json: body });
   });
   await page.reload({ waitUntil: 'networkidle' });
-  await openLyricSync(page);
-  await page.waitForSelector('.sync-studio__auto', { timeout: 10_000 });
+  await page.waitForSelector('.lyric-auto-sync button:not(:disabled)', { timeout: 10_000 });
 }
 
 async function writeThreeVersions(page) {
