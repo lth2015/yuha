@@ -220,6 +220,42 @@ ECR 仓库是 **不可变（IMMUTABLE）** 的，同一个 commit 重新部署�
 
 ---
 
+## 3a. API 角色的存储写权限（2026-11-28，待处理）
+
+官方 BGM 导入由 **API** 直接写私有交付桶（delivery bucket），在生产上被拒：
+
+```
+AccessDenied: User: …assumed-role/qa-music-api-k8s-pod-role/… is not authorized to perform: s3:PutObject
+```
+
+请给角色 `qa-music-api-k8s-pod-role` 加上对交付桶以下前缀的
+`s3:PutObject`、`s3:GetObject`、`s3:DeleteObject`（桶用 KMS 加密的话，也需要对应
+key 的 `kms:GenerateDataKey` / `kms:Decrypt`）：
+
+| 前缀 | 用途 |
+| --- | --- |
+| `official-bgm/masters/*`、`official-bgm/previews/*`、`official-bgm/covers/*` | 官方 BGM 导入（**新**） |
+| `share-cards/*` | 用户的分享卡片 |
+| `<用户id>/<歌曲id>/export-*` | 用户导出的音频 |
+
+- Get：生成试听 / 下载的签名链接，签名链接用的是这个角色的权限。
+- Delete：导入失败时清理半成品，以及账户删除。
+
+后两行是 API 早就在写的地方。如果这个角色对它们也没有写权限，那么用户的
+分享卡片和音频导出在生产上同样一直失败——请一并确认。
+
+**怎么验证改好了**：从 2026-11-28 起，"Deploy QA" 最后一步
+**Check storage permissions (API role)** 会在 API pod 里用这个角色，对上表每个
+前缀写一个小文件、读回、删除，逐行打印结果；任何一行被拒，这一步就是红的，
+并附 AWS 的原始报错。改完权限后重跑一次 Deploy QA（或下一次合并），这一步变绿
+即生效。也可以手动跑：
+
+```bash
+kubectl exec -n qa-music deployment/yuha-api -- node api/dist/check-storage.js manual
+```
+
+---
+
 ## 4. 本清单不覆盖的事
 
 - 真实刷卡扣款的端到端验收（只做过 Stripe 测试模式）

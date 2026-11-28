@@ -21,7 +21,8 @@
     "marketplace:bgm": "tsx --env-file-if-exists=../../.env src/import-official-bgm.ts",
     "openapi": "tsx --env-file-if-exists=../../.env src/openapi/emit.ts",
     "check:prices": "tsx --env-file-if-exists=../../.env src/check-prices.ts",
-    "check:production": "tsx --env-file-if-exists=../../.env src/check-production.ts"
+    "check:production": "tsx --env-file-if-exists=../../.env src/check-production.ts",
+    "check:storage": "tsx --env-file-if-exists=../../.env src/check-storage.ts"
   },
   "dependencies": {
     "@fastify/cors": "^10.0.1",

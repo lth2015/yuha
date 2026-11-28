@@ -230,6 +230,19 @@ check was about the rendering.
   neither was run until after the plan had been written down. The repository's
   visibility, who has access, and whether a fork exists are facts about a
   server, not properties of the local checkout — ask the server.
+- **A permission the code needs is a fact about a cloud account, and code
+  cannot see it.** Official BGM import wrote a new bucket prefix that the API's
+  IAM role had never been granted. Every test passed (they use local
+  storage), the feature shipped, and the product owner's upload came back 500;
+  two more rounds of "please retry" went by before the error even named the
+  step, by which time the SRE who could grant it was gone for the weekend.
+  So: a change that needs something new from the account — a prefix, a queue,
+  a secret, an outbound host — names it *in the PR*, and asks for it the day
+  it is written, not the day it fails. And what the deployment can do is
+  checked under the deployment's own identity: the last step of Deploy QA
+  writes, reads and deletes under every prefix the API writes
+  (`services/storage-probe.ts`; a test fails if API code builds a key under a
+  folder that list does not name).
 - **Writing down what you redacted re-publishes it.** Three times in one
   session: the operator's name went into a `CLAUDE.md` lesson and into a
   comment in `check-stewardship.mjs` as an example of what the check catches,

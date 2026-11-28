@@ -278,6 +278,29 @@ jobs:
           kubectl exec -n "$NAMESPACE" "deployment/${RELEASE}-api" -- node api/dist/sync-catalogue.js
           kubectl exec -n "$NAMESPACE" "deployment/${RELEASE}-api" -- node api/dist/check-prices.js
 
+      # Under the API pod's own AWS role: write, read back and delete one small
+      # object under every prefix the API writes (services/storage-probe.ts).
+      # Official BGM import shipped writing official-bgm/, which that role
+      # could not write, and the first sign was a 500 on the product owner's
+      # upload, days later. An IAM gap is invisible to code and to CI; it is
+      # visible here, in the release that needs it. Runs after the rollout,
+      # so a red step means "these features are broken in production now",
+      # not "this release did not ship". Last, so it cannot hide the steps
+      # above.
+      - name: Check storage permissions (API role)
+        run: |
+          set -euo pipefail
+          {
+            echo "### Storage permissions (API role)"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          status=0
+          kubectl exec -n "$NAMESPACE" "deployment/${RELEASE}-api" -- node api/dist/check-storage.js "gha-${GITHUB_RUN_ID}" \
+            > storage-check.txt 2>&1 || status=$?
+          cat storage-check.txt
+          { cat storage-check.txt; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+          exit "$status"
+
       - name: Report
         if: always()
         run: |
