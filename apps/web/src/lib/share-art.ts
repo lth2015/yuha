@@ -440,6 +440,14 @@ export interface PhotoClipPlan {
   frames: Array<{ at: number; photo: number; line: string | null; ending?: true }>;
 }
 
+/** The caption on screen at `at`: from its start, up to but not including its end. */
+function captionAt(captions: Array<{ from: number; until: number; text: string }>, at: number) {
+  for (const caption of captions) {
+    if (caption.from <= at && at < caption.until) return caption;
+  }
+  return undefined;
+}
+
 /**
  * The photo video's timeline (docs/PHOTO_MV_SPEC.md): the same thirty seconds
  * the share video would choose, the photos sharing it out evenly in the order
@@ -480,7 +488,7 @@ export function planPhotoClip(lines: TimedLine[], songSeconds: number, photos: n
   }
   const times = [...cuts].sort((a, b) => a - b);
   const frames: PhotoClipPlan['frames'] = times.map((at) => {
-    const sung = captions.find((line) => line.from <= at && line.until > at);
+    const sung = captionAt(captions, at);
     return { at, photo: Math.min(slots - 1, Math.floor((at + 0.001) / slot)) % count, line: sung?.text ?? null };
   });
   // The closing two seconds: the last photo, the end frame and the logo, nothing sung.
