@@ -51,7 +51,11 @@ interface Report {
   phase?: {
     firstSong: { started: number; completed: number; pending: number };
     lyrics: { sung: number; automatic: number; corrected: number; unsynced: number };
-    videos: { made: { cover: number; photo: number }; failed: { cover: number; photo: number }; busy: number };
+    videos: {
+      made: { cover: number; photo: number }; failed: { cover: number; photo: number }; busy: number;
+      /** Absent from an API older than the count. */
+      taken?: { download: number; shareOpened: number; shared: number };
+    };
   };
 }
 
@@ -530,6 +534,15 @@ function PhaseLines({ phase, num }: { phase: NonNullable<Report['phase']>; num: 
           busy: num(phase.videos.busy),
         })}
       </p>
+      {phase.videos.taken && (
+        <p className="small">
+          {t('admin.dash.phase.taken', {
+            download: num(phase.videos.taken.download),
+            opened: num(phase.videos.taken.shareOpened),
+            shared: num(phase.videos.taken.shared),
+          })}
+        </p>
+      )}
     </>
   );
 }
